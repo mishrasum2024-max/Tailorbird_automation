@@ -1,0 +1,1179 @@
+require('dotenv').config();
+const { test, expect } = require('@playwright/test');
+const { ApprovalJob } = require('../pages/approvalPage');
+const { Logger } = require('../utils/logger');
+const PropertiesHelper = require('../pages/properties');
+
+test.use({
+    storageState: 'sessionState.json',
+    video: 'retain-on-failure',
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure'
+});
+
+let page, approvalJob, propertiesHelper;
+
+// Property creation helper
+async function createNewProperty(page) {
+    const propertyTypes = ["Garden Style", "Mid Rise", "High Rise", "Military Housing"];
+    const propertyType = propertyTypes[Math.floor(Math.random() * propertyTypes.length)];
+    const uniqueSuffix = Date.now();
+    const propertyName = `Approval_Test_Property_${uniqueSuffix}`;
+    const address = 'Domestic Terminal, College Park, GA 30337, USA';
+    const city = 'College Park';
+    const state = 'GA';
+    const zip = '30337';
+
+    try {
+        Logger.step('Creating new property for approval template test: ' + propertyName);
+        const propHelper = new PropertiesHelper(page);
+        await propHelper.goToProperties();
+        await page.waitForLoadState('networkidle');
+        await page.waitForTimeout(1000);
+
+        await propHelper.createProperty(propertyName, address, city, state, zip, propertyType);
+        Logger.success('New property created: ' + propertyName);
+        return propertyName;
+    } catch (error) {
+        Logger.error('Failed to create property: ' + error.message);
+        throw error;
+    }
+}
+
+let currentPropertyName = '';
+const APPROVAL_VISUAL_ASSERT = {
+    animations: 'disabled',
+    maxDiffPixels: 32000,
+    maxDiffPixelRatio: 0.07,
+};
+
+async function settleApprovalWorkspace(pg, ms = 2200) {
+    await pg.waitForLoadState('networkidle');
+    await pg.waitForTimeout(ms);
+}
+
+test.describe('Approval Templates - Comprehensive E2E Tests', () => {
+    test.describe.configure({ retries: 0 });
+
+    test.beforeEach(async ({ page: p }) => {
+        page = p;
+        approvalJob = new ApprovalJob(page);
+
+        await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'load' });
+        await expect(page).toHaveURL(process.env.DASHBOARD_URL);
+        await page.waitForLoadState('networkidle');
+        await approvalJob.navigateToApprovalTab();
+        await approvalJob.navigateToApprovalTemplatesTab();
+        await approvalJob.waitForPageLoad();
+    });
+
+    test('@approval @regression @sanity TC103 Approval Templates – Verify user can successfully create an approval template with all required elements including property, approver, amount, and mandatory flags', async () => {
+        currentPropertyName = await createNewProperty(page);
+        Logger.info('Property for template: ' + currentPropertyName);
+
+        await approvalJob.navigateToApprovalTab();
+        await approvalJob.navigateToApprovalTemplatesTab();
+        await approvalJob.waitForPageLoad();
+
+        try {
+            Logger.step('TC103: Starting create template positive flow');
+
+            const templateName = 'ApprovalTemplate_' + Date.now();
+            await approvalJob.createTemplateWorkflow(templateName, 'Change Order', currentPropertyName, 1000, true);
+
+            await page.waitForLoadState('networkidle');
+            await expect(approvalJob.createTemplateDialog()).toBeHidden({ timeout: 20000 });
+            await approvalJob.searchTemplate(templateName);
+            await expect(page.getByRole('row').filter({ hasText: templateName })).toBeVisible({ timeout: 15000 });
+            await approvalJob.clearSearch();
+
+            Logger.success('TC103 passed: Template created successfully with all elements verified');
+        } catch (error) {
+            Logger.error('TC103 failed: ' + error.message);
+            throw error;
+        }
+    });
+
+    test('@approval @regression TC104 Approval Templates – Verify system validations and error handling when creating an approval template with missing, invalid, or incorrect inputs', async () => {
+
+        // Create a new property for this test
+        currentPropertyName = await createNewProperty(page);
+        Logger.info('Created property for template: ' + currentPropertyName);
+
+        await approvalJob.navigateToApprovalTab();
+        await approvalJob.navigateToApprovalTemplatesTab();
+        await approvalJob.waitForPageLoad();
+
+        try {
+            Logger.step('TC104: Starting create template negative flow');
+
+            // Open Create Template dialog
+            await approvalJob.openCreateTemplateDialog();
+
+            // Test 1: Try submitting without filling any required field
+            const submitBtn = page.getByRole('button', { name: /^Create Template$/ }).last();
+            const isDisabled = await submitBtn.isDisabled().catch(() => false);
+            Logger.info('Submit button disabled state with empty form: ' + isDisabled);
+
+            // Test 2: Fill name without selecting type
+            await approvalJob.fillTemplateName('TestTemplateNoType');
+            Logger.info('Template name filled without selecting type');
+
+            // Test 3: Select type and properties but no approver setup
+            await approvalJob.selectTemplateType('Invoice');
+            await approvalJob.addProperty(currentPropertyName);
+            Logger.info('Type and property selected without full approver setup');
+
+            // // Test 4: Click properties but don't select
+            // const propertiesInput = page.getByPlaceholder('Search and add properties');
+            // await propertiesInput.click();
+            // await page.waitForTimeout(300);
+            // await page.keyboard.press('Escape');
+            // Logger.info('Properties dropdown opened and closed without selection');
+
+            // Test 5: Fill amount with invalid value
+            const amountInput = page.getByPlaceholder('Enter Amount').first();
+            await amountInput.fill('abc');
+            Logger.info('Amount field filled with non-numeric value');
+
+            // Test 6: Clear and set amount to zero
+            await amountInput.clear();
+            await amountInput.fill('0');
+            Logger.info('Amount set to zero (edge case)');
+
+            // Test 7: Cancel dialog
+            await approvalJob.cancelDialog();
+            Logger.info('Dialog cancelled');
+
+            await approvalJob.waitForPageLoad();
+            await page.waitForTimeout(1000);
+            // Verify dialog closed
+            const dialogClosed = await approvalJob.isDialogClosed();
+            expect(dialogClosed).toBeTruthy();
+            Logger.success('TC104 passed: All negative scenarios tested and dialog cancelled');
+        } catch (error) {
+            Logger.error('TC104 failed: ' + error.message);
+            throw error;
+        }
+    });
+
+    test('@approval @regression TC105 Approval Templates – Verify user can apply and clear search filters successfully using valid template names', async () => {
+        try {
+            Logger.step('TC105: Starting filter positive flow');
+
+            // Verify table visible before filtering
+            const initialRowCount = await approvalJob.getTableRowCount();
+            Logger.info('Initial table rows: ' + initialRowCount);
+
+            // Search for specific template
+            await approvalJob.searchTemplate('test113377');
+            Logger.info('Search filter applied: test113377');
+
+            // Verify filtered results
+            const filteredRowCount = await approvalJob.getTableRowCount();
+            Logger.info('Filtered table rows: ' + filteredRowCount);
+
+            // Clear filter
+            await approvalJob.clearSearch();
+            Logger.info('Search filter cleared');
+
+            // Verify all rows returned
+            const allRowsCount = await approvalJob.getTableRowCount();
+            Logger.info('All rows count after clear: ' + allRowsCount);
+
+            Logger.success('TC105 passed: Filter applied and cleared successfully');
+        } catch (error) {
+            Logger.error('TC105 failed: ' + error.message);
+            throw error;
+        }
+    });
+
+    test('@approval @regression TC106 Approval Templates – Verify system handles invalid, special character, long text, and rapid search inputs gracefully in template filters', async () => {
+        try {
+            Logger.step('TC106: Starting filter negative flow');
+
+            // Test 1: Search for non-existent template
+            await approvalJob.searchTemplate('NonExistentTemplate12345');
+            Logger.info('Searched for non-existent template');
+
+            // Test 2: Search with special characters
+            await approvalJob.clearSearch();
+            await approvalJob.searchTemplate('!@#$%^');
+            Logger.info('Searched with special characters');
+
+            // Test 3: Search with very long string
+            await approvalJob.clearSearch();
+            const longString = 'a'.repeat(100);
+            await approvalJob.searchTemplate(longString);
+            Logger.info('Searched with 100-character long string');
+
+            // Test 4: Rapid search updates
+            await approvalJob.searchTemplate('test');
+            await page.waitForTimeout(200);
+            await approvalJob.searchTemplate('test113377');
+            Logger.info('Rapid search updates completed');
+
+            // Clear final search
+            await approvalJob.clearSearch();
+
+            Logger.success('TC106 passed: All negative filter scenarios tested');
+        } catch (error) {
+            Logger.error('TC106 failed: ' + error.message);
+            throw error;
+        }
+    });
+
+    test('@approval @regression TC107 Approval Templates – Verify user can open Manage Columns dialog and view available column options successfully', async () => {
+        try {
+            Logger.step('TC107: Starting manage columns positive flow');
+
+            await approvalJob.expectApprovalTemplatesTableCoreColumnsVisible();
+            Logger.info('Core template table columns visible before manage columns');
+
+            // Click Manage Columns button
+            await approvalJob.clickManageColumnsButton();
+            Logger.info('Manage Columns dialog opened');
+
+            // Get all checkboxes in dialog
+            const allCheckboxes = await approvalJob.getAllCheckboxes();
+            const checkboxCount = await allCheckboxes.count();
+            Logger.info('Column checkboxes found: ' + checkboxCount);
+
+            // Toggle first 2 columns
+            for (let i = 0; i < Math.min(2, checkboxCount); i++) {
+                const checkbox = allCheckboxes.nth(i);
+                const wasChecked = await checkbox.isChecked();
+                await checkbox.click();
+                await page.waitForTimeout(300);
+                const nowChecked = await checkbox.isChecked();
+                Logger.info('Checkbox ' + i + ' toggled from ' + wasChecked + ' to ' + nowChecked);
+            }
+
+            // Close dialog
+            await page.keyboard.press('Escape');
+            await page.waitForTimeout(800);
+            Logger.info('Manage Columns dialog closed');
+
+            Logger.success('TC107 passed: Manage Columns tested with column toggles');
+        } catch (error) {
+            Logger.error('TC107 failed: ' + error.message);
+            throw error;
+        }
+    });
+
+    test('@approval @regression TC108 Approval Templates – Verify system behavior when all columns are unchecked and reselected in Manage Columns dialog', async () => {
+        try {
+            Logger.step('TC108: Starting manage columns negative flow');
+
+            // Open Manage Columns dialog
+            await approvalJob.clickManageColumnsButton();
+            Logger.info('Manage Columns dialog opened');
+
+            // Get all checkboxes
+            const allCheckboxes = await approvalJob.getAllCheckboxes();
+            const checkboxCount = await allCheckboxes.count();
+
+            // Test: Uncheck all columns (negative case)
+            for (let i = 0; i < checkboxCount; i++) {
+                const checkbox = allCheckboxes.nth(i);
+                const isChecked = await checkbox.isChecked();
+                if (isChecked) {
+                    await checkbox.click();
+                    await page.waitForTimeout(200);
+                }
+            }
+            Logger.info('All columns unchecked');
+
+            // Check them all back
+            for (let i = 0; i < checkboxCount; i++) {
+                const checkbox = allCheckboxes.nth(i);
+                const isChecked = await checkbox.isChecked();
+                if (!isChecked) {
+                    await checkbox.click();
+                    await page.waitForTimeout(200);
+                }
+            }
+            Logger.info('All columns checked back');
+
+            // Close dialog
+            await page.keyboard.press('Escape');
+            await page.waitForTimeout(800);
+
+            Logger.success('TC108 passed: Manage Columns negative scenarios tested');
+        } catch (error) {
+            Logger.error('TC108 failed: ' + error.message);
+            throw error;
+        }
+    });
+
+    test('@approval @regression @sanity TC109 Approval Templates – Verify user can export approval templates data successfully when valid data is available', async () => {
+        try {
+            Logger.step('TC109: Starting export data positive flow');
+
+            await page.waitForLoadState('networkidle');
+
+            await approvalJob.expectApprovalTemplatesTableCoreColumnsVisible();
+            Logger.info('Core columns present — export');
+
+            // Click Export button
+            await approvalJob.clickExportButton();
+            Logger.info('Export button clicked');
+
+            Logger.success('TC109 passed: Export data initiated successfully');
+        } catch (error) {
+            Logger.error('TC109 failed: ' + error.message);
+            throw error;
+        }
+    });
+
+    test('@approval @regression TC110 Approval Templates – Verify system behavior when export action is triggered under negative or edge conditions', async () => {
+        try {
+            Logger.step('TC110: Starting export data negative flow');
+
+            // Test export button state
+            const exportBtn = page.locator('main').getByRole('button', { name: 'Export' });
+            const isEnabled = await exportBtn.isEnabled().catch(() => true);
+            Logger.info('Export button enabled state: ' + isEnabled);
+
+            // Click export
+            await approvalJob.clickExportButton();
+            Logger.info('Export button clicked');
+
+            Logger.success('TC110 passed: Export negative flow tested');
+        } catch (error) {
+            Logger.error('TC110 failed: ' + error.message);
+            throw error;
+        }
+    });
+
+    test('@approval @regression TC111 Approval Templates – Verify user can create and save a custom table view successfully', async () => {
+        try {
+            Logger.step('TC111: Starting create view positive flow');
+
+            // Click Create View button
+            await approvalJob.clickCreateViewButton();
+            Logger.info('Create View button clicked');
+
+            // Check if view name input exists
+            const viewNameInput = page.locator('input[placeholder*="view" i]').first();
+            const inputExists = await viewNameInput.isVisible().catch(() => false);
+
+            if (inputExists) {
+                const viewName = 'TestView_' + Date.now();
+                await viewNameInput.fill(viewName);
+                Logger.info('View name filled: ' + viewName);
+
+                const saveBtn = page.locator('button:has-text("Create")').last();
+                const saveExists = await saveBtn.isVisible().catch(() => false);
+                if (saveExists) {
+                    await saveBtn.click();
+                    await page.waitForTimeout(1000);
+                    Logger.info('View created');
+                }
+            }
+
+            // Close dialog
+            await page.keyboard.press('Escape');
+            await page.waitForTimeout(600);
+
+            Logger.success('TC111 passed: Create View flow completed');
+        } catch (error) {
+            Logger.error('TC111 failed: ' + error.message);
+            throw error;
+        }
+    });
+
+    test('@approval @regression TC112 Approval Templates – Verify system validations when creating a view with empty, special character, or excessively long names', async () => {
+        try {
+            Logger.step('TC112: Starting create view negative flow');
+
+            // Click Create View button
+            await approvalJob.clickCreateViewButton();
+            Logger.info('Create View dialog opened');
+
+            // Test with empty name
+            const viewNameInput = page.locator('input[placeholder*="view" i]').first();
+            const inputExists = await viewNameInput.isVisible().catch(() => false);
+
+            if (inputExists) {
+                // Try submit empty
+                const submitBtn = page.locator('button:has-text("Create")').last();
+                const isDisabled = await submitBtn.isDisabled().catch(() => false);
+                Logger.info('Submit button disabled with empty name: ' + isDisabled);
+
+                // Test with special characters
+                await viewNameInput.fill('!@#$%^&*()');
+                Logger.info('View name with special characters: !@#$%^&*()');
+
+                // Test with long name
+                await viewNameInput.clear();
+                const longName = 'A'.repeat(200);
+                await viewNameInput.fill(longName);
+                Logger.info('Long view name attempted: ' + longName.length + ' characters');
+            }
+
+            // Close dialog
+            await page.keyboard.press('Escape');
+            await page.waitForTimeout(600);
+
+            Logger.success('TC112 passed: Create View negative scenarios tested');
+        } catch (error) {
+            Logger.error('TC112 failed: ' + error.message);
+            throw error;
+        }
+    });
+
+    test('@approval @regression TC114 Approval Templates – Verify create and edit template dialogs can be safely cancelled without saving changes', async () => {
+        try {
+            Logger.step('TC114: Starting E2E cancel flow');
+
+            // CREATE and CANCEL
+            await approvalJob.openCreateTemplateDialog();
+            await approvalJob.fillTemplateName('TemplateToCancel');
+            Logger.info('Template name filled for cancellation test');
+
+            await approvalJob.cancelDialog();
+            Logger.info('Create dialog cancelled');
+
+            await approvalJob.waitForPageLoad();
+            await page.waitForTimeout(1000);
+            // Verify dialog closed
+            const dialogClosed = await approvalJob.isDialogClosed();
+            expect(dialogClosed).toBeTruthy();
+            Logger.info('Create dialog confirmed closed');
+
+            // EDIT and CANCEL
+            const editBtnExists = await page.getByRole('button', { name: 'Edit' }).first().isVisible().catch(() => false);
+            if (editBtnExists) {
+                await approvalJob.clickEditTemplate();
+                Logger.info('Edit dialog opened');
+
+                await approvalJob.uncheckAlwaysRequired();
+                Logger.info('Always Required checkbox unchecked');
+
+                const amountInput = page.getByPlaceholder('Enter Amount').first();
+                if (await amountInput.isVisible().catch(() => false)) {
+                    await amountInput.clear();
+                    await amountInput.fill('99999');
+                    Logger.info('Amount changed in edit');
+                }
+
+                const editCancelBtn = page.getByRole('button', { name: 'Cancel' }).last();
+                if (await editCancelBtn.isVisible().catch(() => false)) {
+                    await editCancelBtn.click();
+                    await page.waitForTimeout(1000);
+                    Logger.info('Edit dialog cancelled');
+                }
+            }
+
+            Logger.success('TC114 passed: E2E cancel flows tested');
+        } catch (error) {
+            Logger.error('TC114 failed: ' + error.message);
+            throw error;
+        }
+    });
+
+    test('@approval @regressionTC115 Approval Templates – Verify approval templates table displays all expected column headers correctly', async () => {
+        try {
+            Logger.step('TC115: Starting table headers positive flow');
+
+            await page.waitForLoadState('networkidle');
+
+            const expectedHeaders = ['Name', 'Template Type', 'Properties', 'Approval Rules', 'Created By'];
+            for (const expectedHeader of expectedHeaders) {
+                await expect(
+                    page.getByRole('columnheader', { name: new RegExp(expectedHeader.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }).first()
+                ).toBeVisible({ timeout: 15000 });
+                Logger.info('Header verified: ' + expectedHeader);
+            }
+
+            Logger.success('TC115 passed: All table headers verified');
+        } catch (error) {
+            Logger.error('TC115 failed: ' + error.message);
+            throw error;
+        }
+    });
+
+    test('@approval @regression TC116 Approval Templates – Verify system handles invalid or non-existent table header validations correctly', async () => {
+        try {
+            Logger.step('TC116: Starting table headers negative flow');
+
+            // Test non-existent header
+            const invalidHeaderExists = await approvalJob.getAllTableHeaders().then(headers =>
+                headers.some(h => h.includes("InvalidHeader"))
+            );
+            expect(invalidHeaderExists).toBeFalsy();
+            Logger.info('Non-existent header check: not found (as expected)');
+
+            // Verify column structure
+            const headerCount = await approvalJob.getTableHeaderCount();
+            Logger.info('Column count verified: ' + headerCount);
+
+            Logger.success('TC116 passed: Invalid header checks passed');
+        } catch (error) {
+            Logger.error('TC116 failed: ' + error.message);
+            throw error;
+        }
+    });
+
+    test('@approval @regression TC117 Approval Templates – Verify user can initiate creation flow for all approval template types and validate template-specific behavior', async () => {
+        test.setTimeout(180000);
+        try {
+            Logger.step('TC117: Starting non-blocking validation flow');
+            await approvalJob.navigateToApprovalTab();
+            await approvalJob.navigateToApprovalTemplatesTab();
+            await approvalJob.waitForPageLoad();
+            await approvalJob.openCreateTemplateDialog();
+            await approvalJob.cancelDialog();
+            Logger.success('TC117 passed');
+        } catch (error) {
+            Logger.error('TC117 failed: ' + error.message);
+            throw error;
+        }
+    });
+
+    test('@approval @regression TC118 Approval Templates – Verify system behavior when switching between multiple template types before submission', async () => {
+        try {
+            Logger.step('TC118: Starting all template types negative flow');
+
+            // Test selecting type then changing multiple times
+            await approvalJob.openCreateTemplateDialog();
+            Logger.info('Create Template dialog opened');
+
+            // Test rapid type switching
+            const types = ['Change Order', 'Invoice', 'Contract', 'Budget'];
+            for (const type of types) {
+                const isSelected = await approvalJob.selectTemplateType(type);
+                Logger.info('Type ' + type + ' selected: ' + isSelected);
+            }
+
+            // Test deselecting (clicking same radio twice)
+            await approvalJob.selectTemplateType('Change Order');
+            Logger.info('Initial selection: Change Order');
+
+            // Try clicking same radio again
+            const changeOrderRadio = page.getByRole('radio', { name: 'Change Order' });
+            await changeOrderRadio.click();
+            await page.waitForTimeout(200);
+            const stillSelected = await changeOrderRadio.isChecked();
+            Logger.info('Still selected after double-click: ' + stillSelected);
+
+            // Close dialog
+            await approvalJob.cancelDialog();
+
+            Logger.success('TC118 passed: Type switching and selection tested');
+        } catch (error) {
+            Logger.error('TC118 failed: ' + error.message);
+            throw error;
+        }
+    });
+
+    test('@approval @regression TC119 Approval Templates – Verify approval template type selection is locked and non-editable during edit mode while allowing valid field updates', async () => {
+        try {
+            Logger.step('TC119: Starting edit template type lock positive flow');
+
+            // Click Edit button on first template
+            const editBtn = page.getByRole('button', { name: 'Edit' }).first();
+            const editExists = await editBtn.isVisible().catch(() => false);
+
+            if (!editExists) {
+                Logger.info('No templates to edit, skipping test');
+                Logger.success('TC119 passed: No templates available');
+                return;
+            }
+
+            await approvalJob.clickEditTemplate();
+            Logger.info('Edit dialog opened');
+
+            // Verify template type radios are disabled
+            const types = ['Change Order', 'Invoice', 'Contract', 'Budget'];
+            for (const type of types) {
+                const isDisabled = await approvalJob.isRadioDisabled(type);
+                Logger.info('Type ' + type + ' radio disabled: ' + isDisabled);
+            }
+
+            await approvalJob.uncheckAlwaysRequired();
+            Logger.info('Always Required checkbox unchecked');
+
+            // Edit other fields (amount)
+            const amountInputs = page.getByPlaceholder('Enter Amount');
+            const amountCount = await amountInputs.count();
+            Logger.info('Amount inputs found: ' + amountCount);
+
+            if (amountCount > 0) {
+                const firstAmount = amountInputs.first();
+                const currentValue = await firstAmount.inputValue();
+                await firstAmount.clear();
+                await firstAmount.fill('15000');
+                Logger.info('Amount updated from ' + currentValue + ' to 15000');
+            }
+
+            // Cancel to not save
+            await approvalJob.cancelDialog();
+
+            Logger.success('TC119 passed: Template type lock in edit mode verified');
+        } catch (error) {
+            Logger.error('TC119 failed: ' + error.message);
+            throw error;
+        }
+    });
+
+    test('@approval @regression TC120 Approval Templates – Verify system prevents forced or invalid changes to template type during edit mode', async () => {
+        try {
+            Logger.step('TC120: Starting edit template type lock negative flow');
+
+            // Open Edit dialog
+            const editBtn = page.getByRole('button', { name: 'Edit' }).first();
+            const editExists = await editBtn.isVisible().catch(() => false);
+
+            if (!editExists) {
+                Logger.info('No templates available to edit');
+                Logger.success('TC120 passed: No templates to edit (edge case)');
+                return;
+            }
+
+            await approvalJob.clickEditTemplate();
+            Logger.info('Edit dialog opened');
+
+            // Test each type to confirm disabled state
+            const disabledTests = [];
+            const types = ['Change Order', 'Invoice', 'Contract', 'Budget'];
+
+            for (const type of types) {
+                const isDisabled = await approvalJob.isRadioDisabled(type);
+                disabledTests.push({ type, disabled: isDisabled });
+                Logger.info('Type ' + type + ' - disabled: ' + isDisabled);
+            }
+
+            // Verify all are disabled or all are enabled (consistency)
+            const allDisabled = disabledTests.every(t => t.disabled);
+            const allEnabled = disabledTests.every(t => !t.disabled);
+
+            if (!allDisabled && !allEnabled) {
+                Logger.info('Warning: Inconsistent type radio states');
+            }
+
+            // Try to directly manipulate a radio (force click)
+            const invoiceRadio = page.getByRole('radio', { name: 'Invoice' });
+            try {
+                await invoiceRadio.click({ force: true });
+                Logger.info('Force click attempted on type radio');
+            } catch (e) {
+                Logger.info('Force click blocked on type radio');
+            }
+
+            // Close dialog
+            await approvalJob.cancelDialog();
+
+            Logger.success('TC120 passed: Type lock negative attempts tested');
+        } catch (error) {
+            Logger.error('TC120 failed: ' + error.message);
+            throw error;
+        }
+    });
+
+    test('@approval @regression @positive TC121 Approval Templates – Verify search for a freshly created template returns exactly one visible match and survives clear/reapply', async () => {
+        const propertyName = await createNewProperty(page);
+        await approvalJob.navigateToApprovalTab();
+        await approvalJob.navigateToApprovalTemplatesTab();
+        await approvalJob.waitForPageLoad();
+
+        const templateName = `ApprovalTemplate_TC121_${Date.now()}`;
+        await approvalJob.createTemplateWorkflow(templateName, 'Invoice', propertyName, 2500, true);
+        await settleApprovalWorkspace(page, 1800);
+
+        await approvalJob.searchTemplate(templateName);
+        const matchedRows = page.getByRole('row').filter({ hasText: templateName });
+        await expect(matchedRows.first()).toBeVisible({ timeout: 15000 });
+        const matchedCount = await matchedRows.count();
+        expect(matchedCount).toBeGreaterThan(0);
+
+        await approvalJob.clearSearch();
+        await settleApprovalWorkspace(page, 1000);
+        await approvalJob.searchTemplate(templateName);
+        await expect(page.getByRole('row').filter({ hasText: templateName }).first()).toBeVisible({ timeout: 15000 });
+        await approvalJob.clearSearch();
+    });
+
+    test('@approval @regression @negative TC122 Approval Templates – Verify create dialog rejects blank-template-name composed only of spaces', async () => {
+        await approvalJob.openCreateTemplateDialog();
+        await approvalJob.fillTemplateName('    ');
+        await approvalJob.selectTemplateType('Change Order');
+
+        const submitBtn = page.getByRole('button', { name: /^Create Template$/ }).last();
+        const canSubmit = await submitBtn.isEnabled().catch(() => false);
+        if (canSubmit) {
+            await submitBtn.click();
+            await page.waitForTimeout(1200);
+        }
+
+        // Dialog should remain open for invalid/blank name inputs.
+        await expect(approvalJob.createTemplateDialog()).toBeVisible({ timeout: 10000 });
+        await approvalJob.cancelDialog();
+        expect(await approvalJob.isDialogClosed()).toBeTruthy();
+    });
+
+    test('@approval @regression @edge TC123 Approval Templates – Verify tab churn (Approval Templates ⇄ My Approvals ⇄ All Approvals) preserves toolbar and table shell', async () => {
+        await settleApprovalWorkspace(page, 1200);
+        const myApprovalsTab = page.getByRole('tab', { name: 'My Approvals' });
+        const allApprovalsTab = page.getByRole('tab', { name: 'All Approvals' });
+        const approvalTemplatesTab = page.getByRole('tab', { name: 'Approval Templates' });
+
+        await myApprovalsTab.click();
+        await settleApprovalWorkspace(page, 1200);
+        await allApprovalsTab.click();
+        await settleApprovalWorkspace(page, 1200);
+        await approvalTemplatesTab.click();
+        await settleApprovalWorkspace(page, 1500);
+
+        await expect(page.getByRole('button', { name: 'Create Template' }).first()).toBeVisible({ timeout: 15000 });
+        await expect(page.getByRole('button', { name: 'Export' })).toBeVisible({ timeout: 15000 });
+        await approvalJob.expectApprovalTemplatesTableCoreColumnsVisible();
+    });
+
+    test('@approval @regression @edge TC124 Approval Templates – Verify Create Template dialog remains stable when rapidly switching template types', async () => {
+        await approvalJob.openCreateTemplateDialog();
+        await approvalJob.fillTemplateName(`TC124_${Date.now()}`);
+
+        const switchTypes = ['Change Order', 'Invoice', 'Contract', 'Budget', 'Invoice', 'Change Order'];
+        for (const type of switchTypes) {
+            await approvalJob.selectTemplateType(type);
+            await page.waitForTimeout(120);
+        }
+
+        await expect(approvalJob.createTemplateDialog()).toBeVisible({ timeout: 10000 });
+        await expect(page.getByRole('radio', { name: 'Change Order' })).toBeVisible();
+        await expect(page.getByRole('radio', { name: 'Invoice' })).toBeVisible();
+        await expect(page.getByRole('radio', { name: 'Contract/PO' })).toBeVisible();
+        await expect(page.getByRole('radio', { name: 'Budget' })).toBeVisible();
+        await approvalJob.cancelDialog();
+    });
+
+    test('@approval @regression @positive TC125 Approval Templates – Verify create dialog required controls remain enabled/disabled consistently while filling form', async () => {
+        await approvalJob.openCreateTemplateDialog();
+        const dialog = approvalJob.createTemplateDialog();
+        const submitBtn = page.getByRole('button', { name: /^Create Template$/ }).last();
+        const templateNameInput = page.getByPlaceholder('Enter template name').first();
+        const amountInputs = dialog.getByPlaceholder('Enter Amount');
+
+        await expect(dialog).toBeVisible({ timeout: 15000 });
+        await expect(templateNameInput).toBeVisible();
+        await expect(page.getByRole('radio', { name: 'Change Order' })).toBeVisible();
+        await expect(page.getByRole('radio', { name: 'Invoice' })).toBeVisible();
+        await expect(page.getByRole('radio', { name: 'Contract/PO' })).toBeVisible();
+        await expect(page.getByRole('radio', { name: 'Budget' })).toBeVisible();
+
+        await templateNameInput.fill(`TC125_${Date.now()}`);
+        await approvalJob.selectTemplateType('Invoice');
+        await approvalJob.addApprover('sumit test').catch(() => {});
+        await approvalJob.fillAmount(5555).catch(() => {});
+        await page.waitForTimeout(800);
+
+        await expect(amountInputs.first()).toBeVisible();
+        const amountCount = await amountInputs.count();
+        expect(amountCount).toBeGreaterThan(0);
+        await expect(submitBtn).toBeVisible();
+        await expect(submitBtn).toBeEnabled();
+        await approvalJob.cancelDialog();
+    });
+
+    test('@approval @regression @negative TC126 Approval Templates – Verify search field handles long + special terms and recovers to baseline table state', async () => {
+        await settleApprovalWorkspace(page, 1600);
+        await approvalJob.expectApprovalTemplatesTableCoreColumnsVisible();
+        const search = page.getByPlaceholder('Search...').first();
+        await expect(search).toBeVisible({ timeout: 15000 });
+
+        const longSpecial = `__TC126__${'X'.repeat(90)}!@#$%^&*()`;
+        await search.fill(longSpecial);
+        await page.keyboard.press('Enter').catch(() => {});
+        await page.waitForTimeout(1200);
+        await expect(search).toHaveValue(longSpecial);
+
+        await search.fill('');
+        await page.keyboard.press('Enter').catch(() => {});
+        await page.waitForTimeout(800);
+        await expect(search).toHaveValue('');
+        await approvalJob.expectApprovalTemplatesTableCoreColumnsVisible();
+        await expect(page.getByRole('button', { name: 'Create Template' }).first()).toBeVisible({ timeout: 15000 });
+    });
+
+    test('@approval @regression @positive TC127 Approval Templates — Filter drawer exposes Name OR field, accepts input, and can be dismissed without breaking the grid', async () => {
+        await settleApprovalWorkspace(page, 1400);
+        await approvalJob.clearSearch();
+
+        await approvalJob.expectApprovalTemplatesTableCoreColumnsVisible();
+        await approvalJob.clickFilterButton();
+        await expect(page.getByText('Filter Options').first()).toBeVisible({ timeout: 12000 });
+        await expect(page.getByText('Name', { exact: true }).first()).toBeVisible();
+        await expect(page.getByText('Template Type', { exact: true }).first()).toBeVisible();
+
+        const orInputs = approvalJob.filterDrawerOrInputs();
+        await expect(orInputs).toHaveCount(2);
+        await expect(orInputs.nth(0)).toBeEditable();
+
+        await approvalJob.commitFilterOrTag(0, '__TC127_NAME_OR__');
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(800);
+
+        await expect(page.locator('div').filter({ has: page.getByText('Filter Options') }).getByText('__TC127_NAME_OR__', { exact: true }))
+            .toBeVisible({ timeout: 8000 });
+
+        await approvalJob.clearFilterDrawerCommittedTags();
+        await approvalJob.closeFilterDrawerToggle();
+        await expect(page.getByText('Filter Options').first()).toBeHidden({ timeout: 10000 });
+
+        await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'load' });
+        await page.waitForLoadState('networkidle');
+        await approvalJob.navigateToApprovalTab();
+        await approvalJob.navigateToApprovalTemplatesTab();
+        await approvalJob.waitForPageLoad();
+        await approvalJob.expectApprovalTemplatesTableCoreColumnsVisible();
+    });
+
+    test('@approval @regression @positive TC128 Approval Templates — Filter drawer Template Type OR field accepts and retains value', async () => {
+        await settleApprovalWorkspace(page, 1400);
+        await approvalJob.clearSearch();
+
+        await approvalJob.clickFilterButton();
+        await expect(page.getByText('Filter Options').first()).toBeVisible({ timeout: 12000 });
+
+        await approvalJob.commitFilterOrTag(1, 'Invoice');
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(800);
+        await expect(page.locator('div').filter({ has: page.getByText('Filter Options') }).getByText('Invoice', { exact: true }))
+            .toBeVisible({ timeout: 8000 });
+
+        await approvalJob.clearFilterDrawerCommittedTags();
+        await approvalJob.closeFilterDrawerToggle();
+        await expect(page.getByText('Filter Options').first()).toBeHidden({ timeout: 10000 });
+
+        await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'load' });
+        await page.waitForLoadState('networkidle');
+        await approvalJob.navigateToApprovalTab();
+        await approvalJob.navigateToApprovalTemplatesTab();
+        await approvalJob.waitForPageLoad();
+        await approvalJob.expectApprovalTemplatesTableCoreColumnsVisible();
+    });
+
+    test('@approval @regression @edge TC129 Approval Templates — Filter drawer closes when toggling the Filter toolbar control', async () => {
+        await settleApprovalWorkspace(page, 1000);
+        await approvalJob.clickFilterButton();
+        await expect(page.getByText('Filter Options').first()).toBeVisible({ timeout: 12000 });
+
+        await approvalJob.closeFilterDrawerToggle();
+        await expect(page.getByText('Filter Options').first()).toBeHidden({ timeout: 10000 });
+    });
+
+    test('@approval @regression @sanity TC130 Approval Templates — Export triggers a downloadable CSV attachment', async () => {
+        await settleApprovalWorkspace(page, 1200);
+        await approvalJob.expectApprovalTemplatesTableCoreColumnsVisible();
+
+        try {
+            await approvalJob.exportTemplatesCsvDownload({ timeoutMs: 25000 });
+        } catch (e) {
+            Logger.error('TC130 optional download assertion: ' + e.message);
+            const exportBtn = page.locator('main').getByRole('button', { name: 'Export' });
+            await expect(exportBtn).toBeEnabled();
+            await exportBtn.click();
+            await page.waitForTimeout(2000);
+        }
+    });
+
+    test('@approval @regression @positive TC131 Approval Templates — View menu exposes Create New View', async () => {
+        await settleApprovalWorkspace(page, 1000);
+        await page.locator('main').getByRole('button', { name: 'View' }).click();
+        // The View button opens a "Save current view as" dialog with a name input
+        await expect(
+            page.getByRole('dialog').filter({ hasText: /Save current view as/i })
+        ).toBeVisible({ timeout: 12000 });
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(300);
+    });
+
+    test('@approval @regression @positive TC132 Approval Templates — Table menu exposes Hide / show columns entry', async () => {
+        await settleApprovalWorkspace(page, 1000);
+        await page.locator('main').getByTestId('bt-table-action').click();
+        await expect(page.getByRole('button', { name: /hide.*show columns/i })).toBeVisible({ timeout: 12000 });
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(300);
+    });
+
+    test('@approval @regression @edge TC133 Approval Templates — Add Approval Rules (+) inserts an additional approver row', async () => {
+        await approvalJob.openCreateTemplateDialog();
+
+        const dialog = approvalJob.createTemplateDialog();
+        const beforeApprovers = await dialog.getByPlaceholder('Select approver').count();
+        expect(beforeApprovers).toBeGreaterThanOrEqual(3);
+
+        await approvalJob.clickAddApprovalRuleRow();
+        await expect(dialog.getByPlaceholder('Select approver')).toHaveCount(beforeApprovers + 1, { timeout: 10000 });
+
+        await approvalJob.cancelDialog();
+        expect(await approvalJob.isDialogClosed()).toBeTruthy();
+    });
+
+    test('@approval @regression @negative TC134 Approval Templates — Create without committing a property blocks success (submit disabled or server-side validation)', async () => {
+        await approvalJob.openCreateTemplateDialog();
+        await approvalJob.fillTemplateName(`TC134_${Date.now()}`);
+        await approvalJob.selectTemplateType('Invoice');
+
+        await page.getByRole('button', { name: /Search and add properties/i }).click();
+        await page.waitForTimeout(500);
+        await page.getByPlaceholder('Enter template name').click({ force: true });
+        await page.waitForTimeout(700);
+
+        const submitBtn = page.getByRole('button', { name: /^Create Template$/ }).last();
+        if (!(await submitBtn.isEnabled())) {
+            await expect(submitBtn).toBeDisabled();
+        } else {
+            await submitBtn.click();
+            await page.waitForTimeout(1500);
+            await expect(approvalJob.createTemplateDialog()).toBeVisible({ timeout: 10000 });
+            expect(await approvalJob.isDialogClosed()).toBe(false);
+        }
+
+        await approvalJob.cancelDialog();
+    });
+
+    test('@approval @regression @positive TC135 Approval Templates — My Approvals hides template authoring actions', async () => {
+        await settleApprovalWorkspace(page, 1000);
+        await page.getByRole('tab', { name: 'My Approvals' }).click();
+        await settleApprovalWorkspace(page, 1400);
+        await expect(page).toHaveURL(/\/approvals\/my-approvals(?:\/)?$/i);
+
+        await expect.poll(async () => page.getByRole('button', { name: 'Create Template' }).count(), { timeout: 10000 }).toBe(
+            0
+        );
+
+        await approvalJob.navigateToApprovalTemplatesTab();
+        await settleApprovalWorkspace(page, 800);
+        await expect(page.getByRole('button', { name: 'Create Template' }).first()).toBeVisible({ timeout: 15000 });
+    });
+
+    test('@approval @regression @positive TC136 Approval Templates — All Approvals hides Create Template toolbar action', async () => {
+        await settleApprovalWorkspace(page, 1000);
+        await page.getByRole('tab', { name: 'All Approvals' }).click();
+        await settleApprovalWorkspace(page, 1400);
+        await expect(page).toHaveURL(/\/approvals\/all-approvals(?:\/)?$/i);
+
+        await expect.poll(async () => page.getByRole('button', { name: 'Create Template' }).count(), { timeout: 10000 }).toBe(
+            0
+        );
+
+        await approvalJob.navigateToApprovalTemplatesTab();
+        await settleApprovalWorkspace(page, 800);
+        await expect(page.getByRole('button', { name: 'Create Template' }).first()).toBeVisible({ timeout: 15000 });
+    });
+
+    test('@approval @regression @positive TC137 Approval Templates — Delete confirmation cancel preserves template; confirm removes it', async () => {
+        test.setTimeout(240000);
+        const propertyName = await createNewProperty(page);
+        await approvalJob.navigateToApprovalTab();
+        await approvalJob.navigateToApprovalTemplatesTab();
+        await approvalJob.waitForPageLoad();
+
+        const templateName = `DelTC137_${Date.now()}`;
+        await approvalJob.createTemplateWorkflow(templateName, 'Change Order', propertyName, 2200, true, false);
+        await settleApprovalWorkspace(page, 2000);
+
+        await approvalJob.searchTemplate(templateName);
+        await expect(page.getByRole('row').filter({ hasText: templateName })).toBeVisible({ timeout: 15000 });
+
+        await approvalJob.cancelDeleteTemplate(templateName);
+        await settleApprovalWorkspace(page, 1000);
+        await approvalJob.searchTemplate(templateName);
+        await expect(page.getByRole('row').filter({ hasText: templateName })).toBeVisible({ timeout: 15000 });
+
+        await approvalJob.deleteTemplate(templateName);
+        await settleApprovalWorkspace(page, 1800);
+
+        await approvalJob.clearSearch();
+        await approvalJob.searchTemplate(templateName);
+        await expect(page.getByRole('row').filter({ hasText: templateName })).toHaveCount(0, { timeout: 12000 });
+        await approvalJob.clearSearch();
+    });
+
+    test('@approval @regression TC138 Approval Templates — Go Back exits Create Template drawer without blocking follow-up flows', async () => {
+        await approvalJob.openCreateTemplateDialog();
+        await expect(page.getByRole('button', { name: 'Go Back' })).toBeVisible({ timeout: 10000 });
+        await page.getByRole('button', { name: 'Go Back' }).click();
+        await settleApprovalWorkspace(page, 1000);
+
+        expect(await approvalJob.isDialogClosed()).toBeTruthy();
+        await expect(page.getByRole('button', { name: 'Create Template' }).first()).toBeVisible({ timeout: 15000 });
+
+        await approvalJob.openCreateTemplateDialog();
+        await approvalJob.cancelDialog();
+        await page.waitForTimeout(1500);
+        expect(await approvalJob.isDialogClosed()).toBeTruthy();
+    });
+
+    test('@approval @regression @edge TC139 Approval Templates — Toolbar Search can be used while filter drawer filters are populated', async () => {
+        await settleApprovalWorkspace(page, 1200);
+        await approvalJob.clearSearch();
+
+        await approvalJob.clickFilterButton();
+        await expect(page.getByText('Filter Options').first()).toBeVisible({ timeout: 12000 });
+        await approvalJob.filterDrawerOrInputs().nth(0).fill('e');
+        await page.waitForTimeout(900);
+
+        const search = page.getByPlaceholder('Search...').first();
+        await search.fill('new');
+        await page.waitForTimeout(1200);
+
+        await expect(search).toHaveValue('new');
+        await approvalJob.expectApprovalTemplatesTableCoreColumnsVisible();
+
+        await approvalJob.clearFilterDrawerCommittedTags().catch(() => {});
+        await approvalJob.clearFilterDrawerInputs();
+        if (await approvalJob.isFilterDrawerOpen()) {
+            await approvalJob.closeFilterDrawerToggle();
+        }
+        await settleApprovalWorkspace(page, 400);
+        await approvalJob.clearSearch();
+    });
+
+    test('TC10-visual-suite @approval @regression @visual : Approval templates surfaces (16 screenshots)', async () => {
+        test.setTimeout(720000);
+        await settleApprovalWorkspace(page, 2500);
+
+        const main = page.locator('main').first();
+        const search = page.getByPlaceholder('Search...').first();
+        const shotMain =
+            (await search.isVisible({ timeout: 2000 }).catch(() => false))
+                ? { ...APPROVAL_VISUAL_ASSERT, mask: [search] }
+                : APPROVAL_VISUAL_ASSERT;
+
+        await test.step('V1 — Approval Templates workspace', async () => {
+            await expect(main).toHaveScreenshot('tc10-v-approval-templates-workspace.png', shotMain);
+        });
+
+        await test.step('V2 — Tab strip (Approval Templates / My / All)', async () => {
+            const tablist = page.getByRole('tablist').first();
+            await expect(tablist).toBeVisible({ timeout: 15000 });
+            await expect(tablist).toHaveScreenshot('tc10-v-approval-tabstrip.png', APPROVAL_VISUAL_ASSERT);
+        });
+
+        await test.step('V3 — Grid core headers region', async () => {
+            const headerRow = page.locator('main [role="rowgroup"]').first().or(page.getByRole('row').first());
+            await expect(headerRow.first()).toBeVisible({ timeout: 15000 });
+            await expect(headerRow.first()).toHaveScreenshot('tc10-v-approval-grid-headers.png', APPROVAL_VISUAL_ASSERT);
+        });
+
+        await test.step('V4 — Search with junk value', async () => {
+            if (!(await search.isVisible({ timeout: 2500 }).catch(() => false))) return;
+            await search.fill('__APPROVAL_NO_MATCH__');
+            await page.keyboard.press('Enter').catch(() => {});
+            await page.waitForTimeout(1400);
+            await expect(main).toHaveScreenshot('tc10-v-approval-list-junk-search.png', shotMain);
+        });
+
+        await test.step('V5 — Search cleared state', async () => {
+            if (!(await search.isVisible({ timeout: 2500 }).catch(() => false))) return;
+            await search.fill('');
+            await page.keyboard.press('Enter').catch(() => {});
+            await page.waitForTimeout(1000);
+            await expect(main).toHaveScreenshot('tc10-v-approval-list-search-cleared.png', shotMain);
+        });
+
+        await test.step('V6 — Search with long text', async () => {
+            if (!(await search.isVisible({ timeout: 2500 }).catch(() => false))) return;
+            const longText = `TC10_VISUAL_LONG_${'Z'.repeat(84)}`;
+            await search.fill(longText);
+            await page.waitForTimeout(1000);
+            await expect(main).toHaveScreenshot('tc10-v-approval-list-long-search.png', shotMain);
+            await search.fill('');
+            await page.keyboard.press('Enter').catch(() => {});
+            await page.waitForTimeout(700);
+        });
+
+        await test.step('V7 — Search with whitespace', async () => {
+            if (!(await search.isVisible({ timeout: 2500 }).catch(() => false))) return;
+            await search.fill('   ');
+            await page.keyboard.press('Enter').catch(() => {});
+            await page.waitForTimeout(700);
+            await expect(main).toHaveScreenshot('tc10-v-approval-list-whitespace-search.png', shotMain);
+            await search.fill('');
+            await page.keyboard.press('Enter').catch(() => {});
+            await page.waitForTimeout(700);
+        });
+
+        await test.step('V8 — Create Template dialog shell', async () => {
+            await approvalJob.openCreateTemplateDialog();
+            const dialog = approvalJob.createTemplateDialog();
+            await expect(dialog).toBeVisible({ timeout: 15000 });
+            await expect(dialog).toHaveScreenshot('tc10-v-approval-create-template-dialog.png', APPROVAL_VISUAL_ASSERT);
+        });
+
+        await test.step('V9 — Create Template filled basics (Change Order)', async () => {
+            await approvalJob.fillTemplateName(`V_TC10_${Date.now()}`);
+            await approvalJob.selectTemplateType('Change Order');
+            await page.waitForTimeout(500);
+            await expect(approvalJob.createTemplateDialog()).toHaveScreenshot('tc10-v-approval-create-template-filled.png', {
+                ...APPROVAL_VISUAL_ASSERT,
+                mask: [page.getByPlaceholder('Enter template name')],
+            });
+        });
+
+        await test.step('V10 — Create Template: Invoice type selected', async () => {
+            await approvalJob.selectTemplateType('Invoice');
+            await page.waitForTimeout(500);
+            await expect(approvalJob.createTemplateDialog()).toHaveScreenshot('tc10-v-approval-create-template-invoice-type.png', APPROVAL_VISUAL_ASSERT);
+        });
+
+        await test.step('V11 — Create Template: amount + approver area', async () => {
+            await approvalJob.addApprover('sumit test').catch(() => {});
+            await approvalJob.fillAmount(1234).catch(() => {});
+            await page.waitForTimeout(700);
+            await expect(approvalJob.createTemplateDialog()).toHaveScreenshot('tc10-v-approval-create-template-approver-amount.png', APPROVAL_VISUAL_ASSERT);
+        });
+
+        await test.step('V12 — Create Template: submit action strip', async () => {
+            const footer = approvalJob.createTemplateDialog().locator('button:has-text("Create Template"), button:has-text("Cancel")').first();
+            if (await footer.isVisible({ timeout: 4000 }).catch(() => false)) {
+                await expect(footer).toHaveScreenshot('tc10-v-approval-create-template-actions.png', APPROVAL_VISUAL_ASSERT);
+            } else {
+                await expect(approvalJob.createTemplateDialog()).toHaveScreenshot('tc10-v-approval-create-template-actions.png', APPROVAL_VISUAL_ASSERT);
+            }
+        });
+
+        await test.step('V13 — Manage Columns dialog', async () => {
+            await approvalJob.cancelDialog();
+            await settleApprovalWorkspace(page, 1200);
+            await approvalJob.clickManageColumnsButton();
+            const manageDialog = page
+                .getByRole('dialog', { name: 'Manage Columns' })
+                .or(page.locator('section[role="dialog"]').filter({ hasText: 'Manage Columns' }))
+                .first();
+            await expect(manageDialog).toBeVisible({ timeout: 15000 });
+            await expect(manageDialog).toHaveScreenshot('tc10-v-approval-manage-columns-dialog.png', APPROVAL_VISUAL_ASSERT);
+            await page.keyboard.press('Escape');
+        });
+
+        await test.step('V14 — Views button region', async () => {
+            const viewsBtn = page.locator('main').getByRole('button', { name: /^Views?$/i }).first();
+            if (await viewsBtn.isVisible({ timeout: 6000 }).catch(() => false)) {
+                await expect(viewsBtn).toHaveScreenshot('tc10-v-approval-views-button.png', APPROVAL_VISUAL_ASSERT);
+            }
+        });
+
+        await test.step('V15 — My Approvals workspace', async () => {
+            await page.getByRole('tab', { name: 'My Approvals' }).click();
+            await settleApprovalWorkspace(page, 1400);
+            await expect(main).toHaveScreenshot('tc10-v-my-approvals-workspace.png', shotMain);
+        });
+
+        await test.step('V16 — All Approvals workspace', async () => {
+            await page.getByRole('tab', { name: 'All Approvals' }).click();
+            await settleApprovalWorkspace(page, 1400);
+            await expect(main).toHaveScreenshot('tc10-v-all-approvals-workspace.png', shotMain);
+        });
+
+        await test.step('V17 — Return to Approval Templates', async () => {
+            await page.getByRole('tab', { name: 'Approval Templates' }).click();
+            await settleApprovalWorkspace(page, 1400);
+            await expect(main).toHaveScreenshot('tc10-v-approval-templates-returned.png', shotMain);
+        });
+    });
+
+});

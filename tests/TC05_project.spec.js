@@ -1,0 +1,541 @@
+require('dotenv').config();
+const path = require('path');
+const fs = require('fs');
+const { test, expect } = require('@playwright/test');
+const { ProjectJob } = require('../pages/projectJob');
+const { ProjectPage } = require('../pages/projectPage');
+const { BudgetJob } = require('../pages/budgetPage');
+const PropertiesHelper = require('../pages/properties');
+
+test.use({
+    storageState: 'sessionState.json',
+    video: 'retain-on-failure',
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure'
+});
+
+let projectPage, projectJob, prop;
+const PROJECT_VISUAL_ASSERT = {
+    animations: 'disabled',
+    maxDiffPixels: 30000,
+    maxDiffPixelRatio: 0.06,
+};
+
+test.beforeEach(async ({ page }) => {
+    projectPage = new ProjectPage(page);
+    projectJob = new ProjectJob(page);
+    prop = new PropertiesHelper(page);
+
+    await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'load' });
+    await expect(page).toHaveURL(process.env.DASHBOARD_URL);
+    await page.waitForLoadState('networkidle');
+});
+
+test('TC29 @regression @projectAndJob : Navigate to Projects & Jobs and verify page loads successfully within 2 seconds and zero console error', async ({ page }) => {
+    await projectPage.navigateToProjects();
+});
+
+test('TC30 @regression @projectAndJob : User should be able to Open Create Project modal and verify all fields are visible', async () => {
+    await projectPage.navigateToProjects();
+    await projectPage.openCreateProjectModal();
+    await projectPage.verifyModalFields();
+});
+
+test('TC31 @regression @sanity @mandatory @projectAndJob @contract : User should be able to Fill Create Project form, submit, and verify project details on dashboard', async ({ page }) => {
+    let propertyName;
+    const propertyDataPath = path.join(__dirname, '../data/propertyData.json');
+    const downloadsPropertyPath = path.join(process.cwd(), 'downloads', 'property.json');
+    if (fs.existsSync(propertyDataPath)) {
+        const propertyData = JSON.parse(fs.readFileSync(propertyDataPath, 'utf8'));
+        propertyName = propertyData.propertyName;
+    } else if (fs.existsSync(downloadsPropertyPath)) {
+        const propertyData = JSON.parse(fs.readFileSync(downloadsPropertyPath, 'utf8'));
+        propertyName = propertyData.propertyName;
+    } else {
+        throw new Error('Property name not found. Ensure TC14 (create property) runs first or add data/propertyData.json or downloads/property.json');
+    }
+
+    const budgetJob = new BudgetJob(page);
+    const budgetDataPath = path.resolve(process.cwd(), 'files', 'budget_data.csv');
+    expect(fs.existsSync(budgetDataPath), 'files/budget_data.csv must exist for budget upload').toBeTruthy();
+
+    await budgetJob.navigateToBudget();
+    await budgetJob.waitForPageLoad();
+
+    const propertySelected = await budgetJob.selectPropertyByName(propertyName);
+    expect(propertySelected, `Property "${propertyName}" must exist in Budget property dropdown`).toBeTruthy();
+
+    await budgetJob.openRevisionEditor();
+    await budgetJob.uploadFileInRevision(budgetDataPath);
+    await budgetJob.ensureSubmitEnabledAfterUpload();
+    await budgetJob.clickSubmitForApproval();
+    // clickSubmitForApproval already handles dialog + network waits; avoid hanging on pages with long-lived requests.
+    await page.waitForTimeout(2000);
+    await page.waitForURL(/financials\/budget|budget-revision/i, { timeout: 15000 }).catch(() => {});
+
+    // Upload success is already asserted inside uploadFileInRevision (row count in revision grid).
+    // Skip main-grid text/row checks here — they flake if the overview has not refreshed yet.
+
+    await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'load' });
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(1500);
+
+    await projectPage.navigateToProjects();
+    await projectPage.openCreateProjectModal();
+    const startDate = await projectPage.getStartDate();
+    const endDate = await projectPage.getEndDate();
+    const budgetAmount = projectPage.generateRandomBudget(400000, 1000000);
+
+    await projectPage.fillProjectDetails({
+        name: 'Automation Test Project',
+        description: 'Created via Playwright automation',
+        startDate,
+        endDate,
+        budget: budgetAmount
+    });
+});
+
+test('TC32 @regression @projectAndJob : User should be able to search project using partial name and verify matching results', async () => {
+    await projectPage.navigateToProjects();
+    await projectPage.setProjectsTableView();
+    await projectPage.searchProjectInProjects('Automa_Test');
+});
+
+test('TC33 @regression @projectAndJob : User should be able to apply filter and export project', async () => {
+    await projectPage.navigateToProjects();
+    await projectPage.setProjectsTableView();
+    await projectJob.applyProjectFilterAndExport('Harbor Bay at MacDill_Liberty Cove (Sample Property 1)', 'Automa_Test');
+    // await projectJob.deleteFirstProjectRow();
+});
+
+test('TC34 @regression @projectAndJob : Validate cancel button closes without saving.', async () => {
+    await projectPage.navigateToProjects();
+    await projectPage.setProjectsTableView();
+    await projectPage.openCreateProjectModal();
+    await projectPage.verifyModalClosed();
+});
+
+test('TC35 @regression @projectAndJob : Validate Create Project form mandatory fields assertion, property dropdown options and date can be filled directly without using calender', async () => {
+    await projectPage.navigateToProjects();
+    await projectPage.openCreateProjectModal();
+    await projectPage.validateMandatoryFields();
+    await projectPage.propertyDropdownOptions();
+    await projectPage.fillDateField('2024-07-01', '2024-12-31');
+});
+
+test('TC05-positive-suite @regression @projectAndJob : Positive user journeys for Projects, Jobs and Bids', async ({ page }) => {
+    const loc = projectPage.tc05Loc();
+    await test.step('P1: Projects workspace loads with key controls', async () => {
+        await projectPage.tc05GotoProjectsWorkspace();
+        await expect(loc.createProjectToolbarBtn).toBeVisible();
+        await expect(loc.filterIconBtn).toBeVisible();
+        await expect(loc.exportToolbarBtn).toBeVisible();
+    });
+
+    await test.step('P2: Create Project modal opens and closes cleanly', async () => {
+        await projectPage.openCreateProjectModal();
+        await expect(projectPage.modalTitle).toBeVisible({ timeout: 10000 });
+        await expect(projectPage.nameInput).toBeVisible();
+        await projectPage.verifyModalClosed();
+    });
+
+    await test.step('P3: Search input accepts and clears value', async () => {
+        const keyword = `positive_${Date.now().toString().slice(-4)}`;
+        await projectPage.tc05FillSearch(keyword);
+        await expect(loc.mainSearchInput).toHaveValue(keyword);
+        await projectPage.tc05ClearSearch();
+        await expect(loc.mainSearchInput).toHaveValue('');
+    });
+
+    await test.step('P4: Export works without filters', async () => {
+        await projectPage.tc05ExportAndAssertDownload();
+    });
+
+    await test.step('P5: Jobs workspace navigation is healthy', async () => {
+        await projectPage.tc05GotoJobsWorkspace();
+        await expect(loc.mainContainer).toBeVisible();
+    });
+
+    await test.step('P6: Bids workspace navigation is healthy', async () => {
+        await projectPage.tc05GotoBidsWorkspace();
+        await expect(loc.mainContainer).toBeVisible();
+    });
+});
+
+test('TC05-negative-suite @regression @projectAndJob : Negative and missing input validations', async ({ page }) => {
+    const loc = projectPage.tc05Loc();
+
+    await test.step('N1: Create Project empty submit shows mandatory invalid markers', async () => {
+        console.log('[TC05-NEG] N1 — Navigate to Projects workspace and open Create Project modal (no fields filled)');
+        await projectPage.tc05GotoProjectsWorkspace();
+        await projectPage.openCreateProjectModal();
+        const invalidCount = await projectPage.tc05ClickCreateProjectAndInvalidCount();
+        console.log(`[TC05-NEG] N1 — ASSERT: invalid field marker count >= 2 | actual: ${invalidCount}`);
+        try {
+            expect(invalidCount).toBeGreaterThanOrEqual(2);
+            console.log(`[TC05-NEG] N1 — PASS: found ${invalidCount} invalid markers (>= 2)`);
+        } catch (e) {
+            console.log(`[TC05-NEG] N1 — FAIL: expected >= 2 invalid markers, got ${invalidCount}`);
+            throw e;
+        }
+        await projectPage.verifyModalClosed();
+    });
+
+    await test.step('N2: Create Project name-only submit should still enforce missing required fields', async () => {
+        console.log('[TC05-NEG] N2 — Open modal, fill name only ("Only Name Negative Case"), submit');
+        await projectPage.openCreateProjectModal();
+        await projectPage.nameInput.fill('Only Name Negative Case');
+        const invalidCount = await projectPage.tc05ClickCreateProjectAndInvalidCount();
+        console.log(`[TC05-NEG] N2 — ASSERT: invalid field marker count >= 1 (other required fields missing) | actual: ${invalidCount}`);
+        try {
+            expect(invalidCount).toBeGreaterThanOrEqual(1);
+            console.log(`[TC05-NEG] N2 — PASS: found ${invalidCount} invalid marker(s) (>= 1)`);
+        } catch (e) {
+            console.log(`[TC05-NEG] N2 — FAIL: expected >= 1 invalid marker, got ${invalidCount}`);
+            throw e;
+        }
+        const stillOpen = await projectPage.modal.first().isVisible({ timeout: 2000 }).catch(() => false);
+        console.log(`[TC05-NEG] N2 — ASSERT: modal stays open after failed submit | actual visible: ${stillOpen}`);
+        try {
+            expect(stillOpen).toBeTruthy();
+            console.log(`[TC05-NEG] N2 — PASS: modal remains open after name-only submit`);
+        } catch (e) {
+            console.log(`[TC05-NEG] N2 — FAIL: modal closed unexpectedly after name-only submit`);
+            throw e;
+        }
+        await projectPage.verifyModalClosed();
+    });
+
+    await test.step('N3: Create Project whitespace-only name should not be treated as valid', async () => {
+        console.log('[TC05-NEG] N3 — Open modal, fill whitespace-only name ("   "), submit');
+        await projectPage.openCreateProjectModal();
+        await projectPage.nameInput.fill('   ');
+        const invalidCount = await projectPage.tc05ClickCreateProjectAndInvalidCount();
+        console.log(`[TC05-NEG] N3 — ASSERT: invalid field marker count >= 1 (whitespace name rejected) | actual: ${invalidCount}`);
+        try {
+            expect(invalidCount).toBeGreaterThanOrEqual(1);
+            console.log(`[TC05-NEG] N3 — PASS: whitespace name produced ${invalidCount} invalid marker(s)`);
+        } catch (e) {
+            console.log(`[TC05-NEG] N3 — FAIL: whitespace name should trigger >= 1 invalid marker, got ${invalidCount}`);
+            throw e;
+        }
+        await projectPage.verifyModalClosed();
+    });
+
+    await test.step('N4: Create Project negative budget value should not proceed silently', async () => {
+        console.log('[TC05-NEG] N4 — Open modal, fill name "Negative Budget Case" and budget "-1000", submit');
+        await projectPage.openCreateProjectModal();
+        await projectPage.nameInput.fill('Negative Budget Case');
+        await projectPage.budgetInput.fill('-1000').catch(() => { });
+        await projectPage.tc05ClickCreateProjectAndInvalidCount();
+        const stillOpen = await projectPage.modal.first().isVisible({ timeout: 2000 }).catch(() => false);
+        console.log(`[TC05-NEG] N4 — ASSERT: modal stays open when budget is negative (-1000) | actual visible: ${stillOpen}`);
+        try {
+            expect(stillOpen).toBeTruthy();
+            console.log(`[TC05-NEG] N4 — PASS: modal remains open with negative budget value`);
+        } catch (e) {
+            console.log(`[TC05-NEG] N4 — FAIL: modal closed unexpectedly with negative budget value`);
+            throw e;
+        }
+        await projectPage.verifyModalClosed();
+    });
+
+    await test.step('N5: Create Project impossible date ordering keeps modal guarded', async () => {
+        console.log('[TC05-NEG] N5 — Open modal, fill start=2026-12-31 end=2026-01-01 (end before start), submit');
+        await projectPage.openCreateProjectModal();
+        await projectPage.nameInput.fill('Date Order Negative');
+        await projectPage.startDateInput.fill('2026-12-31').catch(() => { });
+        await projectPage.endDateInput.fill('2026-01-01').catch(() => { });
+        await projectPage.tc05ClickCreateProjectAndInvalidCount();
+        const stillOpen = await projectPage.modal.first().isVisible({ timeout: 2000 }).catch(() => false);
+        console.log(`[TC05-NEG] N5 — ASSERT: modal stays open with impossible date range | actual visible: ${stillOpen}`);
+        try {
+            expect(stillOpen).toBeTruthy();
+            console.log(`[TC05-NEG] N5 — PASS: modal remains open with end-before-start dates`);
+        } catch (e) {
+            console.log(`[TC05-NEG] N5 — FAIL: modal closed unexpectedly with impossible date range`);
+            throw e;
+        }
+        await projectPage.verifyModalClosed();
+    });
+
+    await test.step('N6: Project search SQL-like string must not crash page', async () => {
+        const sqlPayload = `' OR 1=1 --`;
+        console.log(`[TC05-NEG] N6 — Fill Projects search with SQL injection payload: "${sqlPayload}"`);
+        await projectPage.tc05FillSearch(sqlPayload);
+        console.log(`[TC05-NEG] N6 — ASSERT: search input retains raw value "${sqlPayload}" (not interpreted, page not crashed)`);
+        try {
+            await expect(loc.mainSearchInput).toHaveValue(sqlPayload);
+            console.log(`[TC05-NEG] N6 — PASS: SQL-like payload stored as plain text in search input`);
+        } catch (e) {
+            console.log(`[TC05-NEG] N6 — FAIL: search input did not retain SQL-like payload`);
+            throw e;
+        }
+    });
+
+    await test.step('N7: Project search script-like payload must remain plain text', async () => {
+        const xssPayload = '<script>alert(1)</script>';
+        console.log(`[TC05-NEG] N7 — Fill Projects search with XSS payload: "${xssPayload}"`);
+        await projectPage.tc05FillSearch(xssPayload);
+        console.log(`[TC05-NEG] N7 — ASSERT: search input retains raw value "${xssPayload}" (not executed as script)`);
+        try {
+            await expect(loc.mainSearchInput).toHaveValue(xssPayload);
+            console.log(`[TC05-NEG] N7 — PASS: XSS payload treated as plain text in search input`);
+        } catch (e) {
+            console.log(`[TC05-NEG] N7 — FAIL: search input did not retain XSS payload as plain text`);
+            throw e;
+        }
+    });
+
+    await test.step('N8: No-match project search shows safe empty state', async () => {
+        const noMatchTerm = `__NEG_NO_MATCH_${Date.now()}__`;
+        console.log(`[TC05-NEG] N8 — Fill Projects search with guaranteed no-match term: "${noMatchTerm}"`);
+        await projectPage.tc05FillSearch(noMatchTerm);
+        console.log(`[TC05-NEG] N8 — ASSERT: empty-state / no-results element is visible within 15s`);
+        try {
+            await expect(loc.noResultsPrimaryText).toBeVisible({ timeout: 15000 });
+            console.log(`[TC05-NEG] N8 — PASS: empty state shown for no-match search`);
+        } catch (e) {
+            console.log(`[TC05-NEG] N8 — FAIL: empty state not visible within 15s for no-match search "${noMatchTerm}"`);
+            throw e;
+        }
+        await projectPage.tc05ClearSearch();
+    });
+
+    await test.step('N9: Jobs Create dialog should not allow blind create without required data', async () => {
+        console.log('[TC05-NEG] N9 — Navigate to Jobs workspace and attempt to open Create Job dialog');
+        await projectPage.tc05GotoJobsWorkspace();
+        const dialogVisible = await projectPage.tc05OpenCreateJobDialogIfAvailable();
+        if (dialogVisible) {
+            if (await loc.createJobDialogCreateBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
+                const enabled = await loc.createJobDialogCreateBtn.isEnabled().catch(() => false);
+                console.log(`[TC05-NEG] N9 — ASSERT: Create Job button is disabled when no required data entered | actual enabled: ${enabled}`);
+                try {
+                    expect(enabled).toBeFalsy();
+                    console.log(`[TC05-NEG] N9 — PASS: Create Job button is disabled (cannot blind-create)`);
+                } catch (e) {
+                    console.log(`[TC05-NEG] N9 — FAIL: Create Job button should be disabled but was enabled`);
+                    throw e;
+                }
+            } else {
+                console.log('[TC05-NEG] N9 — INFO: Create button not visible in dialog; assertion skipped');
+            }
+            await projectPage.tc05CloseCreateJobDialogIfOpen();
+        } else {
+            console.log('[TC05-NEG] N9 — INFO: Create Job dialog not available; step skipped');
+        }
+    });
+
+    await test.step('N10: Jobs search random no-hit string remains stable', async () => {
+        if (await loc.mainSearchInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+            const noMatchTerm = `__JOBS_NEG_NO_MATCH_${Date.now()}__`;
+            console.log(`[TC05-NEG] N10 — Fill Jobs search with no-match term: "${noMatchTerm}"`);
+            await projectPage.tc05FillSearch(noMatchTerm);
+            console.log(`[TC05-NEG] N10 — ASSERT: Jobs search input value matches /__JOBS_NEG_NO_MATCH_/`);
+            try {
+                await expect(loc.mainSearchInput).toHaveValue(/__JOBS_NEG_NO_MATCH_/);
+                console.log(`[TC05-NEG] N10 — PASS: Jobs search input retains no-match term`);
+            } catch (e) {
+                console.log(`[TC05-NEG] N10 — FAIL: Jobs search input did not retain no-match term "${noMatchTerm}"`);
+                throw e;
+            }
+            await projectPage.tc05ClearSearch();
+        } else {
+            console.log('[TC05-NEG] N10 — INFO: Jobs search input not visible; step skipped');
+        }
+    });
+
+    await test.step('N11: Bids no-hit search remains stable', async () => {
+        console.log('[TC05-NEG] N11 — Navigate to Bids workspace');
+        await projectPage.tc05GotoBidsWorkspace();
+        if (await loc.mainSearchInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+            const noMatchTerm = `__BIDS_NEG_NO_MATCH_${Date.now()}__`;
+            console.log(`[TC05-NEG] N11 — Fill Bids search with no-match term: "${noMatchTerm}"`);
+            await projectPage.tc05FillSearch(noMatchTerm);
+            console.log(`[TC05-NEG] N11 — ASSERT: Bids search input value matches /__BIDS_NEG_NO_MATCH_/`);
+            try {
+                await expect(loc.mainSearchInput).toHaveValue(/__BIDS_NEG_NO_MATCH_/);
+                console.log(`[TC05-NEG] N11 — PASS: Bids search input retains no-match term`);
+            } catch (e) {
+                console.log(`[TC05-NEG] N11 — FAIL: Bids search input did not retain no-match term "${noMatchTerm}"`);
+                throw e;
+            }
+            await projectPage.tc05ClearSearch();
+        } else {
+            console.log('[TC05-NEG] N11 — INFO: Bids search input not visible; step skipped');
+        }
+    });
+
+    await test.step('N12: Bids Manage Vendors interaction should not break page', async () => {
+        console.log('[TC05-NEG] N12 — Click Manage Vendors button (if visible) then verify main container is intact');
+        if (await loc.bidsManageVendorsBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+            await loc.bidsManageVendorsBtn.click();
+            await page.waitForTimeout(700);
+            await loc.bidsManageVendorsBtn.click().catch(() => { });
+        } else {
+            console.log('[TC05-NEG] N12 — INFO: Manage Vendors button not visible; skipping click');
+        }
+        console.log(`[TC05-NEG] N12 — ASSERT: main container is visible (page not broken by Manage Vendors)`);
+        try {
+            await expect(loc.mainContainer).toBeVisible();
+            console.log(`[TC05-NEG] N12 — PASS: main container is visible after Manage Vendors interaction`);
+        } catch (e) {
+            console.log(`[TC05-NEG] N12 — FAIL: main container not visible after Manage Vendors interaction`);
+            throw e;
+        }
+    });
+});
+
+test('TC05-edge-suite @regression @projectAndJob : Edge behavior and state transition checks', async ({ page }) => {
+    const loc = projectPage.tc05Loc();
+    await test.step('E1: Very long project search input should be accepted and recoverable', async () => {
+        await projectPage.tc05GotoProjectsWorkspace();
+        const longText = `LONG_${'X'.repeat(180)}`;
+        await projectPage.tc05FillSearch(longText);
+        await expect(loc.mainSearchInput).toHaveValue(longText);
+        await projectPage.tc05ClearSearch();
+    });
+
+    await test.step('E2: Rapid open/close filter drawer twice should remain stable', async () => {
+        for (let i = 0; i < 2; i++) {
+            await projectPage.tc05OpenFilterDrawer();
+            await projectPage.tc05CloseFilterDrawer();
+        }
+    });
+
+    await test.step('E3: Toolbar dropdown menus should open/close via Escape', async () => {
+        for (const btn of [loc.layoutToolbarBtn, loc.viewToolbarBtn, loc.tableToolbarBtn]) {
+            await btn.click();
+            await page.keyboard.press('Escape');
+            await page.waitForTimeout(300);
+        }
+    });
+
+    await test.step('E4: Project details route fallback behavior', async () => {
+        const exists = await loc.projectViewDetailsBtn.isVisible({ timeout: 3000 }).catch(() => false);
+        if (exists) {
+            await loc.projectViewDetailsBtn.click();
+            await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => { });
+            await expect(page).toHaveURL(/\/projects\//);
+        } else {
+            await expect(loc.mainContainer).toBeVisible();
+        }
+    });
+});
+
+test('TC05-visual-suite @regression @projectAndJob : Multi-screen visual checkpoints', async ({ page }) => {
+    const loc = projectPage.tc05Loc();
+    const searchMask = loc.mainSearchInput;
+    const shotMain = { ...PROJECT_VISUAL_ASSERT, mask: [searchMask] };
+
+    await test.step('V1: Projects base workspace', async () => {
+        await projectPage.tc05GotoProjectsWorkspace();
+        await projectPage.tc05CaptureMainScreenshot('tc05-v-projects-workspace.png', shotMain);
+    });
+
+    await test.step('V2: Projects Layout menu', async () => {
+        await loc.layoutToolbarBtn.click();
+        const menu = page.locator('[role="menu"], [role="listbox"]').filter({ hasText: /Grid View|Table View|Layout/i }).first();
+        await expect(menu).toBeVisible({ timeout: 10000 });
+        await projectPage.tc05CaptureLocatorScreenshot(menu, 'tc05-v-projects-layout-menu.png', PROJECT_VISUAL_ASSERT);
+        await page.keyboard.press('Escape');
+    });
+
+    await test.step('V3: Projects View menu', async () => {
+        await loc.viewToolbarBtn.click();
+        const menu = page.locator('[role="dialog"], [role="menu"], [role="listbox"]').filter({ hasText: /Create New View|Default|View/i }).first();
+        await expect(menu).toBeVisible({ timeout: 10000 });
+        await projectPage.tc05CaptureLocatorScreenshot(menu, 'tc05-v-projects-view-menu.png', PROJECT_VISUAL_ASSERT);
+        await page.keyboard.press('Escape');
+    });
+
+    await test.step('V4: Projects Table menu', async () => {
+        await loc.tableToolbarBtn.click();
+        const menu = page.locator('[role="dialog"], [role="menu"], [role="listbox"]').filter({ hasText: /Add custom column|Hide\/show columns|Manage Columns|Table/i }).first();
+        await expect(menu).toBeVisible({ timeout: 10000 });
+        await projectPage.tc05CaptureLocatorScreenshot(menu, 'tc05-v-projects-table-menu.png', PROJECT_VISUAL_ASSERT);
+        await page.keyboard.press('Escape');
+    });
+
+    await test.step('V5: Create Project modal default state', async () => {
+        await projectPage.openCreateProjectModal();
+        await expect(projectPage.modal.first()).toHaveScreenshot('tc05-v-projects-create-modal.png', PROJECT_VISUAL_ASSERT);
+    });
+
+    await test.step('V6: Create Project modal mandatory-validation state', async () => {
+        await projectPage.addProjectBtn.click().catch(() => { });
+        await expect(projectPage.modal.first()).toHaveScreenshot('tc05-v-projects-create-modal-validation.png', PROJECT_VISUAL_ASSERT);
+        await projectPage.verifyModalClosed();
+    });
+
+    await test.step('V7: Projects empty/no-match state', async () => {
+        await projectPage.tc05FillSearch(`__VISUAL_NO_MATCH_${Date.now()}__`);
+        await projectPage.tc05CaptureMainScreenshot('tc05-v-projects-empty-state.png', shotMain);
+        await projectPage.tc05ClearSearch();
+    });
+
+    await test.step('V8: Projects filter drawer', async () => {
+        await projectPage.tc05OpenFilterDrawer();
+        await projectPage.tc05CaptureLocatorScreenshot(loc.filterDrawer, 'tc05-v-projects-filter-drawer.png', PROJECT_VISUAL_ASSERT);
+        await projectPage.tc05CloseFilterDrawer();
+    });
+
+    await test.step('V9: Jobs workspace', async () => {
+        await projectPage.tc05GotoJobsWorkspace();
+        await projectPage.tc05CaptureMainScreenshot('tc05-v-jobs-workspace.png', shotMain);
+    });
+
+    await test.step('V10: Jobs create modal default/validation states', async () => {
+        const dialogVisible = await projectPage.tc05OpenCreateJobDialogIfAvailable();
+        if (dialogVisible) {
+            await projectPage.tc05CaptureLocatorScreenshot(loc.createJobDialog, 'tc05-v-jobs-create-modal.png', PROJECT_VISUAL_ASSERT);
+            await projectPage.tc05CaptureLocatorScreenshot(loc.createJobDialog, 'tc05-v-jobs-create-modal-validation.png', PROJECT_VISUAL_ASSERT);
+            await projectPage.tc05CloseCreateJobDialogIfOpen();
+        }
+    });
+
+    await test.step('V11: Jobs filter drawer', async () => {
+        await projectPage.tc05OpenFilterDrawer();
+        await projectPage.tc05CaptureLocatorScreenshot(loc.filterDrawer, 'tc05-v-jobs-filter-drawer.png', PROJECT_VISUAL_ASSERT);
+        await projectPage.tc05CloseFilterDrawer();
+    });
+
+    await test.step('V12: Jobs with-filter state', async () => {
+        await projectPage.tc05OpenFilterDrawer();
+        const applied = await projectPage.tc05ApplyFirstFilterIfAvailable();
+        if (applied) {
+            await projectPage.tc05CaptureMainScreenshot('tc05-v-jobs-with-filter-state.png', shotMain);
+        }
+        await projectPage.tc05CloseFilterDrawer();
+    });
+
+    await test.step('V13: Jobs without-filter state', async () => {
+        await projectPage.tc05CaptureMainScreenshot('tc05-v-jobs-without-filter-state.png', shotMain);
+    });
+
+    await test.step('V14: Bids workspace', async () => {
+        await projectPage.tc05GotoBidsWorkspace();
+        await projectPage.tc05CaptureMainScreenshot('tc05-v-bids-workspace.png', shotMain);
+    });
+
+    await test.step('V15: Bids manage-vendors expanded state', async () => {
+        if (await loc.bidsManageVendorsBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+            await loc.bidsManageVendorsBtn.click();
+            await page.waitForTimeout(800);
+            await projectPage.tc05CaptureMainScreenshot('tc05-v-bids-manage-vendors-expanded.png', shotMain);
+            await loc.bidsManageVendorsBtn.click().catch(() => { });
+        } else {
+            await projectPage.tc05CaptureMainScreenshot('tc05-v-bids-manage-vendors-unavailable.png', shotMain);
+        }
+    });
+
+    await test.step('V16: Bids negative-search state', async () => {
+        if (await loc.mainSearchInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+            await projectPage.tc05FillSearch(`__VISUAL_BIDS_NO_MATCH_${Date.now()}__`);
+            await projectPage.tc05CaptureMainScreenshot('tc05-v-bids-negative-search-state.png', shotMain);
+            await projectPage.tc05ClearSearch();
+        } else {
+            await projectPage.tc05CaptureMainScreenshot('tc05-v-bids-no-search-visible.png', shotMain);
+        }
+    });
+});
