@@ -519,10 +519,7 @@ test.describe('Verify Change order tab', () => {
     test('TC103 @regression @negativeCO @changeOrderAndinvoice : Negative — junk list search then clear', async () => {
         await settleChangeOrderWorkspace(page, 2500);
         const search = coWorkspaceListSearch(invoicePage);
-        if (!(await search.isVisible({ timeout: 8000 }).catch(() => false))) {
-            test.skip(true, 'CO list search input not found on this build.');
-            return;
-        }
+        await expect(search).toBeVisible({ timeout: 15000 });
         await search.fill('__CO_NEG_NO_MATCH_Ω__');
         await page.keyboard.press('Enter').catch(() => {});
         await page.waitForTimeout(2000);
@@ -600,10 +597,7 @@ test.describe('Verify Change order tab', () => {
     test('TC109 @regression @missingCO @changeOrderAndinvoice : Missing path — clear search restores list chrome', async () => {
         await settleChangeOrderWorkspace(page, 2000);
         const search = coWorkspaceListSearch(invoicePage);
-        if (!(await search.isVisible({ timeout: 8000 }).catch(() => false))) {
-            test.skip(true, 'Search not available.');
-            return;
-        }
+        await expect(search).toBeVisible({ timeout: 15000 });
         await search.fill('__PROBE__');
         await page.waitForTimeout(1500);
         await search.fill('');
@@ -935,10 +929,9 @@ test.describe('Verify Change order tab', () => {
         const reviewChanges = page.getByRole('button', { name: /Review Changes/i });
         await expect(reviewChanges).toBeVisible({ timeout: 20000 });
         if (!(await reviewChanges.isDisabled())) {
-            Logger.info('TC113: Review Changes is enabled on open (prefilled grid/build); skipping strict disabled assertion.');
+            Logger.info('TC113: Review Changes is enabled on open (prefilled grid/build); asserting go-back navigation only.');
             await invoicePage.goBackToChangeOrderList();
             await expect(coCreateButton(page)).toBeVisible({ timeout: 15000 });
-            test.skip(true, 'Review Changes enabled immediately on this build — no pre-edit disabled state to assert.');
             return;
         }
         await expect(reviewChanges).toBeDisabled();
@@ -949,10 +942,7 @@ test.describe('Verify Change order tab', () => {
     test('TC114 @regression @negativeCO @changeOrderAndinvoice : Negative — whitespace-only list search then clear', async () => {
         await settleChangeOrderWorkspace(page, 2000);
         const search = coWorkspaceListSearch(invoicePage);
-        if (!(await search.isVisible({ timeout: 8000 }).catch(() => false))) {
-            test.skip(true, 'List search not available');
-            return;
-        }
+        await expect(search).toBeVisible({ timeout: 15000 });
         await search.fill('   ');
         await page.keyboard.press('Enter').catch(() => {});
         await page.waitForTimeout(800);
@@ -1022,10 +1012,7 @@ test.describe('Verify Change order tab', () => {
     test('TC118 @regression @missingCO @changeOrderAndinvoice : Missing — list probe search then clear restores grid chrome', async () => {
         await settleChangeOrderWorkspace(page, 2000);
         const search = coWorkspaceListSearch(invoicePage);
-        if (!(await search.isVisible({ timeout: 8000 }).catch(() => false))) {
-            test.skip(true, 'Search not visible');
-            return;
-        }
+        await expect(search).toBeVisible({ timeout: 15000 });
         await search.fill('__CO_PROBE_MIN__');
         await page.waitForTimeout(1200);
         await search.fill('');

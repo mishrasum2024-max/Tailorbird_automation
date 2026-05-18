@@ -3,6 +3,8 @@ require('dotenv').config();
 const { test, expect } = require('@playwright/test');
 const { LoginPage } = require('../pages/loginPage');
 const { Logger } = require('../utils/logger');
+const { InteractionLogger } = require('../utils/InteractionLogger');
+const authKitMessages = require('../fixture/authKitMessages.json');
 
 /**
  * Login UI visual regression (layout breakpoints, not pixel-perfect text).
@@ -392,5 +394,171 @@ test.describe('Regression — login (consolidated)', () => {
     await expect(page, 'FAIL: Error state must still not be dashboard').not.toHaveURL(dashboardUrl);
     await context.close();
   });
+  });
+});
+
+// ─── Text Agent ───────────────────────────────────────────────────────────────
+/**
+ * Text Agent — one test, one browser context, sequential state machine.
+ *
+ * Full scan  (LoginPage.scanAllTextElements + logAndAssertSnapshot) runs ONCE
+ * per genuine page-state change: email step and password step.
+ *
+ * Targeted error scan (LoginPage.scanErrorText + logErrorTextScan) runs for
+ * each validation trigger — only the volatile regions (paragraphs, alerts,
+ * inline text nodes) are fetched so the static chrome is never re-logged.
+ *
+ * Flow:
+ *   email-step (full) → empty-email-err → malformed-email-err
+ *   → password-step (full) → empty-pwd-err → wrong-pwd-err
+ */
+test.describe('TC01 Login — Text Agent (live MCP browser scan)', () => {
+  test.setTimeout(300_000);
+
+  const loginUrl = process.env.LOGIN_URL;
+  const testEmail = process.env.TEST_EMAIL;
+
+  test('TEXT-01 @login Full login text agent — email step, password step, all error states', async ({ browser }) => {
+    Logger.info('[TEXT AGENT] Starting full login text scan — one context, sequential states');
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+
+    // ── STATE 1: Email step — FULL scan ──────────────────────────────────────
+    await test.step('STATE 1 | Email step — full scan of all text elements', async () => {
+      InteractionLogger.logNavigation(loginUrl, 'Login — email step');
+      await page.goto(loginUrl, { waitUntil: 'load' });
+      await page.locator('input[type="email"], input[name="email"]').waitFor({ state: 'visible', timeout: 15_000 });
+
+      const snapshot = await LoginPage.scanAllTextElements(page);
+      const failures = LoginPage.logAndAssertSnapshot(snapshot, 'email-step');
+
+      expect(snapshot.headings.length, `FAIL [email-step]: No heading found. Fetched: ${JSON.stringify(snapshot.headings)}`).toBeGreaterThan(0);
+      expect(snapshot.headings.every((h) => h.text && h.text.trim().length > 0), `FAIL [email-step]: Heading has empty text. Fetched: ${JSON.stringify(snapshot.headings)}`).toBe(true);
+
+      snapshot.buttons.filter((b) => b.visible).forEach((btn, i) => {
+        const hasText = (btn.text && btn.text.trim().length > 0) || (btn.ariaLabel && btn.ariaLabel.trim().length > 0);
+        if (!hasText && btn.type !== 'submit') Logger.info(`   ⚠️  Visible button[${i}] is icon-only (type="${btn.type || 'button'}") — warning only.`);
+        else expect(hasText, `FAIL [email-step]: Submit button[${i}] has no CTA text. Button: ${JSON.stringify(btn)}`).toBe(true);
+      });
+      expect(snapshot.buttons.filter((b) => b.visible).length, `FAIL [email-step]: No visible buttons. All: ${JSON.stringify(snapshot.buttons)}`).toBeGreaterThan(0);
+
+      const visibleInputs = snapshot.inputs.filter((inp) => inp.visible);
+      expect(visibleInputs.length, `FAIL [email-step]: No visible inputs. All: ${JSON.stringify(snapshot.inputs)}`).toBeGreaterThan(0);
+      visibleInputs.forEach((inp, i) => expect(inp.placeholder || inp.ariaLabel || inp.associatedLabel, `FAIL [email-step]: Input[${i}] has no accessible name. Input: ${JSON.stringify(inp)}`).toBeTruthy());
+
+      expect(failures, `FAIL [email-step]: ${failures.length} properness issue(s):\n${failures.join('\n')}`).toHaveLength(0);
+    });
+
+    // ── ERROR 1: Empty email — TARGETED error scan ────────────────────────────
+    await test.step('ERROR 1 | Empty email — targeted error text scan', async () => {
+      InteractionLogger.logFormFill('Email input', '', false);
+      const submitBtn = page.locator('button[type="submit"]').first();
+      InteractionLogger.logButtonClick('Submit (empty email)', (await submitBtn.textContent().catch(() => '[unknown]')).trim());
+      await submitBtn.click();
+      await page.waitForTimeout(2_000);
+
+      const entries = await LoginPage.scanErrorText(page);
+      const { visibleTexts, failures } = LoginPage.logErrorTextScan(entries, 'error-empty-email');
+
+      const expectedMsg = authKitMessages.emailRequired;
+      const found = visibleTexts.some((t) => t === expectedMsg || t.includes(expectedMsg));
+      InteractionLogger.logAuthMessage(found ? 'success' : 'error', expectedMsg, 'error-empty-email');
+      InteractionLogger.logUIDrift('Empty-email validation message', expectedMsg, visibleTexts.join(' | '), found);
+
+      expect(found, `FAIL [error-empty-email]: Expected "${expectedMsg}" (fixture/authKitMessages.json). Visible: ${JSON.stringify(visibleTexts)}.`).toBe(true);
+      expect(failures, `FAIL [error-empty-email]: ${failures.length} properness issue(s):\n${failures.join('\n')}`).toHaveLength(0);
+    });
+
+    // ── ERROR 2: Malformed email — TARGETED error scan ────────────────────────
+    await test.step('ERROR 2 | Malformed email — targeted error text scan', async () => {
+      InteractionLogger.logFormFill('Email input', 'not-an-email', false);
+      await page.locator('input[type="email"], input[name="email"]').first().fill('not-an-email');
+      const submitBtn = page.locator('button[type="submit"]').first();
+      InteractionLogger.logButtonClick('Submit (malformed email)', (await submitBtn.textContent().catch(() => '[unknown]')).trim());
+      await submitBtn.click();
+      await page.waitForTimeout(2_500);
+
+      const entries = await LoginPage.scanErrorText(page);
+      const { visibleTexts, failures } = LoginPage.logErrorTextScan(entries, 'error-malformed-email');
+
+      const expectedInline = authKitMessages.emailInvalid;
+      const expectedBanner = authKitMessages.credentialsInvalid;
+      const foundInline = visibleTexts.some((t) => t === expectedInline || t.includes(expectedInline));
+      const foundBanner = visibleTexts.some((t) => t === expectedBanner || t.includes(expectedBanner));
+      const found = foundInline || foundBanner;
+      InteractionLogger.logAuthMessage(found ? 'success' : 'error', foundInline ? expectedInline : expectedBanner, 'error-malformed-email');
+      InteractionLogger.logUIDrift('Malformed-email message', `"${expectedInline}" OR "${expectedBanner}"`, visibleTexts.join(' | '), found);
+
+      expect(found, `FAIL [error-malformed-email]: Expected "${expectedInline}" or "${expectedBanner}". Visible: ${JSON.stringify(visibleTexts)}.`).toBe(true);
+      expect(failures, `FAIL [error-malformed-email]: ${failures.length} properness issue(s):\n${failures.join('\n')}`).toHaveLength(0);
+    });
+
+    // ── STATE 2: Password step — FULL scan ────────────────────────────────────
+    await test.step('STATE 2 | Password step — full scan of all text elements', async () => {
+      InteractionLogger.logFormFill('Email input', testEmail, false);
+      await page.locator('input[type="email"], input[name="email"]').first().fill(testEmail);
+      const submitBtn = page.locator('button[type="submit"]').first();
+      InteractionLogger.logButtonClick('Submit (valid email)', (await submitBtn.textContent().catch(() => '[unknown]')).trim());
+      await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), submitBtn.click()]);
+      await page.locator('input[type="password"], input[name="password"]').waitFor({ state: 'visible', timeout: 15_000 });
+
+      const snapshot = await LoginPage.scanAllTextElements(page);
+      const failures = LoginPage.logAndAssertSnapshot(snapshot, 'password-step');
+
+      expect(snapshot.headings.length, `FAIL [password-step]: No heading. Fetched: ${JSON.stringify(snapshot.headings)}`).toBeGreaterThan(0);
+
+      const pwdInputs = snapshot.inputs.filter((inp) => inp.inputType === 'password' && inp.visible);
+      expect(pwdInputs.length, `FAIL [password-step]: No visible password input. Inputs: ${JSON.stringify(snapshot.inputs)}`).toBeGreaterThan(0);
+      pwdInputs.forEach((inp, i) => expect(inp.placeholder || inp.ariaLabel || inp.associatedLabel, `FAIL [password-step]: Password input[${i}] has no accessible name. Input: ${JSON.stringify(inp)}`).toBeTruthy());
+
+      const visibleLinks = snapshot.links.filter((l) => l.visible && l.text && l.text.trim().length > 0);
+      expect(visibleLinks.length, `FAIL [password-step]: No visible non-empty links. All: ${JSON.stringify(snapshot.links)}`).toBeGreaterThan(0);
+
+      expect(failures, `FAIL [password-step]: ${failures.length} properness issue(s):\n${failures.join('\n')}`).toHaveLength(0);
+    });
+
+    // ── ERROR 3: Empty password — TARGETED error scan ─────────────────────────
+    await test.step('ERROR 3 | Empty password — targeted error text scan', async () => {
+      InteractionLogger.logFormFill('Password input', '', true);
+      await page.locator('input[type="password"], input[name="password"]').first().fill('');
+      const signInBtn = page.locator('button[type="submit"]').first();
+      InteractionLogger.logButtonClick('Sign-in (empty password)', (await signInBtn.textContent().catch(() => '[unknown]')).trim());
+      await signInBtn.click();
+      await page.waitForTimeout(2_000);
+
+      const entries = await LoginPage.scanErrorText(page);
+      const { visibleTexts, failures } = LoginPage.logErrorTextScan(entries, 'error-empty-password');
+
+      const expectedMsg = authKitMessages.passwordRequired;
+      const found = visibleTexts.some((t) => t === expectedMsg || t.includes(expectedMsg));
+      InteractionLogger.logAuthMessage(found ? 'success' : 'error', expectedMsg, 'error-empty-password');
+      InteractionLogger.logUIDrift('Empty-password validation message', expectedMsg, visibleTexts.join(' | '), found);
+
+      expect(found, `FAIL [error-empty-password]: Expected "${expectedMsg}" (MCP-verified). Visible: ${JSON.stringify(visibleTexts)}.`).toBe(true);
+      expect(failures, `FAIL [error-empty-password]: ${failures.length} properness issue(s):\n${failures.join('\n')}`).toHaveLength(0);
+    });
+
+    // ── ERROR 4: Wrong password — TARGETED error scan ─────────────────────────
+    await test.step('ERROR 4 | Wrong password — targeted error text scan (credentials banner)', async () => {
+      InteractionLogger.logFormFill('Password input', '__TextAgent_WrongPass_9999__', true);
+      await page.locator('input[type="password"], input[name="password"]').first().fill('__TextAgent_WrongPass_9999__');
+      const signInBtn = page.locator('button[type="submit"]').first();
+      InteractionLogger.logButtonClick('Sign-in (wrong password)', (await signInBtn.textContent().catch(() => '[unknown]')).trim());
+      await signInBtn.click();
+      await page.waitForTimeout(4_000);
+
+      const entries = await LoginPage.scanErrorText(page);
+      const { visibleTexts, failures } = LoginPage.logErrorTextScan(entries, 'error-wrong-password');
+
+      const expectedBanner = authKitMessages.credentialsInvalid;
+      const foundBanner = visibleTexts.some((t) => t === expectedBanner || t.includes(expectedBanner));
+      InteractionLogger.logAuthMessage(foundBanner ? 'success' : 'error', expectedBanner, 'error-wrong-password');
+      InteractionLogger.logUIDrift('Credentials-invalid banner', expectedBanner, visibleTexts.join(' | '), foundBanner);
+
+      expect(foundBanner, `FAIL [error-wrong-password]: Expected "${expectedBanner}" (MCP-verified). Visible: ${JSON.stringify(visibleTexts)}.`).toBe(true);
+      expect(failures, `FAIL [error-wrong-password]: ${failures.length} properness issue(s):\n${failures.join('\n')}`).toHaveLength(0);
+    });
+
+    await ctx.close();
   });
 });

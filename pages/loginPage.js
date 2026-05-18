@@ -1,5 +1,6 @@
 const { expect } = require('@playwright/test');
 const { Logger } = require('../utils/logger');
+const { InteractionLogger } = require('../utils/InteractionLogger');
 const authKitMessages = require('../fixture/authKitMessages.json');
 
 class LoginPage {
@@ -260,6 +261,298 @@ class LoginPage {
   async isLoginErrorVisible() {
     Logger.step('Checking for login error message...');
     return this.errorMessage.isVisible();
+  }
+
+  // ─── Text Agent helpers ───────────────────────────────────────────────────
+
+  /**
+   * Uses MCP browser (page.evaluate) to fetch every text-bearing element from the
+   * live DOM — headings, buttons, inputs, labels, links, paragraphs, alert/live
+   * regions, and inline text nodes. Nothing is filtered before capture.
+   *
+   * @param {import('@playwright/test').Page} page
+   * @returns {Promise<{headings:object[],buttons:object[],inputs:object[],labels:object[],links:object[],paragraphs:object[],alerts:object[],textNodes:object[]}>}
+   */
+  static async scanAllTextElements(page) {
+    return page.evaluate(() => {
+      const norm = (s) => (s || '').replace(/\s+/g, ' ').trim();
+
+      const isVisible = (el) => {
+        const r = el.getBoundingClientRect();
+        const cs = window.getComputedStyle(el);
+        return (
+          r.width > 0 && r.height > 0 &&
+          cs.visibility !== 'hidden' &&
+          cs.display !== 'none' &&
+          parseFloat(cs.opacity) > 0
+        );
+      };
+
+      const hint = (el) => {
+        if (el.id) return `#${el.id}`;
+        if (el.getAttribute('name')) return `[name="${el.getAttribute('name')}"]`;
+        const cls = (el.className || '').split(' ').filter(Boolean)[0];
+        return cls ? `.${cls}` : el.tagName.toLowerCase();
+      };
+
+      const snapshot = { headings: [], buttons: [], inputs: [], labels: [], links: [], paragraphs: [], alerts: [], textNodes: [] };
+
+      document.querySelectorAll('h1,h2,h3,h4,h5,h6,[role="heading"]').forEach((el) => {
+        snapshot.headings.push({ tag: el.tagName.toLowerCase(), text: norm(el.textContent), visible: isVisible(el), ariaLabel: el.getAttribute('aria-label'), level: el.tagName.match(/H(\d)/)?.[1] || el.getAttribute('aria-level') || null, selector: hint(el) });
+      });
+
+      document.querySelectorAll('button,[role="button"]').forEach((el) => {
+        snapshot.buttons.push({ tag: el.tagName.toLowerCase(), text: norm(el.textContent), visible: isVisible(el), ariaLabel: el.getAttribute('aria-label'), name: el.getAttribute('name'), type: el.getAttribute('type'), disabled: el.disabled || el.getAttribute('aria-disabled') === 'true', selector: hint(el) });
+      });
+
+      document.querySelectorAll('input,textarea').forEach((el) => {
+        if (el.type === 'hidden') return;
+        const labelEl = el.id ? document.querySelector(`label[for="${el.id}"]`) : null;
+        snapshot.inputs.push({ tag: el.tagName.toLowerCase(), inputType: el.type, name: el.getAttribute('name') || null, id: el.id || null, placeholder: el.placeholder || null, ariaLabel: el.getAttribute('aria-label') || null, ariaDescribedBy: el.getAttribute('aria-describedby') || null, associatedLabel: labelEl ? norm(labelEl.textContent) : null, visible: isVisible(el), required: el.required, disabled: el.disabled, selector: hint(el) });
+      });
+
+      document.querySelectorAll('label').forEach((el) => {
+        snapshot.labels.push({ tag: 'label', text: norm(el.textContent), visible: isVisible(el), htmlFor: el.htmlFor || null, selector: hint(el) });
+      });
+
+      document.querySelectorAll('a').forEach((el) => {
+        snapshot.links.push({ tag: 'a', text: norm(el.textContent), visible: isVisible(el), ariaLabel: el.getAttribute('aria-label') || null, href: el.href || null, selector: hint(el) });
+      });
+
+      document.querySelectorAll('p').forEach((el) => {
+        const text = norm(el.textContent);
+        if (text) snapshot.paragraphs.push({ tag: 'p', text, visible: isVisible(el), selector: hint(el) });
+      });
+
+      document.querySelectorAll('[role="alert"],[role="status"],[aria-live]').forEach((el) => {
+        snapshot.alerts.push({ tag: el.tagName.toLowerCase(), text: norm(el.textContent), visible: isVisible(el), role: el.getAttribute('role') || null, ariaLive: el.getAttribute('aria-live') || null, selector: hint(el) });
+      });
+
+      document.querySelectorAll('span,div,[data-testid]').forEach((el) => {
+        const directText = Array.from(el.childNodes).filter((n) => n.nodeType === 3).map((n) => norm(n.textContent)).filter((t) => t.length > 2).join(' ').trim();
+        if (!directText || directText.length < 3 || directText.length > 300) return;
+        snapshot.textNodes.push({ tag: el.tagName.toLowerCase(), text: directText, visible: isVisible(el), role: el.getAttribute('role') || null, dataTestId: el.getAttribute('data-testid') || null, selector: hint(el) });
+      });
+
+      return snapshot;
+    });
+  }
+
+  /**
+   * Checks that a UI element's text is "proper":
+   *   1. Non-empty after trim (submit buttons must have CTA; icon-only buttons get a soft WARN)
+   *   2. No raw HTML entity leakage (&amp; &lt; etc.)
+   *   3. No unresolved template syntax ({{ }}, <% %>, ${ })
+   *   4. No debug literals (undefined, null, [object Object], NaN)
+   *
+   * Issues prefixed with "WARN:" are soft — callers log them but don't treat as failures.
+   *
+   * @param {{ tag:string, text?:string, placeholder?:string, ariaLabel?:string, associatedLabel?:string, type?:string, buttonType?:string, role?:string }} el
+   * @returns {{ passed: boolean, issues: string[] }}
+   */
+  static checkTextIsProper(el) {
+    const raw = el.text || el.placeholder || el.ariaLabel || el.associatedLabel || '';
+    const text = raw.trim();
+    const issues = [];
+
+    if (!text) {
+      if (el.type === 'input' || el.tag === 'input' || el.tag === 'textarea') {
+        issues.push(`<${el.tag}> has no label, placeholder, or aria-label — inaccessible input`);
+      } else if ((el.tag === 'button' || el.role === 'button') && el.buttonType !== 'submit') {
+        issues.push(`WARN: icon-only <button type="${el.buttonType || 'button'}"> has no text and no aria-label (possible SVG-icon button)`);
+      } else {
+        issues.push(`<${el.tag || '?'}> has empty or whitespace-only text`);
+      }
+    }
+
+    if (text && /&(?:amp|lt|gt|quot|apos|nbsp);/i.test(text))
+      issues.push(`Raw HTML entity in visible text: "${text}"`);
+
+    if (text && /\{\{.+?\}\}|<%.*?%>|\$\{.+?\}/.test(text))
+      issues.push(`Unresolved template placeholder in visible text: "${text}"`);
+
+    if (text && /^(?:undefined|null|\[object Object\]|NaN|Error)$/i.test(text))
+      issues.push(`Debug/error value leaked into UI text: "${text}"`);
+
+    return { passed: issues.length === 0, issues };
+  }
+
+  /**
+   * Logs every element in the snapshot via InteractionLogger, runs checkTextIsProper
+   * on each, and returns a list of hard failures (WARN-prefixed issues are logged only).
+   *
+   * @param {object} snapshot  result of scanAllTextElements()
+   * @param {string} stepContext  e.g. "email-step"
+   * @returns {string[]}  hard failures only
+   */
+  static logAndAssertSnapshot(snapshot, stepContext) {
+    const bar = '═'.repeat(62);
+    Logger.info(`\n${bar}`);
+    Logger.info(`[TEXT AGENT] ${stepContext.toUpperCase()}`);
+    Logger.info(bar);
+
+    const allFailures = [];
+
+    const assertEl = (category, el, displayText) => {
+      const { passed, issues } = LoginPage.checkTextIsProper(el);
+      if (!passed) {
+        issues.forEach((issue) => {
+          if (issue.startsWith('WARN:')) {
+            Logger.info(`   ⚠️  [${category}] ${issue}`);
+          } else {
+            Logger.error(`   ❌ [${category}] ${issue}`);
+            allFailures.push(`[${stepContext}] [${category}] ${issue}`);
+          }
+        });
+      } else {
+        Logger.info(`   ✅ proper — "${displayText.slice(0, 80)}${displayText.length > 80 ? '…' : ''}"`);
+      }
+    };
+
+    Logger.info(`\n▸ HEADINGS (${snapshot.headings.length})`);
+    snapshot.headings.forEach((el, i) => {
+      InteractionLogger.logDiscoveredElement(el.tag, el.text || '[empty]', { level: el.level || 'implicit', visible: el.visible, ariaLabel: el.ariaLabel || 'none', selector: el.selector });
+      assertEl(`heading[${i}]`, el, el.text || '');
+    });
+
+    Logger.info(`\n▸ BUTTONS / CTAs (${snapshot.buttons.length})`);
+    snapshot.buttons.forEach((el, i) => {
+      InteractionLogger.logButtonClick(`CTA[${i}] <${el.tag}> selector="${el.selector}"`, el.text || el.ariaLabel || '[no visible text]');
+      InteractionLogger.logElementAttributes(`CTA[${i}]`, { visible: el.visible, disabled: el.disabled, type: el.type || 'none', name: el.name || 'none', ariaLabel: el.ariaLabel || 'none' });
+      assertEl(`button[${i}]`, { ...el, buttonType: el.type }, el.text || el.ariaLabel || '');
+    });
+
+    Logger.info(`\n▸ INPUTS (${snapshot.inputs.length})`);
+    snapshot.inputs.forEach((el, i) => {
+      Logger.info(`📝 INPUT[${i}]  type="${el.inputType}"  name="${el.name || ''}"  id="${el.id || ''}"`);
+      Logger.info(`   ├─ placeholder:       "${el.placeholder || '[none]'}"`);
+      Logger.info(`   ├─ aria-label:        "${el.ariaLabel || '[none]'}"`);
+      Logger.info(`   ├─ associated label:  "${el.associatedLabel || '[none]'}"`);
+      Logger.info(`   ├─ aria-describedby:  "${el.ariaDescribedBy || '[none]'}"`);
+      Logger.info(`   ├─ visible:           ${el.visible}`);
+      Logger.info(`   ├─ required:          ${el.required}`);
+      Logger.info(`   └─ selector:          ${el.selector}`);
+      assertEl(`input[${i}](${el.inputType})`, { ...el, type: 'input' }, el.associatedLabel || el.ariaLabel || el.placeholder || '');
+    });
+
+    Logger.info(`\n▸ LABELS (${snapshot.labels.length})`);
+    snapshot.labels.forEach((el, i) => {
+      InteractionLogger.logDiscoveredElement('label', el.text || '[empty]', { visible: el.visible, htmlFor: el.htmlFor || 'none', selector: el.selector });
+      assertEl(`label[${i}]`, el, el.text || '');
+    });
+
+    Logger.info(`\n▸ LINKS (${snapshot.links.length})`);
+    snapshot.links.forEach((el, i) => {
+      InteractionLogger.logDiscoveredElement('a', el.text || el.ariaLabel || '[no text]', { visible: el.visible, ariaLabel: el.ariaLabel || 'none', href: el.href || 'none', selector: el.selector });
+      assertEl(`link[${i}]`, el, el.text || el.ariaLabel || '');
+    });
+
+    Logger.info(`\n▸ PARAGRAPHS (${snapshot.paragraphs.length})`);
+    snapshot.paragraphs.forEach((el, i) => {
+      Logger.info(`📄 P[${i}]: "${el.text}"  visible=${el.visible}  selector="${el.selector}"`);
+      assertEl(`paragraph[${i}]`, el, el.text);
+    });
+
+    Logger.info(`\n▸ ALERT / LIVE REGIONS (${snapshot.alerts.length})`);
+    snapshot.alerts.forEach((el, i) => {
+      Logger.info(`🚨 ALERT[${i}]  role="${el.role || 'none'}"  aria-live="${el.ariaLive || 'none'}"  text="${el.text || '[empty]'}"  visible=${el.visible}`);
+      if (el.text && el.text.trim().length > 0) assertEl(`alert[${i}]`, el, el.text);
+    });
+
+    Logger.info(`\n▸ INLINE TEXT NODES — spans/divs (${snapshot.textNodes.length})`);
+    snapshot.textNodes.forEach((el, i) => {
+      Logger.info(`📝 TEXTNODE[${i}] <${el.tag}>  text="${el.text}"  visible=${el.visible}  testId="${el.dataTestId || 'none'}"`);
+      assertEl(`textNode[${i}]`, el, el.text);
+    });
+
+    const totalEls = snapshot.headings.length + snapshot.buttons.length + snapshot.inputs.length + snapshot.labels.length + snapshot.links.length + snapshot.paragraphs.length + snapshot.alerts.length + snapshot.textNodes.length;
+    InteractionLogger.logCheckpoint(`Text scan complete — ${stepContext}`, `Total elements: ${totalEls} | Failures: ${allFailures.length}`);
+
+    return allFailures;
+  }
+
+  /**
+   * Targeted scan that fetches ONLY the volatile text regions — paragraphs,
+   * alert/live regions, and inline text nodes. Use this after triggering a
+   * validation error to avoid re-logging static page chrome (heading, buttons,
+   * inputs, labels, links) that scanAllTextElements already captured.
+   *
+   * @param {import('@playwright/test').Page} page
+   * @returns {Promise<Array<{source:string, text:string, visible:boolean, role?:string, ariaLive?:string}>>}
+   */
+  static async scanErrorText(page) {
+    return page.evaluate(() => {
+      const norm = (s) => (s || '').replace(/\s+/g, ' ').trim();
+      const isVisible = (el) => {
+        const r = el.getBoundingClientRect();
+        const cs = window.getComputedStyle(el);
+        return r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && cs.display !== 'none' && parseFloat(cs.opacity) > 0;
+      };
+      const results = [];
+
+      // Paragraphs — AuthKit renders the credentials-invalid banner inside <p>
+      document.querySelectorAll('p').forEach((el) => {
+        const text = norm(el.textContent);
+        if (text) results.push({ source: 'paragraph', text, visible: isVisible(el) });
+      });
+
+      // Alert / live regions
+      document.querySelectorAll('[role="alert"],[role="status"],[aria-live]').forEach((el) => {
+        const text = norm(el.textContent);
+        results.push({ source: 'alert', text, visible: isVisible(el), role: el.getAttribute('role'), ariaLive: el.getAttribute('aria-live') });
+      });
+
+      // Spans / divs with direct text — AuthKit puts inline validation inside these
+      document.querySelectorAll('span,div').forEach((el) => {
+        const directText = Array.from(el.childNodes)
+          .filter((n) => n.nodeType === 3)
+          .map((n) => norm(n.textContent))
+          .filter((t) => t.length > 2)
+          .join(' ').trim();
+        if (directText && directText.length >= 5 && directText.length < 300)
+          results.push({ source: 'textNode', text: directText, visible: isVisible(el) });
+      });
+
+      return results;
+    });
+  }
+
+  /**
+   * Logs the results of scanErrorText, runs checkTextIsProper on each visible
+   * entry, and returns the visible text strings for fixture cross-check assertions.
+   *
+   * @param {Array<{source:string, text:string, visible:boolean}>} entries
+   * @param {string} stepContext
+   * @returns {{ visibleTexts: string[], failures: string[] }}
+   */
+  static logErrorTextScan(entries, stepContext) {
+    Logger.info(`\n▸ ERROR TEXT SCAN — ${stepContext}`);
+    const visibleTexts = [];
+    const failures = [];
+
+    entries
+      .filter((e) => e.visible && e.text && e.text.trim().length > 0)
+      .forEach((e) => {
+        Logger.info(`   [${e.source.toUpperCase()}] "${e.text}"`);
+        InteractionLogger.logAuthMessage('info', e.text, stepContext);
+
+        const { passed, issues } = LoginPage.checkTextIsProper({ tag: e.source, text: e.text });
+        if (!passed) {
+          issues.forEach((issue) => {
+            if (!issue.startsWith('WARN:')) {
+              Logger.error(`   ❌ [${stepContext}] ${issue}`);
+              failures.push(`[${stepContext}] ${issue}`);
+            }
+          });
+        } else {
+          Logger.info(`   ✅ proper — "${e.text.slice(0, 80)}${e.text.length > 80 ? '…' : ''}"`);
+        }
+
+        visibleTexts.push(e.text);
+      });
+
+    InteractionLogger.logCheckpoint(`Error text scan — ${stepContext}`, `${visibleTexts.length} visible text(s) | Failures: ${failures.length}`);
+    return { visibleTexts, failures };
   }
 }
 

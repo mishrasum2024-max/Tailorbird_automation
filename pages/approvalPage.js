@@ -693,8 +693,9 @@ exports.ApprovalJob = class ApprovalJob {
         try {
             Logger.step('Opening Create Template dialog');
             await approval.createTemplateButton.click();
-            await this.page.waitForLoadState('networkidle');
-            await this.page.waitForTimeout(2000);
+            const dialog = this.page.getByRole('dialog').filter({ has: approval.templateNameInput });
+            await expect(dialog).toBeVisible({ timeout: 20000 });
+            await this.page.waitForTimeout(400);
             Logger.success('Create Template dialog opened');
         } catch (error) {
             Logger.error('Error opening Create Template dialog: ' + error.message);
@@ -961,9 +962,8 @@ exports.ApprovalJob = class ApprovalJob {
     async cancelDialog() {
         try {
             Logger.step('Cancelling dialog');
-            const templateDialog = this.page.getByRole('dialog').filter({
-                has: approval.templateNameInput,
-            });
+            const drawerLocator = this.page.getByRole('dialog').filter({ has: approval.templateNameInput });
+            const templateDialog = drawerLocator;
             const scopedCancel = templateDialog.getByRole('button', { name: 'Cancel' });
             if (await scopedCancel.isVisible({ timeout: 5000 }).catch(() => false)) {
                 await scopedCancel.click();
@@ -975,7 +975,24 @@ exports.ApprovalJob = class ApprovalJob {
                     await approval.cancelButton.first().click();
                 }
             }
-            await this.page.waitForTimeout(1000);
+            await this.page.waitForTimeout(600);
+
+            // When the form is dirty, cancelling may open a secondary "discard changes" confirmation.
+            const drawerStillVisible = await drawerLocator.isVisible({ timeout: 500 }).catch(() => false);
+            if (drawerStillVisible) {
+                const discardNames = ['Go Back', 'Discard', 'Discard Changes', 'Confirm'];
+                for (const name of discardNames) {
+                    const btn = this.page.getByRole('button', { name });
+                    if (await btn.first().isVisible({ timeout: 400 }).catch(() => false)) {
+                        await btn.first().click();
+                        await this.page.waitForTimeout(700);
+                        break;
+                    }
+                }
+            }
+
+            // Wait for dialog to fully disappear (animation + unmount)
+            await drawerLocator.waitFor({ state: 'hidden', timeout: 10000 }).catch(() => {});
             Logger.success('Dialog cancelled');
         } catch (error) {
             Logger.error('Error cancelling dialog: ' + error.message);

@@ -659,7 +659,10 @@ exports.BudgetJob = class BudgetJob {
         const treegrid = dialog.locator('[role="treegrid"]').first();
         await expect(treegrid).toBeVisible({ timeout: 10000 });
 
-        const actionRowDeleteBtns = treegrid.locator('[role="row"]:has([role="gridcell"] button) button:has(svg.lucide-trash2)');
+        // RevoGrid renders pinned columns (e.g. Actions/delete) OUTSIDE [role="treegrid"]
+        // in a sibling DOM node, so scope to the full dialog instead of treegrid.
+        // Use [class*="lucide-trash"] to match both "lucide-trash2" and "lucide-trash-2" aliases.
+        const actionRowDeleteBtns = dialog.locator('button:has(svg[class*="lucide-trash"])');
         const deleteBtn = actionRowDeleteBtns.first();
         await deleteBtn.scrollIntoViewIfNeeded();
         await deleteBtn.click({ force: true });
@@ -1470,7 +1473,8 @@ exports.BudgetJob = class BudgetJob {
         await opt.first().click({ timeout: 10000 });
         await this.page.waitForLoadState('networkidle').catch(() => {});
         await this.page.waitForTimeout(1200);
-        await this.page.keyboard.press('Escape').catch(() => {});
+        // NOTE: Do NOT press Escape here — when the selection navigates to a revision editor
+        // page (/budget-revision/.../editor), Escape triggers "Go Back" and leaves the page.
     }
 
     /**

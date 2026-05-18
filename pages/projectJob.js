@@ -1487,7 +1487,7 @@ exports.ProjectJob = class ProjectJob {
             await clickCalendarDayAfterOpen(CONTRACT_DATA.startDate);
             await page.keyboard.press('Escape');
             await page.waitForTimeout(500);
-    
+
             await page.keyboard.press('Escape');
             await page.waitForTimeout(300);
             const scopeCellEnd = getCell(colMap.scope);
