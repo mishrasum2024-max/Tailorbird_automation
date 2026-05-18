@@ -365,8 +365,32 @@ class FinancialsCategoryPage {
                 await lateEditor.fill(rowName).catch(() => {});
                 await this.page.keyboard.press('Enter').catch(() => {});
             }
+            // CI fallback: use search to scroll the added row into view (handles virtualized grids)
+            const searchInput = this.catLoc.mainSearchInput;
+            if (await searchInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+                await searchInput.fill(rowName).catch(() => {});
+                await this.page.waitForTimeout(1500);
+            }
         }
-        await expect(cellInMainGrid()).toBeVisible({ timeout: 20000 });
+
+        // Final check: row must be visible in the grid
+        const startWait = Date.now();
+        const rowVisible = await cellInMainGrid()
+            .waitFor({ state: 'visible', timeout: 20_000 })
+            .then(() => true)
+            .catch(() => false);
+
+        if (!rowVisible) {
+            // Last resort: try scrolling to the added row via the search input
+            const searchInput = this.catLoc.mainSearchInput;
+            if (await searchInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+                await searchInput.fill(rowName).catch(() => {});
+                await this.page.waitForTimeout(2000);
+            }
+            console.warn(`[addCategoryRowByName] Row '${rowName}' not found after ${Date.now() - startWait}ms — asserting with remaining time`);
+        }
+
+        await expect(cellInMainGrid()).toBeVisible({ timeout: 15000 });
         await this.page.waitForTimeout(3000);
     }
 

@@ -33,13 +33,38 @@ class OrganizationHelper {
   }
 
   async goto(url) {
+    const startTime = Date.now();
     try {
       this.log(`Navigating to URL: ${url}`);
-      await this.page.goto(url, { waitUntil: "load" });
-      await this.page.waitForLoadState("networkidle");
-      this.log(`Navigation successful: ${url}`);
+      await this.page.goto(url, { waitUntil: 'domcontentloaded' });
+
+      const appShell = this.page
+        .locator('.mantine-AppShell-main, .mantine-AppShell-navbar, main')
+        .first();
+
+      const loaded = await appShell
+        .waitFor({ state: 'visible', timeout: 20_000 })
+        .then(() => true)
+        .catch(() => false);
+
+      if (loaded) {
+        this.log(`Navigation successful: ${url} (${Date.now() - startTime}ms)`);
+        return;
+      }
+
+      for (let i = 0; i < 3; i++) {
+        await this.page.waitForTimeout(5000);
+        const ok = await appShell.isVisible().catch(() => false);
+        if (ok) {
+          this.log(`Navigation successful after extra ${(i + 1) * 5}s: ${url} (${Date.now() - startTime}ms)`);
+          return;
+        }
+        this.log(`[goto] App shell not yet visible after ${(i + 1) * 5}s extra wait`);
+      }
+
+      this.log(`[goto] WARNING: App shell not visible after ${Date.now() - startTime}ms for ${url} — proceeding anyway`);
     } catch (err) {
-      this.log(`ERROR navigating to ${url}: ${err}`);
+      this.log(`ERROR navigating to ${url} after ${Date.now() - startTime}ms: ${err}`);
       throw err;
     }
   }

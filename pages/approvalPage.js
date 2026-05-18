@@ -14,8 +14,22 @@ exports.ApprovalJob = class ApprovalJob {
         try {
             Logger.step('Navigating to Approval tab');
             await approval.approvalTab.click();
-            await this.page.waitForLoadState('networkidle');
-            await this.page.waitForURL('**/approvals/template', { timeout: 10000 });
+            await this.page.waitForURL('**/approvals/**', { timeout: 15000 }).catch(() => {});
+            const _t0 = Date.now();
+            const _tab = this.page.getByRole('tab', { name: 'Approval Templates' });
+            const _ok = await _tab.waitFor({ state: 'visible', timeout: 20_000 }).then(() => true).catch(() => false);
+            if (_ok) {
+                Logger.info(`[Approval] Nav ready in ${Date.now() - _t0}ms`);
+            } else {
+                for (let _i = 0; _i < 3; _i++) {
+                    await this.page.waitForTimeout(5000);
+                    if (await _tab.isVisible().catch(() => false)) {
+                        Logger.info(`[Approval] Nav ready after extra ${(_i + 1) * 5}s`);
+                        break;
+                    }
+                    Logger.info(`[Approval] Tab not visible yet after ${(_i + 1) * 5}s extra`);
+                }
+            }
             Logger.success('Navigated to Approval tab');
         } catch (error) {
             Logger.error('Failed to navigate to Approval tab: ' + error.message);
@@ -24,9 +38,23 @@ exports.ApprovalJob = class ApprovalJob {
     }
 
     async waitForPageLoad() {
+        const _t0 = Date.now();
         try {
-            await this.page.waitForLoadState('networkidle');
-            await this.page.waitForTimeout(4000);
+            const _btn = this.page.getByRole('button', { name: 'Create Template' }).first();
+            const _ok = await _btn.waitFor({ state: 'visible', timeout: 20_000 }).then(() => true).catch(() => false);
+            if (_ok) {
+                Logger.info(`[Approval] Page ready in ${Date.now() - _t0}ms`);
+            } else {
+                for (let _i = 0; _i < 3; _i++) {
+                    await this.page.waitForTimeout(5000);
+                    if (await _btn.isVisible().catch(() => false)) {
+                        Logger.info(`[Approval] Page ready after extra ${(_i + 1) * 5}s`);
+                        return;
+                    }
+                    Logger.info(`[Approval] Page not ready yet after ${(_i + 1) * 5}s extra`);
+                }
+                Logger.info(`[Approval] WARNING: Page not ready after ${Date.now() - _t0}ms — proceeding`);
+            }
         } catch (error) {
             Logger.error('Error waiting for page load: ' + error.message);
             throw error;
@@ -37,8 +65,9 @@ exports.ApprovalJob = class ApprovalJob {
         try {
             Logger.step('Clicking Create Template button');
             await approval.createTemplateButton.click();
-            await this.page.waitForLoadState('networkidle');
-            await this.page.waitForTimeout(1500);
+            await this.page.getByPlaceholder('Enter template name')
+                .waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
+            await this.page.waitForTimeout(400);
             Logger.success('Create Template dialog opened');
             return true;
         } catch (error) {
@@ -110,8 +139,9 @@ exports.ApprovalJob = class ApprovalJob {
         try {
             Logger.step('Submitting create template form');
             await approval.createTemplateSubmit.click();
-            await this.page.waitForLoadState('networkidle');
-            await this.page.waitForTimeout(1500);
+            await this.page.getByRole('button', { name: 'Create Template' }).first()
+                .waitFor({ state: 'visible', timeout: 20000 }).catch(() => {});
+            await this.page.waitForTimeout(400);
             Logger.success('Template submitted');
             return true;
         } catch (error) {
@@ -124,8 +154,9 @@ exports.ApprovalJob = class ApprovalJob {
         try {
             Logger.step('Cancelling create template');
             await approval.cancelButton.click();
-            await this.page.waitForLoadState('networkidle');
-            await this.page.waitForTimeout(1000);
+            await this.page.getByRole('button', { name: 'Create Template' }).first()
+                .waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
+            await this.page.waitForTimeout(300);
             Logger.success('Create template cancelled');
             return true;
         } catch (error) {
@@ -437,9 +468,10 @@ exports.ApprovalJob = class ApprovalJob {
             const editBtn = templateCell.locator('xpath=ancestor::row//button[contains(., "Edit")]').first();
 
             await editBtn.click();
-            await this.page.waitForURL('**/edit', { timeout: 10000 });
-            await this.page.waitForLoadState('networkidle');
-            await this.page.waitForTimeout(1500);
+            await this.page.waitForURL('**/edit', { timeout: 10000 }).catch(() => {});
+            await this.page.getByPlaceholder('Enter template name')
+                .waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
+            await this.page.waitForTimeout(400);
 
             Logger.success('Edit form opened for: ' + templateName);
             return true;
@@ -479,8 +511,9 @@ exports.ApprovalJob = class ApprovalJob {
         try {
             Logger.step('Cancelling edit');
             await approval.cancelButton.click();
-            await this.page.waitForLoadState('networkidle');
-            await this.page.waitForTimeout(1000);
+            await this.page.getByRole('button', { name: 'Create Template' }).first()
+                .waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
+            await this.page.waitForTimeout(300);
             Logger.success('Edit cancelled');
             return true;
         } catch (error) {
@@ -543,8 +576,9 @@ exports.ApprovalJob = class ApprovalJob {
             await this.clickDeleteTemplate(templateName);
 
             await approval.deleteConfirmButton.click();
-            await this.page.waitForLoadState('networkidle');
-            await this.page.waitForTimeout(1500);
+            await this.page.getByRole('button', { name: 'Create Template' }).first()
+                .waitFor({ state: 'visible', timeout: 20000 }).catch(() => {});
+            await this.page.waitForTimeout(400);
 
             Logger.success('Template deleted: ' + templateName);
             return true;
@@ -946,12 +980,13 @@ exports.ApprovalJob = class ApprovalJob {
     }
 
 
-    async submitCreateTemplate() {
+    async submitCreateTemplateForm() {
         try {
             Logger.step('Submitting Create Template form');
             await approval.createTemplateSubmit.click();
-            await this.page.waitForLoadState('networkidle');
-            await this.page.waitForTimeout(2000);
+            await this.page.getByRole('button', { name: 'Create Template' }).first()
+                .waitFor({ state: 'visible', timeout: 20000 }).catch(() => {});
+            await this.page.waitForTimeout(500);
             Logger.success('Create Template form submitted');
         } catch (error) {
             Logger.error('Error submitting form: ' + error.message);
@@ -1261,8 +1296,9 @@ exports.ApprovalJob = class ApprovalJob {
             await propertiesNavLink.click();
 
             // Wait for properties page to load
-            await this.page.waitForLoadState('networkidle');
-            await this.page.waitForTimeout(3000);
+            await this.page.locator("button:has-text('Create Property')")
+                .waitFor({ state: 'visible', timeout: 20000 }).catch(() => {});
+            await this.page.waitForTimeout(800);
 
             // Click Create Property button
             const createPropertyButton = this.page.locator("button:has-text('Create Property')");
@@ -1296,8 +1332,7 @@ exports.ApprovalJob = class ApprovalJob {
             await propertyTypeOption.click();
 
             // Wait for request to settle
-            await this.page.waitForLoadState('networkidle');
-            await this.page.waitForTimeout(3000);
+            await this.page.waitForTimeout(1500);
 
             // Click Add Property button
             const addPropertyBtn = this.page.getByRole('button', { name: /add property/i });

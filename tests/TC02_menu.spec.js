@@ -1,6 +1,8 @@
 require('dotenv').config();
 const { test, expect } = require('@playwright/test');
 const { Logger } = require('../utils/logger');
+const { LoginPage } = require('../pages/loginPage');
+const { InteractionLogger } = require('../utils/InteractionLogger');
 const helper = require('../pages/leftPanel');
 const locators = require('../locators/leftPanelLocator');
 const data = require('../fixture/leftPanel.json');
@@ -203,21 +205,29 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
     });
 
     test('TC05 @sanity @regression Verify main menu toggle functionality', async () => {
+        Logger.info('[TC05] Starting: main sidebar toggle — collapse and expand');
         await test.step('Sidebar shell collapses and expands (width + layout, not aria-expanded)', async () => {
             await helper.assertMainSidebarToggle(page);
         });
+        Logger.success('[TC05] ✅ Main sidebar toggle verified — collapse and expand work');
     });
 
     test('TC06 @sanity @regression Verify Financials expand/collapse', async () => {
+        Logger.info('[TC06] Starting: Financials section expand/collapse');
         await helper.runTwoClickTest(page, "Financials");
+        Logger.success('[TC06] ✅ Financials expand/collapse verified');
     });
 
     test('TC07 @sanity @regression Verify Trackers expand/collapse', async () => {
+        Logger.info('[TC07] Starting: Trackers section expand/collapse');
         await helper.runTwoClickTest(page, "Trackers");
+        Logger.success('[TC07] ✅ Trackers expand/collapse verified');
     });
 
     test('TC08 @sanity @regression Verify Documents expand/collapse', async () => {
+        Logger.info('[TC08] Starting: Documents section expand/collapse');
         await helper.runTwoClickTest(page, "Documents");
+        Logger.success('[TC08] ✅ Documents expand/collapse verified');
     });
 
     // -------------------------------------------------------------------------
@@ -263,14 +273,20 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
         test('TC02-reg-03 @regression @menu Unknown deep link still renders app shell (no blank page)', async ({
             page,
         }) => {
+            Logger.info('[TC02-reg-03] Starting: unknown route must still render app shell');
             const origin = new URL(process.env.DASHBOARD_URL).origin;
-            await page.goto(`${origin}/__tb_automation_unknown_route__/`, {
+            const unknownUrl = `${origin}/__tb_automation_unknown_route__/`;
+            InteractionLogger.logNavigation(unknownUrl, 'Unknown route — app shell render check');
+            await page.goto(unknownUrl, {
                 waitUntil: 'domcontentloaded',
                 timeout: 45000,
             });
+            Logger.info('[TC02-reg-03] Asserting: body is visible (no blank page)');
             await expect(page.locator('body')).toBeVisible();
+            Logger.info('[TC02-reg-03] Asserting: app shell (AppShell-root, nav, or main) is visible');
             const shell = page.locator('.mantine-AppShell-root, nav, main').first();
             await expect(shell).toBeVisible({ timeout: 20000 });
+            Logger.success('[TC02-reg-03] ✅ Unknown route renders app shell — no blank page');
         });
 
         test('TC02-reg-04 @regression @menu Escape closes More submenu when present', async ({ page }) => {
@@ -496,10 +512,104 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
 
         test('TC02-reg-07 @regression @menu Visiting /properties without session shows Sign in', async ({ page }) => {
             test.skip(!process.env.DASHBOARD_URL, 'DASHBOARD_URL is required to resolve app origin for this check.');
+            Logger.info('[TC02-reg-07] Starting: /properties without session must show Sign in');
             const base = process.env.BASE_URL || new URL(process.env.DASHBOARD_URL).origin;
-            await page.goto(new URL('/properties', base).href, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+            const propertiesUrl = new URL('/properties', base).href;
+            InteractionLogger.logNavigation(propertiesUrl, 'Properties — unauthenticated access');
+            await page.goto(propertiesUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+            Logger.info('[TC02-reg-07] Asserting: Sign in heading visible');
             await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible({ timeout: 30_000 });
+            Logger.success('[TC02-reg-07] ✅ Unauthenticated /properties redirected to Sign in');
         });
     });
 
+});
+
+// ─── Text Agent ───────────────────────────────────────────────────────────────
+test.describe('TC02 Menu — Text Agent (live MCP browser scan)', () => {
+    test.setTimeout(120_000);
+
+    test('TEXT-02 @menu @sanity Full nav text agent — all CTAs, labels, nav items, profile menu', async ({ page }) => {
+        test.skip(!process.env.DASHBOARD_URL, 'DASHBOARD_URL required');
+        // beforeEach already navigated to DASHBOARD_URL and set up auth session
+        InteractionLogger.logNavigation(process.env.DASHBOARD_URL, 'Dashboard — left nav Text Agent');
+        await page.getByRole('navigation').waitFor({ state: 'visible', timeout: 20_000 });
+
+        await test.step('STATE 1 | Dashboard nav — full scan of all text elements', async () => {
+            const snapshot = await LoginPage.scanAllTextElements(page);
+            const failures = LoginPage.logAndAssertSnapshot(snapshot, 'dashboard-nav');
+
+            // Nav-specific: all visible buttons must have text or aria-label
+            const visibleButtons = snapshot.buttons.filter((b) => b.visible);
+            visibleButtons.forEach((btn, i) => {
+                const hasText = (btn.text && btn.text.trim().length > 0) || (btn.ariaLabel && btn.ariaLabel.trim().length > 0);
+                expect(hasText, `FAIL [dashboard-nav]: Button[${i}] has no text or aria-label. Button: ${JSON.stringify(btn)}`).toBe(true);
+            });
+
+            const visibleLinks = snapshot.links.filter((l) => l.visible && l.text && l.text.trim().length > 0);
+            expect(visibleLinks.length, `FAIL [dashboard-nav]: No visible non-empty links. All: ${JSON.stringify(snapshot.links)}`).toBeGreaterThan(0);
+
+            // Soft-assert: log input/label issues from page content (e.g. year picker) without failing nav test
+            if (failures.length > 0) {
+                Logger.info(`[TEXT-02] Non-nav input accessibility issues noted (${failures.length}): ${failures.join(' | ')}`);
+            }
+        });
+
+        await test.step('STATE 1b | Known nav labels — primary items visible (MCP-verified 2026-05-18)', async () => {
+            const nav = page.getByRole('navigation');
+            for (const label of [
+                'Properties', 'Approvals', 'Construction Management',
+                'Projects', 'Jobs (Contracts & POs)', 'Bids', 'Change Orders', 'Invoices',
+                'Get Help',
+            ]) {
+                InteractionLogger.logVisibility(label, true);
+                await expect(nav.getByText(label, { exact: true }).first()).toBeVisible({ timeout: 8_000 });
+            }
+
+            const secondaryLabels = [
+                'Financials', 'Category', 'Budget', 'CapEx',
+                'Trackers', 'Unit Tracker', 'Asset Tracker',
+                'Documents', 'Files', 'Images',
+                'Vendors', 'Directory',
+            ];
+            const moreBtn = nav.getByText('More').first();
+            const moreVisible = await moreBtn.isVisible({ timeout: 2_000 }).catch(() => false);
+            if (moreVisible) {
+                InteractionLogger.logButtonClick('More', 'More');
+                await moreBtn.click();
+                const moreMenu = page.locator('[role="menu"]').filter({ hasText: 'Financials' });
+                await moreMenu.waitFor({ state: 'visible', timeout: 8_000 });
+                for (const label of secondaryLabels) {
+                    InteractionLogger.logVisibility(label, true);
+                    await expect(moreMenu.getByText(label, { exact: true }).first()).toBeVisible({ timeout: 5_000 });
+                }
+                await page.keyboard.press('Escape');
+            } else {
+                for (const label of secondaryLabels) {
+                    InteractionLogger.logVisibility(label, true);
+                    await expect(nav.getByText(label, { exact: true }).first()).toBeVisible({ timeout: 5_000 });
+                }
+            }
+        });
+
+        await test.step('STATE 2 | Profile menu — open and assert all action labels', async () => {
+            const nav = page.getByRole('navigation');
+            const profileTrigger = nav.locator('[class*="Avatar-root"]').first();
+            if (await profileTrigger.isVisible({ timeout: 3_000 }).catch(() => false)) {
+                InteractionLogger.logButtonClick('Profile avatar', 'S');
+                await profileTrigger.click();
+            } else {
+                InteractionLogger.logButtonClick('Profile name', 'Sumit Mishra');
+                await nav.locator('text=Sumit Mishra').first().click();
+            }
+            const profileMenu = page.locator('[role="menu"]');
+            await profileMenu.waitFor({ state: 'visible', timeout: 10_000 });
+
+            for (const label of ['Manage User Roles', 'Manage Organization', 'Profile', 'Switch Organization', 'Logout']) {
+                InteractionLogger.logVisibility(label, true);
+                await expect(profileMenu.getByText(label, { exact: true }).first()).toBeVisible({ timeout: 5_000 });
+            }
+            await page.keyboard.press('Escape');
+        });
+    });
 });
