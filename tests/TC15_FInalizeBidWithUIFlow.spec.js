@@ -23,7 +23,7 @@ test.use({
 const PROPERTY_TYPES = ['Garden Style', 'Mid Rise', 'High Rise', 'Military Housing'];
 
 test.describe('Finalize bid / contract — full UI chain', () => {
-    test('TC15_E2E @regression @contract @finalizeBidUi @property @projectAndJob : Property → budget → project → job → contract row finalize', async ({
+    test('TC258 @regression @contract @finalizeBidUi @property @projectAndJob : Property → budget → project → job → contract row finalize', async ({
         page,
     }) => {
         /** Long single journey; default 30s is insufficient. */
@@ -46,7 +46,7 @@ test.describe('Finalize bid / contract — full UI chain', () => {
         await page.waitForLoadState('domcontentloaded');
         await page.waitForTimeout(1500);
 
-        Logger.step('TC15 E2E: Create property + persist propertyData (TC14 core)');
+        Logger.step('TC258: Create property + persist propertyData (TC14 core)');
         await prop.goToProperties();
         await prop.createProperty(propertyName, address, city, state, zip, propertyType);
 
@@ -58,7 +58,7 @@ test.describe('Finalize bid / contract — full UI chain', () => {
         fs.writeFileSync(propertyDataPath, JSON.stringify(propertyPayload, null, 2));
         fs.writeFileSync(downloadsPropertyPath, JSON.stringify(propertyPayload, null, 2));
 
-        Logger.step('TC15 E2E: Budget revision + create project (TC31)');
+        Logger.step('TC258: Budget revision + create project (TC31)');
         const budgetDataPath = path.resolve(process.cwd(), 'files', 'budget_data.csv');
         expect(fs.existsSync(budgetDataPath), 'files/budget_data.csv must exist').toBeTruthy();
 
@@ -98,7 +98,7 @@ test.describe('Finalize bid / contract — full UI chain', () => {
         const projectDataPath = path.join(__dirname, '../data/projectData.json');
         const projectData = JSON.parse(fs.readFileSync(projectDataPath, 'utf8'));
 
-        Logger.step('TC15 E2E: Add job + contract overview edit + lastCreatedJob (TC37 trimmed)');
+        Logger.step('TC258: Add job + contract overview edit + lastCreatedJob (TC37 trimmed)');
         await projectPage.navigateToProjects();
         await projectPage.openProject(projectData.projectName);
         await projectJob.navigateToJobsTab();
@@ -186,9 +186,9 @@ test.describe('Finalize bid / contract — full UI chain', () => {
             )
         );
 
-        Logger.step('TC15 E2E: Jobs menu contract grid + finalize (TC47_NEW_UI)');
+        Logger.step('TC258: Jobs menu contract grid + finalize (TC47_NEW_UI)');
         await projectJob.runTc47NewUiContractFinalize(projectData);
 
-        Logger.success('TC15_E2E: Full chain completed');
+        Logger.success('TC258: Full chain completed');
     });
 });

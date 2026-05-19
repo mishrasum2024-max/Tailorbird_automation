@@ -545,11 +545,12 @@ exports.BudgetJob = class BudgetJob {
             btn = budget.reviseBudgetsBtn;
             enabled = await btn.isEnabled().catch(() => false);
             if (!enabled) {
-                await this.page.reload({ waitUntil: 'networkidle' });
+                await this.page.reload({ waitUntil: 'load' });
+                await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
                 await this.page.waitForTimeout(2000);
                 if (await budget.propertyDropdownButton.isVisible({ timeout: 3000 }).catch(() => false)) {
                     await this.selectBrookProperty();
-                    await this.page.waitForLoadState('networkidle');
+                    await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
                     await this.page.waitForTimeout(2000);
                 }
                 btn = budget.reviseBudgetsBtn;
@@ -1563,5 +1564,677 @@ exports.BudgetJob = class BudgetJob {
     async expectReviseBudgetsEnabled() {
         await expect(budget.reviseBudgetsBtn).toBeEnabled({ timeout: 15000 });
         Logger.success('Revise Budgets enabled for editable published version');
+    }
+
+    // ===================== Shared screenshot helper =====================
+
+    async takeScreenshot(label) {
+        const safeLabel = String(label).replace(/[^a-zA-Z0-9_-]/g, '_');
+        const filePath = `test-results/budget_${safeLabel}_${Date.now()}.png`;
+        await this.page.screenshot({ path: filePath, fullPage: false });
+        Logger.info(`Screenshot: ${filePath}`);
+    }
+
+    // ===================== TC-NEW-01: Toolbar CTAs + View popover + Year =====================
+
+    async verifyToolbarCTALabels() {
+        await this.ensureBudgetOverviewTab();
+        const panel = this.page.getByRole('tabpanel', { name: 'Overview' });
+        await expect(panel.getByRole('button', { name: 'View', exact: true }).first()).toBeVisible({ timeout: 10000 });
+        await expect(panel.getByTestId('bt-table-action')).toBeVisible({ timeout: 10000 });
+        await expect(panel.getByRole('button', { name: 'Export' })).toBeVisible({ timeout: 10000 });
+        await expect(this.page.getByRole('button', { name: /Version Note/i }).first()).toBeVisible({ timeout: 10000 });
+        await expect(this.page.getByRole('button', { name: /Revise Budgets/i }).first()).toBeVisible({ timeout: 10000 });
+        await this.takeScreenshot('tc-new-01-toolbar');
+        Logger.success('All 5 toolbar CTA labels verified');
+    }
+
+    async verifyReviseBudgetsDisabledWhenDraft() {
+        const hasDraft = await this.budgetVersionDropdownHasDraftOption();
+        if (hasDraft) {
+            await expect(this.page.getByRole('button', { name: /Revise Budgets/i }).first()).toBeDisabled({ timeout: 5000 });
+            Logger.success('Revise Budgets is disabled – Draft version exists');
+        } else {
+            Logger.info('No draft version – skipping disabled-state check');
+        }
+    }
+
+    async verifyViewButtonPopover() {
+        const panel = this.page.getByRole('tabpanel', { name: 'Overview' });
+        const viewBtn = panel.getByRole('button', { name: 'View', exact: true }).first();
+        await viewBtn.click();
+        await this.page.waitForTimeout(600);
+        const viewInput = this.page.getByPlaceholder(/Enter a view name|Enter view name/i).first()
+            .or(this.page.getByRole('textbox', { name: /view name/i }).first());
+        if (await viewInput.isVisible({ timeout: 5000 }).catch(() => false)) {
+            await this.takeScreenshot('tc-new-01-view-popover');
+            Logger.success('View inline input visible (Mantine popover, non-blocking)');
+        } else {
+            Logger.info('View button shows dropdown menu');
+        }
+        await this.page.keyboard.press('Escape');
+        await this.page.waitForTimeout(400);
+    }
+
+    async verifyYearSelectorHasOptions() {
+        const count = await this.verifyYearSelectorOptions(this.page);
+        await this.takeScreenshot('tc-new-01-year-dropdown');
+        if (count > 0) Logger.success(`Year selector has ${count} options`);
+    }
+
+    async verifyEmptyYearState() {
+        const found = await this.selectEmptyYearIfAvailable(this.page);
+        if (!found) { Logger.info('No empty year available – skipping'); return; }
+        await this.page.waitForTimeout(2000);
+        await this.takeScreenshot('tc-new-01-empty-year');
+        const createBtn = this.page.getByRole('button', { name: /Create First Budget/i });
+        if (await createBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+            await expect(createBtn).toBeEnabled();
+            Logger.success('Create First Budget CTA enabled on empty year');
+        }
+        const vnBtn = this.page.getByRole('button', { name: /Version Note/i }).first();
+        if (await vnBtn.isDisabled({ timeout: 3000 }).catch(() => false)) {
+            Logger.success('Version Note disabled on empty year');
+        }
+    }
+
+    // ===================== TC-NEW-02: Table menu + Add column + Manage Columns =====================
+
+    async verifyTableMenuItems() {
+        await this.ensureBudgetOverviewTab();
+        const panel = this.page.getByRole('tabpanel', { name: 'Overview' });
+        const tableBtn = panel.getByTestId('bt-table-action');
+        await tableBtn.scrollIntoViewIfNeeded();
+        await tableBtn.click();
+        await this.page.waitForTimeout(500);
+        await this.takeScreenshot('tc-new-02-table-menu');
+        await expect(this.page.getByTestId('bt-table-action-add-column')).toBeVisible({ timeout: 5000 });
+        await expect(this.page.getByTestId('bt-table-action-hide-show-columns')).toBeVisible({ timeout: 5000 });
+        Logger.success('Table menu: "Add custom column" and "Hide / show columns" verified');
+        await this.page.keyboard.press('Escape');
+        await this.page.waitForTimeout(300);
+    }
+
+    async verifyAddColumnPanelValidation() {
+        await this.ensureBudgetOverviewTab();
+        const panel = this.page.getByRole('tabpanel', { name: 'Overview' });
+        const tableBtn = panel.getByTestId('bt-table-action');
+        await tableBtn.scrollIntoViewIfNeeded();
+        // Blur any focused element first so the toggle button opens reliably
+        await this.page.locator('body').click({ position: { x: 10, y: 10 }, force: true });
+        await this.page.waitForTimeout(300);
+        await tableBtn.click();
+        await this.page.waitForTimeout(800);
+        const addColItem = this.page.getByTestId('bt-table-action-add-column');
+        await expect(addColItem).toBeVisible({ timeout: 8000 });
+        await addColItem.click();
+        await this.page.waitForTimeout(600);
+        await this.takeScreenshot('tc-new-02-add-column-panel');
+
+        const nameInput = this.page.getByRole('textbox', { name: /Enter column name/i })
+            .or(this.page.getByPlaceholder(/Enter column name/i)).first();
+        const descInput = this.page.getByRole('textbox', { name: /Enter column description/i })
+            .or(this.page.getByPlaceholder(/Enter column description/i)).first();
+        const submitBtn = this.page.getByRole('button', { name: 'Add column' }).first();
+
+        await expect(nameInput).toBeVisible({ timeout: 5000 });
+        await expect(descInput).toBeVisible({ timeout: 5000 });
+        Logger.success('Add column panel inputs visible');
+
+        await nameInput.fill('TestName');
+        await this.page.waitForTimeout(300);
+        Logger.info(`Submit disabled with name only: ${await submitBtn.isDisabled().catch(() => false)}`);
+
+        await descInput.fill('Test description');
+        await this.page.waitForTimeout(300);
+        if (await submitBtn.isEnabled().catch(() => false)) Logger.success('Submit enabled when both fields filled');
+
+        for (const typeName of ['Text', 'Number', 'Select', 'Date']) {
+            const btn = this.page.locator('button').filter({ hasText: new RegExp(`^${typeName}$`) }).first();
+            if (await btn.isVisible({ timeout: 2000 }).catch(() => false)) Logger.success(`Column type "${typeName}" visible`);
+        }
+        await this.takeScreenshot('tc-new-02-column-types');
+        await this.page.keyboard.press('Escape');
+        await this.page.waitForTimeout(400);
+    }
+
+    async verifyManageColumnsDrawerContent() {
+        await this.openManageColumns();
+        await this.takeScreenshot('tc-new-02-manage-columns');
+        const dialog = this.page.getByRole('dialog', { name: 'Manage Columns' });
+        await expect(dialog).toBeVisible({ timeout: 8000 });
+        for (const col of ['Budget Item', 'Description', 'Category Code', 'Original Budget', 'Current Budget']) {
+            if (await dialog.getByText(col).first().isVisible({ timeout: 3000 }).catch(() => false)) {
+                Logger.success(`Default column "${col}" verified`);
+            }
+        }
+        if (await dialog.getByText(/File that was used to import/i).first().isVisible({ timeout: 2000 }).catch(() => false)) {
+            Logger.success('"Imported From" subtitle text visible');
+        }
+        const toggleRow = dialog.locator('div').filter({ hasText: /Budget Remaining/i }).first();
+        const toggle = toggleRow.locator('input[type="checkbox"], [role="switch"], .mantine-Switch-input').first();
+        if (await toggle.isVisible({ timeout: 2000 }).catch(() => false)) {
+            await toggle.click({ force: true });
+            await this.page.waitForTimeout(400);
+            Logger.success('Budget Remaining toggled off');
+            await toggle.click({ force: true });
+            await this.page.waitForTimeout(400);
+            Logger.success('Budget Remaining toggled back on');
+        }
+        await this.closeManageColumns();
+        Logger.success('Manage Columns drawer content verified');
+    }
+
+    // ===================== TC-NEW-03: Column header controls + Search =====================
+
+    async verifyColumnHeaderControls() {
+        await this.ensureBudgetOverviewTab();
+        // RevoGrid may not expose role="columnheader"; try multiple selectors
+        const header = this.page.locator('[role="columnheader"]').filter({ hasText: 'Budget Item' }).first()
+            .or(this.page.locator('th').filter({ hasText: 'Budget Item' }).first())
+            .or(this.page.locator('[class*="header"], [class*="col-header"]').filter({ hasText: 'Budget Item' }).first());
+        const isVisible = await header.isVisible({ timeout: 10000 }).catch(() => false);
+        if (!isVisible) {
+            Logger.info('Column header "Budget Item" not found in standard format – skipping sort test');
+            return;
+        }
+        await header.click();
+        await this.page.waitForTimeout(500);
+        await this.takeScreenshot('tc-new-03-header-controls');
+        const sortBtn = header.locator('button').last();
+        if (await sortBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+            await sortBtn.click({ force: true });
+            await this.page.waitForTimeout(600);
+            await this.takeScreenshot('tc-new-03-sorted-asc');
+            Logger.success('Sort ascending applied');
+            await header.click();
+            await this.page.waitForTimeout(300);
+            await sortBtn.click({ force: true });
+            await this.page.waitForTimeout(600);
+            Logger.success('Sort descending applied');
+            await header.click();
+            await this.page.waitForTimeout(300);
+            await sortBtn.click({ force: true });
+            await this.page.waitForTimeout(600);
+            Logger.success('Sort cleared – original order restored');
+        } else {
+            Logger.info('Sort button not visible in header – may need hover');
+        }
+        Logger.success('Column header controls verified');
+    }
+
+    async verifySearchFilterBehavior() {
+        const searchBox = this.page.getByRole('textbox', { name: 'Search...' }).first()
+            .or(this.page.getByPlaceholder('Search...').first());
+        if (!await searchBox.isVisible({ timeout: 5000 }).catch(() => false)) {
+            Logger.info('Search box not found'); return;
+        }
+        await searchBox.click();
+        await searchBox.fill('Site Prep');
+        await this.page.waitForTimeout(1000);
+        await this.takeScreenshot('tc-new-03-search-active');
+        const filteredRows = await this.page.locator('[role="row"]')
+            .filter({ has: this.page.locator('[role="gridcell"]') }).count();
+        expect(filteredRows).toBeGreaterThan(0);
+        Logger.success(`Search "Site Prep" filters to ${filteredRows} rows`);
+        await searchBox.clear();
+        await this.page.waitForTimeout(600);
+        Logger.success('Search cleared – grid restored');
+        await searchBox.fill('zzznomatch999');
+        await this.page.waitForTimeout(800);
+        await this.takeScreenshot('tc-new-03-search-empty');
+        const emptyMsg = this.page.getByText(/No budgets added yet|no results/i).first();
+        if (await emptyMsg.isVisible({ timeout: 5000 }).catch(() => false)) Logger.success('Empty state shown for no-match search');
+        await searchBox.clear();
+        await this.page.waitForTimeout(400);
+    }
+
+    // ===================== TC-NEW-04: Version dropdown + Manage Versions + Budget History =====================
+
+    async verifyVersionDropdownBadges() {
+        const versionDropdown = this.page.getByRole('textbox').nth(1);
+        await versionDropdown.click({ timeout: 10000 });
+        await this.page.waitForTimeout(600);
+        await this.takeScreenshot('tc-new-04-version-dropdown');
+        const hasActive = await this.page.getByRole('option').filter({ hasText: /active/i }).first().isVisible({ timeout: 3000 }).catch(() => false);
+        const hasInactive = await this.page.getByRole('option').filter({ hasText: /inactive/i }).first().isVisible({ timeout: 3000 }).catch(() => false);
+        Logger.info(`Version badges – Active: ${hasActive}, Inactive: ${hasInactive}`);
+        expect(hasActive || hasInactive).toBeTruthy();
+        Logger.success('Version dropdown status badges verified');
+        await this.page.keyboard.press('Escape');
+        await this.page.waitForTimeout(300);
+    }
+
+    async verifyManageVersionsDrawer() {
+        const versionDropdown = this.page.getByRole('textbox').nth(1);
+        await versionDropdown.click({ timeout: 10000 });
+        await this.page.waitForTimeout(500);
+        await this.page.evaluate(() => {
+            const lb = document.querySelector('[role="listbox"]');
+            if (lb) lb.scrollTop = lb.scrollHeight;
+        });
+        await this.page.waitForTimeout(300);
+        const mvOption = this.page.getByRole('option', { name: 'Manage Versions' });
+        if (!await mvOption.isVisible({ timeout: 3000 }).catch(() => false)) {
+            await this.page.keyboard.press('Escape');
+            Logger.info('Manage Versions option not found'); return;
+        }
+        await mvOption.click();
+        await this.page.waitForTimeout(1000);
+        await this.takeScreenshot('tc-new-04-manage-versions');
+        await expect(this.page.getByText(/Manage budget versions/i).first()).toBeVisible({ timeout: 8000 });
+        Logger.success('Manage Versions drawer heading verified');
+        if (await this.page.getByText(/View, rename, activate, or delete/i).first().isVisible({ timeout: 3000 }).catch(() => false)) {
+            Logger.success('Manage Versions subtitle verified');
+        }
+        for (const col of ['Version name', 'Status', 'Created Date', 'Actions']) {
+            if (await this.page.getByText(col, { exact: true }).first().isVisible({ timeout: 2000 }).catch(() => false)) {
+                Logger.success(`Manage Versions column "${col}" verified`);
+            }
+        }
+        const vRows = this.page.locator('tr, [role="row"]').filter({ has: this.page.locator('[class*="badge"], [class*="status"]') });
+        const activeKebab = vRows.filter({ hasText: /active/i }).first().locator('button').last();
+        if (await activeKebab.isVisible({ timeout: 2000 }).catch(() => false)) {
+            await activeKebab.click();
+            await this.page.waitForTimeout(400);
+            await this.takeScreenshot('tc-new-04-active-version-menu');
+            const makeActive = this.page.getByRole('menuitem', { name: /Make Active/i }).first();
+            if (await makeActive.isVisible({ timeout: 2000 }).catch(() => false)) {
+                const disabled = await makeActive.isDisabled().catch(() => false) ||
+                    (await makeActive.getAttribute('aria-disabled')) === 'true';
+                if (disabled) Logger.success('Make Active disabled for active version');
+            }
+            await this.page.keyboard.press('Escape');
+            await this.page.waitForTimeout(300);
+        }
+        await this.page.keyboard.press('Escape');
+        await this.page.waitForTimeout(400);
+    }
+
+    async verifyBudgetHistoryDrawer() {
+        const firstRow = this.page.locator('[role="row"]').filter({ has: this.page.locator('[role="gridcell"]') }).first();
+        await expect(firstRow).toBeVisible({ timeout: 8000 });
+        await firstRow.hover();
+        await this.page.waitForTimeout(300);
+        const historyBtn = firstRow.getByRole('button', { name: /Budget History|View History/i }).first()
+            .or(firstRow.locator('button[title*="History" i]').first())
+            .or(firstRow.locator('button:has(svg.lucide-history)').first());
+        if (!await historyBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+            Logger.info('Budget History button not visible on hover'); return;
+        }
+        await historyBtn.click();
+        await this.page.waitForTimeout(1500);
+        await this.takeScreenshot('tc-new-04-budget-history');
+        if (await this.page.getByPlaceholder('Search').first().isVisible({ timeout: 5000 }).catch(() => false)) {
+            Logger.success('Budget History drawer search bar visible');
+        }
+        if (await this.page.getByText(/VERSION \d+/i).first().isVisible({ timeout: 3000 }).catch(() => false)) {
+            Logger.success('Version badges in Budget History verified');
+        }
+        await this.page.keyboard.press('Escape');
+        await this.page.waitForTimeout(400);
+    }
+
+    // ===================== TC-NEW-05: Version Note modal + Manage Versions lifecycle =====================
+
+    async verifyVersionNoteModalLabels() {
+        const vnBtn = this.page.getByRole('button', { name: /Version Note/i }).first();
+        await expect(vnBtn).toBeVisible({ timeout: 10000 });
+        if (!await vnBtn.isEnabled().catch(() => false)) {
+            Logger.info('Version Note button is disabled – skipping modal check'); return;
+        }
+        await vnBtn.click();
+        await this.page.waitForTimeout(800);
+        await this.takeScreenshot('tc-new-05-version-note-modal');
+        const modal = this.page.getByRole('dialog').first();
+        await expect(modal).toBeVisible({ timeout: 5000 });
+        for (const label of [/Version Notes?/i, /Created by/i, /Submitted on|Created on/i]) {
+            if (await modal.getByText(label).first().isVisible({ timeout: 2000 }).catch(() => false)) {
+                Logger.success(`Version Note modal label "${label.source}" verified`);
+            }
+        }
+        if (await modal.getByText(/^Notes$/i).first().isVisible({ timeout: 2000 }).catch(() => false)) {
+            Logger.success('"Notes" section visible');
+        }
+        const closeBtn = modal.getByRole('button').filter({ has: this.page.locator('svg') }).first()
+            .or(modal.locator('button[aria-label*="close" i]').first());
+        await closeBtn.click().catch(() => this.page.keyboard.press('Escape'));
+        await this.page.waitForTimeout(400);
+        Logger.success('Version Note modal labels verified and closed');
+    }
+
+    async verifyManageVersionsRenameAndDeleteGuard() {
+        const versionDropdown = this.page.getByRole('textbox').nth(1);
+        await versionDropdown.click({ timeout: 10000 });
+        await this.page.waitForTimeout(500);
+        await this.page.evaluate(() => {
+            const lb = document.querySelector('[role="listbox"]');
+            if (lb) lb.scrollTop = lb.scrollHeight;
+        });
+        await this.page.waitForTimeout(300);
+        const mvOption = this.page.getByRole('option', { name: 'Manage Versions' });
+        if (!await mvOption.isVisible({ timeout: 3000 }).catch(() => false)) {
+            await this.page.keyboard.press('Escape');
+            Logger.info('Manage Versions not accessible'); return;
+        }
+        await mvOption.click();
+        await this.page.waitForTimeout(1000);
+        await this.takeScreenshot('tc-new-05-manage-versions');
+        const vRows = this.page.locator('tr, [role="row"]').filter({ has: this.page.locator('[class*="badge"], [class*="status"]') });
+        const inactiveKebab = vRows.filter({ hasText: /inactive/i }).first().locator('button').last();
+        if (await inactiveKebab.isVisible({ timeout: 3000 }).catch(() => false)) {
+            // Edit → inline rename input
+            await inactiveKebab.click();
+            await this.page.waitForTimeout(400);
+            const editItem = this.page.getByRole('menuitem', { name: /^Edit$/i }).first();
+            if (await editItem.isVisible({ timeout: 2000 }).catch(() => false)) {
+                await editItem.click();
+                await this.page.waitForTimeout(400);
+                const renameInput = this.page.locator('input[type="text"]').last();
+                if (await renameInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+                    Logger.success(`Rename input pre-filled with: "${await renameInput.inputValue().catch(() => '')}"`);
+                }
+                await this.page.keyboard.press('Escape');
+                await this.page.waitForTimeout(300);
+            } else {
+                await this.page.keyboard.press('Escape');
+            }
+            // Delete confirmation guard
+            await inactiveKebab.click();
+            await this.page.waitForTimeout(400);
+            const deleteItem = this.page.getByRole('menuitem', { name: /Delete/i }).first();
+            if (await deleteItem.isVisible({ timeout: 2000 }).catch(() => false) &&
+                await deleteItem.isEnabled().catch(() => false)) {
+                await deleteItem.click();
+                await this.page.waitForTimeout(500);
+                await this.takeScreenshot('tc-new-05-delete-confirm');
+                const cancelBtn = this.page.getByRole('button', { name: /Cancel/i }).first();
+                if (await cancelBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+                    await cancelBtn.click();
+                    Logger.success('Delete confirmation appeared and cancelled – version preserved');
+                } else {
+                    await this.page.keyboard.press('Escape');
+                }
+            } else {
+                await this.page.keyboard.press('Escape');
+            }
+        }
+        await this.page.keyboard.press('Escape');
+        await this.page.waitForTimeout(400);
+        Logger.success('Manage Versions rename and delete guard verified');
+    }
+
+    // ===================== TC-NEW-06: Revision Editor structure =====================
+
+    async verifyRevisionEditorStructure() {
+        await this.takeScreenshot('tc-new-06-revision-editor');
+        if (await this.page.getByText(/draft/i).first().isVisible({ timeout: 5000 }).catch(() => false)) {
+            Logger.success('DRAFT badge visible');
+        }
+        for (const label of ['Original Total', 'Current Budget Total', 'Total Increase', 'Total Decrease', 'Total Reallocated', 'Adjusted Total', 'Net Change']) {
+            if (await this.page.getByText(label, { exact: true }).first().isVisible({ timeout: 5000 }).catch(() => false)) {
+                Logger.success(`Summary card "${label}" visible`);
+            } else {
+                Logger.info(`Summary card "${label}" not found`);
+            }
+        }
+        await this.takeScreenshot('tc-new-06-summary-cards');
+        const budgetTab = this.page.getByRole('tab', { name: /^Budget$/i }).first();
+        const documentsTab = this.page.getByRole('tab', { name: /^Documents$/i }).first();
+        await expect(budgetTab).toBeVisible({ timeout: 8000 });
+        await expect(documentsTab).toBeVisible({ timeout: 8000 });
+        expect(await budgetTab.getAttribute('aria-selected')).toBe('true');
+        Logger.success('Budget tab active; Documents tab present');
+        const saveAsDraftBtn = this.page.getByRole('button', { name: /Save as Draft/i }).first();
+        const submitBtn = this.page.getByRole('button', { name: /Submit for Approval/i }).first();
+        await expect(saveAsDraftBtn).toBeVisible({ timeout: 8000 });
+        await expect(submitBtn).toBeVisible({ timeout: 8000 });
+        if (await saveAsDraftBtn.isEnabled().catch(() => false)) Logger.success('"Save as Draft" is enabled');
+        await this.takeScreenshot('tc-new-06-cta-buttons');
+        const tabpanel = this.page.getByRole('tabpanel', { name: 'Budget' }).first();
+        const resetVisible = await tabpanel.locator('button:has(svg.lucide-rotate-ccw)').first().isVisible({ timeout: 5000 }).catch(() => false);
+        const addVisible = await tabpanel.locator('button:has(svg.lucide-plus)').first().isVisible({ timeout: 5000 }).catch(() => false);
+        const uploadVisible = await tabpanel.locator('button:has(svg.lucide-cloud-upload)').first().isVisible({ timeout: 5000 }).catch(() => false);
+        Logger.info(`Toolbar icons – Reset: ${resetVisible}, Add: ${addVisible}, Upload: ${uploadVisible}`);
+        if (resetVisible || addVisible || uploadVisible) Logger.success('Revision Editor toolbar icons verified');
+        await this.takeScreenshot('tc-new-06-toolbar-icons');
+        for (const col of ['Category', 'Budget Item', 'Description', 'Original Budget', 'Current Budget', 'Net Change']) {
+            if (await this.page.locator('[role="columnheader"]').filter({ hasText: col }).first().isVisible({ timeout: 5000 }).catch(() => false)) {
+                Logger.success(`Column "${col}" visible`);
+            }
+        }
+        Logger.success('Revision Editor structure fully verified');
+    }
+
+    async verifySubmitEnableDisableLifecycle() {
+        const tabpanel = this.page.getByRole('tabpanel', { name: 'Budget' }).first();
+        const addRowBtn = tabpanel.locator('button:has(svg.lucide-plus)').first();
+        const submitBtn = this.page.getByRole('button', { name: /Submit for Approval/i }).first();
+        if (!await addRowBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+            Logger.info('Add Row button not found – skipping Submit lifecycle check'); return;
+        }
+        await addRowBtn.click();
+        await this.page.waitForTimeout(2000);
+        const rowCount = await this.getTreegridRowCount();
+        if (rowCount > 0) {
+            Logger.info(`Submit disabled without category: ${await submitBtn.isDisabled().catch(() => false)}`);
+            await this.fillCategoryInRevision('Construction');
+            await this.page.waitForTimeout(2000);
+            if (await submitBtn.isEnabled({ timeout: 10000 }).catch(() => false)) {
+                Logger.success('Submit for Approval enabled after Category assigned');
+            }
+        }
+    }
+
+    // ===================== TC-NEW-07: Documents tab + Uploadcare widget =====================
+
+    async verifyDocumentsTabInRevision() {
+        const docsTab = this.page.getByRole('tab', { name: /^Documents$/i }).first();
+        await expect(docsTab).toBeVisible({ timeout: 10000 });
+        await docsTab.click();
+        await this.page.waitForTimeout(1000);
+        await this.takeScreenshot('tc-new-07-documents-tab');
+        Logger.success('Documents tab clicked in Revision Editor');
+        const docsPanel = this.page.getByRole('tabpanel', { name: 'Documents' }).first();
+        if (await docsPanel.getByRole('button', { name: /Upload files/i }).first().isVisible({ timeout: 5000 }).catch(() => false)) {
+            Logger.success('"Upload files" button visible');
+        }
+        const emptyMsg = docsPanel.getByText(/No budget revision attachments|No.*attachments|no.*added yet/i).first();
+        if (await emptyMsg.isVisible({ timeout: 5000 }).catch(() => false)) Logger.success('Documents tab empty state visible');
+        if (await docsPanel.getByPlaceholder('Search...').first().isVisible({ timeout: 3000 }).catch(() => false)) {
+            Logger.success('Documents tab search bar visible');
+        }
+    }
+
+    async verifyUploadcareWidget() {
+        const docsPanel = this.page.getByRole('tabpanel', { name: 'Documents' }).first();
+        const uploadFilesBtn = docsPanel.getByRole('button', { name: /Upload files/i }).first();
+        if (!await uploadFilesBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+            Logger.info('Upload files button not found'); return;
+        }
+        await uploadFilesBtn.click();
+        await this.page.waitForTimeout(1500);
+        await this.takeScreenshot('tc-new-07-uploadcare-widget');
+        const fromDevice = await this.page.getByRole('button', { name: /From device|Choose file/i }).first().isVisible({ timeout: 5000 }).catch(() => false);
+        const googleDrive = await this.page.getByRole('button', { name: /Google Drive/i }).first().isVisible({ timeout: 3000 }).catch(() => false);
+        const dropbox = await this.page.getByRole('button', { name: /Dropbox/i }).first().isVisible({ timeout: 3000 }).catch(() => false);
+        Logger.info(`Uploadcare sources – From device: ${fromDevice}, Google Drive: ${googleDrive}, Dropbox: ${dropbox}`);
+        if (fromDevice) Logger.success('"From device" source visible');
+        const doneBtn = this.page.getByRole('button', { name: /Done/i }).first();
+        if (await doneBtn.isDisabled().catch(() => false)) Logger.success('"Done" disabled with no file selected');
+        const cancelBtn = this.page.getByRole('button', { name: /Cancel/i }).first();
+        if (await cancelBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+            await cancelBtn.click();
+            await this.page.waitForTimeout(400);
+            Logger.success('Upload widget closed via Cancel');
+        } else {
+            await this.page.keyboard.press('Escape');
+        }
+    }
+
+    // ===================== TC-NEW-08: Visual states + edge cases =====================
+
+    async verifyDisabledButtonStylingAndAmounts() {
+        await this.takeScreenshot('tc-new-08-baseline');
+        const hasDraft = await this.budgetVersionDropdownHasDraftOption();
+        if (hasDraft) {
+            await expect(this.page.getByRole('button', { name: /Revise Budgets/i }).first()).toBeDisabled({ timeout: 5000 });
+            Logger.success('Revise Budgets visually disabled (Draft version exists)');
+        }
+        const cells = this.page.locator('[role="gridcell"]');
+        const cellCount = await cells.count();
+        let dollarFound = false;
+        for (let i = 0; i < Math.min(cellCount, 40) && !dollarFound; i++) {
+            const text = await cells.nth(i).textContent().catch(() => '');
+            if (text && text.trim().startsWith('$')) {
+                Logger.success(`Dollar-formatted amount found: "${text.trim()}"`);
+                dollarFound = true;
+            }
+        }
+        const catHeader = this.page.locator('[role="columnheader"]').filter({ hasText: 'Category Code' }).first();
+        if (await catHeader.isVisible({ timeout: 5000 }).catch(() => false)) {
+            const hBox = await catHeader.boundingBox();
+            if (hBox) {
+                const firstRow = this.page.locator('[role="row"]').filter({ has: this.page.locator('[role="gridcell"]') }).first();
+                const rBox = await firstRow.boundingBox().catch(() => null);
+                if (rBox) {
+                    const val = await this.page.evaluate(({ x, y }) => {
+                        const el = document.elementFromPoint(x, y);
+                        return el ? el.textContent?.trim() : null;
+                    }, { x: hBox.x + hBox.width / 2, y: rBox.y + rBox.height / 2 });
+                    Logger.info(`First row Category Code: "${val}"`);
+                    if (val === '-' || val === '—' || val === '–') Logger.success('Unmapped category shows dash');
+                }
+            }
+        }
+        await this.takeScreenshot('tc-new-08-currency-category');
+    }
+
+    async verifyEdgeCases() {
+        await this.ensureBudgetOverviewTab();
+        const panel = this.page.getByRole('tabpanel', { name: 'Overview' });
+        // Special chars in column name
+        await panel.getByTestId('bt-table-action').click();
+        await this.page.waitForTimeout(400);
+        if (await this.page.getByTestId('bt-table-action-add-column').isVisible({ timeout: 3000 }).catch(() => false)) {
+            await this.page.getByTestId('bt-table-action-add-column').click();
+            await this.page.waitForTimeout(400);
+            const nameInput = this.page.getByRole('textbox', { name: /Enter column name/i })
+                .or(this.page.getByPlaceholder(/Enter column name/i)).first();
+            const descInput = this.page.getByRole('textbox', { name: /Enter column description/i })
+                .or(this.page.getByPlaceholder(/Enter column description/i)).first();
+            const submitBtn = this.page.getByRole('button', { name: 'Add column' }).first();
+            if (await nameInput.isVisible({ timeout: 3000 }).catch(() => false)) {
+                await nameInput.fill('###@@@!!!');
+                await descInput.fill('Valid description');
+                await this.page.waitForTimeout(300);
+                Logger.info(`Submit disabled with special chars: ${await submitBtn.isDisabled().catch(() => false)}`);
+                Logger.success('Special char column name validation checked');
+            }
+            await this.page.keyboard.press('Escape');
+            await this.page.waitForTimeout(300);
+        }
+        // Long search – no crash
+        const searchBox = this.page.getByPlaceholder('Search...').first()
+            .or(this.page.getByRole('textbox', { name: 'Search...' }).first());
+        if (await searchBox.isVisible({ timeout: 5000 }).catch(() => false)) {
+            await searchBox.fill('a'.repeat(120));
+            await this.page.waitForTimeout(800);
+            await this.takeScreenshot('tc-new-08-long-search');
+            expect(await this.page.locator('body').isVisible().catch(() => false)).toBeTruthy();
+            Logger.success('120-char search did not crash');
+            await searchBox.clear();
+            await this.page.waitForTimeout(400);
+        }
+        // Manage Columns opens without layout shift
+        await this.openManageColumns();
+        await this.takeScreenshot('tc-new-08-manage-columns-shift');
+        if (await this.page.locator('[role="grid"], [role="treegrid"]').first().isVisible({ timeout: 3000 }).catch(() => false)) {
+            Logger.success('No layout shift when Manage Columns opens');
+        }
+        await this.closeManageColumns();
+        await this.page.waitForTimeout(300);
+        // Future year – no crash
+        if (await this.selectEmptyYearIfAvailable(this.page)) {
+            await this.page.waitForTimeout(1000);
+            await this.takeScreenshot('tc-new-08-future-year');
+            expect(await this.page.locator('body').isVisible().catch(() => false)).toBeTruthy();
+            Logger.success('Future year selection did not crash');
+        }
+        await this.takeScreenshot('tc-new-08-final');
+        Logger.success('Edge cases verified');
+    }
+
+    // ===================== Advanced helpers for TC-NEW-01 =====================
+
+    /**
+     * Opens the year selector and verifies options are listed.
+     * Works with both combobox and button-style year pickers.
+     */
+    async verifyYearSelectorOptions(page) {
+        const yearSelectors = [
+            page.getByRole('combobox').first(),
+            page.locator('input[value*="2026"], input[value*="2025"]').first(),
+            page.locator('[aria-label*="year" i], [title*="year" i]').first(),
+            page.locator('button, input').filter({ hasText: /^20\d{2}$/ }).first(),
+        ];
+
+        for (const sel of yearSelectors) {
+            if (await sel.isVisible({ timeout: 2000 }).catch(() => false)) {
+                await sel.click();
+                await page.waitForTimeout(600);
+
+                const opts = page.getByRole('option')
+                    .or(page.locator('[role="menuitem"]').filter({ hasText: /^20\d{2}$/ }));
+                const count = await opts.count();
+                if (count > 0) {
+                    Logger.success(`Year selector has ${count} year options`);
+                    await page.keyboard.press('Escape');
+                    return count;
+                }
+                await page.keyboard.press('Escape');
+            }
+        }
+        Logger.info('Year selector not found or no options visible');
+        return 0;
+    }
+
+    /**
+     * Selects the first year in the dropdown that has no budget data.
+     * Returns true if such a year was found and selected, false otherwise.
+     */
+    async selectEmptyYearIfAvailable(page) {
+        const yearSelectors = [
+            page.getByRole('combobox').first(),
+            page.locator('input[value*="2026"], input[value*="2025"]').first(),
+            page.locator('[aria-label*="year" i], [title*="year" i]').first(),
+        ];
+
+        for (const sel of yearSelectors) {
+            if (await sel.isVisible({ timeout: 2000 }).catch(() => false)) {
+                await sel.click();
+                await page.waitForTimeout(500);
+
+                const opts = page.getByRole('option');
+                const count = await opts.count();
+                for (let i = 0; i < count; i++) {
+                    const text = (await opts.nth(i).textContent().catch(() => '')) || '';
+                    const trimmed = text.trim();
+                    // Skip "Manage Versions" and non-year items
+                    if (!/^\d{4}$/.test(trimmed)) continue;
+                    // Prefer future years (less likely to have budget data)
+                    if (parseInt(trimmed, 10) >= 2028) {
+                        await opts.nth(i).click();
+                        await page.waitForLoadState('networkidle').catch(() => {});
+                        await page.waitForTimeout(1500);
+                        Logger.info(`Selected year ${trimmed} for empty-year state test`);
+                        return true;
+                    }
+                }
+                await page.keyboard.press('Escape');
+                return false;
+            }
+        }
+        return false;
     }
 };

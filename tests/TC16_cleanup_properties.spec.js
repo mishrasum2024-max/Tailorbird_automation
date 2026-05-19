@@ -218,7 +218,7 @@ async function revokeAllInvitedUsersAcrossPages(page) {
 }
 
 test.describe.skip('Properties cleanup', () => {
-  test('@cleanup @property Delete all properties except sample pair and recently created', async ({
+  test('TC259 @cleanup @property Delete all properties except sample pair and recently created', async ({
     browser,
   }) => {
     // Large environments can have hundreds of generated properties;
@@ -319,7 +319,7 @@ test.describe.skip('Properties cleanup', () => {
 });
 
 test.describe('Organization pending users cleanup', () => {
-  test('@cleanup @organization Cleanup invited/expired users across pages', async ({ browser }) => {
+  test('TC260 @cleanup @organization Cleanup invited/expired users across pages', async ({ browser }) => {
     test.setTimeout(600000);
 
     const context = await browser.newContext({ storageState: 'sessionState.json' });

@@ -54,80 +54,80 @@ test.describe('Manage Organization Flow ', () => {
     await applyWorkspaceZoom(sharedPage);
   });
 
-  test('@sanity @regression TC09 - Invite new user to organization with Member role', async () => {
+  test('@sanity @regression TC22 - Invite new user to organization with Member role', async () => {
     const invitedEmail = `member_${Date.now()}@yopmail.com`;
-    Logger.info(`[TC09] Starting: invite new Member — ${invitedEmail}`);
+    Logger.info(`[TC22] Starting: invite new Member — ${invitedEmail}`);
     await organizationHelper.inviteUser(invitedEmail, 'Member');
     await applyWorkspaceZoom(sharedPage);
     await organizationHelper.search(invitedEmail);
     const userRow = await organizationHelper.getRow(invitedEmail);
-    Logger.info(`[TC09] Asserting: invited badge visible for ${invitedEmail}`);
+    Logger.info(`[TC22] Asserting: invited badge visible for ${invitedEmail}`);
     await organizationHelper.validateInvitedBadge(userRow, invitedEmail);
-    Logger.info('[TC09] Asserting: at least one row visible in results');
+    Logger.info('[TC22] Asserting: at least one row visible in results');
     expect(await organizationHelper.visibleRowCount()).toBeGreaterThan(0);
-    Logger.success(`[TC09] ✅ Member user invited and verified: ${invitedEmail}`);
+    Logger.success(`[TC22] ✅ Member user invited and verified: ${invitedEmail}`);
   });
 
-  test('@sanity @regression TC10 - Invite new user to organization with Admin role', async () => {
+  test('@sanity @regression TC23 - Invite new user to organization with Admin role', async () => {
     const invitedEmail = `admin_${Date.now()}@yopmail.com`;
-    Logger.info(`[TC10] Starting: invite new Admin — ${invitedEmail}`);
+    Logger.info(`[TC23] Starting: invite new Admin — ${invitedEmail}`);
     await organizationHelper.inviteUser(invitedEmail, 'Admin');
     await applyWorkspaceZoom(sharedPage);
     await organizationHelper.search(invitedEmail);
     const userRow = await organizationHelper.getRow(invitedEmail);
-    Logger.info(`[TC10] Asserting: invited badge visible for ${invitedEmail}`);
+    Logger.info(`[TC23] Asserting: invited badge visible for ${invitedEmail}`);
     await organizationHelper.validateInvitedBadge(userRow, invitedEmail);
-    Logger.info('[TC10] Asserting: at least one row visible');
+    Logger.info('[TC23] Asserting: at least one row visible');
     expect(await organizationHelper.visibleRowCount()).toBeGreaterThan(0);
-    Logger.success(`[TC10] ✅ Admin user invited and verified: ${invitedEmail}`);
+    Logger.success(`[TC23] ✅ Admin user invited and verified: ${invitedEmail}`);
   });
 
-  test('@sanity @regression TC11 - Revoke user invitation to organization', async () => {
+  test('@sanity @regression TC24 - Revoke user invitation to organization', async () => {
     const invitedEmail = `revoke_${Date.now()}@yopmail.com`;
-    Logger.info(`[TC11] Starting: invite then revoke — ${invitedEmail}`);
+    Logger.info(`[TC24] Starting: invite then revoke — ${invitedEmail}`);
     await organizationHelper.inviteUser(invitedEmail, 'Admin');
     await applyWorkspaceZoom(sharedPage);
     await organizationHelper.search(invitedEmail);
     const userRow = await organizationHelper.getRow(invitedEmail);
-    Logger.info(`[TC11] Revoking invitation for ${invitedEmail}`);
+    Logger.info(`[TC24] Revoking invitation for ${invitedEmail}`);
     await organizationHelper.revoke(userRow, invitedEmail);
     await applyWorkspaceZoom(sharedPage);
     await organizationHelper.search(invitedEmail);
-    Logger.info('[TC11] Asserting: no results after revoke (user removed from list)');
+    Logger.info('[TC24] Asserting: no results after revoke (user removed from list)');
     await organizationHelper.verifyNoResults();
-    Logger.success(`[TC11] ✅ Invitation revoked — user no longer in list: ${invitedEmail}`);
+    Logger.success(`[TC24] ✅ Invitation revoked — user no longer in list: ${invitedEmail}`);
   });
 
-  test('@sanity @regression TC12 - Resend user invitation to organization', async () => {
+  test('@sanity @regression TC25 - Resend user invitation to organization', async () => {
     const invitedEmail = `resend_${Date.now()}@yopmail.com`;
-    Logger.info(`[TC12] Starting: invite then resend — ${invitedEmail}`);
+    Logger.info(`[TC25] Starting: invite then resend — ${invitedEmail}`);
     await organizationHelper.inviteUser(invitedEmail, 'Admin');
     await applyWorkspaceZoom(sharedPage);
     await organizationHelper.search(invitedEmail);
     const userRow = await organizationHelper.getRow(invitedEmail);
-    Logger.info(`[TC12] Opening user action menu for ${invitedEmail}`);
+    Logger.info(`[TC25] Opening user action menu for ${invitedEmail}`);
     await organizationHelper.openFirstMenu();
     await applyWorkspaceZoom(sharedPage);
-    Logger.info('[TC12] Resending invitation');
+    Logger.info('[TC25] Resending invitation');
     await organizationHelper.resendInvite(invitedEmail);
-    Logger.info('[TC12] Asserting: resend success feedback visible');
+    Logger.info('[TC25] Asserting: resend success feedback visible');
     await organizationHelper.verifyResendSuccess(invitedEmail);
-    Logger.success(`[TC12] ✅ Invitation resent successfully: ${invitedEmail}`);
+    Logger.success(`[TC25] ✅ Invitation resent successfully: ${invitedEmail}`);
   });
 
-  test('@sanity @regression TC13 - Edit user role to organization', async () => {
+  test('@sanity @regression TC26 - Edit user role to organization', async () => {
     const existingAdminEmail = 'tailorbird-admin@tailorbird.us';
-    Logger.info(`[TC13] Starting: toggle role for ${existingAdminEmail}`);
+    Logger.info(`[TC26] Starting: toggle role for ${existingAdminEmail}`);
     await organizationHelper.search(existingAdminEmail);
     await applyWorkspaceZoom(sharedPage);
     const userRow = await organizationHelper.getRow(existingAdminEmail);
     const toggledRole = await organizationHelper.toggleRole(userRow);
-    Logger.info(`[TC13] Role toggled to: ${toggledRole} — verifying update`);
+    Logger.info(`[TC26] Role toggled to: ${toggledRole} — verifying update`);
     await applyWorkspaceZoom(sharedPage);
     await organizationHelper.search(existingAdminEmail);
-    Logger.info(`[TC13] Asserting: role updated to ${toggledRole} for ${existingAdminEmail}`);
+    Logger.info(`[TC26] Asserting: role updated to ${toggledRole} for ${existingAdminEmail}`);
     await organizationHelper.verifyUpdatedRole(existingAdminEmail, toggledRole);
-    Logger.success(`[TC13] ✅ Role toggled and verified for ${existingAdminEmail}: ${toggledRole}`);
+    Logger.success(`[TC26] ✅ Role toggled and verified for ${existingAdminEmail}: ${toggledRole}`);
   });
 });
 
@@ -177,38 +177,38 @@ test.describe('Regression — organization invite validation, search, snapshot',
     }
   });
 
-  test('TC03-reg-01 @regression @organization Empty email: invite blocked or shows validation', async () => {
-    Logger.info('[TC03-reg-01] Starting: empty email invite must be blocked with validation');
+  test('TC27 @regression @organization Empty email: invite blocked or shows validation', async () => {
+    Logger.info('[TC27] Starting: empty email invite must be blocked with validation');
     const inviteUserPanel = await organizationHelper.openInvite();
     InteractionLogger.logFormFill('Email', '', false);
     await expectInviteBlockingFeedback(organizationHelper, sharedPage, inviteUserPanel, {});
-    Logger.success('[TC03-reg-01] ✅ Empty email invite correctly blocked');
+    Logger.success('[TC27] ✅ Empty email invite correctly blocked');
   });
 
-  test('TC03-reg-02 @regression @organization Malformed email: invite blocked or shows validation', async () => {
-    Logger.info('[TC03-reg-02] Starting: malformed email invite must be blocked with validation');
+  test('TC28 @regression @organization Malformed email: invite blocked or shows validation', async () => {
+    Logger.info('[TC28] Starting: malformed email invite must be blocked with validation');
     const inviteUserPanel = await organizationHelper.openInvite();
     InteractionLogger.logFormFill('Email', 'not-a-valid-email-string', false);
     await expectInviteBlockingFeedback(organizationHelper, sharedPage, inviteUserPanel, {
       malformedEmail: 'not-a-valid-email-string',
     });
-    Logger.success('[TC03-reg-02] ✅ Malformed email invite correctly blocked');
+    Logger.success('[TC28] ✅ Malformed email invite correctly blocked');
   });
 
-  test('TC03-reg-03 @regression @organization Cancel closes invite dialog without inviting', async () => {
-    Logger.info('[TC03-reg-03] Starting: Cancel button must close invite dialog');
+  test('TC29 @regression @organization Cancel closes invite dialog without inviting', async () => {
+    Logger.info('[TC29] Starting: Cancel button must close invite dialog');
     const inviteUserPanel = await organizationHelper.openInvite();
     await inviteUserPanel.emailAddressInput.fill(`cancel_flow_${Date.now()}@yopmail.com`);
     await organizationHelper.selectRole(inviteUserPanel.roleSelectTrigger, 'Admin');
     InteractionLogger.logButtonClick('Cancel', organizationFixture.inviteCancelText);
     await inviteUserPanel.dialogRoot.getByRole('button', { name: organizationFixture.inviteCancelText }).click();
-    Logger.info('[TC03-reg-03] Asserting: invite dialog is hidden after Cancel');
+    Logger.info('[TC29] Asserting: invite dialog is hidden after Cancel');
     await expect(inviteUserPanel.dialogRoot).toBeHidden({ timeout: 8000 });
-    Logger.success('[TC03-reg-03] ✅ Cancel dismissed invite dialog without inviting');
+    Logger.success('[TC29] ✅ Cancel dismissed invite dialog without inviting');
   });
 
-  test('TC03-reg-04 @regression @organization Escape dismisses invite dialog', async () => {
-    Logger.info('[TC03-reg-04] Starting: Escape key must dismiss invite dialog');
+  test('TC30 @regression @organization Escape dismisses invite dialog', async () => {
+    Logger.info('[TC30] Starting: Escape key must dismiss invite dialog');
     const inviteUserPanel = await organizationHelper.openInvite();
     await inviteUserPanel.emailAddressInput.fill(`escape_${Date.now()}@yopmail.com`);
     InteractionLogger.logButtonClick('Escape key', 'Escape');
@@ -221,35 +221,35 @@ test.describe('Regression — organization invite validation, search, snapshot',
     if (await inviteUserPanel.dialogRoot.isVisible().catch(() => false)) {
       await inviteUserPanel.dialogRoot.getByRole('button', { name: organizationFixture.inviteCancelText }).click();
     }
-    Logger.info('[TC03-reg-04] Asserting: invite dialog is hidden after Escape');
+    Logger.info('[TC30] Asserting: invite dialog is hidden after Escape');
     await expect(inviteUserPanel.dialogRoot).toBeHidden({ timeout: 12_000 });
-    Logger.success('[TC03-reg-04] ✅ Escape dismissed invite dialog');
+    Logger.success('[TC30] ✅ Escape dismissed invite dialog');
   });
 
-  test('TC03-reg-05 @regression @organization Search with no matches shows empty state', async () => {
+  test('TC31 @regression @organization Search with no matches shows empty state', async () => {
     const noMatchTerm = `__no_users_match_${Date.now()}__`;
-    Logger.info(`[TC03-reg-05] Starting: search with "${noMatchTerm}" must show empty state`);
+    Logger.info(`[TC31] Starting: search with "${noMatchTerm}" must show empty state`);
     await organizationHelper.search(noMatchTerm);
-    Logger.info('[TC03-reg-05] Asserting: no results shown for unmatched search term');
+    Logger.info('[TC31] Asserting: no results shown for unmatched search term');
     await organizationHelper.verifyNoResults();
-    Logger.success('[TC03-reg-05] ✅ Empty search state verified');
+    Logger.success('[TC31] ✅ Empty search state verified');
   });
 
-  test('TC03-bench-mcp @regression @organization Workspace exposes Invite user action', async () => {
-    Logger.info('[TC03-bench-mcp] Asserting: Invite user button is visible in organization workspace');
+  test('TC32 @regression @organization Workspace exposes Invite user action', async () => {
+    Logger.info('[TC32] Asserting: Invite user button is visible in organization workspace');
     await expect(sharedPage.getByRole('button', { name: /invite user/i })).toBeVisible({ timeout: 15_000 });
-    Logger.success('[TC03-bench-mcp] ✅ Invite user button visible in workspace');
+    Logger.success('[TC32] ✅ Invite user button visible in workspace');
   });
 
-  test('TC03-vis-01 @regression @organization Visual snapshot: organization main workspace', async () => {
-    Logger.info('[TC03-vis-01] Starting: visual snapshot of organization main workspace');
+  test('TC33 @regression @organization Visual snapshot: organization main workspace', async () => {
+    Logger.info('[TC33] Starting: visual snapshot of organization main workspace');
     await expect(sharedPage.locator('.mantine-AppShell-main').first()).toHaveScreenshot(
       'organization-main-workspace.png',
       {
         ...ORGANIZATION_WORKSPACE_SCREENSHOT_OPTIONS,
       },
     );
-    Logger.success('[TC03-vis-01] ✅ Organization workspace visual snapshot passed');
+    Logger.success('[TC33] ✅ Organization workspace visual snapshot passed');
   });
 });
 
@@ -257,7 +257,7 @@ test.describe('Regression — organization invite validation, search, snapshot',
 test.describe('TC03 Manage Organization — Text Agent (live MCP browser scan)', () => {
   test.setTimeout(120_000);
 
-  test('TEXT-03-ORG @organization @sanity Full organization workspace text agent — tabs, CTA buttons, table columns, search', async ({ browser }) => {
+  test('TC34 @organization @sanity Full organization workspace text agent — tabs, CTA buttons, table columns, search', async ({ browser }) => {
     const dashboardBase = process.env.DASHBOARD_URL || organizationFixture.dashboardUrl;
     test.skip(!dashboardBase, 'DASHBOARD_URL or fixture dashboard required');
     const orgUrl = new URL('/organization', new URL(dashboardBase).origin).href;
@@ -283,11 +283,11 @@ test.describe('TC03 Manage Organization — Text Agent (live MCP browser scan)',
         const visibleInputs = snapshot.inputs.filter((inp) => inp.visible);
         // Soft-assert: org page inputs may be disabled/hidden during data load
         if (visibleInputs.length === 0) {
-          Logger.info(`[TEXT-03-ORG] No fully-visible inputs at scan time — search input may be loading. All: ${JSON.stringify(snapshot.inputs)}`);
+          Logger.info(`[TC34] No fully-visible inputs at scan time — search input may be loading. All: ${JSON.stringify(snapshot.inputs)}`);
         }
 
         if (failures.length > 0) {
-          Logger.info(`[TEXT-03-ORG] Accessibility notes (${failures.length}): ${failures.join(' | ')}`);
+          Logger.info(`[TC34] Accessibility notes (${failures.length}): ${failures.join(' | ')}`);
         }
       });
 

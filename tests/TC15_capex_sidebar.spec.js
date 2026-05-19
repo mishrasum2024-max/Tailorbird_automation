@@ -59,24 +59,24 @@ test.describe('CapEx Sidebar One-Page QA Checklist', () => {
         await context.close();
     });
 
-    test('TC173 @regression @capexSidebar : Verify CapEx sidebar displays accurate row-level financial formula calculations, validates all supported formula column scenarios, and maintains correct project/job scope rollup values with non-zero financial data integrity checks', async () => {
-        Logger.step('TC173 start: validating formula set for CapEx sidebar');
+    test('TC254 @regression @capexSidebar : Verify CapEx sidebar displays accurate row-level financial formula calculations, validates all supported formula column scenarios, and maintains correct project/job scope rollup values with non-zero financial data integrity checks', async () => {
+        Logger.step('TC254 start: validating formula set for CapEx sidebar');
         await capexPage.ensureNonZeroDataOrFail();
         await capexPage.validateAll11ColumnCases();
         const rollup = await capexPage.validateProjectJobScopeRollupsBestEffort();
-        if (!rollup.available) Logger.info(`TC173 rollup check unavailable: ${rollup.reason}`);
-        Logger.success('TC173 complete: formulas validated with non-zero guardrails');
+        if (!rollup.available) Logger.info(`TC254 rollup check unavailable: ${rollup.reason}`);
+        Logger.success('TC254 complete: formulas validated with non-zero guardrails');
     });
 
-    test('TC174 @regression @capexSidebar : Verify CapEx sidebar correctly maps assigned budget categories, validates category concatenation and category code relationships, prevents duplicate logical node rendering, and preserves assigned category consistency across visible CapEx rows', async () => {
-        Logger.step('TC174 start: validating budget category/category mapping and duplicate logical nodes');
+    test('TC255 @regression @capexSidebar : Verify CapEx sidebar correctly maps assigned budget categories, validates category concatenation and category code relationships, prevents duplicate logical node rendering, and preserves assigned category consistency across visible CapEx rows', async () => {
+        Logger.step('TC255 start: validating budget category/category mapping and duplicate logical nodes');
         await capexPage.ensureNonZeroDataOrFail();
         await capexPage.validateBudgetCategoryAndCategoryMapping();
         const concat = await capexPage.validateBudgetCategoryConcatenationAndCategoryCode();
-        if (!concat.available) Logger.info(`TC174 concat validation unavailable: ${concat.reason}`);
+        if (!concat.available) Logger.info(`TC255 concat validation unavailable: ${concat.reason}`);
         await capexPage.validateNoDuplicateLogicalNodes();
         const assigned = await capexPage.getAssignedBudgetCategories();
-        Logger.info(`TC174 assigned categories count: ${assigned.length}`);
+        Logger.info(`TC255 assigned categories count: ${assigned.length}`);
         runtimeCategoryToken = assigned[0] || 'Unassigned';
 
         if (assigned.length > 0 && expectedBudgetCategoryToken && assigned.some(a => a.toLowerCase().includes(expectedBudgetCategoryToken.toLowerCase()))) {
@@ -90,11 +90,11 @@ test.describe('CapEx Sidebar One-Page QA Checklist', () => {
         } else {
             Logger.info('No assigned budget category visible on this property; validations continue on Unassigned rows only.');
         }
-        Logger.success('TC174 complete');
+        Logger.success('TC255 complete');
     });
 
-    test('TC175 @regression @capexSidebar : Verify CapEx sidebar displays contract-related financial columns with valid currency formatting, proper zero-value handling, stable header alignment during horizontal scrolling, functional search/reset behavior, and correct contract/vendor mapping across visible CapEx grid rows', async () => {
-        Logger.step('TC175 start: validating contract-financial columns and formats');
+    test('TC256 @regression @capexSidebar : Verify CapEx sidebar displays contract-related financial columns with valid currency formatting, proper zero-value handling, stable header alignment during horizontal scrolling, functional search/reset behavior, and correct contract/vendor mapping across visible CapEx grid rows', async () => {
+        Logger.step('TC256 start: validating contract-financial columns and formats');
         await capexPage.ensureNonZeroDataOrFail();
         const { rows } = await capexPage.getVisibleRowsMapped();
         expect(rows.length).toBeGreaterThan(0);
@@ -104,7 +104,7 @@ test.describe('CapEx Sidebar One-Page QA Checklist', () => {
         // RevoGrid may require horizontal scrolling to expose "Remaining Contract Amount"
         // and "Invoiced Amount"; when absent their value is '' — skip rather than fail.
         const presentCols = requiredCols.filter(col => rows.some(r => String(r[col] || '').trim() !== ''));
-        if (presentCols.length === 0) Logger.info('TC175: No contract-financial column data visible in current viewport — skipping per-cell assertions');
+        if (presentCols.length === 0) Logger.info('TC256: No contract-financial column data visible in current viewport — skipping per-cell assertions');
         rows.slice(0, 20).forEach((row) => {
             presentCols.forEach((col) => {
                 const value = String(row[col] || '').trim();
@@ -115,16 +115,16 @@ test.describe('CapEx Sidebar One-Page QA Checklist', () => {
             });
         });
         const alignment = await capexPage.validateHeaderCellAlignmentOnHorizontalScroll();
-        if (!alignment.available) Logger.info(`TC175 header/cell alignment check unavailable: ${alignment.reason}`);
+        if (!alignment.available) Logger.info(`TC256 header/cell alignment check unavailable: ${alignment.reason}`);
         await capexPage.validateSearchAndResetBehavior();
         const mixed = await capexPage.validateMixedJobTypeBoundaryBestEffort();
-        if (!mixed.available) Logger.info(`TC175 mixed job-type boundary unavailable: ${mixed.reason}`);
+        if (!mixed.available) Logger.info(`TC256 mixed job-type boundary unavailable: ${mixed.reason}`);
         const contractVendor = await capexPage.validateContractNumberHyperlinkAndVendorBestEffort();
-        if (!contractVendor.available) Logger.info(`TC175 contract link/vendor check unavailable: ${contractVendor.reason}`);
-        Logger.success(`TC175 complete: validated contract-financial columns on ${Math.min(rows.length, 20)} rows`);
+        if (!contractVendor.available) Logger.info(`TC256 contract link/vendor check unavailable: ${contractVendor.reason}`);
+        Logger.success(`TC256 complete: validated contract-financial columns on ${Math.min(rows.length, 20)} rows`);
     });
 
-    test('TC176 @regression @capexSidebar : E2E Verify end-to-end workflow successfully creates a property, seeds initial budget data, validates CapEx financial records, performs Budget revision updates, and revalidates exact Budget-to-CapEx data synchronization across visible CapEx rows after revision submission', async () => {
+    test('TC257 @regression @capexSidebar : E2E Verify end-to-end workflow successfully creates a property, seeds initial budget data, validates CapEx financial records, performs Budget revision updates, and revalidates exact Budget-to-CapEx data synchronization across visible CapEx rows after revision submission', async () => {
         const activeProperty = suitePropertyName || propertyData.propertyName;
         await capexPage.runBudgetRevisionFlow({
             activeProperty,

@@ -56,12 +56,12 @@ test.describe('Verify category tab', () => {
         });
     });
 
-    test('TC49 @regression @category : Should expand Financials section and show Category option', async () => {
+    test('TC83 @regression @category : Should expand Financials section and show Category option', async () => {
         await financialsCategoryPage.goToCategory();
         await expect(page).toHaveURL(/\/category/);
     });
 
-    test('TC50 @regression @category : Should navigate to Category page and verify URL', async () => {
+    test('TC84 @regression @category : Should navigate to Category page and verify URL', async () => {
         await financialsCategoryPage.goToCategory();
         await expect(page).toHaveURL(/\/category/);
     });
@@ -69,7 +69,7 @@ test.describe('Verify category tab', () => {
     test.describe('TC51 - Category page content load', () => {
         test.describe.configure({ retries: 1 });
 
-        test('TC51 @regression @category : Should load Category page content and not be blank', async () => {
+        test('TC85 @regression @category : Should load Category page content and not be blank', async () => {
             await financialsCategoryPage.goToCategory();
             await expect(page).toHaveURL(/\/category/);
             await financialsCategoryPage.waitForCategoryPageReady();
@@ -81,14 +81,14 @@ test.describe('Verify category tab', () => {
         });
     });
 
-    test('TC52 @regression @category : Should show data table/grid if present', async () => {
+    test('TC86 @regression @category : Should show data table/grid if present', async () => {
         await financialsCategoryPage.goToCategory();
         await expect(page).toHaveURL(/\/category/);
         // Table is optional, so no assertion here
         await financialsCategoryPage.isTableVisible();
     });
 
-    test('TC53 @regression @category : Should show Download/Export button', async () => {
+    test('TC87 @regression @category : Should show Download/Export button', async () => {
         await financialsCategoryPage.goToCategory();
         await expect(page).toHaveURL(/\/category/);
         await page.waitForTimeout(10000);
@@ -96,20 +96,20 @@ test.describe('Verify category tab', () => {
         expect(downloadButtonFound).toBeTruthy();
     });
 
-    test('TC54 @regression @category : Should not show any error indicators on Category page', async () => {
+    test('TC88 @regression @category : Should not show any error indicators on Category page', async () => {
         await financialsCategoryPage.goToCategory();
         await expect(page).toHaveURL(/\/category/);
         const errorFound = await financialsCategoryPage.hasErrorIndicators();
         expect(errorFound).toBeFalsy();
     });
 
-    test('TC55 @regression @category : Validate export job is working as expected', async () => {
+    test('TC89 @regression @category : Validate export job is working as expected', async () => {
         await financialsCategoryPage.goToCategory();
         await expect(page).toHaveURL(/\/category/);
         await prop.exportButton();
     });
 
-    test('TC56 @regression @category : Validate reset table option is working as expected', async () => {
+    test('TC90 @regression @category : Validate reset table option is working as expected', async () => {
         await financialsCategoryPage.goToCategory();
         await expect(page).toHaveURL(/\/category/);
         await projectPage.openResetTableModal();
@@ -121,7 +121,7 @@ test.describe('Verify category tab', () => {
     test.describe('TC57 - Upload category option', () => {
         test.describe.configure({ retries: 1 });
 
-        test('TC57 @regression @category @sanity : Validate Upload category option is working as expected', async () => {
+        test('TC91 @regression @category @sanity : Validate Upload category option is working as expected', async () => {
             await financialsCategoryPage.goToCategory();
             await expect(page).toHaveURL(/\/category/);
             await financialsCategoryPage.waitForCategoryPageReady();
@@ -131,7 +131,7 @@ test.describe('Verify category tab', () => {
         });
     });
 
-    test('TC58 @regression @category : Add data option is working as expected', async () => {
+    test('TC92 @regression @category : Add data option is working as expected', async () => {
         await financialsCategoryPage.goToCategory();
         await expect(page).toHaveURL(/\/category/);
         await page.getByTestId('bt-table-action').click();
@@ -162,7 +162,7 @@ test.describe('Verify category tab', () => {
         ).toBeVisible({ timeout: 10000 });
     });
 
-    test('TC59 @regression @category : Add category option is working as expected', async () => {
+    test('TC93 @regression @category : Add category option is working as expected', async () => {
         await financialsCategoryPage.goToCategory();
         await expect(page).toHaveURL(/\/category/);
         await financialsCategoryPage.waitForTableToLoad(20000).catch(() => {});
@@ -171,7 +171,7 @@ test.describe('Verify category tab', () => {
         await financialsCategoryPage.deleteCategoryRowDetail();
     });
 
-    test('TC60 @sanity @regression @category : filter option is working as expected', async () => {
+    test('TC94 @sanity @regression @category : filter option is working as expected', async () => {
         await page.goto('https://beta.tailorbird.com/financials/category?propertyId=765', { waitUntil: 'domcontentloaded' });
         await expect(page, 'UI changed: expected category route').toHaveURL(/category/);
 
@@ -191,7 +191,7 @@ test.describe('Verify category tab', () => {
         ).toBeGreaterThan(0);
     });
 
-    test('TC07-positive-missing-suite @regression @category : Positive structure and missing-path search resilience', async () => {
+    test('TC95 @regression @category : Positive structure and missing-path search resilience', async () => {
         await test.step('P1 — Category grid structure and BirdTable toolbar (positive)', async () => {
             await financialsCategoryPage.goToCategory();
             await expect(page).toHaveURL(/\/category/);
@@ -228,7 +228,7 @@ test.describe('Verify category tab', () => {
         });
     });
 
-    test('TC07-negative-suite @regression @category : Negative filter + reset cancelled', async () => {
+    test('TC96 @regression @category : Negative filter + reset cancelled', async () => {
         await test.step('N1 — Global filter: no matching rows', async () => {
             await financialsCategoryPage.goToCategory();
             await expect(page).toHaveURL(/\/category/);
@@ -252,7 +252,7 @@ test.describe('Verify category tab', () => {
         });
     });
 
-    test('TC07-edge-suite @regression @category : Filter churn, View/Table presses, long search', async () => {
+    test('TC97 @regression @category : Filter churn, View/Table presses, long search', async () => {
         await financialsCategoryPage.goToCategory();
         await expect(page).toHaveURL(/\/category/);
         await page.waitForTimeout(10000);
@@ -295,7 +295,7 @@ test.describe('Verify category tab', () => {
         });
     });
 
-    test('TC07-visual-suite @regression @category : Dialogs and overlays (6 snapshots)', async () => {
+    test('TC98 @regression @category : Dialogs and overlays (6 snapshots)', async () => {
         const loc = financialsCategoryPage.tc07Loc();
         const shotMain = { ...CATEGORY_VISUAL_ASSERT, mask: [loc.mainSearchInput] };
         const importDialog = page

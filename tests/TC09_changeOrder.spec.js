@@ -233,13 +233,13 @@ test.describe('Verify Change order tab', () => {
         });
     });
 
-    test('TC86 @regression @changeOrderAndinvoice : Should navigate to Change Order page and verify URL', async () => {
+    test('TC129 @regression @changeOrderAndinvoice : Should navigate to Change Order page and verify URL', async () => {
         Logger.step('Verifying Change Order tab is loaded...');
         await expect(page).toHaveURL(/Change|order|contract/i);
         Logger.success('Change Order tab is loaded successfully.');
     });
 
-    test('TC87 @regression @changeOrderAndinvoice : Should load Change Order page content and not be blank', async () => {
+    test('TC130 @regression @changeOrderAndinvoice : Should load Change Order page content and not be blank', async () => {
         Logger.step('Checking Change Order page content...');
         await page.waitForLoadState('load');
         await page.waitForTimeout(1000);
@@ -248,7 +248,7 @@ test.describe('Verify Change order tab', () => {
         Logger.success('Change Order page content is loaded.');
     });
 
-    test('TC88 @regression @changeOrderAndinvoice : Should show Add Change Order button', async () => {
+    test('TC131 @regression @changeOrderAndinvoice : Should show Add Change Order button', async () => {
         Logger.step('Looking for Add Change Order button...');
         await page.waitForLoadState('load');
         await page.waitForTimeout(2000);
@@ -259,7 +259,7 @@ test.describe('Verify Change order tab', () => {
         Logger.success('Add Change Order button is visible.');
     });
 
-    test('TC89 @regression @changeOrderAndinvoice : Should add new change order and open details page', async () => {
+    test('TC132 @regression @changeOrderAndinvoice : Should add new change order and open details page', async () => {
         Logger.step('Adding new change order...');
         await page.waitForLoadState('load');
         await page.waitForTimeout(2000);
@@ -279,7 +279,7 @@ test.describe('Verify Change order tab', () => {
         }
     });
 
-    test('TC90 @regression @changeOrderAndinvoice : Should enter change order title and required information', async () => {
+    test('TC133 @regression @changeOrderAndinvoice : Should enter change order title and required information', async () => {
         Logger.step('Creating and filling change order details...');
         await page.waitForLoadState('load');
         await page.waitForTimeout(2000);
@@ -298,7 +298,7 @@ test.describe('Verify Change order tab', () => {
         Logger.success('Change order details filled successfully.');
     });
 
-    test('TC91 @regression @changeOrderAndinvoice : Should upload PNG image for change order', async () => {
+    test('TC134 @regression @changeOrderAndinvoice : Should upload PNG image for change order', async () => {
         Logger.step('Uploading PNG image for change order...');
         await page.waitForLoadState('load');
         await page.waitForTimeout(2000);
@@ -326,7 +326,7 @@ test.describe('Verify Change order tab', () => {
         await invoicePage.uploadChangeOrderImage(testImagePath);
     });
 
-    test('TC92 @regression @changeOrderAndinvoice : Should export change order data', async () => {
+    test('TC135 @regression @changeOrderAndinvoice : Should export change order data', async () => {
         Logger.step('Exporting change order data...');
         await page.waitForLoadState('load');
         await page.waitForTimeout(2000);
@@ -339,7 +339,7 @@ test.describe('Verify Change order tab', () => {
         }
     });
 
-    test('TC93 @regression @changeOrderAndinvoice : Should add data to change order and save', async () => {
+    test('TC136 @regression @changeOrderAndinvoice : Should add data to change order and save', async () => {
         Logger.step('Adding data to change order and saving...');
         await page.waitForLoadState('load');
         await page.waitForTimeout(2000);
@@ -365,7 +365,7 @@ test.describe('Verify Change order tab', () => {
         }
     });
 
-    test('TC94 @regression @changeOrderAndinvoice : Should verify change order was added to list', async () => {
+    test('TC137 @regression @changeOrderAndinvoice : Should verify change order was added to list', async () => {
         Logger.step('Verifying change order was added to the list...');
         await page.waitForLoadState('load');
         await page.waitForTimeout(2000);
@@ -378,7 +378,7 @@ test.describe('Verify Change order tab', () => {
     test.describe('TC95 - Complete change order with snapshot', () => {
         test.describe.configure({ retries: 1 });
 
-        test('TC95 @regression @changeOrder @changeOrderAndinvoice : Should add complete change order with all fields, verify values, and assert snapshot/Revised Contract Amount', async ({}, testInfo) => {
+        test('TC138 @regression @changeOrder @changeOrderAndinvoice : Should add complete change order with all fields, verify values, and assert snapshot/Revised Contract Amount', async ({}, testInfo) => {
             testInfo.setTimeout(180000);
             Logger.step('Creating complete change order with all fields...');
             await page.waitForLoadState('load');
@@ -425,7 +425,7 @@ test.describe('Verify Change order tab', () => {
         });
     });
 
-    test('TC96 @regression @changeOrderAndinvoice : Should add multiple change orders (4-5) with all fields filled', async () => {
+    test('TC139 @regression @changeOrderAndinvoice : Should add multiple change orders (4-5) with all fields filled', async () => {
         test.setTimeout(180000);
         Logger.step('Creating change order flow in non-blocking mode...');
         try {
@@ -438,12 +438,12 @@ test.describe('Verify Change order tab', () => {
             const result = await invoicePage.createCompleteChangeOrder(testData);
             Logger.info(`Processed change order: ${result?.number || 'unknown number'}`);
         } catch (error) {
-            Logger.error('TC96 non-blocking error: ' + error.message);
+            Logger.error('TC139 non-blocking error: ' + error.message);
         }
-        Logger.success('TC96 passed');
+        Logger.success('TC139 passed');
     });
 
-    test('TC97 @regression @changeOrderAndinvoice : Should verify change order number is auto-generated', async () => {
+    test('TC140 @regression @changeOrderAndinvoice : Should verify change order number is auto-generated', async () => {
         Logger.step('Verifying change order number is auto-generated...');
         await page.waitForLoadState('load');
         await page.waitForTimeout(2000);
@@ -464,7 +464,7 @@ test.describe('Verify Change order tab', () => {
         await invoicePage.goBackToChangeOrderList();
     });
 
-    test('TC99 @regression @changeOrderAndinvoice : Should verify all change order form fields are visible', async () => {
+    test('TC141 @regression @changeOrderAndinvoice : Should verify all change order form fields are visible', async () => {
         Logger.step('Verifying all change order form fields are visible...');
         await page.waitForLoadState('load');
         await page.waitForTimeout(2000);
@@ -489,7 +489,7 @@ test.describe('Verify Change order tab', () => {
         await invoicePage.goBackToChangeOrderList();
     });
 
-    test('TC100 @regression @changeOrderAndinvoice : Should verify change order list displays correct columns', async () => {
+    test('TC142 @regression @changeOrderAndinvoice : Should verify change order list displays correct columns', async () => {
         Logger.step('Verifying change order list columns...');
         await page.waitForLoadState('load');
         await page.waitForTimeout(2000);
@@ -516,7 +516,7 @@ test.describe('Verify Change order tab', () => {
         Logger.success('All change order list columns are displayed correctly.');
     });
 
-    test('TC101 @regression @changeOrderAndinvoice : Should add 5th change order with Fire Safety System Update', async () => {
+    test('TC143 @regression @changeOrderAndinvoice : Should add 5th change order with Fire Safety System Update', async () => {
         test.setTimeout(600_000);
         Logger.step('Creating 5th change order with Fire Safety System Update...');
         await page.waitForLoadState('load');
@@ -552,7 +552,7 @@ test.describe('Verify Change order tab', () => {
         Logger.success(`5th change order ${result.number} created and verified successfully.`);
     });
 
-    test('TC102 @regression @changeOrderAndinvoice : Should verify change orders appear with Approved status', async () => {
+    test('TC144 @regression @changeOrderAndinvoice : Should verify change orders appear with Approved status', async () => {
         Logger.step('Verifying change orders have Approved status...');
         await page.waitForLoadState('load');
         await page.waitForTimeout(2000);
@@ -564,17 +564,17 @@ test.describe('Verify Change order tab', () => {
         Logger.success(`Found ${count} change orders with Approved status.`);
     });
 
-    test('TC103 @regression @negativeCO @changeOrderAndinvoice : Negative — junk list search then clear', async () => {
+    test('TC145 @regression @negativeCO @changeOrderAndinvoice : Negative — junk list search then clear', async () => {
         await settleChangeOrderWorkspace(page, 2500);
         const search = coWorkspaceListSearch(page);
         await expect(search).toBeVisible({ timeout: 15000 });
         const searchEnabled = await search.isEnabled({ timeout: 3000 }).catch(() => false);
         if (!searchEnabled) {
             // Search is disabled when CO list is empty (no prerequisite COs). Verify empty state.
-            Logger.info('[TC103] Search disabled (no COs in list) — asserting empty CO workspace');
+            Logger.info('[TC145] Search disabled (no COs in list) — asserting empty CO workspace');
             await expect(coCreateButton(page)).toBeVisible({ timeout: 15000 });
             await expect(page).toHaveURL(/change|order|contract|invoices|jobs/i);
-            Logger.success('[TC103] Empty CO workspace verified: Create button visible, URL correct');
+            Logger.success('[TC145] Empty CO workspace verified: Create button visible, URL correct');
             return;
         }
         await search.fill('__CO_NEG_NO_MATCH_Ω__');
@@ -585,10 +585,10 @@ test.describe('Verify Change order tab', () => {
         await page.waitForTimeout(600);
         await expect(coCreateButton(page)).toBeVisible({ timeout: 15000 });
         await expect(page).toHaveURL(/change|order|contract|invoices|jobs/i);
-        Logger.success('[TC103] Junk search cleared — CO workspace restored');
+        Logger.success('[TC145] Junk search cleared — CO workspace restored');
     });
 
-    test('TC104 @regression @negativeCO @changeOrderAndinvoice : Negative — discard new change order via Go Back without saving', async () => {
+    test('TC146 @regression @negativeCO @changeOrderAndinvoice : Negative — discard new change order via Go Back without saving', async () => {
         await settleChangeOrderWorkspace(page, 2000);
         await invoicePage.clickAddChangeOrder();
         await page.waitForTimeout(800);
@@ -600,7 +600,7 @@ test.describe('Verify Change order tab', () => {
         await expect(coCreateButton(page)).toBeVisible({ timeout: 15000 });
     });
 
-    test('TC105 @regression @negativeCO @changeOrderAndinvoice : Negative — Escape closes create flow when dialog is open', async () => {
+    test('TC147 @regression @negativeCO @changeOrderAndinvoice : Negative — Escape closes create flow when dialog is open', async () => {
         await settleChangeOrderWorkspace(page, 2000);
         await invoicePage.clickAddChangeOrder();
         const dlg = page.locator('dialog, [role="dialog"]').filter({ hasText: /Change Order|Overview/i }).first();
@@ -614,7 +614,7 @@ test.describe('Verify Change order tab', () => {
         await expect(coCreateButton(page)).toBeVisible({ timeout: 15000 });
     });
 
-    test('TC106 @regression @positiveCO @changeOrderAndinvoice : Positive — workspace exposes list, create action, and Change Order grid', async () => {
+    test('TC148 @regression @positiveCO @changeOrderAndinvoice : Positive — workspace exposes list, create action, and Change Order grid', async () => {
         await settleChangeOrderWorkspace(page, 3000);
         await expect(page).toHaveURL(/change|order|contract|invoices|jobs/i);
         await expect(coCreateButton(page)).toBeVisible({ timeout: 20000 });
@@ -626,16 +626,16 @@ test.describe('Verify Change order tab', () => {
             (await headerFallback.isVisible({ timeout: 5000 }).catch(() => false));
         if (!gridVisible) {
             // Grid is absent when CO list is empty (no COs created yet). Verify empty state.
-            Logger.info('[TC106] CO grid not visible (empty list) — verifying empty CO workspace');
+            Logger.info('[TC148] CO grid not visible (empty list) — verifying empty CO workspace');
             await expect(coCreateButton(page)).toBeVisible({ timeout: 10000 });
-            Logger.success('[TC106] Empty CO workspace verified: create action exposed, grid absent (no COs)');
+            Logger.success('[TC148] Empty CO workspace verified: create action exposed, grid absent (no COs)');
             return;
         }
         expect(gridVisible).toBeTruthy();
-        Logger.success('[TC106] CO workspace verified: create action and grid both visible');
+        Logger.success('[TC148] CO workspace verified: create action and grid both visible');
     });
 
-    test('TC107 @regression @edgeCO @changeOrderAndinvoice : Edge — Invoice ⇄ Change Orders tab churn', async () => {
+    test('TC149 @regression @edgeCO @changeOrderAndinvoice : Edge — Invoice ⇄ Change Orders tab churn', async () => {
         await settleChangeOrderWorkspace(page, 2000);
         await invoicePage.navigateToInvoiceTab();
         await page.waitForTimeout(1200);
@@ -646,7 +646,7 @@ test.describe('Verify Change order tab', () => {
         await expect(coCreateButton(page)).toBeVisible({ timeout: 20000 });
     });
 
-    test('TC108 @regression @edgeCO @changeOrderAndinvoice : Edge — very long title preserves input (no silent truncate on UI)', async () => {
+    test('TC150 @regression @edgeCO @changeOrderAndinvoice : Edge — very long title preserves input (no silent truncate on UI)', async () => {
         await settleChangeOrderWorkspace(page, 2000);
         await invoicePage.clickAddChangeOrder();
         const titleInput = page.getByPlaceholder('Enter title');
@@ -660,16 +660,16 @@ test.describe('Verify Change order tab', () => {
         await invoicePage.goBackToChangeOrderList();
     });
 
-    test('TC109 @regression @missingCO @changeOrderAndinvoice : Missing path — clear search restores list chrome', async () => {
+    test('TC151 @regression @missingCO @changeOrderAndinvoice : Missing path — clear search restores list chrome', async () => {
         await settleChangeOrderWorkspace(page, 2000);
         const search = coWorkspaceListSearch(page);
         await expect(search).toBeVisible({ timeout: 15000 });
         const searchEnabled = await search.isEnabled({ timeout: 3000 }).catch(() => false);
         if (!searchEnabled) {
-            Logger.info('[TC109] Search disabled (no COs in list) — asserting empty CO workspace');
+            Logger.info('[TC151] Search disabled (no COs in list) — asserting empty CO workspace');
             await expect(page.locator('main').first()).toBeVisible({ timeout: 10000 });
             await expect(coCreateButton(page)).toBeVisible({ timeout: 15000 });
-            Logger.success('[TC109] Empty CO workspace verified');
+            Logger.success('[TC151] Empty CO workspace verified');
             return;
         }
         await search.fill('__PROBE__');
@@ -679,14 +679,14 @@ test.describe('Verify Change order tab', () => {
         await page.waitForTimeout(500);
         await expect(page.locator('main').first()).toBeVisible({ timeout: 10000 });
         await expect(coCreateButton(page)).toBeVisible({ timeout: 15000 });
-        Logger.success('[TC109] Search cleared — list chrome restored');
+        Logger.success('[TC151] Search cleared — list chrome restored');
     });
 
     /**
      * One navigation chain: 15+ screenshot baselines (distinct list, search, create, grid, documents, tabs, details, invoice).
      * First run: `npx playwright test tests/TC09_changeOrder.spec.js --grep TC110 --update-snapshots --workers=1`
      */
-    test('TC110 @regression @visualCO @changeOrderAndinvoice : Visual suite — ≥15 screens (list, search, create, grid, details, invoice)', async () => {
+    test('TC152 @regression @visualCO @changeOrderAndinvoice : Visual suite — ≥15 screens (list, search, create, grid, details, invoice)', async () => {
         test.setTimeout(720_000);
         const loc = invoicePage.tc08Loc();
         await settleChangeOrderWorkspace(page, 5000);
@@ -967,7 +967,7 @@ test.describe('Verify Change order tab', () => {
         });
     });
 
-    test('TC111 @regression @positiveCO @changeOrderAndinvoice : Positive — create shell exposes overview, grid workflow, Review Changes, Go Back', async () => {
+    test('TC153 @regression @positiveCO @changeOrderAndinvoice : Positive — create shell exposes overview, grid workflow, Review Changes, Go Back', async () => {
         await settleChangeOrderWorkspace(page, 2500);
         await invoicePage.clickAddChangeOrder();
         const dlg = page
@@ -994,7 +994,7 @@ test.describe('Verify Change order tab', () => {
         await expect(page).toHaveURL(/change|order|jobs/i);
     });
 
-    test('TC112 @regression @positiveCO @changeOrderAndinvoice : Positive — complete change order persists to list', async () => {
+    test('TC154 @regression @positiveCO @changeOrderAndinvoice : Positive — complete change order persists to list', async () => {
         test.setTimeout(240_000);
         await settleChangeOrderWorkspace(page, 2000);
         const amt = getRandomAmount();
@@ -1014,13 +1014,13 @@ test.describe('Verify Change order tab', () => {
         }
     });
 
-    test('TC113 @regression @negativeCO @changeOrderAndinvoice : Negative — Review Changes disabled before grid edits (when applicable)', async () => {
+    test('TC155 @regression @negativeCO @changeOrderAndinvoice : Negative — Review Changes disabled before grid edits (when applicable)', async () => {
         await settleChangeOrderWorkspace(page, 2000);
         await invoicePage.clickAddChangeOrder();
         const reviewChanges = page.getByRole('button', { name: /Review Changes/i });
         await expect(reviewChanges).toBeVisible({ timeout: 20000 });
         if (!(await reviewChanges.isDisabled())) {
-            Logger.info('TC113: Review Changes is enabled on open (prefilled grid/build); asserting go-back navigation only.');
+            Logger.info('TC155: Review Changes is enabled on open (prefilled grid/build); asserting go-back navigation only.');
             await invoicePage.goBackToChangeOrderList();
             await expect(coCreateButton(page)).toBeVisible({ timeout: 15000 });
             return;
@@ -1030,16 +1030,16 @@ test.describe('Verify Change order tab', () => {
         await expect(coCreateButton(page)).toBeVisible({ timeout: 15000 });
     });
 
-    test('TC114 @regression @negativeCO @changeOrderAndinvoice : Negative — whitespace-only list search then clear', async () => {
+    test('TC156 @regression @negativeCO @changeOrderAndinvoice : Negative — whitespace-only list search then clear', async () => {
         await settleChangeOrderWorkspace(page, 2000);
         const search = coWorkspaceListSearch(page);
         await expect(search).toBeVisible({ timeout: 15000 });
         const searchEnabled = await search.isEnabled({ timeout: 3000 }).catch(() => false);
         if (!searchEnabled) {
-            Logger.info('[TC114] Search disabled (no COs in list) — asserting empty CO workspace');
+            Logger.info('[TC156] Search disabled (no COs in list) — asserting empty CO workspace');
             await expect(page.locator('main').first()).toBeVisible({ timeout: 10000 });
             await expect(coCreateButton(page)).toBeVisible({ timeout: 15000 });
-            Logger.success('[TC114] Empty CO workspace verified');
+            Logger.success('[TC156] Empty CO workspace verified');
             return;
         }
         await search.fill('   ');
@@ -1050,10 +1050,10 @@ test.describe('Verify Change order tab', () => {
         await page.waitForTimeout(500);
         await expect(page.locator('main').first()).toBeVisible({ timeout: 10000 });
         await expect(coCreateButton(page)).toBeVisible({ timeout: 15000 });
-        Logger.success('[TC114] Whitespace search cleared — workspace restored');
+        Logger.success('[TC156] Whitespace search cleared — workspace restored');
     });
 
-    test('TC115 @regression @edgeCO @changeOrderAndinvoice : Edge — reload job Change Orders workspace remains usable', async () => {
+    test('TC157 @regression @edgeCO @changeOrderAndinvoice : Edge — reload job Change Orders workspace remains usable', async () => {
         await settleChangeOrderWorkspace(page, 2000);
         await page.reload({ waitUntil: 'load' });
         await invoicePage.navigateToChangeOrderTab();
@@ -1062,7 +1062,7 @@ test.describe('Verify Change order tab', () => {
         await expect(page).toHaveURL(/change|order|jobs|invoices/i);
     });
 
-    test('TC116 @regression @edgeCO @changeOrderAndinvoice : Edge — long description preserves input without silent clear', async () => {
+    test('TC158 @regression @edgeCO @changeOrderAndinvoice : Edge — long description preserves input without silent clear', async () => {
         await settleChangeOrderWorkspace(page, 2000);
         await invoicePage.clickAddChangeOrder();
         const descriptionInput = page.getByPlaceholder('Enter description');
@@ -1077,7 +1077,7 @@ test.describe('Verify Change order tab', () => {
         await expect(coCreateButton(page)).toBeVisible({ timeout: 15000 });
     });
 
-    test('TC117 @regression @positiveCO @changeOrderAndinvoice : Positive — grid Change Order Amount commits and verifies in dialog', async () => {
+    test('TC159 @regression @positiveCO @changeOrderAndinvoice : Positive — grid Change Order Amount commits and verifies in dialog', async () => {
         test.setTimeout(180_000);
         await settleChangeOrderWorkspace(page, 2000);
         await invoicePage.clickAddChangeOrder();
@@ -1109,16 +1109,16 @@ test.describe('Verify Change order tab', () => {
         await expect(coCreateButton(page)).toBeVisible({ timeout: 15000 });
     });
 
-    test('TC118 @regression @missingCO @changeOrderAndinvoice : Missing — list probe search then clear restores grid chrome', async () => {
+    test('TC160 @regression @missingCO @changeOrderAndinvoice : Missing — list probe search then clear restores grid chrome', async () => {
         await settleChangeOrderWorkspace(page, 2000);
         const search = coWorkspaceListSearch(page);
         await expect(search).toBeVisible({ timeout: 15000 });
         const searchEnabled = await search.isEnabled({ timeout: 3000 }).catch(() => false);
         if (!searchEnabled) {
-            Logger.info('[TC118] Search disabled (no COs in list) — asserting empty CO workspace');
+            Logger.info('[TC160] Search disabled (no COs in list) — asserting empty CO workspace');
             await expect(coCreateButton(page)).toBeVisible({ timeout: 15000 });
             await expect(page).toHaveURL(/change|order|contract|invoices|jobs/i);
-            Logger.success('[TC118] Empty CO workspace verified');
+            Logger.success('[TC160] Empty CO workspace verified');
             return;
         }
         await search.fill('__CO_PROBE_MIN__');

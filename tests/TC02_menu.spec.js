@@ -53,7 +53,7 @@ test.afterAll(async () => {
 
 test.describe('Tailorbird Left Panel Flow - Modular', () => {
 
-    test('TC03 @sanity @regression Verify all menu options are available', async () => {
+    test('TC06 @sanity @regression Verify all menu options are available', async () => {
         const actualLabels = await helper.getLeftPanelLabels(page);
 
         if (actualLabels.length === 0)
@@ -65,7 +65,7 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
         }
     });
 
-    test('TC04 @sanity @regression Verify all menu navigation', async () => {
+    test('TC07 @sanity @regression Verify all menu navigation', async () => {
         test.setTimeout(120000);
         const actualLabels = await helper.getLeftPanelLabels(page);
         expect(actualLabels.length).toBeGreaterThan(0);
@@ -204,36 +204,32 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
         Logger.info("\n🎉 All Sidebar Menu Navigation Validated Successfully\n");
     });
 
-    test('TC05 @sanity @regression Verify main menu toggle functionality', async () => {
-        Logger.info('[TC05] Starting: main sidebar toggle — collapse and expand');
+    test('TC08 @sanity @regression Verify main menu toggle functionality', async () => {
+        Logger.info('[TC08] Starting: main sidebar toggle — collapse and expand');
         await test.step('Sidebar shell collapses and expands (width + layout, not aria-expanded)', async () => {
             await helper.assertMainSidebarToggle(page);
         });
-        Logger.success('[TC05] ✅ Main sidebar toggle verified — collapse and expand work');
+        Logger.success('[TC08] ✅ Main sidebar toggle verified — collapse and expand work');
     });
 
-    test('TC06 @sanity @regression Verify Financials expand/collapse', async () => {
-        Logger.info('[TC06] Starting: Financials section expand/collapse');
+    test('TC09 @sanity @regression Verify Financials expand/collapse', async () => {
+        Logger.info('[TC09] Starting: Financials section expand/collapse');
         await helper.runTwoClickTest(page, "Financials");
-        Logger.success('[TC06] ✅ Financials expand/collapse verified');
+        Logger.success('[TC09] ✅ Financials expand/collapse verified');
     });
 
-    test('TC07 @sanity @regression Verify Trackers expand/collapse', async () => {
-        Logger.info('[TC07] Starting: Trackers section expand/collapse');
+    test('TC10 @sanity @regression Verify Trackers expand/collapse', async () => {
+        Logger.info('[TC10] Starting: Trackers section expand/collapse');
         await helper.runTwoClickTest(page, "Trackers");
-        Logger.success('[TC07] ✅ Trackers expand/collapse verified');
+        Logger.success('[TC10] ✅ Trackers expand/collapse verified');
     });
 
-    test('TC08 @sanity @regression Verify Documents expand/collapse', async () => {
-        Logger.info('[TC08] Starting: Documents section expand/collapse');
+    test('TC11 @sanity @regression Verify Documents expand/collapse', async () => {
+        Logger.info('[TC11] Starting: Documents section expand/collapse');
         await helper.runTwoClickTest(page, "Documents");
-        Logger.success('[TC08] ✅ Documents expand/collapse verified');
+        Logger.success('[TC11] ✅ Documents expand/collapse verified');
     });
 
-    // -------------------------------------------------------------------------
-    // TC02 regression / edge / visual (also tagged @regression @menu for grep):
-    //   TC02-reg-01 … TC02-reg-08, TC02-vis-01
-    // -------------------------------------------------------------------------
     test.describe('Regression — left nav edges, resilience, and UI snapshot', () => {
         test.beforeEach(async ({ page }) => {
             Logger.info(`Navigating to dashboard: ${process.env.DASHBOARD_URL}`);
@@ -246,23 +242,23 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
             });
         });
 
-        test('TC02-reg-01 @regression @menu Main menu toggle restores sidebar width', async ({ page }) => {
+        test('TC12 @regression @menu Main menu toggle restores sidebar width', async ({ page }) => {
             await helper.assertMainSidebarToggle(page);
         });
 
-        test('TC02-reg-02 @regression @menu Browser back returns from Properties toward prior app route', async ({
+        test('TC13 @regression @menu Browser back returns from Properties toward prior app route', async ({
             page,
         }) => {
             const base = process.env.BASE_URL || new URL(process.env.DASHBOARD_URL).origin;
             const beforeUrl = page.url();
-            Logger.info(`[TC02-reg-02] URL before Properties navigation: ${beforeUrl}`);
+            Logger.info(`[TC13] URL before Properties navigation: ${beforeUrl}`);
             const propertiesUrl = new URL('/properties', base).href;
             await page.goto(propertiesUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
             await expect(page).toHaveURL(/properties/i, { timeout: 15000 });
-            Logger.info(`[TC02-reg-02] On Properties: ${page.url()}`);
+            Logger.info(`[TC13] On Properties: ${page.url()}`);
             await page.goBack({ waitUntil: 'domcontentloaded' });
             await expect.poll(() => page.url(), { timeout: 15000 }).not.toBe(propertiesUrl);
-            Logger.info(`[TC02-reg-02] URL after browser back: ${page.url()}`);
+            Logger.info(`[TC13] URL after browser back: ${page.url()}`);
             expect(page.url()).not.toMatch(/\/properties(\/|$)/);
             expect(
                 page.url().startsWith(base),
@@ -270,10 +266,10 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
             ).toBeTruthy();
         });
 
-        test('TC02-reg-03 @regression @menu Unknown deep link still renders app shell (no blank page)', async ({
+        test('TC14 @regression @menu Unknown deep link still renders app shell (no blank page)', async ({
             page,
         }) => {
-            Logger.info('[TC02-reg-03] Starting: unknown route must still render app shell');
+            Logger.info('[TC14] Starting: unknown route must still render app shell');
             const origin = new URL(process.env.DASHBOARD_URL).origin;
             const unknownUrl = `${origin}/__tb_automation_unknown_route__/`;
             InteractionLogger.logNavigation(unknownUrl, 'Unknown route — app shell render check');
@@ -281,15 +277,15 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
                 waitUntil: 'domcontentloaded',
                 timeout: 45000,
             });
-            Logger.info('[TC02-reg-03] Asserting: body is visible (no blank page)');
+            Logger.info('[TC14] Asserting: body is visible (no blank page)');
             await expect(page.locator('body')).toBeVisible();
-            Logger.info('[TC02-reg-03] Asserting: app shell (AppShell-root, nav, or main) is visible');
+            Logger.info('[TC14] Asserting: app shell (AppShell-root, nav, or main) is visible');
             const shell = page.locator('.mantine-AppShell-root, nav, main').first();
             await expect(shell).toBeVisible({ timeout: 20000 });
-            Logger.success('[TC02-reg-03] ✅ Unknown route renders app shell — no blank page');
+            Logger.success('[TC14] ✅ Unknown route renders app shell — no blank page');
         });
 
-        test('TC02-reg-04 @regression @menu Escape closes More submenu when present', async ({ page }) => {
+        test('TC15 @regression @menu Escape closes More submenu when present', async ({ page }) => {
             const dashboardUrl = process.env.DASHBOARD_URL;
             test.skip(!dashboardUrl, 'DASHBOARD_URL required');
 
@@ -333,10 +329,10 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
             const usedMore = await moreButton.isVisible().catch(() => false);
 
             if (usedMore) {
-                Logger.info('[TC02-reg-04] Using sidebar "More" overflow menu');
+                Logger.info('[TC15] Using sidebar "More" overflow menu');
                 await moreButton.click();
             } else {
-                Logger.info('[TC02-reg-04] "More" not shown — using user shell menu (Escape still closes Mantine menu)');
+                Logger.info('[TC15] "More" not shown — using user shell menu (Escape still closes Mantine menu)');
                 await shell.locator('.mantine-Avatar-root').last().click();
             }
 
@@ -344,31 +340,26 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
             const openMenu = page.locator('[role="menu"]').first();
             await expect(openMenu).toBeVisible({ timeout: 8000 });
             const beforeLabels = await openMenu.getByRole('menuitem').allInnerTexts().catch(() => []);
-            Logger.info(`[TC02-reg-04] Menu items before Escape: ${JSON.stringify(beforeLabels.map((t) => t.trim()))}`);
+            Logger.info(`[TC15] Menu items before Escape: ${JSON.stringify(beforeLabels.map((t) => t.trim()))}`);
             await page.keyboard.press('Escape');
             await expect(openMenu).toBeHidden({ timeout: 8000 });
         });
 
-        test('TC02-reg-05 @regression @menu Dashboard exposes navigation landmark with Properties entry', async ({
+        test('TC16 @regression @menu Dashboard exposes navigation landmark with Properties entry', async ({
             page,
         }) => {
             const nav = page.getByRole('navigation');
             await expect(nav).toBeVisible({ timeout: 15_000 });
             const linkTexts = await nav.locator('a, button').allInnerTexts().catch(() => []);
             const sample = [...new Set(linkTexts.map((t) => t.trim()).filter(Boolean))].slice(0, 30);
-            Logger.info(`[TC02-reg-05] Navigation landmark sample labels: ${JSON.stringify(sample)}`);
+            Logger.info(`[TC16] Navigation landmark sample labels: ${JSON.stringify(sample)}`);
             await expect(
                 nav.getByText('Properties', { exact: true }).first(),
                 `FAIL: Expected "Properties" in nav landmark; sample above. Menu copy may have changed.`,
             ).toBeVisible({ timeout: 10_000 });
         });
 
-        /**
-         * User shell menu — verified against `app/components/ClientWrapper.tsx` + `userSettingsMenu.ts`.
-         * Do not use `div[aria-haspopup="menu"]).first()`: the "More" overflow menu is first and has no Profile.
-         * Open via navbar avatar; log all [role=menuitem] labels so copy drift is obvious in CI logs.
-         */
-        test('TC02-reg-06 @regression @menu User menu exposes Profile, org management (when shown), Logout', async ({
+        test('TC17 @regression @menu User menu exposes Profile, org management (when shown), Logout', async ({
             page,
         }) => {
             const navbar = page.locator('.mantine-AppShell-navbar');
@@ -384,9 +375,9 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
             });
 
             const items = (await menu.getByRole('menuitem').allInnerTexts()).map((t) => t.trim());
-            Logger.info(`[TC02-reg-06] User menu items (live): ${JSON.stringify(items)}`);
+            Logger.info(`[TC17] User menu items (live): ${JSON.stringify(items)}`);
             Logger.info(
-                `[TC02-reg-06] Fixture benchmark (${uiBenchmark._source?.slice(0, 80)}…): expect Profile="${uiBenchmark.userMenuProfile}", Logout="${uiBenchmark.userMenuLogout}", org copy one of: "${uiBenchmark.userMenuManageTeam}" | "${uiBenchmark.userMenuManageOrganizationLegacy}" | Manage User Roles`,
+                `[TC17] Fixture benchmark (${uiBenchmark._source?.slice(0, 80)}…): expect Profile="${uiBenchmark.userMenuProfile}", Logout="${uiBenchmark.userMenuLogout}", org copy one of: "${uiBenchmark.userMenuManageTeam}" | "${uiBenchmark.userMenuManageOrganizationLegacy}" | Manage User Roles`,
             );
 
             await expect(
@@ -403,7 +394,7 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
             const hasOrgItem = items.some((t) => orgPattern.test(t));
             if (items.length <= 2) {
                 Logger.info(
-                    '[TC02-reg-06] Only Profile + Logout (vendor-style per userSettingsMenu.ts) — skipping org-management item assertion.',
+                    '[TC17] Only Profile + Logout (vendor-style per userSettingsMenu.ts) — skipping org-management item assertion.',
                 );
             } else {
                 expect(
@@ -421,16 +412,16 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
             await expect(menu).toBeHidden({ timeout: 5_000 });
         });
 
-        test('TC02-reg-08 @regression @menu Sidebar stays collapsed after SPA navigation to Properties (edge)', async ({
+        test('TC18 @regression @menu Sidebar stays collapsed after SPA navigation to Properties (edge)', async ({
             page,
         }) => {
-            Logger.info('[TC02-reg-08] Collapse shell, navigate via in-app link, assert width, then expand');
+            Logger.info('[TC18] Collapse shell, navigate via in-app link, assert width, then expand');
             const toggle = helper.mainNavbarToggleLocator(page);
             await expect(toggle).toBeVisible({ timeout: 10_000 });
             expect(await helper.getMainNavbarWidth(page), 'Start expanded').toBeGreaterThan(150);
             await toggle.click();
             await expect.poll(() => helper.getMainNavbarWidth(page), { timeout: 10_000 }).toBeLessThan(120);
-            Logger.info(`[TC02-reg-08] Collapsed width: ${await helper.getMainNavbarWidth(page)}px`);
+            Logger.info(`[TC18] Collapsed width: ${await helper.getMainNavbarWidth(page)}px`);
 
             /**
              * Collapsed ClientWrapper nav uses icon-only Mantine NavLinks with onClick + router.push — no /properties href.
@@ -444,22 +435,22 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
 
             const navigatePropertiesSpa = async () => {
                 if (await byExactHref.isVisible().catch(() => false)) {
-                    Logger.info('[TC02-reg-08] Using a[href="/properties"] (expanded / labelled nav)');
+                    Logger.info('[TC18] Using a[href="/properties"] (expanded / labelled nav)');
                     await byExactHref.click();
                     return;
                 }
                 if (await byPartialHref.isVisible().catch(() => false)) {
-                    Logger.info('[TC02-reg-08] Using a[href*="/properties"]');
+                    Logger.info('[TC18] Using a[href*="/properties"]');
                     await byPartialHref.click();
                     return;
                 }
                 if (await byLabel.isVisible().catch(() => false)) {
-                    Logger.info('[TC02-reg-08] Using visible "Properties" label');
+                    Logger.info('[TC18] Using visible "Properties" label');
                     await byLabel.click();
                     return;
                 }
                 Logger.info(
-                    '[TC02-reg-08] Collapsed mode: 2nd .mantine-NavLink-root in shell = Properties (icons are SVG, not <img>)',
+                    '[TC18] Collapsed mode: 2nd .mantine-NavLink-root in shell = Properties (icons are SVG, not <img>)',
                 );
                 const navLink = shell.locator('.mantine-NavLink-root').nth(1);
                 await expect(
@@ -479,10 +470,10 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
 
             await helper.mainNavbarToggleLocator(page).click();
             await expect.poll(() => helper.getMainNavbarWidth(page), { timeout: 10_000 }).toBeGreaterThan(150);
-            Logger.success('[TC02-reg-08] Collapsed SPA persistence + expand OK');
+            Logger.success('[TC18] Collapsed SPA persistence + expand OK');
         });
 
-        test('TC02-vis-01 @regression @menu Visual snapshot: left navigation shell', async ({ page }) => {
+        test('TC19 @regression @menu Visual snapshot: left navigation shell', async ({ page }) => {
             const nav = page.locator('.mantine-AppShell-navbar').first();
             await nav.waitFor({ state: 'visible', timeout: 15000 });
             const navTexts = await nav
@@ -496,7 +487,7 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
                 })
                 .catch(() => []);
             Logger.info(
-                `[TC02-vis-01] Navbar snapshot benchmark — text nodes (sample): ${JSON.stringify(navTexts.slice(0, 40))}`,
+                `[TC19] Navbar snapshot benchmark — text nodes (sample): ${JSON.stringify(navTexts.slice(0, 40))}`,
             );
             await expect(nav, 'FAIL: Left nav shell screenshot mismatch — layout/branding changed. Review diff + logs.').toHaveScreenshot(
                 'menu-left-navbar-shell.png',
@@ -510,26 +501,26 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
     test.describe('Regression — no session (AuthKit entry)', () => {
         test.use({ storageState: { cookies: [], origins: [] } });
 
-        test('TC02-reg-07 @regression @menu Visiting /properties without session shows Sign in', async ({ page }) => {
+        test('TC20 @regression @menu Visiting /properties without session shows Sign in', async ({ page }) => {
             test.skip(!process.env.DASHBOARD_URL, 'DASHBOARD_URL is required to resolve app origin for this check.');
-            Logger.info('[TC02-reg-07] Starting: /properties without session must show Sign in');
+            Logger.info('[TC20] Starting: /properties without session must show Sign in');
             const base = process.env.BASE_URL || new URL(process.env.DASHBOARD_URL).origin;
             const propertiesUrl = new URL('/properties', base).href;
             InteractionLogger.logNavigation(propertiesUrl, 'Properties — unauthenticated access');
             await page.goto(propertiesUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
-            Logger.info('[TC02-reg-07] Asserting: Sign in heading visible');
+            Logger.info('[TC20] Asserting: Sign in heading visible');
             await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible({ timeout: 30_000 });
-            Logger.success('[TC02-reg-07] ✅ Unauthenticated /properties redirected to Sign in');
+            Logger.success('[TC20] ✅ Unauthenticated /properties redirected to Sign in');
         });
     });
 
 });
 
-// ─── Text Agent ───────────────────────────────────────────────────────────────
-test.describe('TC02 Menu — Text Agent (live MCP browser scan)', () => {
+
+test.describe('TC02 Menu — Text assertions', () => {
     test.setTimeout(120_000);
 
-    test('TEXT-02 @menu @sanity Full nav text agent — all CTAs, labels, nav items, profile menu', async ({ page }) => {
+    test('TC21 @menu @sanity Full nav text agent — all CTAs, labels, nav items, profile menu', async ({ page }) => {
         test.skip(!process.env.DASHBOARD_URL, 'DASHBOARD_URL required');
         // beforeEach already navigated to DASHBOARD_URL and set up auth session
         InteractionLogger.logNavigation(process.env.DASHBOARD_URL, 'Dashboard — left nav Text Agent');
@@ -551,7 +542,7 @@ test.describe('TC02 Menu — Text Agent (live MCP browser scan)', () => {
 
             // Soft-assert: log input/label issues from page content (e.g. year picker) without failing nav test
             if (failures.length > 0) {
-                Logger.info(`[TEXT-02] Non-nav input accessibility issues noted (${failures.length}): ${failures.join(' | ')}`);
+                Logger.info(`[TC21] Non-nav input accessibility issues noted (${failures.length}): ${failures.join(' | ')}`);
             }
         });
 

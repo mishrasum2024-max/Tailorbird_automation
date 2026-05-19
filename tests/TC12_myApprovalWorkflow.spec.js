@@ -29,9 +29,9 @@ test.describe('Approval Workflow - My Approvals E2E Tests with another user', ()
         Logger.success('Setup complete - Navigated to Approval section');
     });
 
-    test('@approval @sanity @regression TC134 My Approvals – Verify user can successfully search approval records using a valid keyword and see filtered results', async () => {
+    test('@approval @sanity @regression TC211 My Approvals – Verify user can successfully search approval records using a valid keyword and see filtered results', async () => {
         try {
-            Logger.step('TC122: Testing search functionality in My Approvals tab');
+            Logger.step('TC211: Testing search functionality in My Approvals tab');
 
             await approvalJob.navigateToMyApprovalsTab();
             await approvalJob.waitForPageLoad();
@@ -52,16 +52,16 @@ test.describe('Approval Workflow - My Approvals E2E Tests with another user', ()
             const afterClearRowCount = await approvalJob.getTableRowCount();
             Logger.info('Rows after clearing search: ' + afterClearRowCount);
 
-            Logger.success('TC122 passed: Search functionality working correctly');
+            Logger.success('TC211 passed: Search functionality working correctly');
         } catch (error) {
-            Logger.error('TC122 failed: ' + error.message);
+            Logger.error('TC211 failed: ' + error.message);
             throw error;
         }
     });
 
-    test('@approval @regression TC136 My Approvals – Verify My Approvals page loads correctly with functional toolbar, table, search, export, and approval details modal', async () => {
+    test('@approval @regression TC212 My Approvals – Verify My Approvals page loads correctly with functional toolbar, table, search, export, and approval details modal', async () => {
         try {
-            Logger.step('TC128: Navigating to My Approvals tab');
+            Logger.step('TC212: Navigating to My Approvals tab');
             await approvalJob.navigateToMyApprovalsTab();
             await approvalJob.waitForPageLoad();
             await page.waitForLoadState('networkidle');
@@ -139,16 +139,16 @@ test.describe('Approval Workflow - My Approvals E2E Tests with another user', ()
                 Logger.info('No rows available – skipping modal validation');
             }
 
-            Logger.success('TC128 passed: My Approvals flow validated end-to-end');
+            Logger.success('TC212 passed: My Approvals flow validated end-to-end');
         } catch (error) {
-            Logger.error('TC128 failed: ' + error.message);
+            Logger.error('TC212 failed: ' + error.message);
             throw error;
         }
     });
 
-    test('@approval @regression TC137 Approval Workflow – Verify search behavior is handled correctly when switching between approval tabs', async () => {
+    test('@approval @regression TC213 Approval Workflow – Verify search behavior is handled correctly when switching between approval tabs', async () => {
         try {
-            Logger.step('TC137: E2E test - testing search behavior across tabs');
+            Logger.step('TC213: E2E test - testing search behavior across tabs');
 
             // Search in My Approvals
             await approvalJob.navigateToMyApprovalsTab();
@@ -168,16 +168,16 @@ test.describe('Approval Workflow - My Approvals E2E Tests with another user', ()
             await approvalJob.clearSearch();
             Logger.success('Search properly managed across tab switches');
 
-            Logger.success('TC137 passed: Search behavior across tabs verified');
+            Logger.success('TC213 passed: Search behavior across tabs verified');
         } catch (error) {
-            Logger.error('TC137 failed: ' + error.message);
+            Logger.error('TC213 failed: ' + error.message);
             throw error;
         }
     });
 
-    test('@approval @regression TC138 Approval Workflow – Verify user can complete the full end-to-end approval journey including search, view details, manage columns, export data, and tab navigation', async () => {
+    test('@approval @regression TC214 Approval Workflow – Verify user can complete the full end-to-end approval journey including search, view details, manage columns, export data, and tab navigation', async () => {
         try {
-            Logger.step('TC138: E2E complete workflow - view, search, manage columns, export');
+            Logger.step('TC214: E2E complete workflow - view, search, manage columns, export');
 
             // Step 1: Navigate to My Approvals
             Logger.step('Step 1: Navigate to My Approvals');
@@ -243,9 +243,9 @@ test.describe('Approval Workflow - My Approvals E2E Tests with another user', ()
                 "UI changed: All Approvals should show search/grid or selected all-approvals state"
             ).toBeTruthy();
             await approvalJob.waitForPageLoad();
-            Logger.success('TC138 passed: Complete E2E workflow executed successfully');
+            Logger.success('TC214 passed: Complete E2E workflow executed successfully');
         } catch (error) {
-            Logger.error('TC138 failed: ' + error.message);
+            Logger.error('TC214 failed: ' + error.message);
             throw error;
         }
     });
