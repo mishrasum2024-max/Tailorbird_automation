@@ -262,7 +262,7 @@ test.describe('Approval Workflow - My Approvals & All Approvals E2E Tests', () =
         }
     });
 
-    test('@approval @regression TC130 All Approvals – Verify user can add a new column to the All Approvals table and see updated table structure', async () => {
+    test('@approval @regression TC130 All Approvals – Verify user can add a new custom column successfully in All Approvals table and validate updated approval grid structure after column creation', async () => {
         try {
             Logger.step('TC133: Testing Add Column in All Approvals');
 
@@ -281,7 +281,7 @@ test.describe('Approval Workflow - My Approvals & All Approvals E2E Tests', () =
         }
     });
 
-    test('@approval @regression TC131 All Approvals – Verify user can open the filter panel, apply filters, and close the filter panel successfully', async () => {
+    test('@approval @regression TC131 All Approvals – Verify user can open the filter panel from All Approvals workspace, apply approval filters successfully, and close the filter drawer without breaking approval table behavior', async () => {
         try {
             Logger.step('TC134: Testing Filter button in All Approvals');
 

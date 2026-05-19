@@ -359,7 +359,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         }
     });
 
-    test('@approval @regression TC110 Approval Templates – Verify system behavior when export action is triggered under negative or edge conditions', async () => {
+    test('@approval @regression TC110 Approval Templates – Verify Export action remains functional and stable under edge conditions and repeated export attempts', async () => {
         try {
             Logger.step('TC110: Starting export data negative flow');
 
@@ -379,7 +379,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         }
     });
 
-    test('@approval @regression TC111 Approval Templates – Verify user can create and save a custom table view successfully', async () => {
+    test('@approval @regression TC111 Approval Templates – Verify user can create, save, and close a custom table view successfully in Approval Templates', async () => {
         try {
             Logger.step('TC111: Starting create view positive flow');
 
@@ -416,7 +416,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         }
     });
 
-    test('@approval @regression TC112 Approval Templates – Verify system validations when creating a view with empty, special character, or excessively long names', async () => {
+    test('@approval @regression TC112 Approval Templates – Verify Create View form handles empty names, special characters, and excessively long view names correctly', async () => {
         try {
             Logger.step('TC112: Starting create view negative flow');
 
@@ -456,7 +456,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         }
     });
 
-    test('@approval @regression TC114 Approval Templates – Verify create and edit template dialogs can be safely cancelled without saving changes', async () => {
+    test('@approval @regression TC114 Approval Templates – Verify Create Template and Edit Template dialogs can be cancelled safely without saving any unsaved changes', async () => {
         try {
             Logger.step('TC114: Starting E2E cancel flow');
 
@@ -525,7 +525,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         }
     });
 
-    test('@approval @regression TC116 Approval Templates – Verify system handles invalid or non-existent table header validations correctly', async () => {
+    test('@approval @regression TC116 Approval Templates – Verify Approval Templates table displays all expected column headers with correct labels', async () => {
         try {
             Logger.step('TC116: Starting table headers negative flow');
 
@@ -547,7 +547,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         }
     });
 
-    test('@approval @regression TC117 Approval Templates – Verify user can initiate creation flow for all approval template types and validate template-specific behavior', async () => {
+    test('@approval @regression TC117 Approval Templates – Verify user can open and access the Create Template flow for different approval template types successfully', async () => {
         test.setTimeout(180000);
         try {
             Logger.step('TC117: Starting non-blocking validation flow');
@@ -563,7 +563,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         }
     });
 
-    test('@approval @regression TC118 Approval Templates – Verify system behavior when switching between multiple template types before submission', async () => {
+    test('@approval @regression TC118 Approval Templates – Verify Create Template dialog remains stable when switching rapidly between multiple approval template types', async () => {
         try {
             Logger.step('TC118: Starting all template types negative flow');
 
@@ -599,7 +599,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         }
     });
 
-    test('@approval @regression TC119 Approval Templates – Verify approval template type selection is locked and non-editable during edit mode while allowing valid field updates', async () => {
+    test('@approval @regression TC119 Approval Templates – Verify approval template type remains locked during edit mode while allowing updates to editable fields like amount and approval rules', async () => {
         try {
             Logger.step('TC119: Starting edit template type lock positive flow');
 
@@ -703,7 +703,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         }
     });
 
-    test('@approval @regression @positive TC121 Approval Templates – Verify search for a freshly created template returns exactly one visible match and survives clear/reapply', async () => {
+    test('@approval @regression @positive TC121 Approval Templates – Verify newly created approval template appears correctly in search results and remains searchable after clearing and reapplying filters', async () => {
         const propertyName = await createNewProperty(page);
         await approvalJob.navigateToApprovalTab();
         await approvalJob.navigateToApprovalTemplatesTab();
@@ -726,7 +726,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         await approvalJob.clearSearch();
     });
 
-    test('@approval @regression @negative TC122 Approval Templates – Verify create dialog rejects blank-template-name composed only of spaces', async () => {
+    test('@approval @regression @negative TC122 Approval Templates – Verify Create Template dialog rejects template names containing only blank spaces and prevents submission', async () => {
         await approvalJob.openCreateTemplateDialog();
         await approvalJob.fillTemplateName('    ');
         await approvalJob.selectTemplateType('Change Order');
@@ -744,7 +744,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         expect(await approvalJob.isDialogClosed()).toBeTruthy();
     });
 
-    test('@approval @regression @edge TC123 Approval Templates – Verify tab churn (Approval Templates ⇄ My Approvals ⇄ All Approvals) preserves toolbar and table shell', async () => {
+    test('@approval @regression @edge TC123 Approval Templates – Verify toolbar controls and approval template table remain stable when switching repeatedly between Approval Templates, My Approvals, and All Approvals tabs', async () => {
         await settleApprovalWorkspace(page, 1200);
         const myApprovalsTab = page.getByRole('tab', { name: 'My Approvals' });
         const allApprovalsTab = page.getByRole('tab', { name: 'All Approvals' });
@@ -762,7 +762,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         await approvalJob.expectApprovalTemplatesTableCoreColumnsVisible();
     });
 
-    test('@approval @regression @edge TC124 Approval Templates – Verify Create Template dialog remains stable when rapidly switching template types', async () => {
+    test('@approval @regression @edge TC124 Approval Templates – Verify Create Template modal remains functional and all template type options stay visible during rapid template type switching', async () => {
         await approvalJob.openCreateTemplateDialog();
         await approvalJob.fillTemplateName(`TC124_${Date.now()}`);
 
@@ -780,7 +780,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         await approvalJob.cancelDialog();
     });
 
-    test('@approval @regression @positive TC125 Approval Templates – Verify create dialog required controls remain enabled/disabled consistently while filling form', async () => {
+    test('@approval @regression @positive TC125 Approval Templates – Verify required controls, amount fields, approver selection, and Create button state update correctly while filling the template form', async () => {
         await approvalJob.openCreateTemplateDialog();
         const dialog = approvalJob.createTemplateDialog();
         const submitBtn = page.getByRole('button', { name: /^Create Template$/ }).last();
@@ -808,7 +808,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         await approvalJob.cancelDialog();
     });
 
-    test('@approval @regression @negative TC126 Approval Templates – Verify search field handles long + special terms and recovers to baseline table state', async () => {
+    test('@approval @regression @negative TC126 Approval Templates – Verify Approval Template search field handles long special-character input and restores default table state after clearing search', async () => {
         await settleApprovalWorkspace(page, 1600);
         await approvalJob.expectApprovalTemplatesTableCoreColumnsVisible();
         const search = page.getByPlaceholder('Search...').first();
@@ -828,7 +828,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         await expect(page.getByRole('button', { name: 'Create Template' }).first()).toBeVisible({ timeout: 15000 });
     });
 
-    test('@approval @regression @positive TC127 Approval Templates — Filter drawer exposes Name OR field, accepts input, and can be dismissed without breaking the grid', async () => {
+    test('@approval @regression @positive TC127 Approval Templates — Verify Filter drawer accepts Name OR filter values, displays applied filter tags, and closes without breaking the approval templates grid', async () => {
         await settleApprovalWorkspace(page, 1400);
         await approvalJob.clearSearch();
 
@@ -886,7 +886,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         await approvalJob.expectApprovalTemplatesTableCoreColumnsVisible();
     });
 
-    test('@approval @regression @edge TC129 Approval Templates — Filter drawer closes when toggling the Filter toolbar control', async () => {
+    test('@approval @regression @edge TC129 Approval Templates — Verify Approval Templates filter drawer opens successfully from toolbar controls and closes properly when toggled again without affecting the underlying approval templates grid state', async () => {
         await settleApprovalWorkspace(page, 1000);
         await approvalJob.clickFilterButton();
         await expect(page.getByText('Filter Options').first()).toBeVisible({ timeout: 12000 });
@@ -895,7 +895,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         await expect(page.getByText('Filter Options').first()).toBeHidden({ timeout: 10000 });
     });
 
-    test('@approval @regression @sanity TC130 Approval Templates — Export triggers a downloadable CSV attachment', async () => {
+    test('@approval @regression @sanity TC130 Approval Templates — Verify Export action generates a downloadable CSV file successfully while keeping Approval Templates toolbar actions and table state functional after export attempt', async () => {
         await settleApprovalWorkspace(page, 1200);
         await approvalJob.expectApprovalTemplatesTableCoreColumnsVisible();
 
@@ -910,7 +910,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         }
     });
 
-    test('@approval @regression @positive TC131 Approval Templates — View menu exposes Create New View', async () => {
+    test('@approval @regression @positive TC131 Approval Templates — Verify View menu opens the “Save Current View As” dialog successfully and allows users to access custom view creation options from Approval Templates toolbar', async () => {
         await settleApprovalWorkspace(page, 1000);
         await page.locator('main').getByRole('button', { name: 'View' }).click();
         // The View button opens a "Save current view as" dialog with a name input
@@ -921,7 +921,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         await page.waitForTimeout(300);
     });
 
-    test('@approval @regression @positive TC132 Approval Templates — Table menu exposes Hide / show columns entry', async () => {
+    test('@approval @regression @positive TC132 Approval Templates — Verify table action menu displays Hide/Show Columns management option successfully and allows users to access column visibility configuration controls', async () => {
         await settleApprovalWorkspace(page, 1000);
         await page.locator('main').getByTestId('bt-table-action').click();
         await expect(page.getByRole('button', { name: /hide.*show columns/i })).toBeVisible({ timeout: 12000 });
@@ -929,7 +929,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         await page.waitForTimeout(300);
     });
 
-    test('@approval @regression @edge TC133 Approval Templates — Add Approval Rules (+) inserts an additional approver row', async () => {
+    test('@approval @regression @edge TC133 Approval Templates — Verify clicking Add Approval Rule (+) dynamically inserts a new approver selection row inside Create Template dialog without affecting existing approval rule entries', async () => {
         await approvalJob.openCreateTemplateDialog();
 
         const dialog = approvalJob.createTemplateDialog();
@@ -943,7 +943,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         expect(await approvalJob.isDialogClosed()).toBeTruthy();
     });
 
-    test('@approval @regression @negative TC134 Approval Templates — Create without committing a property blocks success (submit disabled or server-side validation)', async () => {
+    test('@approval @regression @negative TC134 Approval Templates — Verify Create Template workflow prevents template creation when property selection is opened but not committed, and validation keeps the dialog active until required property mapping is completed', async () => {
         await approvalJob.openCreateTemplateDialog();
         await approvalJob.fillTemplateName(`TC134_${Date.now()}`);
         await approvalJob.selectTemplateType('Invoice');
@@ -966,7 +966,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         await approvalJob.cancelDialog();
     });
 
-    test('@approval @regression @positive TC135 Approval Templates — My Approvals hides template authoring actions', async () => {
+    test('@approval @regression @positive TC135 Approval Templates — Verify My Approvals workspace hides template authoring actions like Create Template while preserving approval navigation and restoring template actions after returning to Approval Templates', async () => {
         await settleApprovalWorkspace(page, 1000);
         await page.getByRole('tab', { name: 'My Approvals' }).click();
         await settleApprovalWorkspace(page, 1400);
@@ -981,7 +981,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         await expect(page.getByRole('button', { name: 'Create Template' }).first()).toBeVisible({ timeout: 15000 });
     });
 
-    test('@approval @regression @positive TC136 Approval Templates — All Approvals hides Create Template toolbar action', async () => {
+    test('@approval @regression @positive TC136 Approval Templates — Verify All Approvals workspace restricts template authoring controls by hiding Create Template actions and restores template management functionality after navigating back to Approval Templates', async () => {
         await settleApprovalWorkspace(page, 1000);
         await page.getByRole('tab', { name: 'All Approvals' }).click();
         await settleApprovalWorkspace(page, 1400);
@@ -996,7 +996,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         await expect(page.getByRole('button', { name: 'Create Template' }).first()).toBeVisible({ timeout: 15000 });
     });
 
-    test('@approval @regression @positive TC137 Approval Templates — Delete confirmation cancel preserves template; confirm removes it', async () => {
+    test('@approval @regression @positive TC137 Approval Templates — Verify cancelling template deletion preserves the approval template record, while confirming deletion permanently removes the template from Approval Templates search results', async () => {
         test.setTimeout(240000);
         const propertyName = await createNewProperty(page);
         await approvalJob.navigateToApprovalTab();
@@ -1024,7 +1024,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         await approvalJob.clearSearch();
     });
 
-    test('@approval @regression TC138 Approval Templates — Go Back exits Create Template drawer without blocking follow-up flows', async () => {
+    test('@approval @regression TC138 Approval Templates — Verify Go Back action closes the Create Template drawer safely without blocking subsequent template creation flows or affecting toolbar functionality', async () => {
         await approvalJob.openCreateTemplateDialog();
         await expect(page.getByRole('button', { name: 'Go Back' })).toBeVisible({ timeout: 10000 });
         await page.getByRole('button', { name: 'Go Back' }).click();
@@ -1039,7 +1039,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         expect(await approvalJob.isDialogClosed()).toBeTruthy();
     });
 
-    test('@approval @regression @edge TC139 Approval Templates — Toolbar Search can be used while filter drawer filters are populated', async () => {
+    test('@approval @regression @edge TC139 Approval Templates — Verify toolbar search functionality continues working correctly while filter drawer inputs are populated and both filtering mechanisms coexist without breaking Approval Templates grid behavior', async () => {
         await settleApprovalWorkspace(page, 1200);
         await approvalJob.clearSearch();
 
@@ -1064,7 +1064,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         await approvalJob.clearSearch();
     });
 
-    test('TC10-visual-suite @approval @regression @visual : Approval templates surfaces (16 screenshots)', async () => {
+    test('TC10 Visual Regression Suite – Verify Approval Templates workspace, approval navigation tabs, grid headers, search result states, Create Template dialog flows, approver and amount configuration screens, Manage Columns dialog, Views section, My Approvals workspace, All Approvals workspace, and restored Approval Templates state render correctly across the complete approval workflow', async () => {
         test.setTimeout(720000);
         await settleApprovalWorkspace(page, 2500);
 

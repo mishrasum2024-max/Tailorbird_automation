@@ -59,7 +59,7 @@ test.describe('CapEx Sidebar One-Page QA Checklist', () => {
         await context.close();
     });
 
-    test('TC173 @regression @capexSidebar : Formula checks (row level)', async () => {
+    test('TC173 @regression @capexSidebar : Verify CapEx sidebar displays accurate row-level financial formula calculations, validates all supported formula column scenarios, and maintains correct project/job scope rollup values with non-zero financial data integrity checks', async () => {
         Logger.step('TC173 start: validating formula set for CapEx sidebar');
         await capexPage.ensureNonZeroDataOrFail();
         await capexPage.validateAll11ColumnCases();
@@ -68,7 +68,7 @@ test.describe('CapEx Sidebar One-Page QA Checklist', () => {
         Logger.success('TC173 complete: formulas validated with non-zero guardrails');
     });
 
-    test('TC174 @regression @capexSidebar : Budget category and category mapping checks', async () => {
+    test('TC174 @regression @capexSidebar : Verify CapEx sidebar correctly maps assigned budget categories, validates category concatenation and category code relationships, prevents duplicate logical node rendering, and preserves assigned category consistency across visible CapEx rows', async () => {
         Logger.step('TC174 start: validating budget category/category mapping and duplicate logical nodes');
         await capexPage.ensureNonZeroDataOrFail();
         await capexPage.validateBudgetCategoryAndCategoryMapping();
@@ -93,7 +93,7 @@ test.describe('CapEx Sidebar One-Page QA Checklist', () => {
         Logger.success('TC174 complete');
     });
 
-    test('TC175 @regression @capexSidebar : Contract-financial columns are present and populated with valid currency/zero values', async () => {
+    test('TC175 @regression @capexSidebar : Verify CapEx sidebar displays contract-related financial columns with valid currency formatting, proper zero-value handling, stable header alignment during horizontal scrolling, functional search/reset behavior, and correct contract/vendor mapping across visible CapEx grid rows', async () => {
         Logger.step('TC175 start: validating contract-financial columns and formats');
         await capexPage.ensureNonZeroDataOrFail();
         const { rows } = await capexPage.getVisibleRowsMapped();
@@ -124,7 +124,7 @@ test.describe('CapEx Sidebar One-Page QA Checklist', () => {
         Logger.success(`TC175 complete: validated contract-financial columns on ${Math.min(rows.length, 20)} rows`);
     });
 
-    test('TC176 @regression @capexSidebar : E2E create property -> budget seed -> capex assert -> budget revise -> capex re-assert', async () => {
+    test('TC176 @regression @capexSidebar : E2E Verify end-to-end workflow successfully creates a property, seeds initial budget data, validates CapEx financial records, performs Budget revision updates, and revalidates exact Budget-to-CapEx data synchronization across visible CapEx rows after revision submission', async () => {
         const activeProperty = suitePropertyName || propertyData.propertyName;
         await capexPage.runBudgetRevisionFlow({
             activeProperty,

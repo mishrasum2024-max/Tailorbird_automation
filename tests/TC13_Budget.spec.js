@@ -30,7 +30,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
 
     // ===== Budget Page & Property Tests =====
 
-    test('TC139 @budget @sanity @regression : Verify Budget page loads, property selection and table headers', async () => {
+    test('TC139 @budget @sanity @regression : Verify Budget workspace loads successfully with selected property details, budget table headers, revise budget controls, year/version selectors, and visible budget item records across the main budget grid', async () => {
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();
         await budgetJob.verifyPropertyHeader();
@@ -43,7 +43,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
         Logger.success('TC139: Budget page verification completed');
     });
 
-    test('TC140 @budget @regression : Verify Budget Category section is displayed under Budget navigation', async () => {
+    test('TC140 @budget @regression : Verify Budget Category section is displayed correctly within Budget navigation menu and remains accessible from the Budget workspace', async () => {
         await budgetJob.navigateToBudget();
         await budgetJob.verifyBudgetCategoryInNav();
         Logger.success('TC140: Budget Category section verified');
@@ -51,14 +51,14 @@ test.describe('Budget Workflow - E2E Tests', () => {
 
     // ===== Category Code Column Tests =====
 
-    test('TC141 @budget @regression : Verify Budget Category column is present in the grid/table', async () => {
+    test('TC141 @budget @regression : Verify Budget Category Code column is displayed correctly within the Budget grid and remains visible for selected property budget records', async () => {
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();
         await budgetJob.verifyCategoryCodeColumn();
         Logger.success('TC141: Category Code column present');
     });
 
-    test('TC142 @budget @regression : Verify user can select a Budget Category from dropdown', async () => {
+    test('TC142 @budget @regression : Verify user can access and select Budget Category values successfully from the category dropdown while budget records remain visible in the grid', async () => {
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();
         await budgetJob.verifyCategoryCodeColumn();
@@ -66,7 +66,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
         Logger.success('TC142: Budget Category dropdown accessible');
     });
 
-    test('TC143 @budget @regression : Verify Budget Category is linked using Category Code', async () => {
+    test('TC143 @budget @regression : Verify Budget Category values are mapped correctly through Category Code linkage and displayed properly within budget item rows', async () => {
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();
         await budgetJob.verifyCategoryCodeColumn();
@@ -74,7 +74,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
         Logger.success('TC143: Budget Category linked via Category Code');
     });
 
-    test('TC144 @budget @regression : Verify Budget Category displays Category Name correctly', async () => {
+    test('TC144 @budget @regression : Verify Budget Category names display correctly for mapped budget items and category-linked budget rows appear successfully in the Budget grid', async () => {
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();
         await budgetJob.verifyCategoryCodeColumn();
@@ -83,7 +83,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
         Logger.success('TC144: Category Name displays correctly');
     });
 
-    test('TC145 @budget @regression : Verify Budget Category can be assigned to a Budget Item', async () => {
+    test('TC145 @budget @regression : Verify Budget Categories can be assigned successfully to budget items while maintaining visible budget row data within the Budget workspace', async () => {
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();
         await budgetJob.verifyCategoryCodeColumn();
@@ -91,14 +91,14 @@ test.describe('Budget Workflow - E2E Tests', () => {
         Logger.success('TC145: Budget Category assignable to items');
     });
 
-    test('TC147 @budget @regression : Verify Budget Category appears consistently across related views', async () => {
+    test('TC147 @budget @regression : Verify Budget Category and Category Code columns remain consistent across Budget table layouts, related views, and budget data structures', async () => {
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();
         await budgetJob.verifyBudgetTableHeaders(['Budget Item', 'Description', 'Category Code', 'Original Budget', 'Current Budget']);
         Logger.success('TC147: Category Code consistent across grid');
     });
 
-    test('TC148 @budget @regression : Verify Budget Category works with enabled invoices/tweezers', async () => {
+    test('TC148 @budget @regression : Verify Budget Category functionality works correctly alongside Revise Budget controls and related invoice-enabled budget workflows', async () => {
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();
         await budgetJob.verifyReviseBudgetsVisible();
@@ -106,7 +106,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
         Logger.success('TC148: Category works with Revise Budgets');
     });
 
-    test('TC149 @budget @regression : Verify Budget Category is reusable across multiple items', async () => {
+    test('TC149 @budget @regression : Verify the same Budget Category can be reused successfully across multiple budget items without affecting budget grid consistency', async () => {
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();
         await budgetJob.verifyCategoryCodeColumn();
@@ -116,7 +116,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
 
     // ===== View & Column Management =====
 
-    test('TC150 @budget @regression : Create a view and load that view', async () => {
+    test('TC150 @budget @regression : Verify user can create a custom Budget view successfully, switch back to default view, and reload the saved Budget view without losing table configuration', async () => {
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();
         const viewName = `BudgetView_${Date.now()}`;
@@ -126,7 +126,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
         Logger.success('TC150: View created and loaded');
     });
 
-    test('TC151 @budget @regression : Add column, verify, and delete via manage columns', async () => {
+    test('TC151 @budget @regression : Verify user can add a custom Budget column, validate the column inside Manage Columns, delete the column successfully, and confirm column removal from configuration controls', async () => {
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();
         const colName = `TestCol-${Date.now()}`;
@@ -139,7 +139,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
         Logger.success('TC151: Add, verify, delete column completed');
     });
 
-    test('TC152 @budget @regression : Export data and verify Excel/CSV has data', async () => {
+    test('TC152 @budget @regression : Verify exported Budget CSV/Excel file contains valid budget table headers, non-empty exported data, and expected budget item records after download', async () => {
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();
         const downloadsDir = path.join(process.cwd(), 'downloads');
@@ -156,7 +156,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
 
     test.describe.serial('Revise Budget - Serial', () => {
 
-    test('TC153 @budget @regression : Revise Budget - header, data, reset table, add budget, upload file', async () => {
+    test('TC153 @budget @regression : Verify Revise Budget workflow opens successfully with property details, Budget Category data, populated revision grid records, and accessible revision editor functionality', async () => {
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();
         await budgetJob.verifyPropertyHeader();
@@ -167,7 +167,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
         Logger.success('TC153: Revise Budget flow verified');
     });
 
-    test('TC154 @budget @regression : Reset table in Revise Budget flow', async () => {
+    test('TC154 @budget @regression : Verify Reset Table action restores the original Budget grid state successfully after revision mode is enabled within the Revise Budget workflow', async () => {
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();
         const { reviseBtn, reviseEnabled } = await budgetJob.ensureReviseEnabled();
@@ -178,7 +178,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
         Logger.success('TC154: Reset table completed');
     });
 
-    test('TC155 @budget @regression : Add row with data and assert row added successfully', async () => {
+    test('TC155 @budget @regression : Verify user can add a new Budget row successfully with custom budget item details and validate the newly created row inside the Budget grid', async () => {
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();
         const uniqueItemName = `TestBudgetItem_${Date.now()}`;
@@ -186,7 +186,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
         Logger.success('TC155: Row added and verified');
     });
 
-    test('TC156 @budget @regression : Upload budget file and assert data is available', async () => {
+    test('TC156 @budget @regression : Verify user can upload a Budget CSV file successfully inside the Revision Editor and validate uploaded budget records are populated correctly in the revision tree grid', async () => {
         test.setTimeout(180000);
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();
@@ -205,7 +205,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
 
     // ===== Revise Budget E2E =====
 
-    test('TC157 @budget @regression : Revise Budget - Delete first row, Reset Table, assert data restored', async () => {
+    test('TC157 @budget @regression : Revise Budget - Verify deleted Budget revision rows are restored successfully after Reset Table action and original revision data becomes visible again inside the Revision Editor grid', async () => {
         test.setTimeout(180000);
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();
@@ -228,7 +228,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
         Logger.success(`TC157: Reset Table - ${count} rows restored`);
     });
 
-    test('TC158 @budget @regression : Revise Budget - Delete first row, Add row with category from dropdown, Submit approval', async () => {
+    test('TC158 @budget @regression : Revise Budget - Verify user can delete an existing revision row, add a new budget row with category mapping from dropdown selection, submit the budget approval workflow successfully, and validate category persistence before and after submission across revision and main grids', async () => {
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();
         await budgetJob.openRevisionEditor();
@@ -262,7 +262,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
         Logger.success('TC158: Row added with category from dropdown, submitted, category verified in both views');
     });
 
-    test('TC159 @budget @regression : Revise Budget - Select other property (no data), Upload CSV, Submit, assert data', async () => {
+    test('TC159 @budget @regression : Revise Budget - Verify user can select another property with no existing budget data, upload Budget CSV records successfully, submit the revision workflow, and validate uploaded budget items appear correctly in the main Budget grid after submission', async () => {
         // await page.pause();
         await budgetJob.navigateToBudget();
         await budgetJob.selectNonBrookProperty();
@@ -283,7 +283,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
 
     }); // end serial
 
-    test('TC160 @budget @regression : Draft version — dialog shows Draft; after close, Revise Budgets disabled on overview', async () => {
+    test('TC160 @budget @regression : Verify selecting a Draft Budget version opens the Budget Revision drawer with Draft status visibility and prevents Revise Budget actions from being enabled after returning to the Budget overview workspace', async () => {
         test.slow();
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();
