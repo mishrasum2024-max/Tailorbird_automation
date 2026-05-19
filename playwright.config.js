@@ -40,6 +40,8 @@ export default defineConfig({
           ['html', { open: 'never' }],
         ],
 
+  updateSnapshots: 'missing',
+
   expect: {
     toHaveScreenshot: {
       pathTemplate:

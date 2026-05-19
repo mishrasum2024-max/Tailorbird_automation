@@ -1017,9 +1017,11 @@ exports.ApprovalJob = class ApprovalJob {
             if (drawerStillVisible) {
                 const discardNames = ['Go Back', 'Discard', 'Discard Changes', 'Confirm'];
                 for (const name of discardNames) {
-                    const btn = this.page.getByRole('button', { name });
-                    if (await btn.first().isVisible({ timeout: 400 }).catch(() => false)) {
-                        await btn.first().click();
+                    const btn = this.page.getByRole('button', { name }).first();
+                    if (await btn.isVisible({ timeout: 400 }).catch(() => false)) {
+                        await this.page.waitForTimeout(200); // let animation stabilize before acting
+                        await btn.scrollIntoViewIfNeeded().catch(() => {});
+                        await btn.click({ force: true, timeout: 10000 });
                         await this.page.waitForTimeout(700);
                         break;
                     }

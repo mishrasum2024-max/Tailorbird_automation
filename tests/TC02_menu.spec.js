@@ -568,11 +568,16 @@ test.describe('TC02 Menu — Text assertions', () => {
             if (moreVisible) {
                 InteractionLogger.logButtonClick('More', 'More');
                 await moreBtn.click();
-                const moreMenu = page.locator('[role="menu"]').filter({ hasText: 'Financials' });
+                const moreMenu = page.getByRole('menu', { name: 'More' });
                 await moreMenu.waitFor({ state: 'visible', timeout: 20_000 });
                 for (const label of secondaryLabels) {
                     InteractionLogger.logVisibility(label, true);
-                    await expect(moreMenu.getByText(label, { exact: true }).first()).toBeVisible({ timeout: 5_000 });
+                    // At 1440×900 some labels (Financials group) stay in the main nav;
+                    // only overflow items land in the More menu — check whichever location has it.
+                    const inMenu = await moreMenu.getByText(label, { exact: true }).first().isVisible({ timeout: 1_000 }).catch(() => false);
+                    if (!inMenu) {
+                        await expect(nav.getByText(label, { exact: true }).first()).toBeVisible({ timeout: 5_000 });
+                    }
                 }
                 await page.keyboard.press('Escape');
             } else {

@@ -1483,13 +1483,17 @@ exports.BudgetJob = class BudgetJob {
      * on overview, Revise Budgets must stay disabled while that draft version is selected.
      */
     async expectDraftVersionBlocksReviseOnOverviewAfterClosingDialog() {
-        // Budget revision can render as a specific draft dialog while other generic
-        // dialogs (toasts/portals/help) may coexist. Anchor on revision controls.
+        // MCP-confirmed (2026-05-19): revision editor is a Mantine Drawer (role="dialog")
+        // with outer mantine-Drawer-root at height:0/top:viewport-height (fixed-position children).
+        // Anchor on revision controls to distinguish from toasts/portals.
+        await this.page.waitForLoadState('networkidle').catch(() => {});
+        await this.page.waitForTimeout(1500);
+
         const revisionDialog = this.page.getByRole('dialog').filter({
             has: this.page.getByRole('button', { name: /Save as Draft|Submit for Approval|Submit for Review/i })
         }).first();
 
-        const isRevisionDialogVisible = await revisionDialog.isVisible({ timeout: 30000 }).catch(() => false);
+        const isRevisionDialogVisible = await revisionDialog.isVisible({ timeout: 20000 }).catch(() => false);
         const isRevisionUrl = /budget-revision/i.test(this.page.url());
         const revisionScope = isRevisionDialogVisible ? revisionDialog : this.page;
 
@@ -1499,7 +1503,10 @@ exports.BudgetJob = class BudgetJob {
             expect(isRevisionUrl).toBeTruthy();
         }
 
-        const draftBadge = revisionScope.getByText(/draft/i).first();
+        // MCP-confirmed: Draft badge is .mantine-Badge-root containing "Draft" text.
+        // Target by Mantine class to avoid matching "Save as Draft" button text.
+        const draftBadge = revisionScope.locator('.mantine-Badge-root').filter({ hasText: /draft/i }).first();
+        await draftBadge.scrollIntoViewIfNeeded().catch(() => {});
         await expect(draftBadge).toBeVisible({ timeout: 40000 });
         Logger.success('Draft revision dialog open with Draft badge (headed: confirm UI)');
 
