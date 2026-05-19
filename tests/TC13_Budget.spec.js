@@ -299,7 +299,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
             'TC160: Select draft version (opens Budget Revision drawer with Draft badge). Headed: npx playwright test tests/TC13_Budget.spec.js -g TC160 --headed --workers=1'
         );
         await budgetJob.selectBudgetVersionMatching(/draft/i);
-        await page.waitForTimeout(5000);
+        await page.waitForURL(/budget-revision/i, { timeout: 30000 }).catch(() => page.waitForTimeout(5000));
 
         Logger.step('TC160: Close draft dialog — overview must keep Revise Budgets disabled for draft version');
         await budgetJob.expectDraftVersionBlocksReviseOnOverviewAfterClosingDialog();

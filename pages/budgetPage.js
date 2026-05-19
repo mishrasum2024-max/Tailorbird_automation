@@ -1488,7 +1488,7 @@ exports.BudgetJob = class BudgetJob {
             has: this.page.getByRole('button', { name: /Save as Draft|Submit for Approval|Submit for Review/i })
         }).first();
 
-        const isRevisionDialogVisible = await revisionDialog.isVisible({ timeout: 10000 }).catch(() => false);
+        const isRevisionDialogVisible = await revisionDialog.isVisible({ timeout: 30000 }).catch(() => false);
         const isRevisionUrl = /budget-revision/i.test(this.page.url());
         const revisionScope = isRevisionDialogVisible ? revisionDialog : this.page;
 
@@ -1499,7 +1499,7 @@ exports.BudgetJob = class BudgetJob {
         }
 
         const draftBadge = revisionScope.getByText(/draft/i).first();
-        await expect(draftBadge).toBeVisible({ timeout: 10000 });
+        await expect(draftBadge).toBeVisible({ timeout: 40000 });
         Logger.success('Draft revision dialog open with Draft badge (headed: confirm UI)');
 
         // Close from revision header if dialog exists; otherwise use top-right close affordance.

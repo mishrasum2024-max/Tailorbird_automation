@@ -150,10 +150,6 @@ class PropertiesHelper {
         console.log("=== 🏠 START: Create Property Flow ===");
 
         try {
-            console.log("⏳ Waiting for page to stabilize...");
-            await this.page.waitForLoadState("networkidle");
-            await this.page.waitForTimeout(3000);
-
             console.log("🔎 Waiting for *Create Property* button...");
             await this.page.locator(propertyLocators.createPropertyButton).waitFor({ state: "visible" });
 
@@ -198,8 +194,7 @@ class PropertiesHelper {
             });
 
             console.log("⏳ Waiting for request to settle...");
-            await this.page.waitForLoadState("networkidle");
-            await this.page.waitForTimeout(3000);
+            await this.page.waitForTimeout(2000);
 
             console.log("💾 Clicking *Add Property*...");
             await this.addPropertyBtn.click();

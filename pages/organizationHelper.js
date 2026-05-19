@@ -205,6 +205,8 @@ class OrganizationHelper {
       const confirmInvite = invitePanel.dialogRoot.getByRole("button", { name: data.inviteButtonText, exact: true });
       if (await confirmInvite.isVisible({ timeout: 10_000 }).catch(() => false)) {
         await confirmInvite.evaluate((el) => el.click());
+        // Wait for the invite dialog to close — signals the backend accepted the invite
+        await invitePanel.dialogRoot.waitFor({ state: "hidden", timeout: 40_000 }).catch(() => {});
       }
       const inviteDialog = invitePanel.dialogRoot;
       if (
@@ -218,6 +220,12 @@ class OrganizationHelper {
         );
       }
       this.log("Waiting for invited user to appear in grid...");
+      // Filter the member table by email so the newly invited (pending) user is visible even if the grid is paginated
+      const _memberSearch = this.page.locator("input[placeholder*=’Search’], input[type=’search’]").first();
+      if (await _memberSearch.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await _memberSearch.fill(email);
+        await this.page.waitForTimeout(1500);
+      }
       await expect(this.page.locator("table tbody tr.rt-TableRow").filter({ hasText: email }).first()).toBeVisible({
         timeout: 120_000,
       });

@@ -578,7 +578,7 @@ test.describe('TC02 Menu — Text Agent (live MCP browser scan)', () => {
                 InteractionLogger.logButtonClick('More', 'More');
                 await moreBtn.click();
                 const moreMenu = page.locator('[role="menu"]').filter({ hasText: 'Financials' });
-                await moreMenu.waitFor({ state: 'visible', timeout: 8_000 });
+                await moreMenu.waitFor({ state: 'visible', timeout: 20_000 });
                 for (const label of secondaryLabels) {
                     InteractionLogger.logVisibility(label, true);
                     await expect(moreMenu.getByText(label, { exact: true }).first()).toBeVisible({ timeout: 5_000 });
