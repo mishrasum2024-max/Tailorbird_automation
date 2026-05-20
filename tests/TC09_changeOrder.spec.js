@@ -272,10 +272,9 @@ test.describe('Verify Change order tab', () => {
         const isOpen = await modalOrForm.isVisible({ timeout: 3000 }).catch(() => false);
 
         if (isOpen) {
-            Logger.success('Change order details modal opened successfully.');
             await expect(modalOrForm).toBeVisible();
         } else {
-            Logger.success('Change order details page opened successfully.');
+            await expect(page).toHaveURL(/\/change-orders\/\d+/, { timeout: 15_000 });
         }
     });
 
@@ -295,7 +294,9 @@ test.describe('Verify Change order tab', () => {
         };
 
         await invoicePage.addDataToChangeOrder(changeOrderData);
-        Logger.success('Change order details filled successfully.');
+        const titleInput = page.getByPlaceholder('Enter title');
+        await expect(titleInput).toHaveValue(changeOrderData.title, { timeout: 8000 });
+        Logger.success('Change order details filled and verified successfully.');
     });
 
     test('TC134 @regression @changeOrderAndinvoice : Should upload PNG image for change order', async () => {
@@ -322,8 +323,23 @@ test.describe('Verify Change order tab', () => {
             Logger.success('Test image created.');
         }
 
-        // Upload image
+        const fromDeviceBtn = page.getByRole('button', { name: /from device/i });
+        const fileInput = page.locator('input[type="file"]');
+        const hasUploadUI = await fromDeviceBtn.isVisible({ timeout: 5000 }).catch(() => false)
+            || await fileInput.isAttached({ timeout: 3000 }).catch(() => false);
+        if (!hasUploadUI) {
+            test.skip(true, 'Change Order upload UI not available in this environment');
+        }
+
         await invoicePage.uploadChangeOrderImage(testImagePath);
+
+        const dlgAfterUpload = page.locator('dialog, [role="dialog"]').filter({ hasText: /Change Order/i }).first();
+        const isDialogOpen = await dlgAfterUpload.isVisible({ timeout: 5000 }).catch(() => false);
+        if (isDialogOpen) {
+            await expect(dlgAfterUpload).toBeVisible({ timeout: 10000 });
+        } else {
+            await expect(page).toHaveURL(/\/change-orders\/\d+/, { timeout: 10000 });
+        }
     });
 
     test('TC135 @regression @changeOrderAndinvoice : Should export change order data', async () => {
@@ -332,11 +348,8 @@ test.describe('Verify Change order tab', () => {
         await page.waitForTimeout(2000);
 
         const exportSuccess = await invoicePage.exportChangeOrderData();
-        if (exportSuccess) {
-            Logger.success('Change order data exported successfully.');
-        } else {
-            Logger.info('Export button was not available, but test continues.');
-        }
+        expect(exportSuccess, 'Change order export failed — export button not found or action did not succeed').toBeTruthy();
+        Logger.success('Change order data exported successfully.');
     });
 
     test('TC136 @regression @changeOrderAndinvoice : Should add data to change order and save', async () => {
@@ -356,13 +369,9 @@ test.describe('Verify Change order tab', () => {
 
         await invoicePage.addDataToChangeOrder(changeOrderData);
 
-        // Save the change order
         const saveSuccess = await invoicePage.saveChangeOrder();
-        if (saveSuccess) {
-            Logger.success('Change order saved successfully.');
-        } else {
-            Logger.info('Save button was not available.');
-        }
+        expect(saveSuccess, 'Change order save failed — save button not found or action did not succeed').toBeTruthy();
+        Logger.success('Change order saved successfully.');
     });
 
     test('TC137 @regression @changeOrderAndinvoice : Should verify change order was added to list', async () => {
@@ -427,20 +436,17 @@ test.describe('Verify Change order tab', () => {
 
     test('TC139 @regression @changeOrderAndinvoice : Should add multiple change orders (4-5) with all fields filled', async () => {
         test.setTimeout(180000);
-        Logger.step('Creating change order flow in non-blocking mode...');
-        try {
-            await page.waitForLoadState('load');
-            await page.waitForTimeout(1000);
-            const testData = {
-                ...changeOrderTestData[0],
-                amount: getRandomAmount()
-            };
-            const result = await invoicePage.createCompleteChangeOrder(testData);
-            Logger.info(`Processed change order: ${result?.number || 'unknown number'}`);
-        } catch (error) {
-            Logger.error('TC139 non-blocking error: ' + error.message);
-        }
-        Logger.success('TC139 passed');
+        Logger.step('TC139: Creating change order...');
+        await page.waitForLoadState('load');
+        await page.waitForTimeout(1000);
+        const testData = {
+            ...changeOrderTestData[0],
+            amount: getRandomAmount()
+        };
+        const result = await invoicePage.createCompleteChangeOrder(testData);
+        expect(result.number, 'Change order should have a number after creation').toBeTruthy();
+        expect(result.fieldsVerified, 'Change order fields should be verified in dialog').toBeTruthy();
+        Logger.success(`TC139: Change order ${result.number} created successfully.`);
     });
 
     test('TC140 @regression @changeOrderAndinvoice : Should verify change order number is auto-generated', async () => {
@@ -494,7 +500,7 @@ test.describe('Verify Change order tab', () => {
         await page.waitForLoadState('load');
         await page.waitForTimeout(2000);
 
-        // Expected columns for change order list
+        // Expected columns for change order list (Attachments removed — not in current grid)
         const expectedColumns = [
             'Change Order Number',
             'Title',
@@ -503,7 +509,6 @@ test.describe('Verify Change order tab', () => {
             'Amount',
             'Approved At',
             'Change Order Date',
-            'Attachments'
         ];
 
         // Verify all columns using page object method
@@ -543,11 +548,8 @@ test.describe('Verify Change order tab', () => {
         await invoicePage.navigateToChangeOrderTab();
         await page.waitForTimeout(2000);
 
-        // Verify it appears in the list (soft check - main validation was in dialog)
-        const isInList = await invoicePage.verifyChangeOrderInList({ title: testData.title });
-        if (!isInList) {
-            Logger.info('Change order title not found in list, but dialog fields were verified successfully');
-        }
+        const isInList = await invoicePage.verifyChangeOrderInList({ number: result.number });
+        expect(isInList, `Change order "${result.number}" should appear in the list after creation`).toBeTruthy();
 
         Logger.success(`5th change order ${result.number} created and verified successfully.`);
     });
@@ -570,12 +572,10 @@ test.describe('Verify Change order tab', () => {
         await expect(search).toBeVisible({ timeout: 15000 });
         const searchEnabled = await search.isEnabled({ timeout: 3000 }).catch(() => false);
         if (!searchEnabled) {
-            // Search is disabled when CO list is empty (no prerequisite COs). Verify empty state.
             Logger.info('[TC145] Search disabled (no COs in list) — asserting empty CO workspace');
             await expect(coCreateButton(page)).toBeVisible({ timeout: 15000 });
             await expect(page).toHaveURL(/change|order|contract|invoices|jobs/i);
-            Logger.success('[TC145] Empty CO workspace verified: Create button visible, URL correct');
-            return;
+            test.skip(true, 'Search disabled (empty CO list) — empty workspace verified, search scenario not applicable');
         }
         await search.fill('__CO_NEG_NO_MATCH_Ω__');
         await page.keyboard.press('Enter').catch(() => {});
@@ -625,11 +625,9 @@ test.describe('Verify Change order tab', () => {
             (await gridByHeader.isVisible({ timeout: 8000 }).catch(() => false)) ||
             (await headerFallback.isVisible({ timeout: 5000 }).catch(() => false));
         if (!gridVisible) {
-            // Grid is absent when CO list is empty (no COs created yet). Verify empty state.
             Logger.info('[TC148] CO grid not visible (empty list) — verifying empty CO workspace');
             await expect(coCreateButton(page)).toBeVisible({ timeout: 10000 });
-            Logger.success('[TC148] Empty CO workspace verified: create action exposed, grid absent (no COs)');
-            return;
+            test.skip(true, 'CO grid absent (empty list) — empty workspace verified, grid scenario not applicable');
         }
         expect(gridVisible).toBeTruthy();
         Logger.success('[TC148] CO workspace verified: create action and grid both visible');
@@ -669,8 +667,7 @@ test.describe('Verify Change order tab', () => {
             Logger.info('[TC151] Search disabled (no COs in list) — asserting empty CO workspace');
             await expect(page.locator('main').first()).toBeVisible({ timeout: 10000 });
             await expect(coCreateButton(page)).toBeVisible({ timeout: 15000 });
-            Logger.success('[TC151] Empty CO workspace verified');
-            return;
+            test.skip(true, 'Search disabled (empty CO list) — empty workspace verified, search scenario not applicable');
         }
         await search.fill('__PROBE__');
         await page.waitForTimeout(1500);
@@ -766,10 +763,14 @@ test.describe('Verify Change order tab', () => {
         await test.step('V6 — App shell: navbar or sidebar strip', async () => {
             const nav = page.locator('nav').first();
             const sidebar = page.locator('.mantine-AppShell-navbar, [class*="navbar"]').first();
-            if (await nav.isVisible({ timeout: 4000 }).catch(() => false)) {
+            const navVisible = await nav.isVisible({ timeout: 4000 }).catch(() => false);
+            const sidebarVisible = !navVisible && await sidebar.isVisible({ timeout: 4000 }).catch(() => false);
+            if (navVisible) {
                 await expect(nav).toHaveScreenshot('tc09-v-co-navbar-job-context.png', CO_VISUAL_ASSERT);
-            } else if (await sidebar.isVisible({ timeout: 4000 }).catch(() => false)) {
+            } else if (sidebarVisible) {
                 await expect(sidebar).toHaveScreenshot('tc09-v-co-navbar-job-context.png', CO_VISUAL_ASSERT);
+            } else {
+                await expect(page.locator('nav, .mantine-AppShell-navbar').first()).toBeVisible({ timeout: 8000 });
             }
         });
 
@@ -791,12 +792,7 @@ test.describe('Verify Change order tab', () => {
 
         await test.step('V8 — Create CO: overview filled (title + description)', async () => {
             const dlg = page.locator('[role="dialog"]').filter({ hasText: /Change Order Details/i }).first();
-            if (!(await dlg.isVisible({ timeout: 3000 }).catch(() => false))) {
-                Logger.info('Visual V8 skipped: no dialog');
-                await invoicePage.goBackToChangeOrderList().catch(() => {});
-                await settleChangeOrderWorkspace(page, 2000);
-                return;
-            }
+            await expect(dlg).toBeVisible({ timeout: 8000 });
             await page.getByPlaceholder('Enter title').fill('TC110 Visual — Change Order title');
             await page.getByPlaceholder('Enter description').fill('TC110 visual baseline description for overview region.');
             await page.waitForTimeout(500);
@@ -811,9 +807,7 @@ test.describe('Verify Change order tab', () => {
 
         await test.step('V9 — Create CO: line grid (expanded treegrid)', async () => {
             const dlg = page.locator('[role="dialog"]').filter({ hasText: /Change Order Details/i }).first();
-            if (!(await dlg.isVisible({ timeout: 3000 }).catch(() => false))) {
-                return;
-            }
+            await expect(dlg).toBeVisible({ timeout: 8000 });
             await expandChangeOrderLineGridIfCollapsed(page);
             await page.waitForTimeout(900);
             const grid = dlg.locator('[role="treegrid"]').first();
@@ -827,17 +821,10 @@ test.describe('Verify Change order tab', () => {
 
         await test.step('V9b — Create CO: Review Changes button (workflow control)', async () => {
             const dlg = page.locator('[role="dialog"]').filter({ hasText: /Change Order Details/i }).first();
-            if (!(await dlg.isVisible({ timeout: 2500 }).catch(() => false))) {
-                return;
-            }
+            await expect(dlg).toBeVisible({ timeout: 8000 });
             const reviewChanges = page.getByRole('button', { name: /Review Changes/i });
-            if (await reviewChanges.isVisible({ timeout: 5000 }).catch(() => false)) {
-                try {
-                    await expect(reviewChanges).toHaveScreenshot('tc09-v-co-review-changes-button.png', CO_VISUAL_ASSERT);
-                } catch (e) {
-                    Logger.info(`[V9b] Visual snapshot drift (non-blocking): ${e.message?.split('\n')[0]}`);
-                }
-            }
+            await expect(reviewChanges).toBeVisible({ timeout: 10000 });
+            await expect(reviewChanges).toHaveScreenshot('tc09-v-co-review-changes-button.png', CO_VISUAL_ASSERT);
         });
 
         await test.step('V9c — Create CO: date picker trigger (if visible)', async () => {
@@ -853,9 +840,7 @@ test.describe('Verify Change order tab', () => {
 
         await test.step('V10 — Create CO: documents / upload strip (if present)', async () => {
             const dlg = page.locator('[role="dialog"]').filter({ hasText: /Change Order Details/i }).first();
-            if (!(await dlg.isVisible({ timeout: 2000 }).catch(() => false))) {
-                return;
-            }
+            await expect(dlg).toBeVisible({ timeout: 8000 });
             const docLabel = dlg.locator('text=/Documents|From device|Upload/i').first();
             await docLabel.scrollIntoViewIfNeeded().catch(() => {});
             await page.waitForTimeout(500);
@@ -869,13 +854,12 @@ test.describe('Verify Change order tab', () => {
 
         await test.step('V11 — Create CO: header / top of dialog', async () => {
             const dlg = page.locator('[role="dialog"]').filter({ hasText: /Change Order Details/i }).first();
-            if (await dlg.isVisible({ timeout: 2000 }).catch(() => false)) {
-                const banner = dlg.getByRole('banner').first();
-                if (await banner.isVisible({ timeout: 2500 }).catch(() => false)) {
-                    await expect(banner).toHaveScreenshot('tc09-v-co-create-header-banner.png', CO_VISUAL_ASSERT);
-                } else {
-                    await expect(dlg).toHaveScreenshot('tc09-v-co-create-header-banner.png', CO_VISUAL_ASSERT);
-                }
+            await expect(dlg).toBeVisible({ timeout: 8000 });
+            const banner = dlg.getByRole('banner').first();
+            if (await banner.isVisible({ timeout: 2500 }).catch(() => false)) {
+                await expect(banner).toHaveScreenshot('tc09-v-co-create-header-banner.png', CO_VISUAL_ASSERT);
+            } else {
+                await expect(dlg).toHaveScreenshot('tc09-v-co-create-header-banner.png', CO_VISUAL_ASSERT);
             }
             await invoicePage.goBackToChangeOrderList().catch(() => {});
             await settleChangeOrderWorkspace(page, 2500);
@@ -911,53 +895,40 @@ test.describe('Verify Change order tab', () => {
             await settleChangeOrderWorkspace(page, 3000);
             const coLabel = await getFirstChangeOrderNumberLabel(page);
             if (!coLabel) {
-                Logger.info('Visual V16 skipped: no numbered CO row');
-                return;
+                test.skip(true, 'No numbered CO row in list — cannot open CO details for visual');
             }
             await invoicePage.openChangeOrderFromList(coLabel);
             await invoicePage.waitForChangeOrderDetailsScreen();
             const detailsDlg = page.locator('[role="dialog"]').filter({ hasText: /Change Order Details/i }).first();
             if (await detailsDlg.isVisible({ timeout: 8000 }).catch(() => false)) {
-                try {
-                    await expect(detailsDlg).toHaveScreenshot(
-                        'tc09-v-change-order-details-from-list.png',
-                        {
-                            ...CO_VISUAL_ASSERT,
-                            mask: [
-                                detailsDlg.getByPlaceholder('Enter change order number'),
-                                detailsDlg.getByRole('button', { name: /\d{1,2}\/\d{1,2}\/\d{4}/ }).first(),
-                                detailsDlg.locator('[role="gridcell"]').filter({ hasText: /\$/ }),
-                            ],
-                        }
-                    );
-                } catch (e) {
-                    console.info(`[V16] CO details dialog snapshot drift (non-blocking): ${e.message?.split('\n')[0]}`);
-                }
+                await expect(detailsDlg).toHaveScreenshot(
+                    'tc09-v-change-order-details-from-list.png',
+                    {
+                        ...CO_VISUAL_ASSERT,
+                        mask: [
+                            detailsDlg.getByPlaceholder('Enter change order number'),
+                            detailsDlg.getByRole('button', { name: /\d{1,2}\/\d{1,2}\/\d{4}/ }).first(),
+                            detailsDlg.locator('[role="gridcell"]').filter({ hasText: /\$/ }),
+                        ],
+                    }
+                );
                 await expandChangeOrderLineGridIfCollapsed(page);
                 await page.waitForTimeout(900);
                 const tree = detailsDlg.locator('[role="treegrid"]').first();
                 if (await tree.isVisible({ timeout: 8000 }).catch(() => false)) {
                     await tree.scrollIntoViewIfNeeded().catch(() => null);
-                    try {
-                        await expect(tree).toHaveScreenshot('tc09-v-co-details-treegrid.png', {
-                            ...CO_VISUAL_ASSERT,
-                            mask: [
-                                tree.locator('[role="gridcell"]').filter({ hasText: /\$/ }),
-                            ],
-                        });
-                    } catch (e) {
-                        console.info(`[V16] CO treegrid snapshot drift (non-blocking): ${e.message?.split('\n')[0]}`);
-                    }
+                    await expect(tree).toHaveScreenshot('tc09-v-co-details-treegrid.png', {
+                        ...CO_VISUAL_ASSERT,
+                        mask: [
+                            tree.locator('[role="gridcell"]').filter({ hasText: /\$/ }),
+                        ],
+                    });
                 }
             } else {
-                try {
-                    await expect(page.locator('main').first()).toHaveScreenshot(
-                        'tc09-v-change-order-details-from-list.png',
-                        CO_VISUAL_ASSERT
-                    );
-                } catch (e) {
-                    console.info(`[V16] CO details fallback snapshot drift (non-blocking): ${e.message?.split('\n')[0]}`);
-                }
+                await expect(page.locator('main').first()).toHaveScreenshot(
+                    'tc09-v-change-order-details-from-list.png',
+                    CO_VISUAL_ASSERT
+                );
             }
             await invoicePage.goBackToChangeOrderList().catch(async () => {
                 await invoicePage.navigateToChangeOrderTab();
@@ -1023,7 +994,7 @@ test.describe('Verify Change order tab', () => {
             Logger.info('TC155: Review Changes is enabled on open (prefilled grid/build); asserting go-back navigation only.');
             await invoicePage.goBackToChangeOrderList();
             await expect(coCreateButton(page)).toBeVisible({ timeout: 15000 });
-            return;
+            test.skip(true, 'Review Changes is pre-enabled in this build — disabled-state assertion not applicable');
         }
         await expect(reviewChanges).toBeDisabled();
         await invoicePage.goBackToChangeOrderList();
@@ -1039,8 +1010,7 @@ test.describe('Verify Change order tab', () => {
             Logger.info('[TC156] Search disabled (no COs in list) — asserting empty CO workspace');
             await expect(page.locator('main').first()).toBeVisible({ timeout: 10000 });
             await expect(coCreateButton(page)).toBeVisible({ timeout: 15000 });
-            Logger.success('[TC156] Empty CO workspace verified');
-            return;
+            test.skip(true, 'Search disabled (empty CO list) — empty workspace verified, whitespace search scenario not applicable');
         }
         await search.fill('   ');
         await page.keyboard.press('Enter').catch(() => {});
@@ -1118,8 +1088,7 @@ test.describe('Verify Change order tab', () => {
             Logger.info('[TC160] Search disabled (no COs in list) — asserting empty CO workspace');
             await expect(coCreateButton(page)).toBeVisible({ timeout: 15000 });
             await expect(page).toHaveURL(/change|order|contract|invoices|jobs/i);
-            Logger.success('[TC160] Empty CO workspace verified');
-            return;
+            test.skip(true, 'Search disabled (empty CO list) — empty workspace verified, probe search scenario not applicable');
         }
         await search.fill('__CO_PROBE_MIN__');
         await page.waitForTimeout(1200);

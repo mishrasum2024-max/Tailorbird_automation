@@ -204,16 +204,19 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
             await approvalJob.searchTemplate('test113377');
             Logger.info('Search filter applied: test113377');
 
-            // Verify filtered results
+            const searchInput = page.getByPlaceholder('Search...').first();
+            await expect(searchInput).toHaveValue('test113377', { timeout: 5000 });
             const filteredRowCount = await approvalJob.getTableRowCount();
             Logger.info('Filtered table rows: ' + filteredRowCount);
 
             // Clear filter
             await approvalJob.clearSearch();
+            await expect(searchInput).toHaveValue('', { timeout: 5000 });
             Logger.info('Search filter cleared');
 
             // Verify all rows returned
             const allRowsCount = await approvalJob.getTableRowCount();
+            expect(allRowsCount).toBeGreaterThanOrEqual(filteredRowCount);
             Logger.info('All rows count after clear: ' + allRowsCount);
 
             Logger.success('TC163 passed: Filter applied and cleared successfully');
@@ -227,29 +230,32 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         try {
             Logger.step('TC164: Starting filter negative flow');
 
-            // Test 1: Search for non-existent template
+            const searchInput = page.getByPlaceholder('Search...').first();
+
             await approvalJob.searchTemplate('NonExistentTemplate12345');
+            await expect(searchInput).toHaveValue('NonExistentTemplate12345', { timeout: 5000 });
             Logger.info('Searched for non-existent template');
 
-            // Test 2: Search with special characters
             await approvalJob.clearSearch();
+            await expect(searchInput).toHaveValue('', { timeout: 5000 });
             await approvalJob.searchTemplate('!@#$%^');
+            await expect(searchInput).toHaveValue('!@#$%^', { timeout: 5000 });
             Logger.info('Searched with special characters');
 
-            // Test 3: Search with very long string
             await approvalJob.clearSearch();
             const longString = 'a'.repeat(100);
             await approvalJob.searchTemplate(longString);
+            await expect(searchInput).toHaveValue(longString, { timeout: 5000 });
             Logger.info('Searched with 100-character long string');
 
-            // Test 4: Rapid search updates
             await approvalJob.searchTemplate('test');
             await page.waitForTimeout(200);
             await approvalJob.searchTemplate('test113377');
+            await expect(searchInput).toHaveValue('test113377', { timeout: 5000 });
             Logger.info('Rapid search updates completed');
 
-            // Clear final search
             await approvalJob.clearSearch();
+            await expect(searchInput).toHaveValue('', { timeout: 5000 });
 
             Logger.success('TC164 passed: All negative filter scenarios tested');
         } catch (error) {
@@ -269,9 +275,9 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
             await approvalJob.clickManageColumnsButton();
             Logger.info('Manage Columns dialog opened');
 
-            // Get all checkboxes in dialog
             const allCheckboxes = await approvalJob.getAllCheckboxes();
             const checkboxCount = await allCheckboxes.count();
+            expect(checkboxCount, 'Manage Columns dialog should expose at least one column checkbox').toBeGreaterThan(0);
             Logger.info('Column checkboxes found: ' + checkboxCount);
 
             // Toggle first 2 columns
@@ -334,7 +340,8 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
             await page.keyboard.press('Escape');
             await page.waitForTimeout(800);
 
-            Logger.success('TC166 passed: Manage Columns negative scenarios tested');
+            await approvalJob.expectApprovalTemplatesTableCoreColumnsVisible();
+            Logger.success('TC166 passed: Manage Columns negative scenarios tested — columns restored');
         } catch (error) {
             Logger.error('TC166 failed: ' + error.message);
             throw error;
@@ -348,7 +355,9 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
             await approvalJob.expectApprovalTemplatesTableCoreColumnsVisible();
             Logger.info('Core columns present — export');
 
-            // Click Export button
+            const exportBtn = page.locator('main').getByRole('button', { name: 'Export' });
+            await expect(exportBtn).toBeVisible({ timeout: 10000 });
+            await expect(exportBtn).toBeEnabled();
             await approvalJob.clickExportButton();
             Logger.info('Export button clicked');
 
@@ -363,16 +372,17 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         try {
             Logger.step('TC168: Starting export data negative flow');
 
-            // Test export button state
             const exportBtn = page.locator('main').getByRole('button', { name: 'Export' });
-            const isEnabled = await exportBtn.isEnabled().catch(() => true);
-            Logger.info('Export button enabled state: ' + isEnabled);
+            await expect(exportBtn).toBeVisible({ timeout: 10000 });
+            const isEnabled = await exportBtn.isEnabled();
+            expect(isEnabled, 'Export button should be enabled when templates are available').toBeTruthy();
+            Logger.info('Export button enabled: ' + isEnabled);
 
-            // Click export
             await approvalJob.clickExportButton();
             Logger.info('Export button clicked');
 
-            Logger.success('TC168 passed: Export negative flow tested');
+            await expect(exportBtn).toBeVisible({ timeout: 5000 });
+            Logger.success('TC168 passed: Export negative flow tested — button remains visible after click');
         } catch (error) {
             Logger.error('TC168 failed: ' + error.message);
             throw error;
@@ -383,30 +393,24 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         try {
             Logger.step('TC169: Starting create view positive flow');
 
-            // Click Create View button
             await approvalJob.clickCreateViewButton();
             Logger.info('Create View button clicked');
 
-            // Check if view name input exists
             const viewNameInput = page.locator('input[placeholder*="view" i]').first();
-            const inputExists = await viewNameInput.isVisible().catch(() => false);
+            await expect(viewNameInput).toBeVisible({ timeout: 10000 });
 
-            if (inputExists) {
-                const viewName = 'TestView_' + Date.now();
-                await viewNameInput.fill(viewName);
-                Logger.info('View name filled: ' + viewName);
+            const viewName = 'TestView_' + Date.now();
+            await viewNameInput.fill(viewName);
+            await expect(viewNameInput).toHaveValue(viewName, { timeout: 5000 });
+            Logger.info('View name filled: ' + viewName);
 
-                const saveBtn = page.locator('button:has-text("Create")').last();
-                const saveExists = await saveBtn.isVisible().catch(() => false);
-                if (saveExists) {
-                    await saveBtn.click();
-                    await page.waitForTimeout(1000);
-                    Logger.info('View created');
-                }
-            }
+            const saveBtn = page.locator('button:has-text("Create")').last();
+            await expect(saveBtn).toBeVisible({ timeout: 5000 });
+            await saveBtn.click();
+            await page.waitForTimeout(1000);
+            Logger.info('View created');
 
-            // Close dialog
-            await page.keyboard.press('Escape');
+            await page.keyboard.press('Escape').catch(() => {});
             await page.waitForTimeout(600);
 
             Logger.success('TC169 passed: Create View flow completed');
@@ -420,32 +424,28 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         try {
             Logger.step('TC170: Starting create view negative flow');
 
-            // Click Create View button
             await approvalJob.clickCreateViewButton();
             Logger.info('Create View dialog opened');
 
-            // Test with empty name
             const viewNameInput = page.locator('input[placeholder*="view" i]').first();
-            const inputExists = await viewNameInput.isVisible().catch(() => false);
+            await expect(viewNameInput).toBeVisible({ timeout: 10000 });
 
-            if (inputExists) {
-                // Try submit empty
-                const submitBtn = page.locator('button:has-text("Create")').last();
-                const isDisabled = await submitBtn.isDisabled().catch(() => false);
-                Logger.info('Submit button disabled with empty name: ' + isDisabled);
+            const submitBtn = page.locator('button:has-text("Create")').last();
+            await expect(submitBtn).toBeVisible({ timeout: 5000 });
+            const isDisabled = await submitBtn.isDisabled().catch(() => false);
+            Logger.info('Submit button disabled with empty name: ' + isDisabled);
 
-                // Test with special characters
-                await viewNameInput.fill('!@#$%^&*()');
-                Logger.info('View name with special characters: !@#$%^&*()');
+            await viewNameInput.fill('!@#$%^&*()');
+            await expect(viewNameInput).toHaveValue('!@#$%^&*()', { timeout: 5000 });
+            Logger.info('View name with special characters verified');
 
-                // Test with long name
-                await viewNameInput.clear();
-                const longName = 'A'.repeat(200);
-                await viewNameInput.fill(longName);
-                Logger.info('Long view name attempted: ' + longName.length + ' characters');
-            }
+            await viewNameInput.clear();
+            const longName = 'A'.repeat(200);
+            await viewNameInput.fill(longName);
+            const filledValue = await viewNameInput.inputValue();
+            expect(filledValue.length).toBeGreaterThanOrEqual(32);
+            Logger.info('Long view name attempted: ' + longName.length + ' characters, actual: ' + filledValue.length);
 
-            // Close dialog
             await page.keyboard.press('Escape');
             await page.waitForTimeout(600);
 
@@ -608,9 +608,8 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
             const editExists = await editBtn.isVisible().catch(() => false);
 
             if (!editExists) {
-                Logger.info('No templates to edit, skipping test');
-                Logger.success('TC176 passed: No templates available');
-                return;
+                await expect(page.getByRole('button', { name: 'Create Template' }).first()).toBeVisible({ timeout: 10000 });
+                test.skip(true, 'No templates available to edit — create templates first via TC161/TC178');
             }
 
             await approvalJob.clickEditTemplate();
@@ -658,9 +657,8 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
             const editExists = await editBtn.isVisible().catch(() => false);
 
             if (!editExists) {
-                Logger.info('No templates available to edit');
-                Logger.success('TC177 passed: No templates to edit (edge case)');
-                return;
+                await expect(page.getByRole('button', { name: 'Create Template' }).first()).toBeVisible({ timeout: 10000 });
+                test.skip(true, 'No templates available to edit — create templates first via TC161/TC178');
             }
 
             await approvalJob.clickEditTemplate();
@@ -1092,7 +1090,9 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         });
 
         await test.step('V4 — Search with junk value', async () => {
-            if (!(await search.isVisible({ timeout: 2500 }).catch(() => false))) return;
+            if (!(await search.isVisible({ timeout: 2500 }).catch(() => false))) {
+                test.skip(true, 'Approval Templates search not visible — cannot test junk search visual');
+            }
             await search.fill('__APPROVAL_NO_MATCH__');
             await page.keyboard.press('Enter').catch(() => {});
             await page.waitForTimeout(1400);
@@ -1100,7 +1100,9 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         });
 
         await test.step('V5 — Search cleared state', async () => {
-            if (!(await search.isVisible({ timeout: 2500 }).catch(() => false))) return;
+            if (!(await search.isVisible({ timeout: 2500 }).catch(() => false))) {
+                test.skip(true, 'Approval Templates search not visible — cannot test cleared search visual');
+            }
             await search.fill('');
             await page.keyboard.press('Enter').catch(() => {});
             await page.waitForTimeout(1000);
@@ -1108,7 +1110,9 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         });
 
         await test.step('V6 — Search with long text', async () => {
-            if (!(await search.isVisible({ timeout: 2500 }).catch(() => false))) return;
+            if (!(await search.isVisible({ timeout: 2500 }).catch(() => false))) {
+                test.skip(true, 'Approval Templates search not visible — cannot test long search visual');
+            }
             const longText = `TC10_VISUAL_LONG_${'Z'.repeat(84)}`;
             await search.fill(longText);
             await page.waitForTimeout(1000);
@@ -1119,7 +1123,9 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         });
 
         await test.step('V7 — Search with whitespace', async () => {
-            if (!(await search.isVisible({ timeout: 2500 }).catch(() => false))) return;
+            if (!(await search.isVisible({ timeout: 2500 }).catch(() => false))) {
+                test.skip(true, 'Approval Templates search not visible — cannot test whitespace search visual');
+            }
             await search.fill('   ');
             await page.keyboard.press('Enter').catch(() => {});
             await page.waitForTimeout(700);
@@ -1183,13 +1189,8 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
 
         await test.step('V14 — Views button region', async () => {
             const viewsBtn = page.locator('main').getByRole('button', { name: /^Views?$/i }).first();
-            if (await viewsBtn.isVisible({ timeout: 6000 }).catch(() => false)) {
-                try {
-                    await expect(viewsBtn).toHaveScreenshot('tc10-v-approval-views-button.png', APPROVAL_VISUAL_ASSERT);
-                } catch (e) {
-                    Logger.info(`[V14] Visual snapshot drift (non-blocking): ${e.message?.split('\n')[0]}`);
-                }
-            }
+            await expect(viewsBtn).toBeVisible({ timeout: 10000 });
+            await expect(viewsBtn).toHaveScreenshot('tc10-v-approval-views-button.png', APPROVAL_VISUAL_ASSERT);
         });
 
         await test.step('V15 — My Approvals workspace', async () => {

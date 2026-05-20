@@ -622,7 +622,11 @@ test.describe('Verify Invoice tab', () => {
         await invoicePage.clickAddInvoice();
         await page.waitForTimeout(2000);
 
-        const documentsLabel = page.locator('text=Invoice Documents');
+        // Label reads "Documents:" in current UI (was "Invoice Documents" in older build)
+        const documentsLabel = page.getByRole('dialog')
+            .locator('p')
+            .filter({ hasText: /^Documents/i })
+            .first();
         await expect(documentsLabel).toBeVisible({ timeout: 10000 });
         Logger.success('Invoice Documents section is visible');
 

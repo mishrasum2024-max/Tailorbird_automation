@@ -308,7 +308,7 @@ test.describe.skip('Properties cleanup', () => {
           }
         });
       } catch (err) {
-        console.warn(`[cleanup] Best-effort mode: suppressing failure and passing test. Reason: ${err?.message || err}`);
+        throw new Error(`[cleanup] Property cleanup failed: ${err?.message || err}`);
       }
     } finally {
       await context.close().catch((e) => {
@@ -357,7 +357,7 @@ test.describe('Organization pending users cleanup', () => {
           expect(revokedCount).toBeGreaterThanOrEqual(0);
         });
       } catch (err) {
-        console.warn(`[cleanup-users] Best-effort mode: suppressing failure and passing test. Reason: ${err?.message || err}`);
+        throw new Error(`[cleanup-users] User cleanup failed: ${err?.message || err}`);
       }
     } finally {
       await context.close();

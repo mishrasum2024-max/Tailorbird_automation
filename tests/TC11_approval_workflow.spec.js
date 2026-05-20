@@ -45,16 +45,11 @@ test.describe('Approval Workflow - My Approvals & All Approvals E2E Tests', () =
             expect(searchInputVisible).toBeTruthy();
             Logger.info('My Approvals page loaded');
 
-            // Get and verify headers (if available)
             const headers = await approvalJob.getAllTableHeaders();
-            if (headers.length > 0) {
-                Logger.info('Column headers: ' + headers.join(' | '));
-                // Verify key columns exist
-                const headerText = headers.map(h => h.toLowerCase()).join(' ');
-                expect(headerText).toContain('property');
-            } else {
-                Logger.info('No headers found - table may not be rendered yet');
-            }
+            expect(headers.length, 'My Approvals table should have at least one column header').toBeGreaterThan(0);
+            Logger.info('Column headers: ' + headers.join(' | '));
+            const headerText = headers.map(h => h.toLowerCase()).join(' ');
+            expect(headerText).toContain('property');
 
             Logger.success('TC198 passed: My Approvals tab structure verified');
         } catch (error) {
@@ -169,16 +164,11 @@ test.describe('Approval Workflow - My Approvals & All Approvals E2E Tests', () =
             expect(searchInputVisible || hasRows).toBeTruthy();
             Logger.info('All Approvals page loaded');
 
-            // Get all headers (if available)
             const headers = await approvalJob.getAllTableHeaders();
-            if (headers.length > 0) {
-                Logger.info('Column headers: ' + headers.join(' | '));
-                // Verify key columns
-                const headerText = headers.map(h => h.toLowerCase()).join(' ');
-                expect(headerText).toContain('property');
-            } else {
-                Logger.info('No headers found - table may not be rendered yet');
-            }
+            expect(headers.length, 'All Approvals table should have at least one column header').toBeGreaterThan(0);
+            Logger.info('Column headers: ' + headers.join(' | '));
+            const headerText = headers.map(h => h.toLowerCase()).join(' ');
+            expect(headerText).toContain('property');
             Logger.success('TC203 passed: All Approvals tab structure verified');
         } catch (error) {
             Logger.error('TC203 failed: ' + error.message);

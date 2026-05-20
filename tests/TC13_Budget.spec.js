@@ -251,9 +251,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
         const rowCount = await budgetJob.getTreegridRowCount();
         expect(rowCount).toBeGreaterThan(0);
         const siteVisible = await budgetJob.isTextVisible('Site Prep');
-        if (!siteVisible) {
-            Logger.info('Site Prep not immediately visible after submit — checking grid data');
-        }
+        expect(siteVisible, 'Site Prep should be visible in the grid after submit').toBeTruthy();
         expect(rowCount).toBeGreaterThan(0);
 
         Logger.step('TC233: Assert category persists in first row after submit (main grid)');

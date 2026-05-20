@@ -432,10 +432,18 @@ class InvoicePage {
                 await this.page.waitForTimeout(1000);
                 Logger.success('Change order saved successfully.');
                 return true;
-            } else {
-                Logger.info('Save button not found');
-                return false;
             }
+            // No explicit Save button — change orders auto-save; navigate back to commit.
+            const goBackBtn = this.page.getByRole('button', { name: 'Go Back' });
+            if (await goBackBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+                await goBackBtn.click();
+                await this.page.waitForLoadState('load');
+                await this.page.waitForTimeout(1000);
+                Logger.success('Change order saved via Go Back (auto-save).');
+                return true;
+            }
+            Logger.info('Save button not found');
+            return false;
         } catch (error) {
             Logger.error(`Error saving change order: ${error.message}`);
             throw error;
@@ -462,17 +470,21 @@ class InvoicePage {
     async exportChangeOrderData() {
         try {
             Logger.step('Exporting change order data...');
-            const exportButton = this.page.locator('button:has-text("Export"), button:has-text("Download")').first();
-            if (await exportButton.isVisible({ timeout: 5000 }).catch(() => false)) {
-                await exportButton.click();
-                await this.page.waitForLoadState('load');
-                await this.page.waitForTimeout(2000);
-                Logger.success('Change order data exported.');
-                return true;
-            } else {
-                Logger.info('Export button not found');
-                return false;
+            // Multiple Export buttons exist across tab panels; iterate to find the visible one.
+            const exportButtons = this.page.locator('button').filter({ hasText: 'Export' });
+            const count = await exportButtons.count().catch(() => 0);
+            for (let i = 0; i < count; i++) {
+                const btn = exportButtons.nth(i);
+                if (await btn.isVisible({ timeout: 1000 }).catch(() => false)) {
+                    await btn.click();
+                    await this.page.waitForLoadState('load');
+                    await this.page.waitForTimeout(2000);
+                    Logger.success('Change order data exported.');
+                    return true;
+                }
             }
+            Logger.info('Export button not found');
+            return false;
         } catch (error) {
             Logger.error(`Error exporting data: ${error.message}`);
             throw error;
@@ -2229,17 +2241,22 @@ class InvoicePage {
     async exportInvoiceData() {
         try {
             Logger.step('Exporting invoice data...');
-            const exportButton = this.page.locator('button:has-text("Export"), button:has(svg.lucide-download)').first();
-            if (await exportButton.isVisible({ timeout: 5000 }).catch(() => false)) {
-                await exportButton.click();
-                await this.page.waitForLoadState('load');
-                await this.page.waitForTimeout(2000);
-                Logger.success('Invoice data exported.');
-                return true;
-            } else {
-                Logger.info('Export button not found');
-                return false;
+            // Multiple Export buttons exist in the DOM (one per tab panel).
+            // Iterate to find the first visible one instead of using .first() which picks hidden panels.
+            const exportButtons = this.page.locator('button').filter({ hasText: 'Export' });
+            const count = await exportButtons.count().catch(() => 0);
+            for (let i = 0; i < count; i++) {
+                const btn = exportButtons.nth(i);
+                if (await btn.isVisible({ timeout: 1000 }).catch(() => false)) {
+                    await btn.click();
+                    await this.page.waitForLoadState('load');
+                    await this.page.waitForTimeout(2000);
+                    Logger.success('Invoice data exported.');
+                    return true;
+                }
             }
+            Logger.info('Export button not found');
+            return false;
         } catch (error) {
             Logger.error(`Error exporting data: ${error.message}`);
             throw error;

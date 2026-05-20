@@ -118,26 +118,20 @@ test.describe('Approval Workflow - My Approvals E2E Tests with another user', ()
 
             Logger.step('Verify modal open/close behavior');
 
-            if (initialRowCount > 0) {
-                await approvalJob.viewApprovalDetails(0);
-                await approvalJob.waitForPageLoad();
-                Logger.info('Approval details modal opened');
-
-                await approvalJob.closeApprovalModal();
-                Logger.info('Approval details modal closed');
-                await approvalJob.waitForPageLoad();
-                await page.waitForTimeout(3000);
-
-                const searchStillVisible = await page
-                    .getByPlaceholder('Search...')
-                    .isVisible()
-                    .catch(() => false);
-
-                expect(searchStillVisible).toBeTruthy();
-                Logger.info('Page remains functional after modal close');
-            } else {
-                Logger.info('No rows available – skipping modal validation');
+            if (initialRowCount === 0) {
+                test.skip(true, 'No approval rows available — cannot test modal open/close');
             }
+            await approvalJob.viewApprovalDetails(0);
+            await approvalJob.waitForPageLoad();
+            Logger.info('Approval details modal opened');
+
+            await approvalJob.closeApprovalModal();
+            Logger.info('Approval details modal closed');
+            await approvalJob.waitForPageLoad();
+            await page.waitForTimeout(3000);
+
+            await expect(page.getByPlaceholder('Search...')).toBeVisible({ timeout: 10000 });
+            Logger.info('Page remains functional after modal close');
 
             Logger.success('TC212 passed: My Approvals flow validated end-to-end');
         } catch (error) {
@@ -195,34 +189,35 @@ test.describe('Approval Workflow - My Approvals E2E Tests with another user', ()
 
             // Step 3: Search for data
             Logger.step('Step 3: Perform search');
-            await approvalJob.searchApprovals('test').catch((e) => Logger.info('Search skipped: ' + e.message));
+            await approvalJob.searchApprovals('test');
             const searchRowCount = await approvalJob.getTableRowCount();
             Logger.info('Search returned ' + searchRowCount + ' results');
 
             // Step 4: Clear search
             Logger.step('Step 4: Clear search');
-            await approvalJob.clearSearch().catch((e) => Logger.info('Clear search skipped: ' + e.message));
+            await approvalJob.clearSearch();
 
             // Step 5: Open approval details
             Logger.step('Step 5: View approval details');
             const hasData = (await approvalJob.getTableRowCount()) > 0;
             if (hasData) {
-                await approvalJob.viewApprovalDetails(0).catch((e) => Logger.info('View details skipped: ' + e.message));
-                await approvalJob.isApprovalModalVisible().catch((e) => Logger.info('Modal visibility check skipped: ' + e.message));
-                await approvalJob.closeApprovalModal().catch((e) => Logger.info('Modal close skipped: ' + e.message));
+                await approvalJob.viewApprovalDetails(0);
+                const modalVisible = await approvalJob.isApprovalModalVisible();
+                expect(modalVisible, 'Approval details modal should be visible after opening').toBeTruthy();
+                await approvalJob.closeApprovalModal();
             } else {
-                Logger.info('No data found for approval details — optional steps skipped');
+                test.skip(true, 'No approval data available — cannot test modal open/close');
             }
 
             // Step 6: Test export
             Logger.step('Step 6: Test export');
-            await approvalJob.clickExportButton().catch((e) => Logger.info('Export skipped: ' + e.message));
+            await approvalJob.clickExportButton();
 
             // Step 7: Test manage columns
             Logger.step('Step 7: Test manage columns');
-            await approvalJob.clickSettingsButton().catch((e) => Logger.info('Settings skipped: ' + e.message));
-            await approvalJob.waitForPageLoad().catch((e) => Logger.info('Page wait skipped: ' + e.message));
-            await approvalJob.closeDialog().catch((e) => Logger.info('Close dialog skipped: ' + e.message));
+            await approvalJob.clickSettingsButton();
+            await approvalJob.waitForPageLoad();
+            await approvalJob.closeDialog();
 
             // Step 8: Switch to All Approvals
             Logger.step('Step 8: Switch to All Approvals');

@@ -75,7 +75,7 @@ test.describe('Finalize bid / contract — full UI chain', () => {
         await budgetJob.ensureSubmitEnabledAfterUpload();
         await budgetJob.clickSubmitForApproval();
         await page.waitForTimeout(2000);
-        await page.waitForURL(/financials\/budget|budget-revision/i, { timeout: 15000 }).catch(() => {});
+        await expect(page).toHaveURL(/financials\/budget|budget-revision/i, { timeout: 15000 });
 
         await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'load' });
         await page.waitForLoadState('domcontentloaded');
