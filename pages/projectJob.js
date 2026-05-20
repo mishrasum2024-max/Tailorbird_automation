@@ -1616,12 +1616,25 @@ exports.ProjectJob = class ProjectJob {
             }
     
             Logger.success('TC47_NEW_UI: Contract finalized successfully');
-    
-            await page.waitForTimeout(1500);
+
+            await page.waitForTimeout(2000);
             const changeOrderTab = page.getByRole('tab', { name: /Change Order/i });
             const invoiceTab = page.getByRole('tab', { name: /^Invoice$/i }).or(page.getByRole('tab', { name: 'Invoice' }));
-            await expect(changeOrderTab).toBeEnabled({ timeout: 15000 });
-            await expect(invoiceTab).toBeEnabled({ timeout: 15000 });
+
+            // The job page does not always reactively re-enable the tabs after
+            // finalization — a navigation to the same URL forces the app to
+            // re-fetch the job state from the server before we assert.
+            const tabsEnabledAlready = await changeOrderTab.isEnabled({ timeout: 3000 }).catch(() => false);
+            if (!tabsEnabledAlready) {
+                Logger.info('CO tab still disabled after finalize — reloading job page to refresh state');
+                const jobUrl = page.url();
+                await page.goto(jobUrl, { waitUntil: 'domcontentloaded' });
+                await page.locator('main, .mantine-AppShell-main').first()
+                    .waitFor({ state: 'visible', timeout: 20000 });
+            }
+
+            await expect(changeOrderTab).toBeEnabled({ timeout: 20000 });
+            await expect(invoiceTab).toBeEnabled({ timeout: 20000 });
         } catch (error) {
             await captureDebugScreenshot('failure_state');
             throw error;

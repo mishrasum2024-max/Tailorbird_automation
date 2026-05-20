@@ -1190,6 +1190,11 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         await test.step('V14 — Views button region', async () => {
             const viewsBtn = page.locator('main').getByRole('button', { name: /^Views?$/i }).first();
             await expect(viewsBtn).toBeVisible({ timeout: 10000 });
+            // Escape in V13 leaves keyboard focus on the Views button, causing a
+            // focus-ring that makes the screenshot non-deterministic.  Move the
+            // mouse away and blur active focus before capturing.
+            await page.mouse.move(0, 0);
+            await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); });
             await expect(viewsBtn).toHaveScreenshot('tc10-v-approval-views-button.png', APPROVAL_VISUAL_ASSERT);
         });
 

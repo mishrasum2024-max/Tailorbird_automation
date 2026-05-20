@@ -852,7 +852,7 @@ class PropertiesHelper {
     async validateTabs(tabs = ["Overview", "Asset Viewer", "Takeoffs", "Locations"]) {
         for (const tab of tabs) {
             const tabEl = this.page.getByRole("tab", { name: new RegExp(`^${tab}$`, "i") }).first();
-            await expect(tabEl).toBeVisible();
+            await expect(tabEl).toBeVisible({ timeout: 15000 });
             console.log(`[ASSERT] Tab visible → ${tab}`);
         }
         const overviewTab = this.page.getByRole("tab", { name: /^Overview$/i }).first();

@@ -959,7 +959,16 @@ exports.ApprovalJob = class ApprovalJob {
             let checkboxes = approval.alwaysRequiredCheckboxesInTemplateDialog;
             let count = await checkboxes.count();
             if (count === 0) {
+                // Edit template page: approver rows load after the template name input appears;
+                // wait for the first checkbox to be attached before counting.
+                await this.page.locator('input[type="checkbox"]').first()
+                    .waitFor({ state: 'attached', timeout: 15000 }).catch(() => {});
                 checkboxes = this.page.locator('input[type="checkbox"]');
+                count = await checkboxes.count();
+            }
+            if (count === 0) {
+                // Last resort: some Mantine versions render toggles as role="switch" buttons
+                checkboxes = this.page.locator('[role="switch"]');
                 count = await checkboxes.count();
             }
             if (count === 0) {
@@ -968,8 +977,13 @@ exports.ApprovalJob = class ApprovalJob {
             const firstCheckbox = checkboxes.first();
             await expect(firstCheckbox).toBeVisible({ timeout: 10000 });
 
-            if (await firstCheckbox.isChecked()) {
-                await firstCheckbox.uncheck();
+            const isChecked = await firstCheckbox.isChecked().catch(async () => {
+                // role="switch" elements expose checked state via aria-checked
+                const aria = await firstCheckbox.getAttribute('aria-checked');
+                return aria === 'true';
+            });
+            if (isChecked) {
+                await firstCheckbox.click();
             }
 
             Logger.success('Always Required checkbox unchecked');
@@ -1281,7 +1295,7 @@ exports.ApprovalJob = class ApprovalJob {
 
     async getAllCheckboxes() {
         try {
-            return this.page.locator('checkbox');
+            return this.page.locator('input[type="checkbox"]');
         } catch (error) {
             Logger.error('Error getting checkboxes: ' + error.message);
             throw error;

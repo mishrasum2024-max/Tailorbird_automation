@@ -56,11 +56,24 @@ test.describe('CapEx Sidebar One-Page QA Checklist', () => {
 
     test.afterAll(async ({ browser }) => {
         if (!suitePropertyName) return;
-        const context = await browser.newContext({ storageState: 'sessionState.json' });
-        const page = await context.newPage();
-        const cleanupPage = new CapexSidebarPage(page);
-        await cleanupPage.cleanupSuiteProperty(suitePropertyName);
-        await context.close();
+        let context;
+        try {
+            context = await browser.newContext({ storageState: 'sessionState.json' });
+            const page = await context.newPage();
+            const cleanupPage = new CapexSidebarPage(page);
+            // Cap cleanup at 60 s — goto/navigation can hang indefinitely in CI
+            // when the session has expired or network fetch errors appear.
+            await Promise.race([
+                cleanupPage.cleanupSuiteProperty(suitePropertyName),
+                new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('afterAll cleanup timed out after 60 s')), 60_000)
+                ),
+            ]);
+        } catch (err) {
+            Logger.info(`Suite afterAll: cleanup error — ${err.message}. TC16 cleanup script will handle remaining data.`);
+        } finally {
+            await context?.close().catch(() => {});
+        }
     });
 
     test('TC254 @regression @capexSidebar : Verify CapEx sidebar displays accurate row-level financial formula calculations, validates all supported formula column scenarios, and maintains correct project/job scope rollup values with non-zero financial data integrity checks', async () => {
