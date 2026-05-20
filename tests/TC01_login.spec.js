@@ -86,10 +86,6 @@ test.describe('Tailorbird Login Flow', () => {
       await page.context().storageState({ path: 'OtherSessionState.json' });
       Logger.success('💾 Session stored successfully at OtherSessionState.json');
     });
-
-    await test.step('Close Context', async () => {
-      await context.close();
-    });
   });
 });
 
@@ -382,7 +378,6 @@ test.describe('Regression — login (consolidated)', () => {
     Logger.info('[TC04] Asserting: password field not visible after back');
     await expect(loginPage.passwordInput, 'FAIL: After back, password field should be hidden').not.toBeVisible();
     Logger.success('[TC04] ✅ Browser back returned to email step');
-    await context.close();
   });
 
   await test.step('TC01-edge-03: Padded email with wrong password — invalid credentials banner', async () => {

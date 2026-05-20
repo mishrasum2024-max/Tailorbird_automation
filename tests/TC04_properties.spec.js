@@ -248,10 +248,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
     await prop.takeoffOption();
     await prop.interiorANDexteriorTab();
     const headerLocator = page.locator('[role="columnheader"]');
-    const scrollContainer = page.locator('[role="treegrid"]');
-    console.log("[STEP] Checking header count...");
-    // await expect(headerLocator).toHaveCount(expectedHeaders.length);
-    console.log("[INFO] Header count matches.");
+    await expect(headerLocator.filter({ visible: true }).first()).toBeVisible({ timeout: 20_000 });
     await prop.exportButton();
     await prop.filtertab();
     // await prop.unitMix(); // Unit mix option removed from UI
@@ -271,10 +268,8 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
     await prop.takeoffOption();
     await prop.interiorANDexteriorTab();
     await prop.clickExteriortab();
-    const headerLocator = page.locator('.ag-header-cell .mantine-Text-root:visible');
-    const scrollContainer = page.locator('.ag-center-cols-viewport');
-    console.log("[STEP] Checking header count...");
-    console.log("[INFO] Header count matches.");
+    const headerLocator = page.locator('[role="columnheader"]');
+    await expect(headerLocator.filter({ visible: true }).first()).toBeVisible({ timeout: 20_000 });
     await prop.exportButton();
     // await prop.unitMix(); // Unit mix option removed from UI
     await prop.addPropertyTakeOff('exterior');
@@ -348,7 +343,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
     log("PANEL ID =", id)
     let pnl = page.locator(`#${id}`)
 
-    await pnl.waitFor({ state: "visible", timeout: 30000 })
+    await expect(pnl).toBeVisible({ timeout: 30000 })
     log("PANEL LOADED & VISIBLE")
 
     await wait()
@@ -461,6 +456,8 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
       REPORT.push(out)
     }
 
+    expect(REPORT.length, 'Asset viewer panel must expose at least one dropdown').toBeGreaterThan(0);
+
     log("\n EXPORTING FULL JSON LOG → dropdown_report.json")
 
     await page.evaluate(r => {
@@ -470,7 +467,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
       a.click()
     }, REPORT)
 
-    log("\n EXECUTION 100% COMPLETE — NO STOP, NO FAIL, FULL TRACE GENERATED 🔥\n")
+    log("\n EXECUTION COMPLETE\n")
 
   });
 
@@ -541,8 +538,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
     if (await noUnitsState.isVisible({ timeout: 3000 }).catch(() => false)) {
       await expect(noUnitsState).toBeVisible();
       await expect(locationsPanel.getByText(/Use \+ or Create Button to create one/i)).toBeVisible();
-      console.log("Units tab currently in empty-state; add-row controls are not exposed in this run.");
-      return;
+      test.skip(true, 'Units tab is in empty-state — add-row scenario requires existing units');
     }
     await expect(
       locationsPanel.getByRole("columnheader", { name: /Unit Name/i }).first(),
@@ -561,8 +557,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
       if (await noUnitsAfterAdd.isVisible({ timeout: 3000 }).catch(() => false)) {
         await expect(noUnitsAfterAdd).toBeVisible();
         await expect(locationsPanel.getByText(/Use \+ or Create Button to create one/i)).toBeVisible();
-        console.log("Units remain in empty-state after add attempt; skipping export row assertions for this run.");
-        return;
+        test.skip(true, 'Units panel still in empty-state after add attempt — export assertions not testable');
       }
       const firstUnitCell = locationsPanel
         .locator('[role="treegrid"] [role="row"] [role="gridcell"]')
@@ -667,11 +662,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
       await test.step('Visual: main workspace (table, masked search)', async () => {
         const main = page.locator('main').first();
         await main.waitFor({ state: 'visible', timeout: 20_000 });
-        try {
-          await expect(main).toHaveScreenshot('properties-main-workspace.png', shotMain);
-        } catch (e) {
-          console.warn('[visual-skip] properties-main-workspace.png: ' + e.message.split('\n')[0]);
-        }
+        await expect(main).toHaveScreenshot('properties-main-workspace.png', shotMain);
       });
 
       await test.step('TC04-reg-01: Very long search yields no matching row', async () => {
@@ -694,13 +685,9 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
         const filterDrawer = prop.filterPopup();
         await filterDrawer.waitFor({ state: 'visible', timeout: 15000 });
         await expect(filterDrawer.getByRole('button', { name: 'Reset Filters' })).toHaveCount(0);
-        try {
-          await expect(filterDrawer).toHaveScreenshot('properties-filter-drawer.png', {
-            ...PROPERTY_REGRESSION_SCREENSHOT,
-          });
-        } catch (e) {
-          console.warn('[visual-skip] properties-filter-drawer.png: ' + e.message.split('\n')[0]);
-        }
+        await expect(filterDrawer).toHaveScreenshot('properties-filter-drawer.png', {
+          ...PROPERTY_REGRESSION_SCREENSHOT,
+        });
         await filterDrawer.locator('.mantine-CloseButton-root').click();
         await expect(filterDrawer).toBeHidden({ timeout: 10000 });
       });
@@ -724,11 +711,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
           timeout: 15_000,
         });
         await expect(page.getByText(/Use \+ or Create Button to create one|Nothing matches your filters/i)).toBeVisible();
-        try {
-          await expect(page.locator('main').first()).toHaveScreenshot('properties-main-empty-state.png', shotMain);
-        } catch (e) {
-          console.warn('[visual-skip] properties-main-empty-state.png: ' + e.message.split('\n')[0]);
-        }
+        await expect(page.locator('main').first()).toHaveScreenshot('properties-main-empty-state.png', shotMain);
         await prop.clearSearch('');
       });
 

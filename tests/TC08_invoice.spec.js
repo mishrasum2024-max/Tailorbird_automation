@@ -132,23 +132,27 @@ test.describe('Verify Invoice tab', () => {
 
         const isModalOpen = await invoicePage.isModalOpen();
         if (isModalOpen) {
-            Logger.success('Invoice details modal opened successfully.');
             await expect(invoicePage.modal).toBeVisible();
         } else {
-            Logger.success('Invoice details page opened successfully.');
+            await expect(page).toHaveURL(/\/invoices\/\d+/, { timeout: 15_000 });
         }
     });
 
     test('TC101 @regression @changeOrderAndinvoice : Should enter invoice title and required information', async () => {
         await invoicePage.clickAddInvoice();
 
-        // Fill invoice details
         const testTitle = `Invoice_${Date.now()}`;
         await invoicePage.fillInvoiceTitle(testTitle);
-        await invoicePage.fillInvoiceAmount('1000');
-        await invoicePage.fillInvoiceDescription('Test Invoice Description');
+        const titleInput = page.locator('input[placeholder="Enter title"]').first();
+        await expect(titleInput).toHaveValue(testTitle, { timeout: 8000 });
 
-        Logger.success('Invoice details filled successfully.');
+        await invoicePage.fillInvoiceAmount('1000');
+
+        await invoicePage.fillInvoiceDescription('Test Invoice Description');
+        const descInput = page.locator('input[placeholder="Enter description"], textarea[placeholder="Enter description"]').first();
+        await expect(descInput).toHaveValue('Test Invoice Description', { timeout: 8000 });
+
+        Logger.success('Invoice details filled and verified successfully.');
     });
 
     test('TC102 @regression @changeOrderAndinvoice : Should upload PNG image for invoice', async () => {
@@ -167,7 +171,22 @@ test.describe('Verify Invoice tab', () => {
             Logger.success('Test image created.');
         }
 
+        const fileInput = page.locator('input[type="file"]');
+        const fromDeviceBtn = page.getByRole('button', { name: /from device/i });
+        const hasUploadUI = await fromDeviceBtn.isVisible({ timeout: 5000 }).catch(() => false)
+            || await fileInput.isAttached({ timeout: 3000 }).catch(() => false);
+        if (!hasUploadUI) {
+            test.skip(true, 'Invoice upload UI not available in this environment');
+        }
+
         await invoicePage.uploadInvoiceImage(testImagePath);
+
+        const isModalStillOpen = await invoicePage.isModalOpen();
+        if (isModalStillOpen) {
+            await expect(invoicePage.modal).toBeVisible({ timeout: 10000 });
+        } else {
+            await expect(page).toHaveURL(/\/invoices\/\d+/, { timeout: 10000 });
+        }
     });
 
     test('TC103 @regression @changeOrderAndinvoice : Should confirm/save the invoice with budget category', async () => {
@@ -252,13 +271,13 @@ test.describe('Verify Invoice tab', () => {
 
         await invoicePage.navigateToChangeOrderTab();
 
-        await page.waitForLoadState('load').catch(() => {});
+        await page.waitForLoadState('load');
         await expect(page).toHaveURL(/tab=change-orders|tab=changeOrders|Change Order/i, { timeout: 20000 });
 
         Logger.success('Successfully navigated to Change Order tab.');
 
         await invoicePage.navigateToInvoiceTab();
-        await page.waitForLoadState('load').catch(() => {});
+        await page.waitForLoadState('load');
 
         await expect(page).toHaveURL(/tab=invoices/);
         Logger.success('Successfully navigated back to Invoice tab.');
@@ -367,12 +386,8 @@ test.describe('Verify Invoice tab', () => {
         expect(hasAddButton).toBeTruthy();
         Logger.success('Add Invoice button is present.');
 
-        const hasTable = await invoicePage.invoiceTable.isVisible({ timeout: 3000 }).catch(() => false);
-        if (hasTable) {
-            Logger.success('Invoice table is present.');
-        } else {
-            Logger.info('Invoice table not immediately visible (may be lazy-loaded).');
-        }
+        await expect(invoicePage.invoiceTable).toBeVisible({ timeout: 20000 });
+        Logger.success('Invoice table is present.');
     });
 
     test('TC112 @regression @changeOrderAndinvoice : Should add complete invoice with all fields, set budget category, and verify values', async () => {
@@ -607,23 +622,13 @@ test.describe('Verify Invoice tab', () => {
         await invoicePage.clickAddInvoice();
         await page.waitForTimeout(2000);
 
-        // Verify document upload section is visible
         const documentsLabel = page.locator('text=Invoice Documents');
-        const isDocumentsVisible = await documentsLabel.isVisible({ timeout: 5000 }).catch(() => false);
+        await expect(documentsLabel).toBeVisible({ timeout: 10000 });
+        Logger.success('Invoice Documents section is visible');
 
-        if (isDocumentsVisible) {
-            Logger.success('Invoice Documents section is visible');
-
-            // Verify upload buttons are present
-            const fromDeviceButton = page.getByRole('button', { name: 'From device' });
-            const isFromDeviceVisible = await fromDeviceButton.isVisible({ timeout: 3000 }).catch(() => false);
-
-            if (isFromDeviceVisible) {
-                Logger.success('From device upload button is visible');
-            }
-        } else {
-            Logger.info('Invoice Documents section not visible (may be collapsed)');
-        }
+        const fromDeviceButton = page.getByRole('button', { name: 'From device' });
+        await expect(fromDeviceButton).toBeVisible({ timeout: 8000 });
+        Logger.success('From device upload button is visible');
 
         // Close the form
         await invoicePage.goBackToInvoiceList();
@@ -636,11 +641,8 @@ test.describe('Verify Invoice tab', () => {
         await page.waitForTimeout(2000);
 
         const exportSuccess = await invoicePage.exportInvoiceData();
-        if (exportSuccess) {
-            Logger.success('Invoice data exported successfully.');
-        } else {
-            Logger.info('Export button was not available, but test continues.');
-        }
+        expect(exportSuccess, 'Invoice export failed — export button not found or action did not succeed').toBeTruthy();
+        Logger.success('Invoice data exported successfully.');
     });
 
     test('TC120 @regression @changeOrderAndinvoice : Should verify invoice stats update after adding invoice with budget category', async () => {
@@ -865,7 +867,7 @@ test.describe('Verify Invoice tab', () => {
         await test.step('P2 — List search probe and clear (missing-path)', async () => {
             const search = loc.listSearchInput;
             if (!(await search.isVisible({ timeout: 4000 }).catch(() => false))) {
-                return;
+                test.skip(true, 'Invoice list search input not available in this environment');
             }
             await search.fill('__TC08_PROBE_MISSING__');
             await search.press('Enter').catch(() => {});
@@ -884,7 +886,7 @@ test.describe('Verify Invoice tab', () => {
             await invoicePage.waitForInvoiceWorkspaceSettled(4000);
             const search = loc.listSearchInput;
             if (!(await search.isVisible({ timeout: 3000 }).catch(() => false))) {
-                return;
+                test.skip(true, 'Invoice list search not available — cannot test junk search resilience');
             }
             await search.fill('__TC08_NEG_IMPOSSIBLE_£__');
             await page.waitForTimeout(5000);
@@ -920,7 +922,7 @@ test.describe('Verify Invoice tab', () => {
         await test.step('E2 — Long search string', async () => {
             const search = loc.listSearchInput;
             if (!(await search.isVisible({ timeout: 3000 }).catch(() => false))) {
-                return;
+                test.skip(true, 'Invoice list search not available — cannot test long search string');
             }
             const longText = `TC08_LONG_${'Z'.repeat(80)}`;
             await search.fill(longText);

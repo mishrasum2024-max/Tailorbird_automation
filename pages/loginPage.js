@@ -308,7 +308,7 @@ class LoginPage {
       document.querySelectorAll('input,textarea').forEach((el) => {
         if (el.type === 'hidden') return;
         const labelEl = el.id ? document.querySelector(`label[for="${el.id}"]`) : null;
-        snapshot.inputs.push({ tag: el.tagName.toLowerCase(), inputType: el.type, name: el.getAttribute('name') || null, id: el.id || null, placeholder: el.placeholder || null, ariaLabel: el.getAttribute('aria-label') || null, ariaDescribedBy: el.getAttribute('aria-describedby') || null, associatedLabel: labelEl ? norm(labelEl.textContent) : null, visible: isVisible(el), required: el.required, disabled: el.disabled, selector: hint(el) });
+        snapshot.inputs.push({ tag: el.tagName.toLowerCase(), inputType: el.type, name: el.getAttribute('name') || null, id: el.id || null, placeholder: el.placeholder || null, ariaLabel: el.getAttribute('aria-label') || null, ariaDescribedBy: el.getAttribute('aria-describedby') || null, ariaLabelledBy: el.getAttribute('aria-labelledby') || null, ariaHasPopup: el.getAttribute('aria-haspopup') || null, associatedLabel: labelEl ? norm(labelEl.textContent) : null, visible: isVisible(el), required: el.required, disabled: el.disabled, selector: hint(el) });
       });
 
       document.querySelectorAll('label').forEach((el) => {
@@ -316,7 +316,7 @@ class LoginPage {
       });
 
       document.querySelectorAll('a').forEach((el) => {
-        snapshot.links.push({ tag: 'a', text: norm(el.textContent), visible: isVisible(el), ariaLabel: el.getAttribute('aria-label') || null, href: el.href || null, selector: hint(el) });
+        snapshot.links.push({ tag: 'a', text: norm(el.textContent), visible: isVisible(el), ariaLabel: el.getAttribute('aria-label') || null, href: el.href || null, hasChildren: el.children.length > 0, selector: hint(el) });
       });
 
       document.querySelectorAll('p').forEach((el) => {
@@ -357,9 +357,17 @@ class LoginPage {
 
     if (!text) {
       if (el.type === 'input' || el.tag === 'input' || el.tag === 'textarea') {
-        issues.push(`<${el.tag}> has no label, placeholder, or aria-label — inaccessible input`);
+        // Combobox triggers (Mantine Select, etc.) rely on visual context — demote to WARN
+        if (el.ariaHasPopup === 'listbox' || el.ariaLabelledBy) {
+          issues.push(`WARN: combobox/select <${el.tag}> has no explicit aria-label or placeholder (aria-haspopup="${el.ariaHasPopup || ''}")`);
+        } else {
+          issues.push(`<${el.tag}> has no label, placeholder, or aria-label — inaccessible input`);
+        }
       } else if ((el.tag === 'button' || el.role === 'button') && el.buttonType !== 'submit') {
         issues.push(`WARN: icon-only <button type="${el.buttonType || 'button'}"> has no text and no aria-label (possible SVG-icon button)`);
+      } else if (el.tag === 'a' && el.hasChildren) {
+        // SVG-only links (icon toggles) — demote to WARN like icon-only buttons
+        issues.push(`WARN: icon-only <a> has no text content and no aria-label (possible SVG-icon link)`);
       } else {
         issues.push(`<${el.tag || '?'}> has empty or whitespace-only text`);
       }

@@ -30,7 +30,7 @@ test.beforeEach(async ({ page }) => {
     await expect(page).toHaveURL(process.env.DASHBOARD_URL);
     // networkidle times out on CapEx page in CI — wait for app shell instead
     const _appShell05 = page.locator('.mantine-AppShell-navbar, .mantine-AppShell-main, main').first();
-    await _appShell05.waitFor({ state: 'visible', timeout: 20_000 }).catch(() => {});
+    await _appShell05.waitFor({ state: 'visible', timeout: 20_000 });
 });
 
 test('TC63 @regression @projectAndJob : Navigate to Projects & Jobs and verify page loads successfully within 2 seconds and zero console error', async ({ page }) => {
@@ -308,64 +308,30 @@ test('TC71 @regression @projectAndJob : Negative and missing input validations',
         console.log('[TC71] N9 — Navigate to Jobs workspace and attempt to open Create Job dialog');
         await projectPage.tc05GotoJobsWorkspace();
         const dialogVisible = await projectPage.tc05OpenCreateJobDialogIfAvailable();
-        if (dialogVisible) {
-            if (await loc.createJobDialogCreateBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
-                const enabled = await loc.createJobDialogCreateBtn.isEnabled().catch(() => false);
-                console.log(`[TC71] N9 — ASSERT: Create Job button is disabled when no required data entered | actual enabled: ${enabled}`);
-                try {
-                    expect(enabled).toBeFalsy();
-                    console.log(`[TC71] N9 — PASS: Create Job button is disabled (cannot blind-create)`);
-                } catch (e) {
-                    console.log(`[TC71] N9 — FAIL: Create Job button should be disabled but was enabled`);
-                    throw e;
-                }
-            } else {
-                console.log('[TC71] N9 — INFO: Create button not visible in dialog; assertion skipped');
-            }
-            await projectPage.tc05CloseCreateJobDialogIfOpen();
-        } else {
-            console.log('[TC71] N9 — INFO: Create Job dialog not available; step skipped');
+        if (!dialogVisible) {
+            test.skip(true, 'Create Job dialog not available in this environment');
         }
+        await expect(loc.createJobDialogCreateBtn).toBeVisible({ timeout: 5000 });
+        const enabled = await loc.createJobDialogCreateBtn.isEnabled();
+        expect(enabled, 'FAIL [N9]: Create Job button must be disabled when no required data is entered').toBeFalsy();
+        await projectPage.tc05CloseCreateJobDialogIfOpen();
     });
 
     await test.step('N10: Jobs search random no-hit string remains stable', async () => {
-        if (await loc.mainSearchInput.isVisible({ timeout: 2000 }).catch(() => false)) {
-            const noMatchTerm = `__JOBS_NEG_NO_MATCH_${Date.now()}__`;
-            console.log(`[TC71] N10 — Fill Jobs search with no-match term: "${noMatchTerm}"`);
-            await projectPage.tc05FillSearch(noMatchTerm);
-            console.log(`[TC71] N10 — ASSERT: Jobs search input value matches /__JOBS_NEG_NO_MATCH_/`);
-            try {
-                await expect(loc.mainSearchInput).toHaveValue(/__JOBS_NEG_NO_MATCH_/);
-                console.log(`[TC71] N10 — PASS: Jobs search input retains no-match term`);
-            } catch (e) {
-                console.log(`[TC71] N10 — FAIL: Jobs search input did not retain no-match term "${noMatchTerm}"`);
-                throw e;
-            }
-            await projectPage.tc05ClearSearch();
-        } else {
-            console.log('[TC71] N10 — INFO: Jobs search input not visible; step skipped');
-        }
+        await expect(loc.mainSearchInput).toBeVisible({ timeout: 8000 });
+        const noMatchTerm = `__JOBS_NEG_NO_MATCH_${Date.now()}__`;
+        await projectPage.tc05FillSearch(noMatchTerm);
+        await expect(loc.mainSearchInput).toHaveValue(/__JOBS_NEG_NO_MATCH_/);
+        await projectPage.tc05ClearSearch();
     });
 
     await test.step('N11: Bids no-hit search remains stable', async () => {
-        console.log('[TC71] N11 — Navigate to Bids workspace');
         await projectPage.tc05GotoBidsWorkspace();
-        if (await loc.mainSearchInput.isVisible({ timeout: 2000 }).catch(() => false)) {
-            const noMatchTerm = `__BIDS_NEG_NO_MATCH_${Date.now()}__`;
-            console.log(`[TC71] N11 — Fill Bids search with no-match term: "${noMatchTerm}"`);
-            await projectPage.tc05FillSearch(noMatchTerm);
-            console.log(`[TC71] N11 — ASSERT: Bids search input value matches /__BIDS_NEG_NO_MATCH_/`);
-            try {
-                await expect(loc.mainSearchInput).toHaveValue(/__BIDS_NEG_NO_MATCH_/);
-                console.log(`[TC71] N11 — PASS: Bids search input retains no-match term`);
-            } catch (e) {
-                console.log(`[TC71] N11 — FAIL: Bids search input did not retain no-match term "${noMatchTerm}"`);
-                throw e;
-            }
-            await projectPage.tc05ClearSearch();
-        } else {
-            console.log('[TC71] N11 — INFO: Bids search input not visible; step skipped');
-        }
+        await expect(loc.mainSearchInput).toBeVisible({ timeout: 8000 });
+        const noMatchTerm = `__BIDS_NEG_NO_MATCH_${Date.now()}__`;
+        await projectPage.tc05FillSearch(noMatchTerm);
+        await expect(loc.mainSearchInput).toHaveValue(/__BIDS_NEG_NO_MATCH_/);
+        await projectPage.tc05ClearSearch();
     });
 
     await test.step('N12: Bids Manage Vendors interaction should not break page', async () => {
@@ -403,13 +369,20 @@ test('TC72 @regression @projectAndJob : Edge behavior and state transition check
             await projectPage.tc05OpenFilterDrawer();
             await projectPage.tc05CloseFilterDrawer();
         }
+        await expect(loc.mainContainer).toBeVisible({ timeout: 10000 });
     });
 
-    await test.step('E3: Toolbar dropdown menus should open/close via Escape', async () => {
+    await test.step('E3: Toolbar dropdown menus should open/close via Escape or click-outside', async () => {
         for (const btn of [loc.layoutToolbarBtn, loc.viewToolbarBtn, loc.tableToolbarBtn]) {
             await btn.click();
+            const openMenu = page.locator('[role="menu"], [role="listbox"], [role="dialog"]').first();
+            await expect(openMenu).toBeVisible({ timeout: 5000 });
             await page.keyboard.press('Escape');
-            await page.waitForTimeout(300);
+            await page.waitForTimeout(400);
+            // Dialogs (view/table drawers) may not respond to Escape alone — click outside as fallback
+            const isStillVisible = await openMenu.isVisible().catch(() => false);
+            if (isStillVisible) await page.mouse.click(5, 5);
+            await expect(openMenu).toBeHidden({ timeout: 5000 });
         }
     });
 
@@ -417,8 +390,7 @@ test('TC72 @regression @projectAndJob : Edge behavior and state transition check
         const exists = await loc.projectViewDetailsBtn.isVisible({ timeout: 3000 }).catch(() => false);
         if (exists) {
             await loc.projectViewDetailsBtn.click();
-            await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => { });
-            await expect(page).toHaveURL(/\/projects\//);
+            await expect(page).toHaveURL(/\/projects\//, { timeout: 20000 });
         } else {
             await expect(loc.mainContainer).toBeVisible();
         }
@@ -439,11 +411,7 @@ test('TC73 @regression @projectAndJob : Multi-screen visual checkpoints', async 
         await loc.layoutToolbarBtn.click();
         const menu = page.locator('[role="menu"], [role="listbox"]').filter({ hasText: /Grid View|Table View|Layout/i }).first();
         await expect(menu).toBeVisible({ timeout: 10000 });
-        try {
-            await projectPage.tc05CaptureLocatorScreenshot(menu, 'tc05-v-projects-layout-menu.png', PROJECT_VISUAL_ASSERT);
-        } catch (e) {
-            console.info(`[V2] Visual snapshot drift (non-blocking): ${e.message?.split('\n')[0]}`);
-        }
+        await projectPage.tc05CaptureLocatorScreenshot(menu, 'tc05-v-projects-layout-menu.png', PROJECT_VISUAL_ASSERT);
         await page.keyboard.press('Escape');
     });
 
@@ -451,11 +419,7 @@ test('TC73 @regression @projectAndJob : Multi-screen visual checkpoints', async 
         await loc.viewToolbarBtn.click();
         const menu = page.locator('[role="dialog"], [role="menu"], [role="listbox"]').filter({ hasText: /Create New View|Default|View/i }).first();
         await expect(menu).toBeVisible({ timeout: 10000 });
-        try {
-            await projectPage.tc05CaptureLocatorScreenshot(menu, 'tc05-v-projects-view-menu.png', PROJECT_VISUAL_ASSERT);
-        } catch (e) {
-            console.info(`[V3] Visual snapshot drift (non-blocking): ${e.message?.split('\n')[0]}`);
-        }
+        await projectPage.tc05CaptureLocatorScreenshot(menu, 'tc05-v-projects-view-menu.png', PROJECT_VISUAL_ASSERT);
         await page.keyboard.press('Escape');
     });
 
@@ -497,11 +461,12 @@ test('TC73 @regression @projectAndJob : Multi-screen visual checkpoints', async 
 
     await test.step('V10: Jobs create modal default/validation states', async () => {
         const dialogVisible = await projectPage.tc05OpenCreateJobDialogIfAvailable();
-        if (dialogVisible) {
-            await projectPage.tc05CaptureLocatorScreenshot(loc.createJobDialog, 'tc05-v-jobs-create-modal.png', PROJECT_VISUAL_ASSERT);
-            await projectPage.tc05CaptureLocatorScreenshot(loc.createJobDialog, 'tc05-v-jobs-create-modal-validation.png', PROJECT_VISUAL_ASSERT);
-            await projectPage.tc05CloseCreateJobDialogIfOpen();
+        if (!dialogVisible) {
+            test.skip(true, 'Create Job dialog not available in this environment — visual snapshot skipped');
         }
+        await projectPage.tc05CaptureLocatorScreenshot(loc.createJobDialog, 'tc05-v-jobs-create-modal.png', PROJECT_VISUAL_ASSERT);
+        await projectPage.tc05CaptureLocatorScreenshot(loc.createJobDialog, 'tc05-v-jobs-create-modal-validation.png', PROJECT_VISUAL_ASSERT);
+        await projectPage.tc05CloseCreateJobDialogIfOpen();
     });
 
     await test.step('V11: Jobs filter drawer', async () => {
@@ -513,9 +478,10 @@ test('TC73 @regression @projectAndJob : Multi-screen visual checkpoints', async 
     await test.step('V12: Jobs with-filter state', async () => {
         await projectPage.tc05OpenFilterDrawer();
         const applied = await projectPage.tc05ApplyFirstFilterIfAvailable();
-        if (applied) {
-            await projectPage.tc05CaptureMainScreenshot('tc05-v-jobs-with-filter-state.png', shotMain);
+        if (!applied) {
+            test.skip(true, 'No filter option available to apply — with-filter visual snapshot skipped');
         }
+        await projectPage.tc05CaptureMainScreenshot('tc05-v-jobs-with-filter-state.png', shotMain);
         await projectPage.tc05CloseFilterDrawer();
     });
 

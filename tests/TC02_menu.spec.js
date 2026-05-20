@@ -81,7 +81,7 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
 
         // Start from the page loaded in beforeEach; avoid extra dashboard reloads.
         const base = process.env.BASE_URL || new URL(process.env.DASHBOARD_URL).origin;
-        await page.locator('nav').waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
+        await page.locator('nav').waitFor({ state: 'visible', timeout: 10000 });
 
         const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -234,7 +234,7 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
         test.beforeEach(async ({ page }) => {
             Logger.info(`Navigating to dashboard: ${process.env.DASHBOARD_URL}`);
             await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'load', timeout: 60000 });
-            await page.locator('nav').waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
+            await page.locator('nav').waitFor({ state: 'visible', timeout: 15000 });
             await page.evaluate(() => {
                 document.querySelectorAll('main, .mantine-AppShell-navbar').forEach((el) => {
                     el.style.zoom = '70%';
@@ -540,10 +540,7 @@ test.describe('TC02 Menu — Text assertions', () => {
             const visibleLinks = snapshot.links.filter((l) => l.visible && l.text && l.text.trim().length > 0);
             expect(visibleLinks.length, `FAIL [dashboard-nav]: No visible non-empty links. All: ${JSON.stringify(snapshot.links)}`).toBeGreaterThan(0);
 
-            // Soft-assert: log input/label issues from page content (e.g. year picker) without failing nav test
-            if (failures.length > 0) {
-                Logger.info(`[TC21] Non-nav input accessibility issues noted (${failures.length}): ${failures.join(' | ')}`);
-            }
+            expect(failures, `FAIL [dashboard-nav]: ${failures.length} accessibility issue(s):\n${failures.join('\n')}`).toHaveLength(0);
         });
 
         await test.step('STATE 1b | Known nav labels — primary items visible (MCP-verified 2026-05-18)', async () => {

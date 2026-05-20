@@ -109,12 +109,8 @@ test.describe('Verify Create Project and Add Job flow', () => {
         });
 
         const selectedCategory = projectPage.selectedBudgetCategory;
-        if (selectedCategory) {
-            Logger.success(`Budget Category assigned to job: "${selectedCategory}"`);
-            expect(selectedCategory.length).toBeGreaterThan(0);
-        } else {
-            Logger.info('Budget Category not available for this job — skipping assertion');
-        }
+        expect(selectedCategory, 'Budget Category must be assigned when selectBudgetCategory: true is passed to fillJobForm').toBeTruthy();
+        expect(selectedCategory.length, `Budget Category must have a non-empty name, got: "${selectedCategory}"`).toBeGreaterThan(0);
 
         await projectPage.submitJob();
 
@@ -479,6 +475,8 @@ test.describe('Verify Create Project and Add Job flow', () => {
 
             const contractsGrid = innerContractPanel.locator('revo-grid[role="treegrid"]').first();
             await expect(contractsGrid).toBeVisible({ timeout: 15000 });
+            // Wait for RevoGrid to render column headers before reading them
+            await expect(contractsGrid.locator('div[role="columnheader"]').filter({ visible: true }).first()).toBeVisible({ timeout: 15000 });
 
             /* ---------- Helper Functions ---------- */
 
@@ -496,7 +494,10 @@ test.describe('Verify Create Project and Add Job flow', () => {
 
             const findColumnIndex = (headers, nameRegex) => {
                 const col = headers.find(h => nameRegex.test(h.text));
-                if (!col) throw new Error(`Column not found for ${nameRegex}`);
+                if (!col) {
+                    const available = headers.map(h => h.text).filter(t => t).join(', ');
+                    throw new Error(`Column not found for ${nameRegex}. Available: [${available}]`);
+                }
                 return col.col;
             };
             const findOptionalColumnIndex = (headers, nameRegex) => {
@@ -957,17 +958,9 @@ test.describe('Verify Create Project and Add Job flow', () => {
         await test.step('V4: Create Job modal visual (default + validation)', async () => {
             await projectPage.openCreateJobModal();
             const dialog = projectPage.modal.filter({ has: page.getByPlaceholder(/Enter job title/i) }).last();
-            try {
-                await expect(dialog).toHaveScreenshot('tc06-v-create-job-modal.png', JOB_VISUAL_ASSERT);
-            } catch (e) {
-                console.info(`[V4] Visual snapshot drift (non-blocking): ${e.message?.split('\n')[0]}`);
-            }
+            await expect(dialog).toHaveScreenshot('tc06-v-create-job-modal.png', JOB_VISUAL_ASSERT);
             await projectPage.submitBtn.click().catch(() => { });
-            try {
-                await expect(dialog).toHaveScreenshot('tc06-v-create-job-modal-validation.png', JOB_VISUAL_ASSERT);
-            } catch (e) {
-                console.info(`[V4] Visual snapshot drift on validation state (non-blocking): ${e.message?.split('\n')[0]}`);
-            }
+            await expect(dialog).toHaveScreenshot('tc06-v-create-job-modal-validation.png', JOB_VISUAL_ASSERT);
             await projectPage.closeJobModalIfOpen();
         });
 

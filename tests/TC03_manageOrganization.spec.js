@@ -269,6 +269,7 @@ test.describe('TC03 Manage Organization — Text Agent (live MCP browser scan)',
       await test.step('STATE 1 | Organization page — full scan of all text elements', async () => {
         await page.goto(orgUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
         await page.locator('[role="tablist"]').waitFor({ state: 'visible', timeout: 20_000 });
+        await page.locator('[aria-label="User search"]').waitFor({ state: 'visible', timeout: 20_000 });
 
         const snapshot = await LoginPage.scanAllTextElements(page);
         const failures = LoginPage.logAndAssertSnapshot(snapshot, 'org-workspace');
@@ -281,14 +282,9 @@ test.describe('TC03 Manage Organization — Text Agent (live MCP browser scan)',
         });
 
         const visibleInputs = snapshot.inputs.filter((inp) => inp.visible);
-        // Soft-assert: org page inputs may be disabled/hidden during data load
-        if (visibleInputs.length === 0) {
-          Logger.info(`[TC34] No fully-visible inputs at scan time — search input may be loading. All: ${JSON.stringify(snapshot.inputs)}`);
-        }
+        expect(visibleInputs.length, `FAIL [org-workspace]: No fully-visible inputs found. All: ${JSON.stringify(snapshot.inputs)}`).toBeGreaterThan(0);
 
-        if (failures.length > 0) {
-          Logger.info(`[TC34] Accessibility notes (${failures.length}): ${failures.join(' | ')}`);
-        }
+        expect(failures, `FAIL [org-workspace]: ${failures.length} accessibility issue(s):\n${failures.join('\n')}`).toHaveLength(0);
       });
 
       await test.step('STATE 1b | Known CTAs and labels — MCP-verified 2026-05-18', async () => {

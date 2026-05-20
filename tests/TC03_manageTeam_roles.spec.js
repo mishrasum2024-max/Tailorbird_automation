@@ -253,6 +253,7 @@ test.describe("TC03 Manage Team Roles — Text Agent (live MCP browser scan)", (
       await test.step("STATE 1 | User Role Management — full scan of all text elements", async () => {
         await page.goto(rolesUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
         await page.getByRole("button", { name: "Add Role" }).waitFor({ state: "visible", timeout: 20_000 });
+        await page.getByPlaceholder("Search...").waitFor({ state: "visible", timeout: 20_000 });
 
         const snapshot = await LoginPage.scanAllTextElements(page);
         const failures = LoginPage.logAndAssertSnapshot(snapshot, "roles-workspace");
@@ -265,13 +266,9 @@ test.describe("TC03 Manage Team Roles — Text Agent (live MCP browser scan)", (
         });
 
         const visibleInputs = snapshot.inputs.filter((inp) => inp.visible);
-        if (visibleInputs.length === 0) {
-          Logger.info(`[TC47] No fully-visible inputs at scan time. All: ${JSON.stringify(snapshot.inputs)}`);
-        }
+        expect(visibleInputs.length, `FAIL [roles-workspace]: No fully-visible inputs found. All: ${JSON.stringify(snapshot.inputs)}`).toBeGreaterThan(0);
 
-        if (failures.length > 0) {
-          Logger.info(`[TC47] Accessibility notes (${failures.length}): ${failures.join(' | ')}`);
-        }
+        expect(failures, `FAIL [roles-workspace]: ${failures.length} accessibility issue(s):\n${failures.join('\n')}`).toHaveLength(0);
       });
 
       await test.step("STATE 1b | Known CTAs and labels — MCP-verified 2026-05-18", async () => {

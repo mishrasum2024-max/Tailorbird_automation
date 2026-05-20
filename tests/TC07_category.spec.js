@@ -84,8 +84,8 @@ test.describe('Verify category tab', () => {
     test('TC86 @regression @category : Should show data table/grid if present', async () => {
         await financialsCategoryPage.goToCategory();
         await expect(page).toHaveURL(/\/category/);
-        // Table is optional, so no assertion here
-        await financialsCategoryPage.isTableVisible();
+        const tableVisible = await financialsCategoryPage.isTableVisible();
+        expect(tableVisible, 'FAIL [TC86]: Category data table/grid should be visible after page load').toBeTruthy();
     });
 
     test('TC87 @regression @category : Should show Download/Export button', async () => {
@@ -165,7 +165,7 @@ test.describe('Verify category tab', () => {
     test('TC93 @regression @category : Add category option is working as expected', async () => {
         await financialsCategoryPage.goToCategory();
         await expect(page).toHaveURL(/\/category/);
-        await financialsCategoryPage.waitForTableToLoad(20000).catch(() => {});
+        await financialsCategoryPage.waitForTableToLoad(20000);
         await page.getByTestId('bt-add-row').click();
         await financialsCategoryPage.addCategoryRowDetail();
         await financialsCategoryPage.deleteCategoryRowDetail();
@@ -215,9 +215,7 @@ test.describe('Verify category tab', () => {
         await test.step('P2 — Main search probe and clear (missing / gap coverage)', async () => {
             const loc = financialsCategoryPage.tc07Loc();
             await expect(loc.mainContainer).toBeVisible({ timeout: 15000 });
-            if (!(await loc.mainSearchInput.isVisible({ timeout: 4000 }).catch(() => false))) {
-                return;
-            }
+            await expect(loc.mainSearchInput).toBeVisible({ timeout: 8000 });
             await loc.mainSearchInput.fill('__TC07_PROBE_MISSING__');
             await loc.mainSearchInput.press('Enter').catch(() => {});
             await page.waitForTimeout(10000);
@@ -259,34 +257,40 @@ test.describe('Verify category tab', () => {
         const loc = financialsCategoryPage.tc07Loc();
 
         await test.step('E1 — Filter funnel repeated open/dismiss', async () => {
-            await loc.filterFunnelBtn.click();
-            await page.waitForTimeout(500);
-            await page.keyboard.press('Escape').catch(() => {});
-            await page.waitForTimeout(500);
-            await loc.filterFunnelBtn.click().catch(() => {});
-            await page.waitForTimeout(400);
-            await page.keyboard.press('Escape').catch(() => {});
+            const filterPanel = page.locator('.mantine-Paper-root').filter({ hasText: /Filters/i }).first();
+            for (let i = 0; i < 2; i++) {
+                await loc.filterFunnelBtn.click();
+                await expect(filterPanel).toBeVisible({ timeout: 8000 });
+                await page.keyboard.press('Escape');
+                await page.waitForTimeout(400);
+                if (await filterPanel.isVisible().catch(() => false)) await page.mouse.click(5, 5);
+                await expect(filterPanel).toBeHidden({ timeout: 5000 });
+            }
         });
 
         await test.step('E2 — View and Table toolbar opens are stable', async () => {
             const viewBtn = page.getByRole('button', { name: /^View$/i }).first();
             const tableBtn = page.getByRole('button', { name: /^Table$/i }).first();
-            if (await viewBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-                await viewBtn.click().catch(() => {});
-                await page.waitForTimeout(400);
-                await page.keyboard.press('Escape').catch(() => {});
-            }
-            if (await tableBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-                await tableBtn.click().catch(() => {});
-                await page.waitForTimeout(400);
-                await page.keyboard.press('Escape').catch(() => {});
-            }
+            await expect(viewBtn).toBeVisible({ timeout: 8000 });
+            await viewBtn.click();
+            const viewMenu = page.locator('[role="menu"], [role="listbox"], [role="dialog"]').first();
+            await expect(viewMenu).toBeVisible({ timeout: 5000 });
+            await page.keyboard.press('Escape');
+            await page.waitForTimeout(400);
+            if (await viewMenu.isVisible().catch(() => false)) await page.mouse.click(5, 5);
+            await expect(viewMenu).toBeHidden({ timeout: 5000 });
+            await expect(tableBtn).toBeVisible({ timeout: 8000 });
+            await tableBtn.click();
+            const tableMenu = page.locator('[role="menu"], [role="listbox"], [role="dialog"]').first();
+            await expect(tableMenu).toBeVisible({ timeout: 5000 });
+            await page.keyboard.press('Escape');
+            await page.waitForTimeout(400);
+            if (await tableMenu.isVisible().catch(() => false)) await page.mouse.click(5, 5);
+            await expect(tableMenu).toBeHidden({ timeout: 5000 });
         });
 
         await test.step('E3 — Long main search string accepted and cleared', async () => {
-            if (!(await loc.mainSearchInput.isVisible({ timeout: 4000 }).catch(() => false))) {
-                return;
-            }
+            await expect(loc.mainSearchInput).toBeVisible({ timeout: 8000 });
             const longText = `TC07_LONG_${'Z'.repeat(100)}`;
             await loc.mainSearchInput.fill(longText);
             await expect(loc.mainSearchInput).toHaveValue(longText);
