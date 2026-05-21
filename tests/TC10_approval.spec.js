@@ -614,6 +614,17 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
     });
 
     test('@approval @regression TC176 Approval Templates – Verify approval template type remains locked during edit mode while allowing updates to editable fields like amount and approval rules', async () => {
+        test.setTimeout(240000);
+        const tc176Property = await createNewProperty(page);
+        await approvalJob.navigateToApprovalTab();
+        await approvalJob.navigateToApprovalTemplatesTab();
+        await approvalJob.waitForPageLoad();
+        const tc176Template = `TC176_Template_${Date.now()}`;
+        await approvalJob.createTemplateWorkflow(tc176Template, 'Change Order', tc176Property, 5000, true);
+        await settleApprovalWorkspace(page, 2000);
+        await approvalJob.searchTemplate(tc176Template);
+        await expect(page.getByRole('row').filter({ hasText: tc176Template })).toBeVisible({ timeout: 15000 });
+
         try {
             Logger.step('TC176: Starting edit template type lock positive flow');
 
@@ -621,7 +632,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
             const editBtn = page.getByRole('button', { name: 'Edit' }).first();
             const editExists = await editBtn.isVisible().catch(() => false);
 
-            expect(editExists, 'TC176: No "Edit" button found — approval templates must exist; ensure TC161 ran first').toBe(true);
+            expect(editExists, 'TC176: No "Edit" button found — template creation may have failed').toBe(true);
 
             await approvalJob.clickEditTemplate();
             Logger.info('Edit dialog opened');
@@ -656,10 +667,26 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         } catch (error) {
             Logger.error('TC176 failed: ' + error.message);
             throw error;
+        } finally {
+            await approvalJob.clearSearch().catch(() => {});
+            await approvalJob.searchTemplate(tc176Template).catch(() => {});
+            await approvalJob.deleteTemplate(tc176Template).catch(() => {});
+            await approvalJob.clearSearch().catch(() => {});
         }
     });
 
     test('@approval @regression TC177 Approval Templates – Verify system prevents forced or invalid changes to template type during edit mode', async () => {
+        test.setTimeout(240000);
+        const tc177Property = await createNewProperty(page);
+        await approvalJob.navigateToApprovalTab();
+        await approvalJob.navigateToApprovalTemplatesTab();
+        await approvalJob.waitForPageLoad();
+        const tc177Template = `TC177_Template_${Date.now()}`;
+        await approvalJob.createTemplateWorkflow(tc177Template, 'Change Order', tc177Property, 5000, true);
+        await settleApprovalWorkspace(page, 2000);
+        await approvalJob.searchTemplate(tc177Template);
+        await expect(page.getByRole('row').filter({ hasText: tc177Template })).toBeVisible({ timeout: 15000 });
+
         try {
             Logger.step('TC177: Starting edit template type lock negative flow');
 
@@ -667,7 +694,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
             const editBtn = page.getByRole('button', { name: 'Edit' }).first();
             const editExists = await editBtn.isVisible().catch(() => false);
 
-            expect(editExists, 'TC177: No "Edit" button found — approval templates must exist; ensure TC161 ran first').toBe(true);
+            expect(editExists, 'TC177: No "Edit" button found — template creation may have failed').toBe(true);
 
             await approvalJob.clickEditTemplate();
             Logger.info('Edit dialog opened');
@@ -706,6 +733,11 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         } catch (error) {
             Logger.error('TC177 failed: ' + error.message);
             throw error;
+        } finally {
+            await approvalJob.clearSearch().catch(() => {});
+            await approvalJob.searchTemplate(tc177Template).catch(() => {});
+            await approvalJob.deleteTemplate(tc177Template).catch(() => {});
+            await approvalJob.clearSearch().catch(() => {});
         }
     });
 
