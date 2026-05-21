@@ -475,8 +475,6 @@ test.describe('Verify Create Project and Add Job flow', () => {
 
             const contractsGrid = innerContractPanel.locator('revo-grid[role="treegrid"]').first();
             await expect(contractsGrid).toBeVisible({ timeout: 15000 });
-            // Wait for RevoGrid to render column headers before reading them
-            await expect(contractsGrid.locator('div[role="columnheader"]').filter({ visible: true }).first()).toBeVisible({ timeout: 15000 });
 
             /* ---------- Helper Functions ---------- */
 
@@ -494,10 +492,7 @@ test.describe('Verify Create Project and Add Job flow', () => {
 
             const findColumnIndex = (headers, nameRegex) => {
                 const col = headers.find(h => nameRegex.test(h.text));
-                if (!col) {
-                    const available = headers.map(h => h.text).filter(t => t).join(', ');
-                    throw new Error(`Column not found for ${nameRegex}. Available: [${available}]`);
-                }
+                if (!col) throw new Error(`Column not found for ${nameRegex}`);
                 return col.col;
             };
             const findOptionalColumnIndex = (headers, nameRegex) => {
