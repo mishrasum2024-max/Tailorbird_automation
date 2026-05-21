@@ -90,13 +90,10 @@ function invoiceLocators(page) {
         successMessage: page.locator('[class*="success"], [role="alert"]:has-text("success")'),
         invoiceAddedSuccessMessage: page.locator('text=Invoice Added').or(page.locator('text=Invoice added successfully')),
         
-        // Search and Filter (BirdTable list search — role or placeholder varies by build)
+        // Search and Filter (BirdTable list search — must use :visible to avoid matching hidden
+        // inputs from inactive sibling tabs; same pattern used in TC09 coWorkspaceListSearch)
         searchInput: page.getByRole('textbox', { name: 'Search...' }),
-        listSearchInput: page
-            .locator('main')
-            .getByPlaceholder('Search...')
-            .or(page.getByRole('textbox', { name: 'Search...' }))
-            .first(),
+        listSearchInput: page.locator('main input[placeholder="Search..."]:visible').first(),
         filterButtons: page.locator('button:has(svg.lucide-filter)')
     };
 }

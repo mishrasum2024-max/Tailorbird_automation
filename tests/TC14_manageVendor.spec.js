@@ -37,7 +37,7 @@ test.describe('Vendors Directory - E2E', () => {
         Logger.success('TC245 passed');
     });
 
-    test.skip('TC246 @vendor @regression : Verify user can search vendor records successfully using filter keywords, view filtered vendor results correctly, and restore the complete Vendor Directory grid after clearing search filters', async () => {
+    test('TC246 @vendor @regression : Verify user can search vendor records successfully using filter keywords, view filtered vendor results correctly, and restore the complete Vendor Directory grid after clearing search filters', async () => {
         await vendorPage.goToDirectory();
         await vendorPage.waitForDirectoryReady();
         await vendorPage.searchAndAssertFiltered('TOM');

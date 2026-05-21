@@ -81,9 +81,7 @@ test.describe('CapEx Sidebar One-Page QA Checklist', () => {
         await capexPage.ensureNonZeroDataOrFail();
         await capexPage.validateAll11ColumnCases();
         const rollup = await capexPage.validateProjectJobScopeRollupsBestEffort();
-        if (!rollup.available) {
-            test.skip(true, `TC254 rollup check unavailable: ${rollup.reason}`);
-        }
+        expect(rollup.available, `TC254 rollup check failed: ${rollup.reason}`).toBe(true);
         Logger.success('TC254 complete: formulas validated with non-zero guardrails');
     });
 
@@ -92,9 +90,7 @@ test.describe('CapEx Sidebar One-Page QA Checklist', () => {
         await capexPage.ensureNonZeroDataOrFail();
         await capexPage.validateBudgetCategoryAndCategoryMapping();
         const concat = await capexPage.validateBudgetCategoryConcatenationAndCategoryCode();
-        if (!concat.available) {
-            test.skip(true, `TC255 concat validation unavailable: ${concat.reason}`);
-        }
+        expect(concat.available, `TC255 concat validation failed: ${concat.reason}`).toBe(true);
         await capexPage.validateNoDuplicateLogicalNodes();
         const assigned = await capexPage.getAssignedBudgetCategories();
         Logger.info(`TC255 assigned categories count: ${assigned.length}`);
@@ -109,7 +105,7 @@ test.describe('CapEx Sidebar One-Page QA Checklist', () => {
             expect(ok).toBeTruthy();
             Logger.info(`projectData token not present for selected property; using visible assigned value "${runtimeCategoryToken}" from CapEx grid.`);
         } else {
-            test.skip(true, 'No assigned budget category visible on this property — skip assigned-category assertions');
+            expect(assigned.length, 'TC255: No assigned budget category visible on this property').toBeGreaterThan(0);
         }
         Logger.success('TC255 complete');
     });
@@ -215,9 +211,7 @@ test.describe('CapEx Sidebar One-Page QA Checklist', () => {
 
         const expandBtns = capexPage.l.treeExpandButtons;
         const btnCount = await expandBtns.count();
-        if (btnCount === 0) {
-            test.skip(true, 'TC263: No expand/collapse controls visible in current dataset — tree may be flat');
-        }
+        expect(btnCount, 'TC263: No expand/collapse controls visible — tree must have expandable parent nodes').toBeGreaterThan(0);
 
         const firstBtn = expandBtns.first();
         const expandedBefore = await firstBtn.getAttribute('aria-expanded');

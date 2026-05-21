@@ -54,7 +54,7 @@ test.describe('Manage Organization Flow ', () => {
     await applyWorkspaceZoom(sharedPage);
   });
 
-  test.skip('@sanity @regression TC22 - Invite new user to organization with Member role', async () => {
+  test('@sanity @regression TC22 - Invite new user to organization with Member role', async () => {
     const invitedEmail = `member_${Date.now()}@yopmail.com`;
     Logger.info(`[TC22] Starting: invite new Member — ${invitedEmail}`);
     await organizationHelper.inviteUser(invitedEmail, 'Member');
@@ -68,7 +68,7 @@ test.describe('Manage Organization Flow ', () => {
     Logger.success(`[TC22] ✅ Member user invited and verified: ${invitedEmail}`);
   });
 
-  test.skip('@sanity @regression TC23 - Invite new user to organization with Admin role', async () => {
+  test('@sanity @regression TC23 - Invite new user to organization with Admin role', async () => {
     const invitedEmail = `admin_${Date.now()}@yopmail.com`;
     Logger.info(`[TC23] Starting: invite new Admin — ${invitedEmail}`);
     await organizationHelper.inviteUser(invitedEmail, 'Admin');
@@ -82,7 +82,7 @@ test.describe('Manage Organization Flow ', () => {
     Logger.success(`[TC23] ✅ Admin user invited and verified: ${invitedEmail}`);
   });
 
-  test.skip('@sanity @regression TC24 - Revoke user invitation to organization', async () => {
+  test('@sanity @regression TC24 - Revoke user invitation to organization', async () => {
     const invitedEmail = `revoke_${Date.now()}@yopmail.com`;
     Logger.info(`[TC24] Starting: invite then revoke — ${invitedEmail}`);
     await organizationHelper.inviteUser(invitedEmail, 'Admin');
@@ -98,7 +98,7 @@ test.describe('Manage Organization Flow ', () => {
     Logger.success(`[TC24] ✅ Invitation revoked — user no longer in list: ${invitedEmail}`);
   });
 
-  test.skip('@sanity @regression TC25 - Resend user invitation to organization', async () => {
+  test('@sanity @regression TC25 - Resend user invitation to organization', async () => {
     const invitedEmail = `resend_${Date.now()}@yopmail.com`;
     Logger.info(`[TC25] Starting: invite then resend — ${invitedEmail}`);
     await organizationHelper.inviteUser(invitedEmail, 'Admin');

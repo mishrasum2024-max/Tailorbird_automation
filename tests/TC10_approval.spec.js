@@ -621,10 +621,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
             const editBtn = page.getByRole('button', { name: 'Edit' }).first();
             const editExists = await editBtn.isVisible().catch(() => false);
 
-            if (!editExists) {
-                await expect(page.getByRole('button', { name: 'Create Template' }).first()).toBeVisible({ timeout: 10000 });
-                test.skip(true, 'No templates available to edit — create templates first via TC161/TC178');
-            }
+            expect(editExists, 'TC176: No "Edit" button found — approval templates must exist; ensure TC161 ran first').toBe(true);
 
             await approvalJob.clickEditTemplate();
             Logger.info('Edit dialog opened');
@@ -670,10 +667,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
             const editBtn = page.getByRole('button', { name: 'Edit' }).first();
             const editExists = await editBtn.isVisible().catch(() => false);
 
-            if (!editExists) {
-                await expect(page.getByRole('button', { name: 'Create Template' }).first()).toBeVisible({ timeout: 10000 });
-                test.skip(true, 'No templates available to edit — create templates first via TC161/TC178');
-            }
+            expect(editExists, 'TC177: No "Edit" button found — approval templates must exist; ensure TC161 ran first').toBe(true);
 
             await approvalJob.clickEditTemplate();
             Logger.info('Edit dialog opened');
