@@ -280,14 +280,28 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
             expect(checkboxCount, 'Manage Columns dialog should expose at least one column checkbox').toBeGreaterThan(0);
             Logger.info('Column checkboxes found: ' + checkboxCount);
 
-            // Toggle first 2 columns
+            // Record original state then toggle first 2 columns
+            const originalStates = [];
             for (let i = 0; i < Math.min(2, checkboxCount); i++) {
                 const checkbox = allCheckboxes.nth(i);
                 const wasChecked = await checkbox.isChecked();
+                originalStates.push(wasChecked);
                 await checkbox.click();
                 await page.waitForTimeout(300);
                 const nowChecked = await checkbox.isChecked();
                 Logger.info('Checkbox ' + i + ' toggled from ' + wasChecked + ' to ' + nowChecked);
+            }
+
+            // Restore original states so column visibility is not polluted for subsequent tests
+            Logger.info('TC165: Restoring toggled columns to original state');
+            for (let i = 0; i < originalStates.length; i++) {
+                const checkbox = allCheckboxes.nth(i);
+                const currentChecked = await checkbox.isChecked();
+                if (currentChecked !== originalStates[i]) {
+                    await checkbox.click();
+                    await page.waitForTimeout(300);
+                    Logger.info('Checkbox ' + i + ' restored to ' + originalStates[i]);
+                }
             }
 
             // Close dialog

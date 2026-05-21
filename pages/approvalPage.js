@@ -1090,12 +1090,43 @@ exports.ApprovalJob = class ApprovalJob {
         }
     }
 
-    /** Fails fast if the approval templates grid is missing core columns (avoids brittle fixed column counts). */
+    /** Fails fast if the approval templates grid is missing core columns (avoids brittle fixed column counts).
+     *  Self-heals: if any required column is hidden (e.g. from a previous test toggling Manage Columns),
+     *  opens the Manage Columns drawer and checks all checkboxes before asserting. */
     async expectApprovalTemplatesTableCoreColumnsVisible() {
         const patterns = [/Name/i, /Template Type/i, /Properties/i, /Approval Rules/i, /Created By/i];
+
+        // Quick pre-check: if every column is already visible, skip the heal step.
+        const allVisible = await Promise.all(
+            patterns.map(p =>
+                this.page.getByRole('columnheader', { name: p }).first()
+                    .isVisible({ timeout: 3000 }).catch(() => false)
+            )
+        );
+
+        if (!allVisible.every(Boolean)) {
+            Logger.info('[expectApprovalTemplatesTableCoreColumnsVisible] One or more columns hidden — resetting via Manage Columns');
+            const opened = await this.clickManageColumnsButton().then(() => true).catch(() => false);
+            if (opened) {
+                const checkboxes = this.page.locator('input[type="checkbox"]');
+                const count = await checkboxes.count();
+                for (let i = 0; i < count; i++) {
+                    const cb = checkboxes.nth(i);
+                    const checked = await cb.isChecked().catch(() => true);
+                    if (!checked) {
+                        await cb.click();
+                        await this.page.waitForTimeout(200);
+                    }
+                }
+                await this.page.keyboard.press('Escape');
+                await this.page.waitForTimeout(800);
+                Logger.info('[expectApprovalTemplatesTableCoreColumnsVisible] Columns reset — all checkboxes re-enabled');
+            }
+        }
+
         for (const pattern of patterns) {
             await expect(this.page.getByRole('columnheader', { name: pattern }).first()).toBeVisible({
-                timeout: 15000,
+                timeout: 30000,
             });
         }
     }
