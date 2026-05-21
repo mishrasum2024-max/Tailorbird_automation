@@ -1228,7 +1228,7 @@ exports.ProjectJob = class ProjectJob {
                 budgetCategory: findColumnIndex(headers, /budget category/i),
                 scheduleOfValue: findColumnIndex(headers, /schedule of value/i),
                 location: findColumnIndex(headers, /^location$/i),
-                costItem: findColumnIndex(headers, /cost item/i),
+                costItem: findOptionalColumnIndex(headers, /cost item/i),
                 contractAmount: findColumnIndex(headers, /contract amount/i),
                 startDate: findColumnIndex(headers, /start date/i),
                 endDate: findColumnIndex(headers, /end date/i),
@@ -1470,7 +1470,11 @@ exports.ProjectJob = class ProjectJob {
     
             await fillSearchDropdownCell(colMap.scope, CONTRACT_DATA.scope, 'Scope');
             await fillSearchDropdownCell(colMap.budgetCategory, CONTRACT_DATA.budgetCategory, 'Budget Category');
-            await fillSearchDropdownCell(colMap.costItem, CONTRACT_DATA.costItem, 'Cost Item');
+            if (colMap.costItem !== null) {
+                await fillSearchDropdownCell(colMap.costItem, CONTRACT_DATA.costItem, 'Cost Item');
+            } else {
+                Logger.info('TC47_NEW_UI: Cost Item column not present in this grid variant — skipping');
+            }
     
             await page.keyboard.press('Escape');
             await page.waitForTimeout(300);

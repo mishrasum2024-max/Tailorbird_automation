@@ -103,7 +103,11 @@ exports.BudgetJob = class BudgetJob {
         }
         if (bestIdx >= 0) {
             await items.nth(bestIdx).click();
-            await this.page.waitForLoadState('networkidle');
+            await this.page.waitForLoadState('domcontentloaded').catch(() => {});
+            await Promise.race([
+                this.page.waitForLoadState('networkidle'),
+                this.page.waitForTimeout(15000),
+            ]);
             await this.page.waitForTimeout(2000);
             Logger.success(`Selected property (prefix match): ${propertyName}`);
             return true;

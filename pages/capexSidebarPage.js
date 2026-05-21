@@ -21,7 +21,19 @@ class CapexSidebarPage {
     async gotoCapexWithPropertyId(propertyId) {
         const base = process.env.DASHBOARD_URL || 'https://beta.tailorbird.com/financials/capex';
         const url = `${base.split('?')[0]}?propertyId=${propertyId}`;
-        await this.page.goto(url, { waitUntil: 'domcontentloaded' });
+        try {
+            await this.page.goto(url, { waitUntil: 'domcontentloaded' });
+        } catch (e) {
+            const msg = String(e?.message || '');
+            if (msg.includes('ERR_ABORTED') || msg.includes('interrupted by another navigation')) {
+                Logger.info('gotoCapexWithPropertyId: navigation aborted by in-progress app redirect — waiting to settle then retrying');
+                await this.page.waitForLoadState('domcontentloaded').catch(() => {});
+                await this.page.waitForTimeout(2500);
+                await this.page.goto(url, { waitUntil: 'domcontentloaded' });
+            } else {
+                throw e;
+            }
+        }
         await expect(this.page).toHaveURL(new RegExp(`financials/capex\\?propertyId=${propertyId}`));
         await this.waitForCapexShellReady();
     }
@@ -115,12 +127,20 @@ class CapexSidebarPage {
                 indexByHeader[h] = allHeaderTexts.findIndex((v) => v === h);
             });
             const hasLeadingBlankHeader = allHeaderTexts.length > 0 && allHeaderTexts[0] === '';
+            // The grid renders a blank expand-button column (leading) and an Actions column (trailing)
+            // in separate DOM containers from the data cells.  Data rows therefore have fewer cells
+            // than total columnheaders.  Compute the expected data-cell count so the shift is always
+            // exactly -1 whenever the leading blank header is present.
+            const trailingActionsCount = allHeaderTexts[allHeaderTexts.length - 1] === 'Actions' ? 1 : 0;
+            const expectedDataCells = allHeaderTexts.length
+                - (hasLeadingBlankHeader ? 1 : 0)
+                - trailingActionsCount;
 
             const rows = Array.from(gridRoot.querySelectorAll('[role="row"]'))
                 .map((rowEl) => Array.from(rowEl.querySelectorAll('[role="gridcell"]')).map((c) => clean(c.textContent || '')))
                 .filter((cells) => cells.length > 0)
                 .map((cells) => {
-                    const shift = (hasLeadingBlankHeader && cells.length === allHeaderTexts.length - 1) ? -1 : 0;
+                    const shift = (hasLeadingBlankHeader && cells.length === expectedDataCells) ? -1 : 0;
                     const row = {};
                     headers.forEach((h) => {
                         const idx = indexByHeader[h];
@@ -480,8 +500,12 @@ class CapexSidebarPage {
         rows.slice(0, 30).forEach((row) => {
             textColumns.forEach((col) => {
                 const value = String(row[col] || '').trim();
-                // Assert only when field is actually available in dataset.
-                if ((availability.get(col) || 0) > 0) expect(value.length).toBeGreaterThan(0);
+                // 'Category' is optional — only some rows carry a category code.
+                // TC255 validates the category code format for rows that have one.
+                // Only assert non-empty for columns required on every row (e.g. Budget Category).
+                if (col !== 'Category' && (availability.get(col) || 0) > 0) {
+                    expect(value.length).toBeGreaterThan(0);
+                }
             });
 
             moneyColumns.forEach((col) => {
@@ -765,11 +789,44 @@ class CapexSidebarPage {
             return { available: false, reason: 'No parent-child numeric rollup candidates found' };
         });
 
-        if (!rollup.available) return rollup;
-        Logger.info(`Rollup candidate => parent:${rollup.parentName}, parentCurrentBudget:${rollup.parentCurrentBudget}, childSum:${rollup.childSum}, childCount:${rollup.childCount}`);
-        expect(Math.round(rollup.parentCurrentBudget * 100) / 100).toBe(Math.round(rollup.childSum * 100) / 100);
-        Logger.success('Rollup arithmetic validated for one parent-child set');
-        return rollup;
+        if (rollup.available) {
+            Logger.info(`Rollup candidate => parent:${rollup.parentName}, parentCurrentBudget:${rollup.parentCurrentBudget}, childSum:${rollup.childSum}, childCount:${rollup.childCount}`);
+            expect(Math.round(rollup.parentCurrentBudget * 100) / 100).toBe(Math.round(rollup.childSum * 100) / 100);
+            Logger.success('Rollup arithmetic validated for one parent-child set');
+            return rollup;
+        }
+
+        // Flat-grid fallback: validate Total row has a non-negative aggregate value
+        // that is >= any individual visible data row (the aggregate can never be less
+        // than a component).  This works with virtual-scroll grids where not all rows
+        // are in the DOM simultaneously.
+        Logger.info(`Tree rollup unavailable (${rollup.reason}); validating Total-row aggregate (flat grid)`);
+        const { rows } = await this.getVisibleRowsMapped();
+        expect(rows.length, 'CapEx grid must have at least one visible row').toBeGreaterThan(0);
+
+        const dataRows = rows.filter((r) => String(r['Budget Category'] || '').trim() !== 'Total');
+        const totalRow = rows.find((r) => String(r['Budget Category'] || '').trim() === 'Total');
+        expect(totalRow, 'TC254: flat-grid CapEx must have a Total summary row').toBeDefined();
+
+        const totalCurrentBudget = this.parseMoney(totalRow['Current Budget']);
+        expect(
+            !Number.isNaN(totalCurrentBudget) && totalCurrentBudget > 0,
+            `TC254: Total row must have a positive non-zero Current Budget (got ${totalRow['Current Budget']})`
+        ).toBeTruthy();
+
+        const maxRowBudget = dataRows.reduce((max, r) => {
+            const v = this.parseMoney(r['Current Budget']);
+            return (!Number.isNaN(v) && v > max) ? v : max;
+        }, 0);
+        if (maxRowBudget > 0) {
+            expect(
+                totalCurrentBudget,
+                `TC254: Total row Current Budget (${totalCurrentBudget}) must be >= max individual row budget (${maxRowBudget})`
+            ).toBeGreaterThanOrEqual(maxRowBudget);
+            Logger.success(`TC254 flat-grid rollup: Total Current Budget (${totalCurrentBudget}) >= max individual row (${maxRowBudget}) ✓`);
+        }
+
+        return { available: true, parentName: 'Total row (flat grid)' };
     }
 
     async validateMixedJobTypeBoundaryBestEffort() {
