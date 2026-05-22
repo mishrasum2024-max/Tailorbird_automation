@@ -1079,6 +1079,57 @@ test.describe('Verify Change order tab', () => {
         await expect(coCreateButton(page)).toBeVisible({ timeout: 15000 });
     });
 
+    test('@regression @changeOrderAndinvoice TC274 - Reject change order confirmation with whitespace-only title', async () => {
+        await settleChangeOrderWorkspace(page, 2000);
+
+        // Create the CO stub — navigates to /change-orders/:id
+        const coBtn = coCreateButton(page);
+        await coBtn.waitFor({ state: 'visible', timeout: 20000 });
+        await coBtn.click();
+        await page.waitForURL(/change-orders/, { timeout: 20000 });
+
+        // Fill title with whitespace + dot
+        const titleInput = page.getByPlaceholder('Enter title').first();
+        await titleInput.waitFor({ state: 'visible', timeout: 15000 });
+        await titleInput.fill('      .');
+        await titleInput.blur().catch(() => {});
+        await page.waitForTimeout(500);
+
+        // Attempt to progress through the CO confirmation flow (Review Changes → Confirm Changes)
+        const reviewBtn = page.getByRole('button', { name: /Review Changes/i });
+        const reviewBtnVisible = await reviewBtn.isVisible({ timeout: 5000 }).catch(() => false);
+        if (reviewBtnVisible) {
+            const reviewBtnEnabled = await reviewBtn.isEnabled({ timeout: 2000 }).catch(() => false);
+            if (reviewBtnEnabled) {
+                await reviewBtn.click({ force: true });
+                await page.waitForTimeout(3000);
+
+                // If "Confirm Changes" appeared, Review Changes succeeded with the whitespace title — that is the bug.
+                const confirmChangesVisible = await page
+                    .getByRole('button', { name: /Confirm Changes/i })
+                    .isVisible({ timeout: 3000 })
+                    .catch(() => false);
+                expect(
+                    confirmChangesVisible,
+                    'Bug: change order Review Changes succeeded with whitespace-only title "      ." — app must reject titles that are blank or contain only whitespace/punctuation.',
+                ).toBe(false);
+            }
+            // If Review Changes was disabled → correct (validation blocked it)
+        }
+
+        // Additionally: URL must still be on the CO detail page (not navigated to list)
+        const urlAfter = page.url();
+        const navigatedToList = !/change-orders\/\d+/.test(urlAfter) && /change-orders/.test(urlAfter);
+        expect(
+            navigatedToList,
+            `Bug: navigated away from CO detail (${urlAfter}) after attempting to confirm with whitespace-only title.`,
+        ).toBe(false);
+
+        // Clean up — go back to CO list
+        await invoicePage.goBackToChangeOrderList().catch(() => page.goBack().catch(() => {}));
+        await expect(page).toHaveURL(/change.order/i, { timeout: 10000 }).catch(() => {});
+    });
+
     test('TC160 @regression @missingCO @changeOrderAndinvoice : Missing — list probe search then clear restores grid chrome', async () => {
         await settleChangeOrderWorkspace(page, 2000);
         const search = coWorkspaceListSearch(page);

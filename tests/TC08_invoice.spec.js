@@ -1000,5 +1000,57 @@ test.describe('Verify Invoice tab', () => {
         });
     });
 
+    test('@regression @changeOrderAndinvoice TC273 - Reject invoice confirmation with whitespace-only title', async () => {
+        await invoicePage.navigateToInvoiceTab();
+
+        // Create the invoice stub — navigates to /invoices/:id
+        await invoicePage.clickAddInvoice();
+        const invoiceDetailUrl = page.url();
+        await expect(page).toHaveURL(/\/invoices\//, { timeout: 15000 });
+
+        // Fill title with whitespace + dot and a valid amount
+        const titleInput = page.locator('input[placeholder="Enter title"]').first();
+        await titleInput.waitFor({ state: 'visible', timeout: 10000 });
+        await titleInput.fill('      .');
+        await invoicePage.fillInvoiceAmount('1000');
+        await page.waitForTimeout(500);
+
+        // Attempt to confirm the invoice
+        const confirmBtn = page.getByRole('button', { name: /confirm invoice/i });
+        if (await confirmBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+            await confirmBtn.click({ force: true });
+        } else {
+            // Fallback: look for any save/submit button on the invoice form
+            const saveBtn = page.getByRole('button').filter({ hasText: /save|submit/i }).first();
+            if (await saveBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+                await saveBtn.click({ force: true });
+            }
+        }
+
+        await page.waitForTimeout(4000);
+        const urlAfter = page.url();
+
+        // If the URL navigated away from the invoice detail page, the invoice was confirmed — that is the bug.
+        const confirmedAndLeft = !urlAfter.includes('/invoices/');
+        expect(
+            confirmedAndLeft,
+            `Bug: invoice was confirmed with whitespace-only title "      ." — navigated to ${urlAfter} — app must reject titles that are blank or contain only whitespace/punctuation.`,
+        ).toBe(false);
+
+        // Validate that the title field shows an invalid state (optional reinforcement)
+        const titleInvalid = await titleInput.evaluate(el =>
+            el.getAttribute('aria-invalid') === 'true' ||
+            (el.closest('[class*="Input"]') || el.closest('[class*="Field"]') || document.body)
+                .querySelector('[class*="error" i], [class*="invalid" i]') !== null
+        ).catch(() => false);
+        if (!titleInvalid) {
+            console.log('[TC129] Note: title input did not expose aria-invalid — form may rely on server-side validation.');
+        }
+
+        // Clean up — go back to invoice list
+        await invoicePage.goBackToInvoiceList().catch(() => page.goBack().catch(() => {}));
+        await expect(page).toHaveURL(/tab=invoices/, { timeout: 10000 }).catch(() => {});
+    });
+
 });
 

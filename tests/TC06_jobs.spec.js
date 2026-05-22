@@ -964,4 +964,66 @@ test.describe('Verify Create Project and Add Job flow', () => {
         });
     });
 
+    test('@regression @projectAndJob TC272 - Reject job creation with whitespace-only title', async () => {
+        await openJobsWorkspaceFromLeftNav(page);
+        await projectPage.openCreateJobModal();
+
+        const jobModal = page
+            .locator('section[role="dialog"][data-modal-content="true"], [role="dialog"]')
+            .filter({ has: page.getByPlaceholder('Enter job title') })
+            .last();
+
+        // Fill title with whitespace + dot; all other required fields valid to isolate title validation
+        await jobModal.getByPlaceholder('Enter job title').fill('      .');
+
+        const jobTypeDropdown = jobModal.getByPlaceholder('Select job type');
+        await jobTypeDropdown.click();
+        await page.waitForTimeout(400);
+        const capexOption = page.getByRole('option', { name: /Capex/i }).first();
+        if (await capexOption.isVisible({ timeout: 3000 }).catch(() => false)) {
+            await capexOption.click();
+        }
+
+        const financialTypeDropdown = jobModal.getByPlaceholder('Select Contract or PO')
+            .or(jobModal.getByRole('combobox', { name: /Financial Type/i })).first();
+        await financialTypeDropdown.click();
+        await page.waitForTimeout(400);
+        const contractOption = page.getByRole('option', { name: /^Contract$/i }).first();
+        if (await contractOption.isVisible({ timeout: 3000 }).catch(() => false)) {
+            await contractOption.click();
+        }
+
+        const vendorDropdown = jobModal.getByRole('textbox', { name: 'Vendor' }).first();
+        if (await vendorDropdown.isVisible({ timeout: 2000 }).catch(() => false)) {
+            await vendorDropdown.click();
+            await vendorDropdown.fill('Sumit');
+            await page.waitForTimeout(600);
+            const vendorOption = page.getByRole('option').first();
+            if (await vendorOption.isVisible({ timeout: 3000 }).catch(() => false)) {
+                await vendorOption.click();
+            }
+        }
+
+        const urlBefore = page.url();
+        await projectPage.submitBtn.click().catch(() => {});
+        await page.waitForTimeout(3000);
+        const urlAfter = page.url();
+
+        // If the URL navigated to a job detail page, the job was created — that is the bug.
+        const navigatedToJob = urlAfter !== urlBefore && /\/jobs\//.test(urlAfter);
+        expect(
+            navigatedToJob,
+            `Bug: job was created with whitespace-only title "      ." — navigated to ${urlAfter} — app must reject titles that are blank or contain only whitespace/punctuation.`,
+        ).toBe(false);
+
+        // Modal must still be open (validation blocked the submit)
+        const modalStillOpen = await jobModal.isVisible({ timeout: 2000 }).catch(() => false);
+        expect(
+            modalStillOpen,
+            'Create Job modal should stay open when the title is whitespace-only.',
+        ).toBe(true);
+
+        await projectPage.closeJobModalIfOpen();
+    });
+
 });

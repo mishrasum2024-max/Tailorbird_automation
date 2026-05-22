@@ -1,4 +1,4 @@
-/** TC04 — Properties. MCP + screenshots: `mcp-reference-screenshots-tc04/`. */
+﻿/** TC04 â€” Properties. MCP + screenshots: `mcp-reference-screenshots-tc04/`. */
 require('dotenv').config();
 const { test, expect } = require('@playwright/test');
 const PropertiesHelper = require('../pages/properties');
@@ -77,7 +77,7 @@ test.afterAll(async () => {
 test.describe('PROPERTY FLOW TEST SUITE', () => {
 
   test('@sanity @mandatory @regression @property @contract TC48 - Validate Property Export Functionality and New Property Creation', async () => {
-    await test.step('Table View — BirdTable toolbar (Export) is available', async () => {
+    await test.step('Table View â€” BirdTable toolbar (Export) is available', async () => {
       await prop.changeView(testData.viewName);
     });
 
@@ -104,7 +104,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
       const fromDisk = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
       expect(
         fromDisk.propertyName,
-        'propertyData.json must record the property name from this run — empty or mismatch means create flow did not complete.',
+        'propertyData.json must record the property name from this run â€” empty or mismatch means create flow did not complete.',
       ).toBe(name);
 
       const downloadPath = path.join(process.cwd(), 'downloads', 'property.json');
@@ -241,7 +241,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
     await prop.goto(tcTakeoffsStartUrl);
     await prop.goToProperties();
     const propertyName = 'Harbor Bay at MacDill_Liberty Cove (Sample Property 1)';
-    console.log(`🔎 Using property name: ${propertyName}`);
+    console.log(`ðŸ”Ž Using property name: ${propertyName}`);
     await prop.changeView('Table View');
     await prop.searchProperty(propertyName);
     await prop.viewDetailsButton();
@@ -261,7 +261,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
     await prop.goto(tcTakeoffsStartUrl);
     await prop.goToProperties();
     const propertyName = 'Harbor Bay at MacDill_Liberty Cove (Sample Property 1)';
-    console.log(`🔎 Using property name: ${propertyName}`);
+    console.log(`ðŸ”Ž Using property name: ${propertyName}`);
     await prop.changeView('Table View');
     await prop.searchProperty(propertyName);
     await prop.viewDetailsButton();
@@ -276,12 +276,12 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
     // await prop.addColumnTakeOff('exterior');
   });
 
-  test('@sanity @regression @property TC58 – asset viewer', async () => {
+  test('@sanity @regression @property TC58 â€“ asset viewer', async () => {
     await prop.goto(tcTakeoffsStartUrl);
     await prop.goToProperties();
     test.setTimeout(480000)
 
-    const log = (...msg) => console.log("🔹", ...msg)
+    const log = (...msg) => console.log("ðŸ”¹", ...msg)
     const testStartedAt = Date.now();
     const TIME_BUDGET_MS = 420000; // keep headroom before Playwright test timeout
 
@@ -291,7 +291,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
         throw new Error('TC25 time budget exceeded before completion');
       }
       log("Waiting network idle")
-      try { await page.waitForLoadState("networkidle", { timeout: 500 }); } catch { log("⚠ networkidle skipped") }
+      try { await page.waitForLoadState("networkidle", { timeout: 500 }); } catch { log("âš  networkidle skipped") }
       await page.waitForTimeout(200)
     }
 
@@ -301,9 +301,9 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
       try {
         await wait();
         await fn();
-        log(`✔ DONE: ${label}`);
+        log(`âœ” DONE: ${label}`);
       } catch (e) {
-        log(`❗ FAIL: ${label}`, e.message);
+        log(`â— FAIL: ${label}`, e.message);
         throw e;
       }
     };
@@ -312,7 +312,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
       const c = await page.locator('img').count();
       if (c > 0) {
         const src = await page.locator('img').first().getAttribute('src');
-        log(`IMAGE FOUND → ${src}`);
+        log(`IMAGE FOUND â†’ ${src}`);
         return src;
       }
       log('NO IMAGE FOUND');
@@ -335,7 +335,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
       if (Date.now() - testStartedAt > TIME_BUDGET_MS) {
         throw new Error('Timed out waiting for Asset Viewer panel id');
       }
-      log("aria-controls not ready → retrying")
+      log("aria-controls not ready â†’ retrying")
       await page.waitForTimeout(250)
       id = await tab.getAttribute("aria-controls")
     }
@@ -349,7 +349,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
     await wait()
 
     const labels = await pnl.locator("label").allTextContents()
-    log("DROPDOWN LABELS DETECTED →", labels)
+    log("DROPDOWN LABELS DETECTED â†’", labels)
 
     const seenLabels = new Set()
     const dropdowns = labels
@@ -371,7 +371,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
     let REPORT = []
 
     for (const dd of dropdowns) {
-      log(`PROCESSING DROPDOWN → ${dd.name}`)
+      log(`PROCESSING DROPDOWN â†’ ${dd.name}`)
 
       let out = { dropdown: dd.name, options: [], results: [], disabled: false }
 
@@ -379,14 +379,14 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
 
       let count = await dd.input.count()
       log(`INPUT COUNT for '${dd.name}' = ${count}`)
-      if (count === 0) { log("DROPDOWN INPUT NOT FOUND → SKIPPING"); REPORT.push(out); continue }
+      if (count === 0) { log("DROPDOWN INPUT NOT FOUND â†’ SKIPPING"); REPORT.push(out); continue }
       const loc = dd.input
 
       let enabled = await loc.isEnabled().catch(() => false)
-      log(`DROPDOWN '${dd.name}' ENABLED? →`, enabled)
+      log(`DROPDOWN '${dd.name}' ENABLED? â†’`, enabled)
 
       if (!enabled) {
-        log(` '${dd.name}' DISABLED — FULL SKIP`)
+        log(` '${dd.name}' DISABLED â€” FULL SKIP`)
         out.disabled = true
         REPORT.push(out)
         continue
@@ -399,7 +399,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
 
       log(`OPTION COUNT for '${dd.name}' = ${total}`)
 
-      if (total === 0) { log("ZERO OPTIONS → SKIP"); REPORT.push(out); continue }
+      if (total === 0) { log("ZERO OPTIONS â†’ SKIP"); REPORT.push(out); continue }
       if (total > 20) { log("VISIBILITY FILTER ACTIVATED"); list = list.filter({ has: page.locator("[role='option']:visible") }); total = await list.count() }
       const maxOptionsPerDropdown = 8;
       if (total > maxOptionsPerDropdown) {
@@ -414,20 +414,20 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
           break;
         }
 
-        log(`\n DROPDOWN '${dd.name}' → OPTION ${i + 1}/${total}`)
+        log(`\n DROPDOWN '${dd.name}' â†’ OPTION ${i + 1}/${total}`)
 
         await wait()
 
         let raw = await list.nth(i).innerText().catch(() => null)
         if (!raw) {
-          log("FAILED TO READ OPTION TEXT → SKIP")
+          log("FAILED TO READ OPTION TEXT â†’ SKIP")
           continue
         }
 
         let option = raw.split("\n")[0].trim()
         out.options.push(option)
 
-        log(`Selecting option → ${option}`)
+        log(`Selecting option â†’ ${option}`)
 
         let before = await getImg()
         await safe(`Clicking option '${option}'`, async () => await list.nth(i).click({ force: true }))
@@ -435,7 +435,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
         let after = await getImg()
 
         if (before === null && after === null) {
-          log(`NO IMAGE FOR '${option}' → SKIPPED BUT CONTINUING`)
+          log(`NO IMAGE FOR '${option}' â†’ SKIPPED BUT CONTINUING`)
           out.results.push({ option, image: "none" })
         }
         else if (before !== after) {
@@ -458,7 +458,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
 
     expect(REPORT.length, 'Asset viewer panel must expose at least one dropdown').toBeGreaterThan(0);
 
-    log("\n EXPORTING FULL JSON LOG → dropdown_report.json")
+    log("\n EXPORTING FULL JSON LOG â†’ dropdown_report.json")
 
     await page.evaluate(r => {
       const a = document.createElement("a")
@@ -538,7 +538,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
     if (await noUnitsState.isVisible({ timeout: 3000 }).catch(() => false)) {
       await expect(noUnitsState).toBeVisible();
       await expect(locationsPanel.getByText(/Use \+ or Create Button to create one/i)).toBeVisible();
-      test.skip(true, 'Units tab is in empty-state — add-row scenario requires existing units');
+      test.skip(true, 'Units tab is in empty-state â€” add-row scenario requires existing units');
     }
     await expect(
       locationsPanel.getByRole("columnheader", { name: /Unit Name/i }).first(),
@@ -557,7 +557,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
       if (await noUnitsAfterAdd.isVisible({ timeout: 3000 }).catch(() => false)) {
         await expect(noUnitsAfterAdd).toBeVisible();
         await expect(locationsPanel.getByText(/Use \+ or Create Button to create one/i)).toBeVisible();
-        test.skip(true, 'Units panel still in empty-state after add attempt — export assertions not testable');
+        test.skip(true, 'Units panel still in empty-state after add attempt â€” export assertions not testable');
       }
       const firstUnitCell = locationsPanel
         .locator('[role="treegrid"] [role="row"] [role="gridcell"]')
@@ -612,7 +612,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
       k.toLowerCase().includes("unit")
     );
 
-    console.log(" Detected Unit Column →", unitColumn);
+    console.log(" Detected Unit Column â†’", unitColumn);
     expect(unitColumn).toBeTruthy();
 
     const rowsWithUnit = parsedData.filter(row => row[unitColumn] === unitName);
@@ -627,10 +627,10 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Regression bundle: single Properties load + merged negative/edge/bench + multi-screen visuals (was TC04-reg-01…07, bench, vis).
+  // Regression bundle: single Properties load + merged negative/edge/bench + multi-screen visuals (was TC04-reg-01â€¦07, bench, vis).
   // Saves runtime vs per-test navigation. Add baselines: npx playwright test tests/TC04_properties.spec.js -g TC04-reg-bundle --update-snapshots
   // -------------------------------------------------------------------------
-  test.describe('PROPERTY REGRESSION — search, filters, injection, visuals', () => {
+  test.describe('PROPERTY REGRESSION â€” search, filters, injection, visuals', () => {
     test('TC62 @regression @property Negative, edge, bench, visuals (single Properties load)', async () => {
       const searchMask = page.locator('main input[placeholder="Search..."], main [role="textbox"][placeholder="Search..."]').first();
       const shotMain = {
@@ -756,6 +756,60 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
         await expect(page.getByPlaceholder('Search...').first()).toBeVisible({ timeout: 15_000 });
       });
     });
+  });
+
+  test('@regression @property TC270 - Reject property creation with "      ." name', async () => {
+    await prop.goToProperties();
+    await page.waitForLoadState('networkidle');
+
+    await page.locator(propertyLocators.createPropertyButton).first().waitFor({ state: 'visible', timeout: 15000 });
+    await page.locator(propertyLocators.createPropertyButton).first().click({ force: true });
+
+    const dialog = prop.addPropertyDialog();
+    await dialog.waitFor({ state: 'visible', timeout: 15000 });
+
+    // Fill all required fields with valid data; name is intentionally whitespace + dot
+    await prop.nameInput.fill('      .');
+    await prop.cityInput.fill(city);
+    await prop.stateInput.fill(state);
+    await prop.zipInput.fill(zip);
+    await prop.addressInput.fill(address);
+    const addressOpt = page.locator(propertyLocators.addressSuggestion(address)).first();
+    await addressOpt.waitFor({ state: 'attached', timeout: 30000 });
+    await addressOpt.evaluate(el => el.click());
+    await prop.typeInput.fill(garden_style);
+    const typeOpt = page.locator(propertyLocators.propertyTypeOption(garden_style)).first();
+    await typeOpt.waitFor({ state: 'attached', timeout: 15000 });
+    await typeOpt.evaluate(el => el.click());
+    await page.waitForTimeout(1000);
+
+    await dialog.getByRole('button', { name: /\badd property\b/i }).click();
+
+    // If the success toast appears the property was created â€” that is the bug; this assertion fails it.
+    const wasCreated = await page
+      .locator('.mantine-Notification-root')
+      .filter({ hasText: uiMessages.propertyCreatedToastTitle })
+      .filter({ hasText: uiMessages.propertyCreatedToastMessage })
+      .first()
+      .waitFor({ state: 'visible', timeout: 8000 })
+      .then(() => true)
+      .catch(() => false);
+
+    expect(
+      wasCreated,
+      'Bug: property was created with whitespace-only name "      ." â€” the app must reject names that are blank or contain only whitespace/punctuation.',
+    ).toBe(false);
+
+    // Dialog must remain open because validation should have blocked the submit
+    await expect(
+      dialog,
+      'Add Property dialog should stay open when the name is whitespace-only.',
+    ).toBeVisible({ timeout: 3000 });
+
+    // Clean up
+    await dialog.getByRole('button', { name: 'Cancel' }).click().catch(() => {});
+    await page.keyboard.press('Escape').catch(() => {});
+    await expect(dialog.first()).toBeHidden({ timeout: 10000 }).catch(() => {});
   });
 
 });
