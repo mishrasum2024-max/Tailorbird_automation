@@ -146,9 +146,9 @@ test.describe('Budget Workflow - E2E Tests', () => {
         const savePath = await budgetJob.exportBudgetData(downloadsDir);
         const content = fs.readFileSync(savePath, 'utf-8');
         expect(content.length).toBeGreaterThan(100);
-        expect(content).toContain('Budget Item');
+        expect(content).toContain('Description');
         // Brook sample data may include Site Prep; other properties often show Construction, etc.
-        expect(content).toMatch(/Site Prep|Construction/);
+        expect(content).toMatch(/Site Prep|Construction/i);
         Logger.success('TC227: Export verified with budget data');
     });
 

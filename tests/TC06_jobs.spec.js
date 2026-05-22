@@ -1005,7 +1005,7 @@ test.describe('Verify Create Project and Add Job flow', () => {
         }
 
         const urlBefore = page.url();
-        await projectPage.submitBtn.click().catch(() => {});
+        await projectPage.submitBtn.click().catch(() => { });
         await page.waitForTimeout(3000);
         const urlAfter = page.url();
 

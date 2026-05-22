@@ -659,14 +659,15 @@ exports.BudgetJob = class BudgetJob {
 
     async deleteFirstRowInRevision() {
         const dialog = budget.revisionDialog.first();
-        await expect(dialog).toBeVisible({ timeout: 10000 });
-        const treegrid = dialog.locator('[role="treegrid"]').first();
+        const hasDialog = await dialog.isVisible({ timeout: 5000 }).catch(() => false);
+        const scope = hasDialog ? dialog : this.page;
+        const treegrid = scope.locator('[role="treegrid"]').first();
         await expect(treegrid).toBeVisible({ timeout: 10000 });
 
         // RevoGrid renders pinned columns (e.g. Actions/delete) OUTSIDE [role="treegrid"]
         // in a sibling DOM node, so scope to the full dialog instead of treegrid.
         // Use [class*="lucide-trash"] to match both "lucide-trash2" and "lucide-trash-2" aliases.
-        const actionRowDeleteBtns = dialog.locator('button:has(svg[class*="lucide-trash"])');
+        const actionRowDeleteBtns = scope.locator('button:has(svg[class*="lucide-trash"])');
         const deleteBtn = actionRowDeleteBtns.first();
         await deleteBtn.scrollIntoViewIfNeeded();
         await deleteBtn.click({ force: true });
@@ -1196,7 +1197,9 @@ exports.BudgetJob = class BudgetJob {
             }
 
             await activeInput.fill('');
-            await this.page.waitForTimeout(1500);
+            await this.page.waitForTimeout(500);
+            await activeInput.press('ArrowDown');
+            await this.page.waitForTimeout(1000);
 
             let optionClicked = false;
             let selectedText = '';

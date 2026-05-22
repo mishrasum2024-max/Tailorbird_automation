@@ -1538,13 +1538,24 @@ exports.ProjectJob = class ProjectJob {
             };
     
             await trySave();
-    
+            await page.waitForTimeout(2000);
+
             await expect(
                 contractsGrid.locator(`div[role="gridcell"]:has-text("${CONTRACT_DATA.scope}")`).first()
-            ).toBeVisible({ timeout: 10000 });
-            await expect(
-                contractsGrid.locator(`div[role="gridcell"]:has-text("${CONTRACT_DATA.budgetCategory}")`).first()
-            ).toBeVisible({ timeout: 10000 });
+            ).toBeVisible({ timeout: 20000 });
+
+            const bcCellLocator = contractsGrid
+                .locator(`div[role="gridcell"]:has-text("${CONTRACT_DATA.budgetCategory}")`)
+                .first();
+            const bcOk = await bcCellLocator.isVisible({ timeout: 15000 }).catch(() => false);
+            if (!bcOk) {
+                Logger.info(`Budget Category "${CONTRACT_DATA.budgetCategory}" missing after save — retrying fill`);
+                await fillSearchDropdownCell(colMap.budgetCategory, CONTRACT_DATA.budgetCategory, 'Budget Category (retry)');
+                await page.waitForTimeout(400);
+                await trySave();
+                await page.waitForTimeout(2000);
+            }
+            await expect(bcCellLocator).toBeVisible({ timeout: 20000 });
     
             await assertSovCellShows15000(25000);
             Logger.info('Schedule of Value cell shows 15000 (formatted or plain)');
@@ -1592,7 +1603,47 @@ exports.ProjectJob = class ProjectJob {
             await contractsTabBack.click();
             await page.waitForLoadState('load');
             await page.waitForTimeout(1000);
-    
+
+            // Delete any auto-created incomplete rows (no scope) before finalizing
+            Logger.info('Pre-finalize: purging any incomplete contract rows...');
+            let purgeGuard = 0;
+            while (purgeGuard < 10) {
+                await page.waitForTimeout(300);
+                const rowsWithDelete = contractsGrid.locator('div[role="row"]').filter({
+                    has: page.locator('button:has(svg.lucide-trash-2), button:has(svg.lucide-trash2), button[aria-label="Delete Row"]'),
+                });
+                const total = await rowsWithDelete.count().catch(() => 0);
+                let deleted = false;
+                for (let ri = 0; ri < total; ri++) {
+                    const row = rowsWithDelete.nth(ri);
+                    const hasScope = await row
+                        .locator(`div[role="gridcell"]:has-text("${CONTRACT_DATA.scope}")`)
+                        .isVisible({ timeout: 500 })
+                        .catch(() => false);
+                    if (!hasScope) {
+                        const delBtn = row
+                            .locator('button:has(svg.lucide-trash-2), button:has(svg.lucide-trash2), button[aria-label="Delete Row"]')
+                            .first();
+                        if (await delBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
+                            await delBtn.click({ force: true });
+                            await page.waitForTimeout(400);
+                            const confirmDel = page
+                                .locator(".mantine-Popover-dropdown button:has-text('Delete'), [role='dialog'] button:has-text('Delete')")
+                                .first();
+                            if (await confirmDel.isVisible({ timeout: 3000 }).catch(() => false)) {
+                                await confirmDel.click({ force: true });
+                            }
+                            await page.waitForTimeout(800);
+                            deleted = true;
+                            break;
+                        }
+                    }
+                }
+                if (!deleted) break;
+                purgeGuard++;
+            }
+            Logger.info(`Pre-finalize purge done (${purgeGuard} row(s) removed).`);
+
             const finalizeBtn = page.getByRole('button', { name: /Finalize Contract/i });
             const finalizeResponsePromise = page
                 .waitForResponse((response) => {
