@@ -523,9 +523,18 @@ exports.ProjectPage = class ProjectPage {
                 selectedOption = cliOption;
                 Logger.info(`Using option from CLI: ${selectedOption}`);
             } else {
-                const randomIndex = Math.floor(Math.random() * optionTexts.length);
-                selectedOption = optionTexts[randomIndex];
-                Logger.info(`Randomly selected option: ${selectedOption}`);
+                // Prefer the option that matches the intended property name — never pick randomly,
+                // which could silently select The Brook or another property and break contract assertions.
+                selectedOption =
+                    optionTexts.find(t => t.trim() === currentPropertyName.trim()) ??
+                    optionTexts.find(t => t.includes(currentPropertyName.trim())) ??
+                    optionTexts[0];
+                if (!selectedOption) {
+                    throw new Error(
+                        `Property "${currentPropertyName}" not found in dropdown (available: [${optionTexts.join(', ')}])`
+                    );
+                }
+                Logger.info(`Selected matching property: ${selectedOption}`);
             }
 
             await dropdown.getByRole('option', { name: selectedOption }).click();

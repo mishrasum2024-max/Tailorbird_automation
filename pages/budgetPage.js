@@ -519,9 +519,13 @@ exports.BudgetJob = class BudgetJob {
 
                 const draftOption = budget.draftOption;
                 if (await draftOption.isVisible({ timeout: 2000 }).catch(() => false)) {
+                    // Hover to trigger CSS :hover so the delete button becomes interactive.
+                    // force:true click bypasses hover, so the button stays opacity:0 and unresponsive.
+                    await draftOption.hover().catch(() => {});
+                    await this.page.waitForTimeout(400);
                     const deleteBtn = draftOption.locator('button').first();
-                    if (await deleteBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
-                        await deleteBtn.click({ force: true });
+                    if (await deleteBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+                        await deleteBtn.click();
                         await this.page.waitForTimeout(500);
                         const deleteDialog = budget.deleteDraftDialog;
                         if (await deleteDialog.isVisible({ timeout: 3000 }).catch(() => false)) {
@@ -531,15 +535,7 @@ exports.BudgetJob = class BudgetJob {
                         }
                         await versionDropdown.click({ force: true });
                         await this.page.waitForTimeout(300);
-                    } else {
-                        await this.page.keyboard.press('Escape');
-                        await this.page.waitForTimeout(300);
-                        await versionDropdown.click({ timeout: 5000 });
-                        await this.page.waitForTimeout(500);
-                        await this._deleteDraftViaManageVersions();
                     }
-                } else {
-                    await this._deleteDraftViaManageVersions();
                 }
             } catch (e) {
                 Logger.info(`ensureReviseEnabled: ${e.message}`);
@@ -628,7 +624,9 @@ exports.BudgetJob = class BudgetJob {
         await this.clickReviseBudgets();
         await this.page.waitForLoadState('networkidle');
         await this.page.waitForTimeout(3000);
-        await this.page.waitForURL(/budget-revision|financials\/budget/, { timeout: 15000 }).catch(() => {});
+        // Must match the revision-editor URL — the old pattern /financials\/budget/ matched the
+        // current page immediately, so waitForURL resolved without any navigation ever happening.
+        await this.page.waitForURL(/budget-revision/, { timeout: 15000 });
         await this.page.waitForLoadState('networkidle');
         await this.page.waitForTimeout(2000);
 
@@ -1207,8 +1205,15 @@ exports.BudgetJob = class BudgetJob {
             Logger.info(`Dropdown options visible: ${roleCount}`);
 
             if (roleCount > 0) {
-                selectedText = await roleOptions.first().textContent().catch(() => '');
-                await roleOptions.first().click();
+                // Prefer an option whose text matches the requested category
+                const exactMatch = roleOptions.filter({ hasText: new RegExp(`^${category}$`, 'i') }).first();
+                const partialMatch = roleOptions.filter({ hasText: category }).first();
+                const nonEmpty = roleOptions.filter({ hasNotText: /^\s*$/ }).first();
+                const hasExact = await exactMatch.isVisible({ timeout: 500 }).catch(() => false);
+                const hasPartial = !hasExact && await partialMatch.isVisible({ timeout: 500 }).catch(() => false);
+                const targetOption = hasExact ? exactMatch : hasPartial ? partialMatch : nonEmpty;
+                selectedText = (await targetOption.textContent().catch(() => '')).trim();
+                await targetOption.click();
                 optionClicked = true;
                 Logger.success(`Selected category: "${selectedText}"`);
             }
@@ -1217,8 +1222,14 @@ exports.BudgetJob = class BudgetJob {
                 const comboboxOptions = this.page.locator('[data-combobox-option]:visible');
                 const optCount = await comboboxOptions.count().catch(() => 0);
                 if (optCount > 0) {
-                    selectedText = await comboboxOptions.first().textContent().catch(() => '');
-                    await comboboxOptions.first().click();
+                    const exactMatch = comboboxOptions.filter({ hasText: new RegExp(`^${category}$`, 'i') }).first();
+                    const partialMatch = comboboxOptions.filter({ hasText: category }).first();
+                    const nonEmpty = comboboxOptions.filter({ hasNotText: /^\s*$/ }).first();
+                    const hasExact = await exactMatch.isVisible({ timeout: 500 }).catch(() => false);
+                    const hasPartial = !hasExact && await partialMatch.isVisible({ timeout: 500 }).catch(() => false);
+                    const targetOption = hasExact ? exactMatch : hasPartial ? partialMatch : nonEmpty;
+                    selectedText = (await targetOption.textContent().catch(() => '')).trim();
+                    await targetOption.click();
                     optionClicked = true;
                     Logger.success(`Selected category option: "${selectedText}"`);
                 }

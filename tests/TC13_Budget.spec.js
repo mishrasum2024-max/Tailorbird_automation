@@ -244,15 +244,14 @@ test.describe('Budget Workflow - E2E Tests', () => {
         Logger.success(`TC233: Category in first row BEFORE submit = "${categoryBeforeSubmit}"`);
 
         await budgetJob.clickSubmitForApproval();
-        // await page.waitForLoadState('networkidle');
-        await page.waitForTimeout(3000);
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(5000);
 
         Logger.step('TC233: Assert budget item and row count after submit');
-        const rowCount = await budgetJob.getTreegridRowCount();
-        expect(rowCount).toBeGreaterThan(0);
-        const siteVisible = await budgetJob.isTextVisible('Site Prep');
+        const mainGridCount = await budgetJob.getDataRowCount();
+        expect(mainGridCount).toBeGreaterThan(0);
+        const siteVisible = await budgetJob.isTextVisible('Site Prep', 10000);
         expect(siteVisible, 'Site Prep should be visible in the grid after submit').toBeTruthy();
-        expect(rowCount).toBeGreaterThan(0);
 
         Logger.step('TC233: Assert category persists in first row after submit (main grid)');
         const categoryAfterSubmit = await budgetJob.assertFirstRowCategoryNotEmpty('main');

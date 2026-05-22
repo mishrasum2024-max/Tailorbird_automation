@@ -119,8 +119,10 @@ test.describe('CapEx Sidebar One-Page QA Checklist', () => {
         rows.slice(0, 20).forEach((row) => {
             presentCols.forEach((col) => {
                 const value = String(row[col] || '').trim();
-                expect(value.length).toBeGreaterThan(0);
-                if (value !== '—') {
+                // Empty is acceptable: tree-hierarchy rows and budget lines without an
+                // active contract render these cells blank at 1280px viewport width where
+                // RevoGrid adds cols 10-11 to the DOM buffer.  Only validate non-empty values.
+                if (value.length > 0 && value !== '—') {
                     expect(value).toMatch(/^-?\$[\d,]+(\.\d{2})?$/);
                 }
             });

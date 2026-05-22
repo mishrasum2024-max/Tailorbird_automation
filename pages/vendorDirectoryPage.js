@@ -70,11 +70,21 @@ class VendorDirectoryPage {
         try {
             Logger.step(`Searching for: ${searchTerm}`);
 
+            // Use aria-rowcount when available — it reflects the real filtered total,
+            // not the ~20-row virtual-scroll DOM slice that fluctuates by 2-6 rows
+            // depending on scroll position (causing spurious "24 >= 26" failures).
+            const grid = this.page.locator('[role="grid"], [role="treegrid"]').first();
+            const getCount = async () => {
+                const aria = await grid.getAttribute('aria-rowcount').catch(() => null);
+                if (aria !== null && parseInt(aria, 10) > 0) return parseInt(aria, 10);
+                return await this.locators.dataRows.count();
+            };
+
             let beforeCount;
             await expect
                 .poll(
                     async () => {
-                        beforeCount = await this.locators.dataRows.count();
+                        beforeCount = await getCount();
                         return beforeCount;
                     },
                     { timeout: 20000, intervals: [500, 1000, 2000] }
@@ -85,7 +95,7 @@ class VendorDirectoryPage {
             await this.page.keyboard.press('Enter');
             await this.page.waitForTimeout(900);
 
-            const afterCount = await this.locators.dataRows.count();
+            const afterCount = await getCount();
             expect(afterCount).toBeLessThanOrEqual(beforeCount);
             if (afterCount > 0) {
                 const firstRow = this.locators.dataRows.first();
@@ -94,8 +104,8 @@ class VendorDirectoryPage {
 
             await this.locators.searchInput.fill('');
             await this.page.keyboard.press('Enter');
-            await this.page.waitForTimeout(1200);
-            const restored = await this.locators.dataRows.count();
+            await this.page.waitForTimeout(1500);
+            const restored = await getCount();
             expect(restored).toBeGreaterThanOrEqual(afterCount);
             Logger.success('Search filter and clear verified');
         } catch (e) {

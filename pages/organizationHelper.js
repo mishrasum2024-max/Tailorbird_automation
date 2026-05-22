@@ -208,6 +208,10 @@ class OrganizationHelper {
         // Wait for the invite dialog to close — signals the backend accepted the invite
         await invitePanel.dialogRoot.waitFor({ state: "hidden", timeout: 40_000 }).catch(() => {});
       }
+      // Reload to ensure the member table reflects the backend's latest state.
+      // Without this, a slow CI server may not push the new member row before the 120s wait expires.
+      await this.page.reload({ waitUntil: 'networkidle' }).catch(() => {});
+      await this.page.waitForTimeout(1500);
       const inviteDialog = invitePanel.dialogRoot;
       if (
         await inviteDialog
