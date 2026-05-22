@@ -4,7 +4,7 @@ function capexSidebarLocators(page) {
         propertySearchInput: page.getByRole('textbox', { name: /Search properties\.\.\./i }).first(),
         propertyMenuItems: page.getByRole('menuitem'),
         yearDropdown: page.getByRole('textbox', { name: /\d{4}/ }).first(),
-        gridSearchInput: page.getByRole('textbox', { name: /Search\.\.\./i }).first(),
+        gridSearchInput: page.getByPlaceholder(/Search/i).first(),
 
         columnHeaders: page.locator('[role="columnheader"]'),
         gridRows: page.locator('[role="row"]').filter({ has: page.locator('[role="gridcell"]') }),

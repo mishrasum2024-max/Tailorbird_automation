@@ -196,11 +196,6 @@ test.describe('Verify Create Project and Add Job flow', () => {
 
     test('TC77 @regression @mandatory @projectAndJob @contract : Add contract from left Jobs menu and finalize contract with new flow', async () => {
         const captureDebugScreenshot = async (label) => {
-            const safeLabel = String(label || 'debug').replace(/[^a-zA-Z0-9_-]/g, '_');
-            const fileName = `test-results/tc47_new_${safeLabel}_${Date.now()}.png`;
-            await page.screenshot({ path: fileName, fullPage: true });
-            Logger.info(`Saved debug screenshot: ${fileName}`);
-            return fileName;
         };
 
         try {
@@ -767,6 +762,7 @@ test.describe('Verify Create Project and Add Job flow', () => {
             throw error;
         }
     });
+
 
     // Writes tabs disabled state for TC08 / TC09; run after `npm run Test:mandatory` when executing invoice/CO suites (see `npm run Test:depsForInvoiceCo`).
     test('TC78 @regression @projectAndJob @mandatory : Check if Invoice and Change Order tabs are disabled - persist for spec 8 and 9', async () => {

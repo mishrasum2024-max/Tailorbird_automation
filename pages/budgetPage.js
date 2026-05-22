@@ -624,11 +624,12 @@ exports.BudgetJob = class BudgetJob {
         await this.clickReviseBudgets();
         await this.page.waitForLoadState('networkidle');
         await this.page.waitForTimeout(3000);
-        // Must match the revision-editor URL — the old pattern /financials\/budget/ matched the
-        // current page immediately, so waitForURL resolved without any navigation ever happening.
-        await this.page.waitForURL(/budget-revision/, { timeout: 15000 });
+        // The revision editor may open via URL navigation (/budget-revision/) or as an in-place
+        // dialog/drawer (no URL change). Soft-wait for URL, then confirm via verifyRevisionEditorOpen().
+        await this.page.waitForURL(/budget-revision/, { timeout: 15000 }).catch(() => {});
         await this.page.waitForLoadState('networkidle');
         await this.page.waitForTimeout(2000);
+        await this.verifyRevisionEditorOpen();
 
         const createRev = budget.createBudgetRevisionBtn;
         if (await createRev.first().isVisible({ timeout: 5000 }).catch(() => false)) {

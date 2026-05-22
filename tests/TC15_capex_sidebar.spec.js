@@ -465,11 +465,11 @@ test.describe('CapEx Sidebar One-Page QA Checklist', () => {
         // ── 3. Navigate to CapEx without propertyId → "Select a Property" shown ──
         const baseUrl = 'https://beta.tailorbird.com/financials/capex';
         await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
-        await page.waitForTimeout(2000);
         const selectBtn = page.getByRole('button', { name: /Select a Property/i }).first();
         const breadcrumb = page.locator('text=Select a Property').first();
-        const selectVisible = await selectBtn.isVisible({ timeout: 8000 }).catch(() => false)
-            || await breadcrumb.isVisible({ timeout: 3000 }).catch(() => false);
+        // Use waitFor (retrying) instead of isVisible (instant) — React needs time to mount
+        const selectVisible = await selectBtn.waitFor({ state: 'visible', timeout: 15000 }).then(() => true).catch(() => false)
+            || await breadcrumb.waitFor({ state: 'visible', timeout: 5000 }).then(() => true).catch(() => false);
         expect(selectVisible).toBeTruthy();
         Logger.info('TC268 step3: CapEx without propertyId shows "Select a Property" ✓');
 

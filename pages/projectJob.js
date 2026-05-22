@@ -1334,7 +1334,8 @@ exports.ProjectJob = class ProjectJob {
                 await page.waitForTimeout(700);
             };
     
-            const revoActivateCol = (logicalCol) => (logicalCol >= 4 ? logicalCol + 2 : logicalCol);
+            // RevoGrid now uses 0-based aria-colindex matching the logical column index directly.
+            const revoActivateCol = (logicalCol) => logicalCol;
     
             const fillSearchDropdownCell = async (logicalCol, value, label) => {
                 const primaryAc = revoActivateCol(logicalCol);

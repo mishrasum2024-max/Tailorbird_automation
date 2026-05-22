@@ -71,8 +71,16 @@ class OrganizationHelper {
 
   async goToOrganization() {
     const navbar = this.page.locator('.mantine-AppShell-navbar');
-    await navbar.locator('.mantine-Avatar-root').last().waitFor({ state: 'visible', timeout: 20_000 });
-    await navbar.locator('.mantine-Avatar-root').last().click();
+    const avatar = navbar.locator('.mantine-Avatar-root').last();
+    // CI can be slow to render the user avatar after the app shell appears — try once, reload, retry
+    const avatarVisible = await avatar.waitFor({ state: 'visible', timeout: 30_000 }).then(() => true).catch(() => false);
+    if (!avatarVisible) {
+      this.log('Avatar not found after 30s — reloading page and retrying');
+      await this.page.reload({ waitUntil: 'domcontentloaded' });
+      await this.page.waitForTimeout(3000);
+      await avatar.waitFor({ state: 'visible', timeout: 30_000 });
+    }
+    await avatar.click();
 
     const menu = this.page
       .locator('[role="menu"]')
