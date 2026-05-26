@@ -74,12 +74,12 @@ test.describe('Finalize bid / contract — full UI chain', () => {
         await budgetJob.uploadFileInRevision(budgetDataPath);
         await budgetJob.ensureSubmitEnabledAfterUpload();
         await budgetJob.clickSubmitForApproval();
-        await page.waitForTimeout(2000);
+        await page.waitForTimeout(8000); // extra time for backend to index budget categories before navigating away
         await expect(page).toHaveURL(/financials\/budget|budget-revision/i, { timeout: 15000 });
 
         await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'load' });
         await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(1500);
+        await page.waitForTimeout(3000);
 
         await projectPage.navigateToProjects();
         await projectPage.openCreateProjectModal();
@@ -141,12 +141,12 @@ test.describe('Finalize bid / contract — full UI chain', () => {
         const contractEstimatedBudget = Math.floor(Math.random() * (10000 - 1000 + 1)) + 1000;
         await projectPage.openContractsTab();
         await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(2000);
+        await page.waitForTimeout(5000);
 
         const editContractBtn = page.getByRole('button', { name: /^Edit$/i }).first();
         await expect(editContractBtn).toBeVisible({ timeout: 15000 });
         await editContractBtn.click({ force: true });
-        await page.waitForTimeout(800);
+        await page.waitForTimeout(2000);
 
         const editContractDialog = page.getByRole('dialog').filter({ hasText: /Edit Contract Overview/i }).first();
         await expect(editContractDialog).toBeVisible({ timeout: 15000 });
@@ -167,7 +167,7 @@ test.describe('Finalize bid / contract — full UI chain', () => {
         await expect(saveChangesBtn).toBeEnabled({ timeout: 10000 });
         await saveChangesBtn.click();
         await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(2000);
+        await page.waitForTimeout(5000);
 
         const lastCreatedJobPath = path.join(__dirname, '../data/lastCreatedJob.json');
         fs.writeFileSync(
