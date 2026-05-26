@@ -469,6 +469,7 @@ class CapexSidebarPage {
     }
 
     async validateAll11ColumnCases() {
+        await this.waitForGridReady();
         const { rows } = await this.getVisibleRowsMapped();
         expect(rows.length).toBeGreaterThan(0);
 

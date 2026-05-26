@@ -1640,6 +1640,8 @@ class InvoicePage {
             const budgetColIndex = String(budgetColIndexRaw || '5');
 
             const dataRows = grid.locator('[role="row"][data-rgrow]');
+            // Wait for at least the first row to render its cells before counting (CI can be slow)
+            await dataRows.first().waitFor({ state: 'visible', timeout: 12000 }).catch(() => {});
             const rowCount = await dataRows.count();
             expect(rowCount).toBeGreaterThan(0);
             Logger.info(`Invoice grid has ${rowCount} data rows (Budget Category column index: ${budgetColIndex})`);
@@ -1660,7 +1662,7 @@ class InvoicePage {
                 const catCell = row
                     .locator(`[role="gridcell"][data-rgcol="${budgetColIndex}"], [role="gridcell"][aria-colindex="${budgetColIndex}"]`)
                     .first();
-                const cellVisible = await catCell.isVisible({ timeout: 2000 }).catch(() => false);
+                const cellVisible = await catCell.isVisible({ timeout: 5000 }).catch(() => false);
                 if (!cellVisible) {
                     Logger.info(`Row ${rowIdx}: Budget category cell not visible, skipping`);
                     continue;

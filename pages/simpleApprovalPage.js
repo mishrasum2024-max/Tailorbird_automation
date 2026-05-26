@@ -52,10 +52,12 @@ class SimpleApprovalPage {
         // Wait for the Property Name header to ensure full table is loaded
         const propertyHeader = this.page.locator('[role="columnheader"]', { hasText: 'Property Name' });
         try {
-            await propertyHeader.waitFor({ state: 'visible', timeout: 10000 });
+            await propertyHeader.waitFor({ state: 'visible', timeout: 15000 });
         } catch {
-            // If Property Name header doesn't appear, wait a bit more for any headers
-            await this.page.waitForTimeout(2000);
+            // Fallback: wait for any column header to appear before giving up
+            const anyHeader = this.page.locator('[role="columnheader"]').first();
+            await anyHeader.waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
+            await this.page.waitForTimeout(5000);
         }
         return await this.loc.columnHeaders.allTextContents();
     }

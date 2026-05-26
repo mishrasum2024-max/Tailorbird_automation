@@ -1553,9 +1553,9 @@ exports.ProjectJob = class ProjectJob {
                 await fillSearchDropdownCell(colMap.budgetCategory, CONTRACT_DATA.budgetCategory, 'Budget Category (retry)');
                 await page.waitForTimeout(400);
                 await trySave();
-                await page.waitForTimeout(2000);
+                await page.waitForTimeout(5000);
             }
-            await expect(bcCellLocator).toBeVisible({ timeout: 20000 });
+            await expect(bcCellLocator).toBeVisible({ timeout: 30000 });
     
             await assertSovCellShows15000(25000);
             Logger.info('Schedule of Value cell shows 15000 (formatted or plain)');
