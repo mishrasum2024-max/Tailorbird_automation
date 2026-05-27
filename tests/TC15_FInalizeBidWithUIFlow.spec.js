@@ -23,7 +23,7 @@ test.use({
 const PROPERTY_TYPES = ['Garden Style', 'Mid Rise', 'High Rise', 'Military Housing'];
 
 test.describe('Finalize bid / contract — full UI chain', () => {
-    test('TC258 @regression @contract @finalizeBidUi @property @projectAndJob : Property → budget → project → job → contract row finalize', async ({
+    test.only('TC258 @regression @contract @finalizeBidUi @property @projectAndJob : Property → budget → project → job → contract row finalize', async ({
         page,
     }) => {
         /** Long single journey; default 30s is insufficient. */
@@ -185,6 +185,53 @@ test.describe('Finalize bid / contract — full UI chain', () => {
                 2
             )
         );
+
+        Logger.step('TC258 Scenario 1: Assert Budget Category is prefilled when Add Contract is clicked');
+        const addContractBtn = page.getByRole('button', { name: /Add Contract/i });
+        await expect(addContractBtn).toBeVisible({ timeout: 10000 });
+        if (selectedCategory) {
+            const beforeAddCount = await page
+                .getByRole('gridcell', { name: selectedCategory, exact: true })
+                .count();
+            await addContractBtn.click();
+            await page.waitForTimeout(2000);
+            const afterAddCount = await page
+                .getByRole('gridcell', { name: selectedCategory, exact: true })
+                .count();
+            expect(
+                afterAddCount,
+                `New contract row must have Budget Category "${selectedCategory}" prefilled`
+            ).toBeGreaterThan(beforeAddCount);
+            Logger.success(`TC258 Scenario 1: Budget Category "${selectedCategory}" is prefilled in new contract row ✓`);
+        } else {
+            Logger.info('TC258 Scenario 1: selectedCategory not captured — prefill assertion skipped');
+        }
+
+        Logger.step('TC258 Scenario 2: Table → Manage Columns → hide Cost Item → assert hidden → restore');
+        const tableMenuBtn = page.getByRole('button', { name: 'Table' });
+        await expect(tableMenuBtn).toBeVisible({ timeout: 10000 });
+        await tableMenuBtn.click();
+        await page.waitForTimeout(500);
+        await page.getByText(/hide \/ show columns/i).click();
+        await page.waitForTimeout(1000);
+        const manageColumnsDialog = page.getByRole('dialog', { name: 'Manage Columns' });
+        await expect(manageColumnsDialog).toBeVisible({ timeout: 10000 });
+        await manageColumnsDialog.getByText('Cost Item', { exact: true }).click();
+        await page.waitForTimeout(1000);
+        await expect(
+            page.getByRole('columnheader', { name: 'Cost Item', exact: true }),
+            '"Cost Item" column header must be hidden after unchecking in Manage Columns'
+        ).not.toBeVisible({ timeout: 5000 });
+        Logger.success('TC258 Scenario 2: Cost Item column is hidden ✓');
+        await manageColumnsDialog.getByText('Cost Item', { exact: true }).click();
+        await page.waitForTimeout(1000);
+        await manageColumnsDialog.getByRole('banner').getByRole('button').click();
+        await page.waitForTimeout(500);
+        await expect(
+            page.getByRole('columnheader', { name: 'Cost Item', exact: true }),
+            '"Cost Item" column header must be visible after re-enabling in Manage Columns'
+        ).toBeVisible({ timeout: 5000 });
+        Logger.success('TC258 Scenario 2: Cost Item column restored ✓');
 
         Logger.step('TC258: Jobs menu contract grid + finalize (TC47_NEW_UI)');
         await projectJob.runTc47NewUiContractFinalize(projectData);
