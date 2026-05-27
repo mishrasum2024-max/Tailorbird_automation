@@ -1078,26 +1078,14 @@ exports.ProjectJob = class ProjectJob {
             await expect(matchingRows.first()).toBeVisible({ timeout: 15000 });
             const targetRow = (await matchingRows.count()) > 1 ? matchingRows.last() : matchingRows.first();
             await expect(targetRow).toBeVisible({ timeout: 10000 });
-            const rowIndex = await targetRow.evaluate((el) => {
-                const gridRoot = el.closest('[role="treegrid"]');
-                if (!gridRoot) return 0;
-                const bodyRows = [...gridRoot.querySelectorAll('[role="row"]')].filter((row) => {
-                    if (row.querySelector('[role="columnheader"]')) return false;
-                    const cells = row.querySelectorAll('[role="gridcell"]');
-                    if (!cells.length) return false;
-                    if (cells.length === 1 && row.querySelector('input[type="checkbox"]')) return false;
-                    return true;
-                });
-                return Math.max(0, bodyRows.indexOf(el));
-            });
-            const jobsJobGrid = page
-                .locator('[role="treegrid"], revo-grid')
-                .filter({ has: page.getByRole('columnheader', { name: 'Title', exact: true }) });
-            const viewDetailsBtn = jobsJobGrid.locator('button:has(svg.lucide-eye)').nth(rowIndex);
-            await expect(viewDetailsBtn).toBeVisible({ timeout: 15000 });
-            await viewDetailsBtn.scrollIntoViewIfNeeded();
-            await viewDetailsBtn.click();
-            await page.waitForLoadState('load');
+
+            // View Details button removed; the ID column now has a clickable link to job details.
+            const jobIdLink = targetRow.locator('a[href*="/jobs/"]').first();
+            await expect(jobIdLink).toBeVisible({ timeout: 15000 });
+            await jobIdLink.scrollIntoViewIfNeeded();
+            await jobIdLink.click();
+            await page.waitForURL(/\/jobs\/\d+/, { timeout: 30000 });
+            await page.waitForLoadState('domcontentloaded');
     
             Logger.step('Pre-flight: delete existing bids (required before contract UI work / finalize)...');
             await this.deleteExistingBids();

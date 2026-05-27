@@ -225,8 +225,8 @@ test.describe('Verify Create Project and Add Job flow', () => {
             await searchInput.fill(targetJobName);
             await page.waitForTimeout(1500);
 
-            // Data rows and the Actions column are separate; use "View Details" by row index. Restrict to
-            // this project so we do not open "Mall in Noida" / "Mall in noida" from another project.
+            // View Details button removed; the ID column now has a clickable link to job details.
+            // Restrict to this project so we do not open "Mall in Noida" / "Mall in noida" from another project.
             const matchingRows = page
                 .getByRole('row')
                 .filter({ hasText: targetJobName })
@@ -234,27 +234,13 @@ test.describe('Verify Create Project and Add Job flow', () => {
             await expect(matchingRows.first()).toBeVisible({ timeout: 15000 });
             const targetRow = (await matchingRows.count()) > 1 ? matchingRows.last() : matchingRows.first();
             await expect(targetRow).toBeVisible({ timeout: 10000 });
-            const rowIndex = await targetRow.evaluate((el) => {
-                const gridRoot = el.closest('[role="treegrid"]');
-                if (!gridRoot) return 0;
-                const bodyRows = [...gridRoot.querySelectorAll('[role="row"]')].filter((row) => {
-                    if (row.querySelector('[role="columnheader"]')) return false;
-                    const cells = row.querySelectorAll('[role="gridcell"]');
-                    if (!cells.length) return false;
-                    // Pinned checkbox column uses single-checkbox rows; skip so index matches Actions column.
-                    if (cells.length === 1 && row.querySelector('input[type="checkbox"]')) return false;
-                    return true;
-                });
-                return Math.max(0, bodyRows.indexOf(el));
-            });
-            const jobsJobGrid = page
-                .locator('[role="treegrid"], revo-grid')
-                .filter({ has: page.getByRole('columnheader', { name: 'Title', exact: true }) });
-            const viewDetailsBtn = jobsJobGrid.locator('button:has(svg.lucide-eye)').nth(rowIndex);
-            await expect(viewDetailsBtn).toBeVisible({ timeout: 15000 });
-            await viewDetailsBtn.scrollIntoViewIfNeeded();
-            await viewDetailsBtn.click();
-            await page.waitForLoadState('networkidle');
+
+            const jobIdLink = targetRow.locator('a[href*="/jobs/"]').first();
+            await expect(jobIdLink).toBeVisible({ timeout: 15000 });
+            await jobIdLink.scrollIntoViewIfNeeded();
+            await jobIdLink.click();
+            await page.waitForURL(/\/jobs\/\d+/, { timeout: 30000 });
+            await page.waitForLoadState('domcontentloaded');
 
             Logger.step('Opening Contracts tab and importing contract CSV...');
             const contractsTab = page.getByRole('tab', { name: 'Contracts' });
@@ -271,6 +257,9 @@ test.describe('Verify Create Project and Add Job flow', () => {
             await expect(contractsJobPanel).toBeVisible({ timeout: 15000 });
             const innerContractPanel = contractsJobPanel.getByRole('tabpanel', { name: 'Contract' }).first();
             await expect(innerContractPanel).toBeVisible({ timeout: 15000 });
+            // Wait for grid toolbar to finish loading (skeleton → real content) before any grid interaction
+            await innerContractPanel.getByRole('button', { name: /^Import$/i })
+                .waitFor({ state: 'visible', timeout: 30000 });
 
 
             // const editContractBtn = page.getByRole('button', { name: /^Edit$/i }).first();
@@ -440,8 +429,13 @@ test.describe('Verify Create Project and Add Job flow', () => {
                         }
                     }
 
-                    await page.waitForLoadState('networkidle');
-                    await page.waitForTimeout(3000);
+                    // Data appears immediately after Done click; networkidle never fires in this SPA.
+                    await innerContractPanel
+                        .locator('div[role="row"][data-rgrow]')
+                        .first()
+                        .waitFor({ state: 'visible', timeout: 30000 })
+                        .catch(() => {}); // If row doesn't appear here, retry logic below handles it
+                    await page.waitForTimeout(800);
                 };
 
                 await uploadAndClickDone();
@@ -463,10 +457,8 @@ test.describe('Verify Create Project and Add Job flow', () => {
 
             Logger.step('Editing imported contract, filling missing values and finalizing...');
 
-            const editContractBtn1 = page.getByRole('button', { name: /^Edit$/i }).first();
-            await expect(editContractBtn1).toBeVisible({ timeout: 10000 });
-            await editContractBtn1.click({ force: true });
-            await page.waitForTimeout(1200);
+            // "Edit" button removed from grid toolbar in new UI; grid is directly editable by double-click.
+            // Clicking it would open "Edit Contract Overview" dialog (wrong) and block grid cells.
 
             const contractsGrid = innerContractPanel.locator('revo-grid[role="treegrid"]').first();
             await expect(contractsGrid).toBeVisible({ timeout: 15000 });
@@ -742,7 +734,8 @@ test.describe('Verify Create Project and Add Job flow', () => {
                     await confirmBtn.click();
                 }
 
-                await page.waitForLoadState("networkidle");
+                // await page.waitForLoadState("networkidle");
+                await page.waitForTimeout(5000);
                 const finalizeResponse = await finalizeResponsePromise;
                 if (finalizeResponse) {
                     Logger.success(`Finalize API: ${finalizeResponse.request().method()} ${finalizeResponse.url()} [${finalizeResponse.status()}]`);
