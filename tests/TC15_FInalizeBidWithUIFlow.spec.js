@@ -23,7 +23,7 @@ test.use({
 const PROPERTY_TYPES = ['Garden Style', 'Mid Rise', 'High Rise', 'Military Housing'];
 
 test.describe('Finalize bid / contract — full UI chain', () => {
-    test.only('TC258 @regression @contract @finalizeBidUi @property @projectAndJob : Property → budget → project → job → contract row finalize', async ({
+    test('TC258 @regression @contract @finalizeBidUi @property @projectAndJob : Property → budget → project → job → contract row finalize', async ({
         page,
     }) => {
         /** Long single journey; default 30s is insufficient. */
