@@ -734,6 +734,44 @@ class CapexSidebarPage {
         Logger.info('Hierarchy expand controls not visible; verified grid has populated hierarchical rows.');
     }
 
+    async validateUnassignedRowZeroValues() {
+        const { rows } = await this.getVisibleRowsMapped();
+        const unassignedRows = rows.filter(
+            (r) => String(r['Budget Category'] || '').trim().toLowerCase() === 'unassigned'
+        );
+        if (unassignedRows.length === 0) {
+            return { available: false, reason: 'No "Unassigned" row visible in current grid viewport' };
+        }
+
+        const moneyColumns = [
+            'Original Budget',
+            'Budget Revision',
+            'Current Budget',
+            'Budget Remaining',
+            'Original Contract Amount',
+            'Approved Change Orders',
+            'Current Contract Amount',
+            'Remaining Contract Amount',
+            'Invoiced Amount'
+        ];
+
+        unassignedRows.forEach((row, idx) => {
+            moneyColumns.forEach((col) => {
+                const raw = String(row[col] || '').trim();
+                const parsed = this.parseMoney(raw);
+                if (!Number.isNaN(parsed)) {
+                    expect(
+                        Math.abs(parsed),
+                        `Unassigned row[${idx}] column "${col}" expected $0 but got "${raw}"`
+                    ).toBe(0);
+                }
+                Logger.info(`Unassigned row "${col}": "${raw || '—'}" → ${Number.isNaN(parsed) ? 'empty/dash' : '$' + parsed} ✓`);
+            });
+        });
+
+        return { available: true, count: unassignedRows.length };
+    }
+
     async validateProjectJobScopeRollupsBestEffort() {
         Logger.step('Rollup check: scanning tree rows with aria levels');
         const rollup = await this.page.evaluate(() => {

@@ -61,6 +61,12 @@ test.describe('CapEx Sidebar One-Page QA Checklist', () => {
         Logger.step('TC254 start: validating formula set for CapEx sidebar');
         await capexPage.ensureNonZeroDataOrFail();
         await capexPage.validateAll11ColumnCases();
+        const unassigned = await capexPage.validateUnassignedRowZeroValues();
+        if (!unassigned.available) {
+            Logger.info(`TC254: Unassigned row check — ${unassigned.reason}`);
+        } else {
+            Logger.success(`TC254: Unassigned row (${unassigned.count} found) — all numeric values are $0 ✓`);
+        }
         const rollup = await capexPage.validateProjectJobScopeRollupsBestEffort();
         if (!rollup.available) {
             Logger.info(`TC254: Rollup check unavailable (flat grid, no tree hierarchy) — ${rollup.reason}`);
