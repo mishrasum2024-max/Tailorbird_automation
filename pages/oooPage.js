@@ -238,7 +238,194 @@ class OOOPage {
         return text;
     }
 
+    // ── State assertion helpers ──────────────────────────────────────────
+
+    /**
+     * Asserts the UI is in the OOO active state:
+     *   - active state banner visible
+     *   - Deactivate button visible
+     * Pass { withDateLine: true } to also assert the auto-deactivation date line is visible.
+     */
+    async assertIsActive({ withDateLine = false } = {}) {
+        await expect(this.loc.activeStatePara, 'Active state banner must be visible').toBeVisible({ timeout: 10000 });
+        await expect(this.loc.btn_deactivate, '"Deactivate OOO mode" button must be visible').toBeVisible({ timeout: 5000 });
+        if (withDateLine) {
+            await expect(
+                this.page.getByText(/Auto-deactivates on/i),
+                'Auto-deactivation date line must be visible'
+            ).toBeVisible({ timeout: 10000 });
+        }
+        Logger.success('[OOO] Active state confirmed — banner visible, deactivate visible');
+    }
+
+    /**
+     * Asserts the UI is fully reset to the inactive (post-deactivation) state:
+     *   - active banner hidden
+     *   - Activate button visible and disabled
+     *   - Deactivate button hidden
+     *   - date field empty
+     */
+    async assertIsInactive() {
+        await expect(this.loc.activeStatePara, 'Active banner must be HIDDEN').toBeHidden({ timeout: 10000 });
+        await expect(this.loc.btn_activate, '"Activate OOO mode" must be VISIBLE').toBeVisible({ timeout: 5000 });
+        await expect(this.loc.btn_activate, '"Activate OOO mode" must be DISABLED — no delegate selected').toBeDisabled({ timeout: 5000 });
+        await expect(this.loc.btn_deactivate, '"Deactivate OOO mode" must be HIDDEN').toBeHidden({ timeout: 5000 });
+        await expect(this.loc.input_deactivateDate, 'Date field must be empty after reset').toHaveValue('', { timeout: 5000 });
+        Logger.success('[OOO] Inactive state confirmed — banner hidden, activate disabled, deactivate hidden, date cleared');
+    }
+
+    /**
+     * Asserts the active banner text content. Returns the banner text.
+     * Options:
+     *   - roleName: asserts the banner contains this name
+     *   - isRole: asserts the banner contains "(role)"
+     */
+    async assertActiveBanner({ roleName = null, isRole = false } = {}) {
+        const text = await this.getActiveStateText();
+        expect(text, 'Active banner must contain the delegation phrase').toContain('Active — delegating approvals to');
+        if (roleName) {
+            expect(text, `Active banner must contain "${roleName}"`).toContain(roleName);
+        }
+        if (isRole) {
+            expect(text, 'Active banner must contain the "(role)" label').toContain('(role)');
+        }
+        Logger.success(`[OOO] Active banner confirmed: "${text}"`);
+        return text;
+    }
+
+    /**
+     * Calls getOooApiState() and asserts all fields for a role delegation.
+     * apiDate behaviour:
+     *   - not passed (undefined): deactivate_at is not checked
+     *   - null: asserts deactivate_at IS null (no date was set)
+     *   - "YYYY-MM-DD" string: asserts deactivate_at starts with that string (no timezone shift)
+     * Returns the raw api state object.
+     */
+    async assertRoleDelegationApi({ roleName, apiDate = undefined }) {
+        const apiState = await this.getOooApiState();
+        expect(apiState.success, 'API success flag must be true').toBe(true);
+        expect(apiState.ooo, 'API ooo must not be null').not.toBeNull();
+        expect(apiState.ooo.id, 'API ooo.id must be assigned').toBeTruthy();
+        expect(apiState.ooo.delegate_role_name, `API delegate_role_name must be "${roleName}"`).toBe(roleName);
+        expect(apiState.ooo.delegate_user_id, 'API delegate_user_id must be null for role delegation').toBeNull();
+        if (apiDate === null) {
+            expect(apiState.ooo.deactivate_at, 'API deactivate_at must be null when no date was set').toBeNull();
+        } else if (apiDate !== undefined) {
+            expect(apiState.ooo.deactivate_at, 'API deactivate_at must not be null when a date was set').not.toBeNull();
+            expect(
+                apiState.ooo.deactivate_at.startsWith(apiDate),
+                `TIMEZONE SHIFT DETECTED: set "${apiDate}", stored "${apiState.ooo.deactivate_at}"`
+            ).toBe(true);
+        }
+        const dateLog = apiDate === undefined ? 'not checked' : (apiDate === null ? 'none' : apiDate);
+        Logger.success(`[OOO] Role delegation API confirmed — id=${apiState.ooo.id}, role="${roleName}", date=${dateLog}`);
+        return apiState;
+    }
+
+    /**
+     * Calls getOooApiState() and asserts all fields for a user delegation.
+     * Pass apiDate (YYYY-MM-DD) to also assert deactivate_at starts with that date.
+     * Returns the raw api state object.
+     */
+    async assertUserDelegationApi({ apiDate = null } = {}) {
+        const apiState = await this.getOooApiState();
+        expect(apiState.success, 'API success flag must be true').toBe(true);
+        expect(apiState.ooo, 'API ooo must not be null').not.toBeNull();
+        expect(apiState.ooo.id, 'API ooo.id must be assigned').toBeTruthy();
+        expect(apiState.ooo.delegate_user_id, 'API delegate_user_id must not be null for user delegation').not.toBeNull();
+        expect(apiState.ooo.delegate_role_name, 'API delegate_role_name must be null for user delegation').toBeNull();
+        if (apiDate) {
+            expect(apiState.ooo.deactivate_at, 'API deactivate_at must not be null when a date was set').not.toBeNull();
+            expect(
+                apiState.ooo.deactivate_at.startsWith(apiDate),
+                `TIMEZONE SHIFT DETECTED: set "${apiDate}", stored "${apiState.ooo.deactivate_at}"`
+            ).toBe(true);
+        }
+        Logger.success(`[OOO] User delegation API confirmed — id=${apiState.ooo.id}, delegate_user_id=${apiState.ooo.delegate_user_id}, date=${apiDate || 'none'}`);
+        return apiState;
+    }
+
+    /**
+     * Types a user email into the team member search field and selects the matching option.
+     * Uses pressSequentially so the dropdown filters correctly by the typed text.
+     */
+    async searchAndSelectUser(userEmail) {
+        Logger.step(`[OOO] Searching for and selecting user "${userEmail}"`);
+        await this.loc.input_teamMember.click();
+        await this.loc.input_teamMember.pressSequentially(userEmail, { delay: 50 });
+        await this.page.waitForTimeout(800);
+        const option = this.page.getByRole('option', { name: userEmail });
+        await option.waitFor({ state: 'visible', timeout: 10000 });
+        await option.click();
+        await expect(
+            this.loc.input_teamMember,
+            `Team member input must show "${userEmail}" after selection`
+        ).toHaveValue(userEmail, { timeout: 5000 });
+        Logger.success(`[OOO] User "${userEmail}" selected`);
+    }
+
+    /**
+     * Re-selects the team member input (3-click to select-all, then press-sequential) — use when
+     * the input already has a value and needs replacing with a different user.
+     */
+    async replaceSelectedUser(userEmail) {
+        Logger.step(`[OOO] Replacing delegate user with "${userEmail}"`);
+        await this.loc.input_teamMember.click({ clickCount: 3 });
+        await this.loc.input_teamMember.pressSequentially(userEmail, { delay: 50 });
+        await this.page.waitForTimeout(800);
+        const option = this.page.getByRole('option', { name: userEmail });
+        await option.waitFor({ state: 'visible', timeout: 10000 });
+        await option.click();
+        await expect(
+            this.loc.input_teamMember,
+            `Team member input must show "${userEmail}" after replacing`
+        ).toHaveValue(userEmail, { timeout: 5000 });
+        Logger.success(`[OOO] Delegate user replaced with "${userEmail}"`);
+    }
+
+    /**
+     * Attaches a dialog listener to catch any unexpected browser alerts during a test.
+     * Returns an object with:
+     *   - assertNoAlert(context): hard expect that no alert fired (fails with message if one did)
+     *   - message: getter for the captured alert message (null if none appeared)
+     */
+    attachAlertDetector() {
+        let alertMessage = null;
+        this.page.on('dialog', async (dialog) => {
+            alertMessage = dialog.message();
+            Logger.error(`[BUG] Unexpected browser alert: "${dialog.message()}"`);
+            await dialog.dismiss();
+        });
+        return {
+            assertNoAlert: (context = '') => {
+                expect(
+                    alertMessage,
+                    `BUG: Unexpected browser alert appeared${context ? ' — ' + context : ''}. Alert: "${alertMessage}"`
+                ).toBeNull();
+                Logger.info(`[OOO] No alert confirmed${context ? ' — ' + context : ''} ✓`);
+            },
+            get message() { return alertMessage; },
+        };
+    }
+
     // ── Convenience: full activation workflows ───────────────────────────
+
+    /**
+     * Full user delegation activation flow: ensure user mode, search + pick user,
+     * optionally fill a date, then click Activate.
+     */
+    async activateWithUser(userEmail, uiDate = null) {
+        Logger.step(`[OOO] Activating with user="${userEmail}", date="${uiDate || 'none'}"`);
+        await this.selectDelegateToUser();
+        await this.searchAndSelectUser(userEmail);
+        if (uiDate) {
+            await this.loc.input_deactivateDate.fill(uiDate);
+            await this.page.keyboard.press('Enter');
+            await this.page.waitForTimeout(500);
+        }
+        await this.clickActivateOoo();
+        Logger.success(`[OOO] Activated with user "${userEmail}"`);
+    }
 
     /** Activates OOO with a role delegate. Optionally sets a deactivation date. */
     async activateWithRole(roleName, dateStr = null) {

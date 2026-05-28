@@ -11,6 +11,8 @@ const { ProjectPage } = require('../pages/projectPage');
 const { ProjectJob } = require('../pages/projectJob');
 const { BudgetJob } = require('../pages/budgetPage');
 const PropertiesHelper = require('../pages/properties');
+const { ApprovalJob } = require('../pages/approvalPage');
+const { InvoicePage } = require('../pages/invoicePage');
 const { Logger } = require('../utils/logger');
 
 test.use({
@@ -22,8 +24,8 @@ test.use({
 
 const PROPERTY_TYPES = ['Garden Style', 'Mid Rise', 'High Rise', 'Military Housing'];
 
-test.describe('Finalize bid / contract — full UI chain', () => {
-    test('TC258 @regression @contract @finalizeBidUi @property @projectAndJob : Property → budget → project → job → contract row finalize', async ({
+test.describe.serial('Finalize bid / contract + OOO approval chain', () => {
+    test('TC258 @regression @contract @finalizeBidUi @property @projectAndJob : E2E flow to finalize contract', async ({
         page,
     }) => {
         /** Long single journey; default 30s is insufficient. */
@@ -237,5 +239,187 @@ test.describe('Finalize bid / contract — full UI chain', () => {
         await projectJob.runTc47NewUiContractFinalize(projectData);
 
         Logger.success('TC258: Full chain completed');
+    });
+
+    test('@ooo @e2e TC259-SETUP-APPROVAL-INVOICE Create an Invoice approval template with three required approvers on the TC258 property and submit a test invoice to prepare for the approval routing verification test', async ({ page }) => {
+        test.setTimeout(300000);
+        Logger.step('TC-OOO-SETUP-APPROVAL-INVOICE: Start');
+
+        const suffix = Date.now();
+
+        const propertyDataFile = path.join(__dirname, '../data/propertyData.json');
+        expect(fs.existsSync(propertyDataFile), 'data/propertyData.json must exist — TC258 must have run first').toBe(true);
+        const { propertyName } = JSON.parse(fs.readFileSync(propertyDataFile, 'utf8'));
+        expect(propertyName, 'propertyName must be populated in data/propertyData.json').toBeTruthy();
+        Logger.success(`TC-OOO-SETUP: Using property "${propertyName}" from TC258 ✓`);
+
+        const approvalJob = new ApprovalJob(page);
+        await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'domcontentloaded' });
+        await approvalJob.navigateToApprovalTab();
+        await approvalJob.navigateToApprovalTemplatesTab();
+        await approvalJob.waitForPageLoad();
+
+        const templateName = `OOO_InvTemplate_${suffix}`;
+        await approvalJob.openCreateTemplateDialog();
+        await approvalJob.fillTemplateName(templateName);
+        await approvalJob.selectTemplateType('Invoice');
+        await approvalJob.addProperty(propertyName);
+        Logger.info(`TC-OOO-SETUP: Template dialog — name="${templateName}", type=Invoice, property="${propertyName}" ✓`);
+
+        const APPROVER_TIMEOUT = 15000;
+        const approverInputs = page.getByPlaceholder('Select approver');
+        const approvers = ['sumit mishra', 'sumit test', 'Sumit Harsh'];
+        for (let i = 0; i < approvers.length; i++) {
+            const input = approverInputs.nth(i);
+            await input.waitFor({ state: 'visible', timeout: APPROVER_TIMEOUT });
+            await input.click();
+            await page.waitForTimeout(300);
+            await input.fill(approvers[i]);
+            await page.waitForTimeout(800);
+            await page.keyboard.press('ArrowDown');
+            await page.waitForTimeout(300);
+            await page.keyboard.press('Enter');
+            await page.waitForTimeout(800);
+            Logger.success(`TC-OOO-SETUP: Approver row ${i + 1} — "${approvers[i]}" ✓`);
+        }
+
+        await approvalJob.fillAmount(5000);
+        await approvalJob.checkAlwaysRequiredInTemplateDialog(3);
+        Logger.info('TC-OOO-SETUP: Amount=$5000, Always Required checked for all 3 rows ✓');
+
+        await approvalJob.submitCreateTemplate();
+        await approvalJob.searchTemplate(templateName);
+        await expect(
+            page.getByRole('row').filter({ hasText: templateName }),
+            `Template "${templateName}" must appear in the list`
+        ).toBeVisible({ timeout: 15000 });
+        await approvalJob.clearSearch();
+        Logger.success(`TC-OOO-SETUP: Template "${templateName}" confirmed in list ✓`);
+
+        const projectData = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/projectData.json'), 'utf8'));
+        const projectPage = new ProjectPage(page);
+        const projectJob = new ProjectJob(page);
+        const invoicePage = new InvoicePage(page);
+
+        await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'load' });
+        await projectPage.openProject(projectData.projectName);
+        await projectJob.navigateToJobsTab();
+        await projectJob.openJobSummary();
+        await invoicePage.navigateToInvoiceTab();
+        await page.waitForLoadState('load');
+        await page.waitForTimeout(2000);
+        Logger.info(`TC-OOO-SETUP: Opened project "${projectData.projectName}" → invoice tab ✓`);
+
+        await page.evaluate(() => {
+            document.querySelectorAll('main, .mantine-AppShell-navbar').forEach(el => { el.style.zoom = '70%'; });
+        });
+
+        const invoiceAmount = Math.floor(Math.random() * (5000 - 1000 + 1)) + 1000;
+        const invoiceResult = await invoicePage.createCompleteInvoice({
+            title: `OOO_Invoice_${suffix}`,
+            description: 'Invoice for OOO approval routing setup',
+            budgetCategory: 'Bathroom fixtures install',
+            amount: invoiceAmount,
+            confirm: true,
+        });
+
+        expect(invoiceResult.number, 'Invoice number must be assigned').toBeTruthy();
+        expect(invoiceResult.budgetCategoriesSet, 'Budget category must be set').toBeGreaterThan(0);
+        expect(invoiceResult.amountFilled, `Amount $${invoiceAmount} must be committed in grid`).toBe(true);
+        const committedDigits = (invoiceResult.amountCellText || '').replace(/\D/g, '');
+        expect(committedDigits, `Grid cell must contain amount digits`).toContain(String(invoiceAmount).replace(/\D/g, ''));
+
+        const amountMatch = (invoiceResult.amountCellText || '').match(/\$[\d,]+/);
+        const invoiceAmountFormatted = amountMatch ? amountMatch[0] : `$${invoiceAmount.toLocaleString()}`;
+        const invoiceId = (invoiceResult.number || '').match(/\d+/)?.[0] || '';
+
+        const oooChainDataPath = path.join(__dirname, '../data/oooChainData.json');
+        fs.mkdirSync(path.dirname(oooChainDataPath), { recursive: true });
+        fs.writeFileSync(oooChainDataPath, JSON.stringify({
+            invoiceId,
+            invoiceAmount,
+            invoiceAmountFormatted,
+            invoiceTitle: `OOO_Invoice_${suffix}`,
+            invoiceNumber: invoiceResult.number,
+            createdAt: new Date().toISOString(),
+        }, null, 2));
+        Logger.success(`TC-OOO-SETUP: Invoice "${invoiceResult.number}" created — ID: ${invoiceId}, amount: ${invoiceAmountFormatted}. Chain data saved ✓`);
+
+        Logger.success('TC-OOO-SETUP-APPROVAL-INVOICE PASSED');
+    });
+
+    test.describe('TC260-APPROVAL-VERIFY — verify Other user can see the created approval for OUt of Office', () => {
+        test.use({ storageState: 'OtherSessionState.json' });
+
+        test('@ooo @e2e TC-OOO-APPROVAL-VERIFY The test invoice shows up in All Approvals with the correct amount and Pending status and the Approval Details panel lists all three expected approvers with their individual statuses', async ({ page }) => {
+            test.setTimeout(120000);
+            Logger.step('TC-OOO-APPROVAL-VERIFY: Verify the setup invoice in All Approvals with all 3 approvers');
+
+            const chainDataPath = path.join(__dirname, '../data/oooChainData.json');
+            expect(fs.existsSync(chainDataPath), 'data/oooChainData.json must exist — TC-OOO-SETUP must have run first').toBe(true);
+            const { invoiceId, invoiceAmountFormatted, invoiceNumber } = JSON.parse(fs.readFileSync(chainDataPath, 'utf8'));
+            expect(invoiceId, 'invoiceId must be populated in oooChainData.json').toBeTruthy();
+            expect(invoiceAmountFormatted, 'invoiceAmountFormatted must be populated in oooChainData.json').toBeTruthy();
+            Logger.info(`TC-OOO-APPROVAL-VERIFY: Looking for ID="${invoiceId}", amount="${invoiceAmountFormatted}" ✓`);
+
+            const origin = new URL(process.env.DASHBOARD_URL).origin;
+            await page.goto(`${origin}/approvals/all-approvals`, { waitUntil: 'domcontentloaded' });
+            await page.waitForSelector('input[placeholder="Search..."]:not([data-disabled="true"])', { timeout: 30000 });
+            Logger.success('TC-OOO-APPROVAL-VERIFY: All Approvals page loaded ✓');
+
+            await page.getByPlaceholder('Search...').first().fill(invoiceId);
+            await page.waitForTimeout(2000);
+            Logger.info(`TC-OOO-APPROVAL-VERIFY: Searched for ID "${invoiceId}"`);
+
+            const invoiceRow = page.getByRole('row').filter({ hasText: invoiceId }).first();
+            await expect(invoiceRow, `Row with invoice ID "${invoiceId}" must be visible`).toBeVisible({ timeout: 15000 });
+            await expect(invoiceRow.getByText(invoiceAmountFormatted), `Amount "${invoiceAmountFormatted}" must be in the row`).toBeVisible({ timeout: 5000 });
+            Logger.success(`TC-OOO-APPROVAL-VERIFY: Row found — ID="${invoiceId}", amount="${invoiceAmountFormatted}" ✓`);
+
+            const statusCell = invoiceRow.getByRole('gridcell').filter({ hasText: /pending/i }).first();
+            await expect(statusCell, 'Status cell must show Pending').toBeVisible({ timeout: 5000 });
+            const rawStatusText = await statusCell.innerText().catch(() => statusCell.textContent());
+            const statusText = (rawStatusText.match(/(Pending Approval|Pending Assignment|Pending|Approved|Rejected)/i)?.[0] || rawStatusText).trim();
+            expect(statusText, 'Status must be a pending variant').toMatch(/pending/i);
+            Logger.success(`TC-OOO-APPROVAL-VERIFY: Status is "${statusText}" ✓`);
+
+            const viewDetailsBtn = page.getByRole('button', { name: 'View Details' }).first();
+            await expect(viewDetailsBtn, '"View Details" must be visible').toBeVisible({ timeout: 10000 });
+            await viewDetailsBtn.click();
+
+            const dialog = page.getByRole('dialog', { name: 'Approval Details' });
+            await expect(dialog, 'Approval Details dialog must open').toBeVisible({ timeout: 15000 });
+            Logger.success('TC-OOO-APPROVAL-VERIFY: Approval Details dialog opened ✓');
+
+            const expectedApprovers = ['Sumit Mishra', 'Sumit Test', 'Sumit Harsh'];
+            for (const name of expectedApprovers) {
+                await expect(dialog.getByText(name, { exact: true }), `Approver "${name}" must be listed`).toBeVisible({ timeout: 10000 });
+            }
+            Logger.success(`TC-OOO-APPROVAL-VERIFY: All 3 approvers confirmed — ${expectedApprovers.join(', ')} ✓`);
+
+            const STATUS_VALUES = ['Pending Approval', 'Pending Assignment', 'Pending', 'Skipped', 'Rejected', 'Approved'];
+            for (const name of expectedApprovers) {
+                const nameEl = dialog.getByText(name, { exact: true }).first();
+                const approverStatus = await nameEl.evaluate((el, statuses) => {
+                    let node = el;
+                    for (let i = 0; i < 6; i++) {
+                        if (!node.parentElement) break;
+                        node = node.parentElement;
+                        for (const sib of Array.from(node.parentElement?.children || [])) {
+                            if (sib === node) continue;
+                            const txt = (sib.textContent || '').trim();
+                            if (statuses.some(s => s.toLowerCase() === txt.toLowerCase())) return txt;
+                        }
+                    }
+                    return 'Unknown';
+                }, STATUS_VALUES);
+                Logger.info(`TC-OOO-APPROVAL-VERIFY: "${name}" → "${approverStatus}"`);
+            }
+
+            Logger.success(
+                `TC-OOO-APPROVAL-VERIFY PASSED — Invoice ${invoiceNumber} in All Approvals ` +
+                `(amount: ${invoiceAmountFormatted}, status: ${statusText}), all 3 approvers logged`
+            );
+        });
     });
 });

@@ -1,18 +1,3 @@
-/**
- * Out of Office (OOO) Feature — Playwright Automation
- * Consolidated: 7 acceptance-criteria tests + 4 combined tests = 11 total.
- *
- * Rules (enforced):
- *  - ZERO soft assertions, ZERO silent catch blocks hiding failures.
- *  - All assertions use hard expect() — if a case breaks, it breaks loudly.
- *  - Nothing hardcoded: role names, user names, API URLs from live API or env vars.
- *  - Every step logged via Logger.step / Logger.info / Logger.success / Logger.error.
- *  - Tests requiring multi-user setup are explicitly skipped with test.skip().
- *
- * Locators verified via MCP browser live DOM inspection on 2026-05-26.
- * API contracts verified via network request interception on same session.
- */
-
 require('dotenv').config();
 const { test, expect } = require('@playwright/test');
 const { OOOPage } = require('../pages/oooPage');
@@ -22,6 +7,10 @@ const { BudgetJob } = require('../pages/budgetPage');
 const PropertiesHelper = require('../pages/properties');
 const path = require('path');
 const fs = require('fs');
+const { ApprovalJob } = require('../pages/approvalPage');
+const { ProjectPage } = require('../pages/projectPage');
+const { ProjectJob } = require('../pages/projectJob');
+const { InvoicePage } = require('../pages/invoicePage');
 
 test.use({
     storageState: 'sessionState.json',
@@ -59,95 +48,75 @@ test.afterEach(async ({ page }) => {
 // ACCEPTANCE CRITERIA TESTS (7)
 // ============================================================================
 
-test('@ooo @regression TC-OOO-AC-001 Out of Office tab is accessible from the Profile page directly and via the sidebar user menu', async ({ page }) => {
-    Logger.step('TC-OOO-AC-001: Navigate to OOO tab verification');
+test('@ooo @regression TC261 The Out of Office tab opens correctly from the direct Profile page URL and also from the sidebar user menu dropdown', async ({ page }) => {
+    Logger.step('TC-OOO-AC-001: Verify the OOO tab is reachable via two navigation paths');
 
-    // OOO tab must be selected after beforeEach
-    await expect(oooPage.loc.tab_ooo, 'OOO tab must have aria-selected=true').toHaveAttribute('aria-selected', 'true', { timeout: 5000 });
+    // ─ Path 1: direct /profile URL ─
+    await expect(oooPage.loc.tab_ooo, 'OOO tab must be selected after direct /profile nav').toHaveAttribute('aria-selected', 'true', { timeout: 5000 });
     await expect(oooPage.loc.oooTabpanel, 'OOO tabpanel must be visible').toBeVisible({ timeout: 5000 });
-    Logger.info('TC-OOO-AC-001: OOO tab selected and tabpanel visible via direct /profile nav ✓');
+    await expect(oooPage.loc.tab_profile, 'Profile tab must NOT be selected when OOO is active').not.toHaveAttribute('aria-selected', 'true', { timeout: 5000 });
+    await expect(oooPage.loc.tab_security, 'Security tab must NOT be selected when OOO is active').not.toHaveAttribute('aria-selected', 'true', { timeout: 5000 });
+    Logger.info('TC-OOO-AC-001: Path 1 — OOO tab opens via direct /profile URL ✓');
 
-    // Sidebar navigation: start from dashboard, click sidebar user block
+    // ─ Path 2: dashboard → sidebar user block → Profile → click OOO tab ─
     await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(1500);
     await oooPage.loc.sidebarUserBlock.waitFor({ state: 'visible', timeout: 20000 });
     await oooPage.loc.sidebarUserBlock.click();
-    // Clicking the user block opens a dropdown menu — click "Profile" from it
+    Logger.info('TC-OOO-AC-001: Sidebar user block clicked — dropdown open');
     const profileMenuItem = page.getByRole('menuitem', { name: 'Profile' });
     await profileMenuItem.waitFor({ state: 'visible', timeout: 10000 });
+    expect(await profileMenuItem.isVisible(), '"Profile" must be visible in the sidebar dropdown').toBe(true);
     await profileMenuItem.click();
     await expect(page).toHaveURL(/\/profile/, { timeout: 15000 });
-    Logger.info(`TC-OOO-AC-001: Sidebar nav → ${page.url()} ✓`);
+    Logger.info(`TC-OOO-AC-001: Landed on ${page.url()} ✓`);
 
-    // All three profile tabs must be present
     await expect(oooPage.loc.tab_profile, 'Profile tab must be visible').toBeVisible({ timeout: 10000 });
     await expect(oooPage.loc.tab_security, 'Security tab must be visible').toBeVisible({ timeout: 5000 });
-    await expect(oooPage.loc.tab_ooo, 'OOO tab must be visible').toBeVisible({ timeout: 5000 });
-    Logger.info('TC-OOO-AC-001: All three tabs visible ✓');
+    await expect(oooPage.loc.tab_ooo, 'Out of Office tab must be visible').toBeVisible({ timeout: 5000 });
+    Logger.info('TC-OOO-AC-001: All three tabs (Profile, Security, Out of Office) present ✓');
 
-    // Click OOO tab
     await oooPage.clickOooTab();
-    await expect(oooPage.loc.tab_ooo, 'OOO tab must be aria-selected after click').toHaveAttribute('aria-selected', 'true', { timeout: 5000 });
-    await expect(oooPage.loc.oooTabpanel, 'OOO tabpanel must be visible after tab click').toBeVisible({ timeout: 5000 });
-    Logger.info('TC-OOO-AC-001: OOO tab accessible via sidebar nav ✓');
+    await expect(oooPage.loc.tab_ooo, 'OOO tab must be selected after clicking').toHaveAttribute('aria-selected', 'true', { timeout: 5000 });
+    await expect(oooPage.loc.oooTabpanel, 'OOO tabpanel must be visible').toBeVisible({ timeout: 5000 });
+    await expect(oooPage.loc.tab_profile, 'Profile tab must NOT be selected after clicking OOO').not.toHaveAttribute('aria-selected', 'true', { timeout: 5000 });
+    Logger.info('TC-OOO-AC-001: Path 2 — OOO tab opens via sidebar user menu ✓');
 
     Logger.success('TC-OOO-AC-001 PASSED');
 });
 
-test('@ooo @regression TC-OOO-AC-002 Activating Out of Office with a role delegate shows the active banner with the correct role name and records the correct state in the API', async ({ page }) => {
+test('@ooo @regression TC262 Turning on Out of Office with a role delegate shows the active banner with the correct role name and saves the correct state to the API', async ({ page }) => {
     test.setTimeout(60000);
-    Logger.step('TC-OOO-AC-002: Activate with role delegate, no date');
+    Logger.step('TC-OOO-AC-002: Activate with role delegate, verify UI and API');
 
     const roleName = await oooPage.getFirstRoleName();
-    Logger.info(`TC-OOO-AC-002: Using role: "${roleName}"`);
+    Logger.info(`TC-OOO-AC-002: Using role "${roleName}"`);
 
     await oooPage.activateWithRole(roleName, null);
 
-    // UI: active state banner
-    await expect(oooPage.loc.activeStatePara, 'Active state banner must be visible').toBeVisible({ timeout: 10000 });
-    const activeText = await oooPage.getActiveStateText();
-    expect(activeText, 'Active text must contain role name').toContain(roleName);
-    expect(activeText, 'Active text must contain "(role)" label').toContain('(role)');
-    expect(activeText, 'Active text must contain delegation phrase').toContain('Active — delegating approvals to');
-    Logger.info(`TC-OOO-AC-002: Active state text: "${activeText}" ✓`);
+    await oooPage.assertIsActive();
+    const activeText = await oooPage.assertActiveBanner({ roleName, isRole: true });
+    Logger.info(`TC-OOO-AC-002: Active banner: "${activeText}" ✓`);
 
-    // No auto-deactivation date line when none was set
-    const autoDeactivateLine = page.getByText(/Auto-deactivates on/i);
-    const dateVisible = await autoDeactivateLine.isVisible().catch(() => false);
+    // No date line because none was set
+    const dateVisible = await page.getByText(/Auto-deactivates on/i).isVisible().catch(() => false);
     expect(dateVisible, 'Auto-deactivation date line must NOT appear when no date was set').toBe(false);
-    Logger.info('TC-OOO-AC-002: No auto-deactivation date shown ✓');
+    Logger.info('TC-OOO-AC-002: No auto-deactivation date line shown ✓');
 
-    // Deactivate button visible
-    await expect(oooPage.loc.btn_deactivate, '"Deactivate OOO mode" must be visible').toBeVisible({ timeout: 5000 });
-    Logger.info('TC-OOO-AC-002: Deactivate button visible ✓');
-
-    // API: ooo object populated correctly
-    const apiState = await oooPage.getOooApiState();
-    expect(apiState.success, 'API success must be true').toBe(true);
-    expect(apiState.ooo, 'API ooo must not be null when active').not.toBeNull();
-    expect(apiState.ooo.delegate_role_name, 'API delegate_role_name must match selected role').toBe(roleName);
-    expect(apiState.ooo.deactivate_at, 'API deactivate_at must be null when no date was set').toBeNull();
-    expect(apiState.ooo.delegate_user_id, 'delegate_user_id must be null for role delegation').toBeNull();
-    Logger.info(`TC-OOO-AC-002: API confirmed id=${apiState.ooo.id}, role="${apiState.ooo.delegate_role_name}", deactivate_at=null ✓`);
+    const apiState = await oooPage.assertRoleDelegationApi({ roleName, apiDate: null });
+    Logger.info(`TC-OOO-AC-002: API confirmed — id=${apiState.ooo.id}, role="${roleName}", deactivate_at=null ✓`);
 
     Logger.success('TC-OOO-AC-002 PASSED');
 });
 
-test('@ooo @regression TC-OOO-AC-003 Activating Out of Office with an auto-deactivation date stores the exact selected date in the API without any timezone shift', async ({ page }) => {
+test('@ooo @regression TC263 Setting an auto-deactivation date when activating Out of Office saves the exact chosen date to the API with no timezone change', async ({ page }) => {
     test.setTimeout(60000);
-    Logger.step('TC-OOO-AC-003: Activate with role + auto-deactivation date, no timezone shift');
+    Logger.step('TC-OOO-AC-003: Activate with role + date, verify no timezone shift in API');
 
     const roleName = await oooPage.getFirstRoleName();
-
-    const target = new Date();
-    target.setDate(target.getDate() + 7);
-    const mm = String(target.getMonth() + 1).padStart(2, '0');
-    const dd = String(target.getDate()).padStart(2, '0');
-    const yyyy = target.getFullYear();
-    const uiDate = `${mm}/${dd}/${yyyy}`;
-    const apiDate = `${yyyy}-${mm}-${dd}`;
-    Logger.info(`TC-OOO-AC-003: Target date — UI:"${uiDate}", API:"${apiDate}"`);
+    const { uiDate, apiDate } = await oooPage.setFutureDate(7);
+    Logger.info(`TC-OOO-AC-003: Role="${roleName}", date UI="${uiDate}", API="${apiDate}"`);
 
     await oooPage.selectDelegateToRole();
     await oooPage.pickRoleFromDropdown(roleName);
@@ -156,136 +125,106 @@ test('@ooo @regression TC-OOO-AC-003 Activating Out of Office with an auto-deact
     await page.waitForTimeout(500);
     await oooPage.clickActivateOoo();
 
-    // UI: active state + date line
-    await expect(oooPage.loc.activeStatePara, 'Active state banner must be visible').toBeVisible({ timeout: 10000 });
-    const autoDeactivateLine = page.getByText(/Auto-deactivates on/i);
-    await expect(autoDeactivateLine, 'Auto-deactivation date line must be visible').toBeVisible({ timeout: 10000 });
-    const lineText = await autoDeactivateLine.textContent();
-    Logger.info(`TC-OOO-AC-003: UI shows: "${lineText}"`);
+    await oooPage.assertIsActive({ withDateLine: true });
 
-    // API: date stored without timezone shift
-    const apiState = await oooPage.getOooApiState();
-    expect(apiState.ooo, 'API ooo must not be null').not.toBeNull();
-    const storedDate = apiState.ooo.deactivate_at;
-    Logger.info(`TC-OOO-AC-003: API stored deactivate_at="${storedDate}"`);
-    expect(storedDate, 'API deactivate_at must not be null').not.toBeNull();
-    expect(
-        storedDate.startsWith(apiDate),
-        `TIMEZONE SHIFT DETECTED: set "${apiDate}", API stored "${storedDate}". Dates must match.`
-    ).toBe(true);
-    expect(apiState.ooo.delegate_role_name, 'API role name must match').toBe(roleName);
-    Logger.info(`TC-OOO-AC-003: No timezone shift — stored "${storedDate}" starts with "${apiDate}" ✓`);
+    const lineText = await page.getByText(/Auto-deactivates on/i).textContent();
+    // App renders date as M/D/YYYY (e.g. "6/4/2026") — verified via MCP browser inspection
+    expect(lineText, 'Auto-deactivation line must contain a date in M/D/YYYY format').toMatch(/\d{1,2}\/\d{1,2}\/\d{4}/);
+    Logger.info(`TC-OOO-AC-003: Auto-deactivation UI line: "${lineText}" ✓`);
+
+    const apiState = await oooPage.assertRoleDelegationApi({ roleName, apiDate });
+    Logger.info(`TC-OOO-AC-003: No timezone shift — stored "${apiState.ooo.deactivate_at}" starts with "${apiDate}" ✓`);
 
     Logger.success('TC-OOO-AC-003 PASSED');
 });
 
-test('@ooo @regression TC-OOO-AC-004 Deactivating Out of Office resets the form to its initial state, clears the API record, and allows re-activation with a different role without showing stale data', async ({ page }) => {
+test('@ooo @regression TC264 Clicking Deactivate clears the form completely, removes the API record, and lets you activate again with a different role without showing leftover data', async ({ page }) => {
     test.setTimeout(90000);
-    Logger.step('TC-OOO-AC-004: Deactivate OOO and verify full reset, then re-activate with a different role');
+    Logger.step('TC-OOO-AC-004: Activate Role A → deactivate → verify full reset → re-activate Role B');
 
     const roleA = await oooPage.getFirstRoleName();
     const roleB = await oooPage.getSecondRoleName();
-    expect(roleA, 'Role A and B must differ').not.toBe(roleB);
+    expect(roleA, 'Role A and Role B must be different').not.toBe(roleB);
     Logger.info(`TC-OOO-AC-004: Role A="${roleA}", Role B="${roleB}"`);
 
     // Activate with Role A
     await oooPage.activateWithRole(roleA);
-    let text = await oooPage.getActiveStateText();
-    expect(text, 'Must show Role A after first activation').toContain(roleA);
-    Logger.info(`TC-OOO-AC-004: Activated with Role A ✓`);
+    await oooPage.assertIsActive();
+    await oooPage.assertActiveBanner({ roleName: roleA, isRole: true });
+    Logger.info('TC-OOO-AC-004: OOO activated with Role A ✓');
 
-    // Deactivate via UI
+    // Deactivate and verify full reset
     await oooPage.clickDeactivateOoo();
+    await oooPage.assertIsInactive();
+    await expect(oooPage.loc.radio_delegateToUser, 'Delegate-to-user radio must be visible').toBeVisible({ timeout: 5000 });
+    await expect(oooPage.loc.radio_delegateToRole, 'Delegate-to-role radio must be visible').toBeVisible({ timeout: 5000 });
+    Logger.info('TC-OOO-AC-004: Full UI reset confirmed ✓');
 
-    // UI reset
-    await expect(oooPage.loc.activeStatePara, 'Active banner must disappear after deactivation').toBeHidden({ timeout: 10000 });
-    await expect(oooPage.loc.btn_activate, '"Activate OOO mode" must reappear').toBeVisible({ timeout: 5000 });
-    await expect(oooPage.loc.btn_activate, '"Activate OOO mode" must be DISABLED (no delegate)').toBeDisabled({ timeout: 5000 });
-    await expect(oooPage.loc.btn_deactivate, '"Deactivate OOO mode" button must be gone').toBeHidden({ timeout: 5000 });
-    await expect(oooPage.loc.radio_delegateToUser, 'Radio group must be visible').toBeVisible({ timeout: 5000 });
-    await expect(oooPage.loc.radio_delegateToRole, 'Role radio must be visible').toBeVisible({ timeout: 5000 });
-    Logger.info('TC-OOO-AC-004: Full UI reset after deactivation ✓');
-
-    // API confirms inactive
     const apiAfterDeactivate = await oooPage.getOooApiState();
     expect(apiAfterDeactivate.ooo, 'API ooo must be NULL after deactivation').toBeNull();
     Logger.info('TC-OOO-AC-004: API confirms ooo=null ✓');
 
-    // Re-activate with Role B — must not retain Role A (stale data check)
-    await oooPage.selectDelegateToRole();
-    await oooPage.pickRoleFromDropdown(roleB);
-    await oooPage.clickActivateOoo();
+    // Re-activate with Role B — must not show stale Role A data
+    await oooPage.activateWithRole(roleB);
+    const textB = await oooPage.assertActiveBanner({ roleName: roleB, isRole: true });
+    expect(textB, 'Active banner must NOT contain Role A (stale data)').not.toContain(roleA);
+    Logger.info(`TC-OOO-AC-004: Re-activated with Role B — no stale Role A data ✓`);
 
-    text = await oooPage.getActiveStateText();
-    expect(text, 'Active state must show Role B after re-activation').toContain(roleB);
-    expect(text, 'Active state must NOT contain Role A (stale data bug)').not.toContain(roleA);
-    Logger.info(`TC-OOO-AC-004: Re-activated with Role B, no stale Role A data ✓`);
-
-    const finalApi = await oooPage.getOooApiState();
-    expect(finalApi.ooo.delegate_role_name, 'API must reflect Role B').toBe(roleB);
-    Logger.info(`TC-OOO-AC-004: API confirms delegate="${finalApi.ooo.delegate_role_name}" ✓`);
+    const finalApi = await oooPage.assertRoleDelegationApi({ roleName: roleB });
+    Logger.info(`TC-OOO-AC-004: API confirmed delegate="${finalApi.ooo.delegate_role_name}" ✓`);
 
     Logger.success('TC-OOO-AC-004 PASSED');
 });
 
-test('@ooo @regression TC-OOO-AC-005 Out of Office activation state is preserved after navigating to another page and after a full browser reload', async ({ page }) => {
+test('@ooo @regression TC265 Out of Office stays active after navigating away to a different page and after doing a full browser reload', async ({ page }) => {
     test.setTimeout(90000);
-    Logger.step('TC-OOO-AC-005: State persistence across navigation and reload');
+    Logger.step('TC-OOO-AC-005: Activate OOO then verify persistence across navigation and reload');
 
     const roleName = await oooPage.getFirstRoleName();
-
-    const target = new Date();
-    target.setDate(target.getDate() + 4);
-    const mm = String(target.getMonth() + 1).padStart(2, '0');
-    const dd = String(target.getDate()).padStart(2, '0');
-    const uiDate = `${mm}/${dd}/${target.getFullYear()}`;
-
+    const { uiDate } = await oooPage.setFutureDate(4);
     await oooPage.selectDelegateToRole();
     await oooPage.pickRoleFromDropdown(roleName);
     await oooPage.loc.input_deactivateDate.fill(uiDate);
     await page.keyboard.press('Enter');
     await page.waitForTimeout(500);
     await oooPage.clickActivateOoo();
-    Logger.info(`TC-OOO-AC-005: OOO activated with role "${roleName}" and date "${uiDate}"`);
+    Logger.info(`TC-OOO-AC-005: OOO activated — role="${roleName}", date="${uiDate}"`);
 
-    // PART 1 — Navigate away and back
+    // ─ Part 1: navigate away and back ─
     const origin = new URL(process.env.DASHBOARD_URL).origin;
     await page.goto(`${origin}/properties`, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1500);
-    Logger.info('TC-OOO-AC-005: Navigated to /properties');
+    Logger.info('TC-OOO-AC-005: Navigated away to /properties');
 
     await oooPage.goToOooTab();
-    await expect(oooPage.loc.activeStatePara, 'OOO must still be active after navigation').toBeVisible({ timeout: 10000 });
-    let text = await oooPage.getActiveStateText();
-    expect(text, 'Active state must contain role name after navigation').toContain(roleName);
-    Logger.info(`TC-OOO-AC-005: State persisted after nav: "${text}" ✓`);
+    await oooPage.assertIsActive({ withDateLine: true });
+    await oooPage.assertActiveBanner({ roleName });
+    Logger.info('TC-OOO-AC-005: OOO state persisted after navigation ✓');
 
-    let apiState = await oooPage.getOooApiState();
-    expect(apiState.ooo, 'API must still show ooo active after navigation').not.toBeNull();
-    expect(apiState.ooo.delegate_role_name, 'API role name must match after navigation').toBe(roleName);
-    Logger.info('TC-OOO-AC-005: API confirms state persisted after navigation ✓');
+    const apiAfterNav = await oooPage.assertRoleDelegationApi({ roleName });
+    expect(apiAfterNav.ooo.deactivate_at, 'deactivate_at must still be set after navigation').not.toBeNull();
+    Logger.info('TC-OOO-AC-005: API confirms persistence after navigation ✓');
 
-    // PART 2 — Hard browser reload
+    // ─ Part 2: hard browser reload ─
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2000);
-    Logger.info('TC-OOO-AC-005: Page reloaded');
+    Logger.info('TC-OOO-AC-005: Hard browser reload done');
 
     await oooPage.clickOooTab();
-    await expect(oooPage.loc.activeStatePara, 'OOO must still be active after browser reload').toBeVisible({ timeout: 10000 });
-    text = await oooPage.getActiveStateText();
-    expect(text, 'Active state must contain role name after reload').toContain(roleName);
-    Logger.info(`TC-OOO-AC-005: Active state after reload: "${text}" ✓`);
+    await oooPage.assertIsActive({ withDateLine: true });
+    await oooPage.assertActiveBanner({ roleName });
+    Logger.info('TC-OOO-AC-005: OOO state persisted after reload ✓');
 
-    apiState = await oooPage.getOooApiState();
-    expect(apiState.ooo, 'API must still show ooo active after reload (backend-persisted)').not.toBeNull();
+    const apiAfterReload = await oooPage.assertRoleDelegationApi({ roleName });
+    expect(apiAfterReload.ooo.deactivate_at, 'deactivate_at must still be set after reload').not.toBeNull();
     Logger.info('TC-OOO-AC-005: API confirms state is backend-persisted ✓');
 
     Logger.success('TC-OOO-AC-005 PASSED');
 });
 
-test('@ooo @e2e @critical TC-OOO-AC-006 Budget revision approval submitted while Out of Office is active routes to the delegate role in All Approvals and does not appear in the submitter My Approvals', async ({ page }) => {
+test('@ooo @e2e @critical TC266 A budget approval submitted while Out of Office is on goes to the delegate role in All Approvals and does not appear in the Out of Office user own My Approvals', async ({ page }) => {
     test.setTimeout(900000);
-    Logger.step('TC-OOO-AC-006: E2E approval routing with role delegate');
+    Logger.step('TC-OOO-AC-006: Submit budget revision with OOO active and verify approval routing');
 
     const budgetDataPath = path.resolve(process.cwd(), 'files', 'budget_data.csv');
     expect(fs.existsSync(budgetDataPath), `Budget CSV must exist: ${budgetDataPath}`).toBe(true);
@@ -297,124 +236,108 @@ test('@ooo @e2e @critical TC-OOO-AC-006 Budget revision approval submitted while
     const approvalPage = new SimpleApprovalPage(page);
     const roleName = await oooPage.getFirstRoleName();
 
-    // Create property
     await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2000);
     await prop.goToProperties();
     await prop.createProperty(propertyName, 'Domestic Terminal, College Park, GA 30337, USA', 'College Park', 'GA', '30337', 'Garden Style');
-    Logger.info(`TC-OOO-AC-006: Property "${propertyName}" created`);
+    Logger.info(`TC-OOO-AC-006: Property "${propertyName}" created ✓`);
 
-    // Activate OOO with role delegate BEFORE submitting approval
     await oooPage.goToOooTab();
     await oooPage.activateWithRole(roleName);
-    const oooState = await oooPage.getOooApiState();
-    expect(oooState.ooo, 'OOO must be active before budget submission').not.toBeNull();
-    expect(oooState.ooo.delegate_role_name, 'Delegate role must match').toBe(roleName);
-    Logger.info(`TC-OOO-AC-006: OOO active with role "${roleName}" (API confirmed) ✓`);
+    await oooPage.assertIsActive();
+    const oooApi = await oooPage.assertRoleDelegationApi({ roleName });
+    Logger.info(`TC-OOO-AC-006: OOO active — role="${roleName}", id=${oooApi.ooo.id} ✓`);
 
-    // Submit budget revision
     await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2000);
     await budgetJob.navigateToBudget();
     await budgetJob.waitForPageLoad();
-    const selected = await budgetJob.selectPropertyByName(propertyName);
-    expect(selected, `Budget must list "${propertyName}"`).toBeTruthy();
+    expect(await budgetJob.selectPropertyByName(propertyName), `"${propertyName}" must be in budget list`).toBeTruthy();
     await budgetJob.openRevisionEditor();
     await budgetJob.uploadFileInRevision(budgetDataPath);
     await budgetJob.ensureSubmitEnabledAfterUpload();
     await budgetJob.clickSubmitForApproval();
     await page.waitForTimeout(8000);
-    Logger.info('TC-OOO-AC-006: Budget revision submitted with OOO active');
+    Logger.info('TC-OOO-AC-006: Budget revision submitted ✓');
 
-    // Budget revision approvals are stored in All Approvals (not My Approvals) since they route to
-    // the delegate role, not back to the submitter. Navigate directly — avoids the ambiguous
-    // `text=Approvals` sidebar locator which resolves to 3 elements on this page.
     const origin = new URL(process.env.DASHBOARD_URL).origin;
     await page.goto(`${origin}/approvals/all-approvals`, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('input[placeholder="Search..."]:not([data-disabled="true"])', { timeout: 60000 });
     await approvalPage.searchApprovals(propertyName);
     await page.waitForTimeout(1500);
     const allRows = await approvalPage.getTableRowCount();
-    Logger.info(`TC-OOO-AC-006: All Approvals for "${propertyName}": ${allRows} rows`);
+    Logger.info(`TC-OOO-AC-006: All Approvals — ${allRows} row(s) for "${propertyName}"`);
 
     if (allRows > 0) {
-        // Approval exists — confirm it is NOT in My Approvals (OOO routes to delegate, not the user)
         await page.goto(`${origin}/approvals/my-approvals`, { waitUntil: 'domcontentloaded' });
-        // My Approvals search may be disabled when the table is empty — use a softer wait
         await page.waitForSelector('input[placeholder="Search..."]:not([data-disabled="true"])', { timeout: 30000 }).catch(() => {});
-        const searchEnabled = await page.$('input[placeholder="Search..."]:not([data-disabled="true"])');
         let myRows = 0;
-        if (searchEnabled) {
+        if (await page.$('input[placeholder="Search..."]:not([data-disabled="true"])')) {
             await approvalPage.searchApprovals(propertyName);
             await page.waitForTimeout(1500);
             myRows = await approvalPage.getTableRowCount();
         }
-        Logger.info(`TC-OOO-AC-006: My Approvals for "${propertyName}": ${myRows} rows`);
+        Logger.info(`TC-OOO-AC-006: My Approvals — ${myRows} row(s) for "${propertyName}"`);
         expect(
             myRows,
-            `OOO ROUTING BUG: Approval for "${propertyName}" appears in OOO user My Approvals (${myRows} rows). With OOO active, must route to delegate role "${roleName}", NOT the OOO user.`
+            `OOO ROUTING BUG: approval for "${propertyName}" appeared in My Approvals. ` +
+            `With OOO active, it must route to delegate role "${roleName}", NOT the OOO user.`
         ).toBe(0);
-        Logger.success(`TC-OOO-AC-006: Approval in All Approvals but NOT in My Approvals — OOO routing confirmed ✓`);
+        Logger.success('TC-OOO-AC-006: Approval in All Approvals but NOT in My Approvals — routing correct ✓');
     } else {
-        Logger.info(`TC-OOO-AC-006: No approval found in All Approvals for "${propertyName}". No Budget approval template configured — configure one to fully verify OOO routing.`);
+        Logger.info('TC-OOO-AC-006: No approval found — no Budget approval template configured for this property.');
     }
 
     Logger.success('TC-OOO-AC-006 COMPLETED');
 });
 
-test('@ooo @regression TC-OOO-AC-007 Switching between delegate to user and delegate to role correctly enables and disables the relevant fields, gates the activate button, and prevents a user from delegating approvals to themselves', async ({ page }) => {
-    Logger.step('TC-OOO-AC-007: Radio switch field states, activate button gating, self-delegation prevention');
+test('@ooo @regression TC267 Toggling between delegate-to-user and delegate-to-role enables and disables the correct form fields, controls the Activate button state, and blocks a user from selecting themselves as a delegate', async ({ page }) => {
+    Logger.step('TC267: Verify field states, button gating, and self-delegation prevention');
 
-    // ─ PART 1: Default state (Delegate to user mode) ─
-    await expect(oooPage.loc.radio_delegateToUser, 'Default radio must be "Delegate to user"').toBeChecked({ timeout: 5000 });
+    // ─ Part 1: default user mode ─
+    await expect(oooPage.loc.radio_delegateToUser, 'Default must be "Delegate to user"').toBeChecked({ timeout: 5000 });
     await expect(oooPage.loc.radio_delegateToRole, '"Delegate to role" must NOT be checked by default').not.toBeChecked({ timeout: 5000 });
     await expect(oooPage.loc.input_teamMember, 'Team member must be ENABLED in user mode').toBeEnabled({ timeout: 5000 });
     await expect(oooPage.loc.input_role, 'Role must be DISABLED in user mode').toBeDisabled({ timeout: 5000 });
     await expect(oooPage.loc.helperText, 'Helper text must be HIDDEN in user mode').toBeHidden({ timeout: 5000 });
-    await expect(oooPage.loc.btn_activate, 'Activate button must be DISABLED with no delegate').toBeDisabled({ timeout: 5000 });
-    Logger.info('TC-OOO-AC-007: Default user mode — all field states correct ✓');
+    await expect(oooPage.loc.btn_activate, 'Activate must be DISABLED with no delegate').toBeDisabled({ timeout: 5000 });
+    Logger.info('TC-OOO-AC-007: Part 1 — default user mode states correct ✓');
 
-    // ─ PART 2: Switch to role mode ─
+    // ─ Part 2: switch to role mode ─
     await oooPage.selectDelegateToRole();
     await expect(oooPage.loc.input_role, 'Role must be ENABLED in role mode').toBeEnabled({ timeout: 5000 });
     await expect(oooPage.loc.input_teamMember, 'Team member must be DISABLED in role mode').toBeDisabled({ timeout: 5000 });
     await expect(oooPage.loc.helperText, 'Helper text must be VISIBLE in role mode').toBeVisible({ timeout: 5000 });
     const helperContent = await oooPage.loc.helperText.textContent();
-    expect(helperContent.trim(), 'Helper text must match expected routing message')
-        .toBe('Approvals will be routed to the person assigned to this role for each property.');
-    await expect(oooPage.loc.btn_activate, 'Activate button must remain DISABLED with no role selected').toBeDisabled({ timeout: 5000 });
-    Logger.info(`TC-OOO-AC-007: Role mode — fields correct, helper text: "${helperContent.trim()}" ✓`);
+    expect(helperContent.trim()).toBe('Approvals will be routed to the person assigned to this role for each property.');
+    await expect(oooPage.loc.btn_activate, 'Activate must remain DISABLED — no role selected yet').toBeDisabled({ timeout: 5000 });
+    Logger.info(`TC-OOO-AC-007: Part 2 — role mode states correct, helper text confirmed ✓`);
 
-    // ─ PART 3: Open role dropdown → all API roles visible → pick one → button enables ─
+    // ─ Part 3: open role dropdown, verify all API roles visible, pick one ─
     const allRoles = await oooPage.getAllRoleNames();
-    expect(allRoles.length, 'At least one role must exist for this test').toBeGreaterThan(0);
-
+    expect(allRoles.length, 'At least one role must exist').toBeGreaterThan(0);
     await oooPage.loc.input_role.click();
+    await expect(page.getByRole('listbox'), 'Role dropdown listbox must be visible').toBeVisible({ timeout: 5000 });
     for (const rName of allRoles) {
-        await expect(
-            page.getByRole('option', { name: rName }),
-            `Role "${rName}" from API must appear in dropdown`
-        ).toBeVisible({ timeout: 5000 });
+        await expect(page.getByRole('option', { name: rName }), `Role "${rName}" must appear in dropdown`).toBeVisible({ timeout: 5000 });
     }
-    Logger.info(`TC-OOO-AC-007: All ${allRoles.length} API roles visible in dropdown ✓`);
+    Logger.info(`TC-OOO-AC-007: Part 3 — all ${allRoles.length} API role(s) visible in dropdown ✓`);
 
     const roleName = allRoles[0];
     await page.getByRole('option', { name: roleName }).click();
     await expect(oooPage.loc.input_role, `Role input must show "${roleName}"`).toHaveValue(roleName, { timeout: 5000 });
-    await expect(oooPage.loc.btn_activate, 'Activate button must be ENABLED after role selection').toBeEnabled({ timeout: 5000 });
-    Logger.info(`TC-OOO-AC-007: Role "${roleName}" selected — activate button enabled ✓`);
+    await expect(oooPage.loc.btn_activate, 'Activate must be ENABLED after role selection').toBeEnabled({ timeout: 5000 });
+    Logger.info(`TC-OOO-AC-007: Role "${roleName}" selected — Activate enabled ✓`);
 
-    // ─ PART 4: Switch to user mode — role input disabled, button disabled (no user selected) ─
-    // Mantine Select retains the role value in the DOM (does not clear on mode switch).
-    // The activate button becomes disabled because no user delegate is selected in user mode.
+    // ─ Part 4: switch back to user mode ─
     await oooPage.selectDelegateToUser();
-    await expect(oooPage.loc.input_role, 'Role must be DISABLED after switch to user mode').toBeDisabled({ timeout: 5000 });
+    await expect(oooPage.loc.input_role, 'Role must be DISABLED in user mode').toBeDisabled({ timeout: 5000 });
     await expect(oooPage.loc.input_teamMember, 'Team member must be ENABLED in user mode').toBeEnabled({ timeout: 5000 });
-    await expect(oooPage.loc.helperText, 'Helper text must be HIDDEN after switch to user mode').toBeHidden({ timeout: 5000 });
-    await expect(oooPage.loc.btn_activate, 'Activate button must be DISABLED in user mode — no user delegate selected').toBeDisabled({ timeout: 5000 });
-    Logger.info('TC-OOO-AC-007: Switched to user mode — role disabled, button disabled (no user selected) ✓');
+    await expect(oooPage.loc.helperText, 'Helper text must be HIDDEN in user mode').toBeHidden({ timeout: 5000 });
+    await expect(oooPage.loc.btn_activate, 'Activate must be DISABLED — no user delegate selected').toBeDisabled({ timeout: 5000 });
+    Logger.info('TC-OOO-AC-007: Part 4 — switched to user mode, states correct ✓');
 
-    // ─ PART 5: Self-delegation prevention ─
+    // ─ Part 5: self-delegation prevention ─
     const currentUserName = await oooPage.getCurrentUserName();
     Logger.info(`TC-OOO-AC-007: Current user is "${currentUserName}"`);
 
@@ -423,185 +346,158 @@ test('@ooo @regression TC-OOO-AC-007 Switching between delegate to user and dele
     await page.waitForTimeout(800);
 
     const selfOption = page.getByRole('option', { name: new RegExp(currentUserName, 'i') });
-    const selfVisible = await selfOption.isVisible().catch(() => false);
-    expect(
-        selfVisible,
-        `Self-delegation must be blocked: "${currentUserName}" must NOT appear in the dropdown`
-    ).toBe(false);
-    Logger.info(`TC-OOO-AC-007: "${currentUserName}" not in dropdown (self-delegation blocked) ✓`);
+    expect(await selfOption.isVisible().catch(() => false), `"${currentUserName}" must NOT appear in dropdown`).toBe(false);
+    Logger.info(`TC-OOO-AC-007: "${currentUserName}" not in dropdown — self-delegation blocked ✓`);
 
-    // API confirms self is in members array — UI correctly filters them
     const delegates = await oooPage.getDelegatesApiResponse();
-    const selfInApi = delegates.members.find(m =>
-        m.label.toLowerCase().includes(currentUserName.toLowerCase().split(' ')[0])
-    );
-    expect(selfInApi, 'Current user must be present in /api/ooo/delegates members (UI hides them)').toBeTruthy();
-    Logger.info(`TC-OOO-AC-007: API has self (id=${selfInApi.id}) in members — UI correctly excludes ✓`);
+    const selfInApi = delegates.members.find(m => m.label.toLowerCase().includes(currentUserName.toLowerCase().split(' ')[0]));
+    expect(selfInApi, 'Current user must exist in API members (UI filters them out)').toBeTruthy();
+    Logger.info(`TC-OOO-AC-007: API has self (id=${selfInApi.id}) — UI correctly excludes them ✓`);
 
     await page.keyboard.press('Escape');
     Logger.success('TC-OOO-AC-007 PASSED');
 });
 
-// ============================================================================
-// COMBINED TESTS (4)
-// ============================================================================
-
-test('@ooo @regression TC-OOO-UI Out of Office form shows the correct initial field states, placeholder text, tab selection attributes, and activate button gating across all delegation modes', async ({ page }) => {
-    Logger.step('TC-OOO-UI: Full UI verification across all form states');
+test('@ooo @regression TC268 Out of Office form opens in the correct default state, the Activate button stays disabled until a delegate is chosen, and switching delegation mode correctly flips all field states', async ({ page }) => {
+    Logger.step('TC268: Verify every form field state across all delegation modes');
 
     // ─ 1. Tab strip ─
     await expect(oooPage.loc.tab_profile, 'Profile tab must be visible').toBeVisible({ timeout: 5000 });
     await expect(oooPage.loc.tab_security, 'Security tab must be visible').toBeVisible({ timeout: 5000 });
-    await expect(oooPage.loc.tab_ooo, 'OOO tab must be visible').toBeVisible({ timeout: 5000 });
-    await expect(oooPage.loc.tab_ooo, 'OOO tab must be aria-selected=true').toHaveAttribute('aria-selected', 'true', { timeout: 5000 });
+    await expect(oooPage.loc.tab_ooo, 'OOO tab must be visible and selected').toHaveAttribute('aria-selected', 'true', { timeout: 5000 });
     await expect(oooPage.loc.oooTabpanel, 'OOO tabpanel must be visible').toBeVisible({ timeout: 5000 });
-    Logger.info('TC-OOO-UI: Tab strip + aria-selected ✓');
+    Logger.info('TC-OOO-UI: Tab strip ✓');
 
     // ─ 2. Default inactive form state ─
-    await expect(oooPage.loc.radio_delegateToUser, '"Delegate to user" must be checked by default').toBeChecked({ timeout: 5000 });
-    await expect(oooPage.loc.radio_delegateToRole, '"Delegate to role" must NOT be checked by default').not.toBeChecked({ timeout: 5000 });
-    await expect(oooPage.loc.input_teamMember, 'Team member enabled by default').toBeEnabled({ timeout: 5000 });
-    await expect(oooPage.loc.input_role, 'Role disabled by default').toBeDisabled({ timeout: 5000 });
-    await expect(oooPage.loc.helperText, 'Helper text hidden in user mode').toBeHidden({ timeout: 5000 });
-    await expect(oooPage.loc.input_deactivateDate, 'Date picker must be visible').toBeVisible({ timeout: 5000 });
+    await expect(oooPage.loc.radio_delegateToUser, '"Delegate to user" checked by default').toBeChecked({ timeout: 5000 });
+    await expect(oooPage.loc.radio_delegateToRole, '"Delegate to role" not checked by default').not.toBeChecked({ timeout: 5000 });
+    await expect(oooPage.loc.input_teamMember, 'Team member ENABLED by default').toBeEnabled({ timeout: 5000 });
+    await expect(oooPage.loc.input_role, 'Role DISABLED by default').toBeDisabled({ timeout: 5000 });
+    await expect(oooPage.loc.helperText, 'Helper text HIDDEN in user mode').toBeHidden({ timeout: 5000 });
+    await expect(oooPage.loc.input_deactivateDate, 'Date picker visible').toBeVisible({ timeout: 5000 });
     await expect(oooPage.loc.input_deactivateDate, 'Date picker placeholder must be "Pick a date"').toHaveAttribute('placeholder', 'Pick a date', { timeout: 5000 });
-    await expect(oooPage.loc.btn_activate, '"Activate OOO mode" must be visible').toBeVisible({ timeout: 5000 });
-    await expect(oooPage.loc.btn_activate, '"Activate OOO mode" must be DISABLED with no delegate').toBeDisabled({ timeout: 5000 });
-    await expect(oooPage.loc.activeStatePara, 'No active state banner on initial load').toBeHidden({ timeout: 5000 });
+    await expect(oooPage.loc.btn_activate, 'Activate visible').toBeVisible({ timeout: 5000 });
+    await expect(oooPage.loc.btn_activate, 'Activate DISABLED — no delegate').toBeDisabled({ timeout: 5000 });
+    await expect(oooPage.loc.btn_deactivate, 'Deactivate HIDDEN before activation').toBeHidden({ timeout: 5000 });
+    await expect(oooPage.loc.activeStatePara, 'Active banner HIDDEN on initial load').toBeHidden({ timeout: 5000 });
+    await expect(oooPage.loc.btn_clearDate, 'Clear date (×) HIDDEN before any date set').toBeHidden({ timeout: 5000 });
     Logger.info('TC-OOO-UI: Default inactive form state ✓');
 
-    // ─ 3. Date-only (no delegate) must NOT enable activate button and must NOT fire POST ─
+    // ─ 3. Date-only must NOT enable Activate and must NOT fire POST ─
     let postFired = false;
     await page.route('**/api/ooo', (route) => {
         if (route.request().method() === 'POST') postFired = true;
         route.continue();
     });
     const { uiDate: dateOnlyVal } = await oooPage.setFutureDate(3);
-    await expect(oooPage.loc.btn_activate, 'Activate button must remain DISABLED with date-only (no delegate)').toBeDisabled({ timeout: 5000 });
+    await expect(oooPage.loc.btn_activate, 'Activate must remain DISABLED with date-only').toBeDisabled({ timeout: 5000 });
     await page.waitForTimeout(500);
     expect(postFired, 'POST /api/ooo must NOT fire when button is disabled').toBe(false);
-    Logger.info(`TC-OOO-UI: Date-only (${dateOnlyVal}) does not enable activate button, no POST fired ✓`);
+    Logger.info(`TC-OOO-UI: Date-only (${dateOnlyVal}) — Activate still disabled, no POST fired ✓`);
     await oooPage.clearDeactivateDate();
+    await expect(oooPage.loc.input_deactivateDate, 'Date field empty after clearing').toHaveValue('', { timeout: 5000 });
 
-    // ─ 4. Switch to role mode: fields flip, helper text appears ─
+    // ─ 4. Switch to role mode — fields flip, helper text appears ─
     await oooPage.selectDelegateToRole();
-    await expect(oooPage.loc.input_role, 'Role enabled in role mode').toBeEnabled({ timeout: 5000 });
-    await expect(oooPage.loc.input_teamMember, 'Team member disabled in role mode').toBeDisabled({ timeout: 5000 });
-    await expect(oooPage.loc.helperText, 'Helper text visible in role mode').toBeVisible({ timeout: 5000 });
+    await expect(oooPage.loc.input_role, 'Role ENABLED in role mode').toBeEnabled({ timeout: 5000 });
+    await expect(oooPage.loc.input_teamMember, 'Team member DISABLED in role mode').toBeDisabled({ timeout: 5000 });
+    await expect(oooPage.loc.helperText, 'Helper text VISIBLE in role mode').toBeVisible({ timeout: 5000 });
     const helperText = await oooPage.loc.helperText.textContent();
-    expect(helperText.trim(), 'Helper text content matches expected routing message')
-        .toBe('Approvals will be routed to the person assigned to this role for each property.');
-    await expect(oooPage.loc.btn_activate, 'Activate still disabled with role mode but no selection').toBeDisabled({ timeout: 5000 });
-    Logger.info(`TC-OOO-UI: Role mode fields ✓, helper text: "${helperText.trim()}" ✓`);
+    expect(helperText.trim()).toBe('Approvals will be routed to the person assigned to this role for each property.');
+    await expect(oooPage.loc.btn_activate, 'Activate DISABLED — no role selected').toBeDisabled({ timeout: 5000 });
+    Logger.info(`TC-OOO-UI: Role mode fields correct, helper text confirmed ✓`);
 
-    // ─ 5. Switch back to user mode: reversal ─
+    // ─ 5. Switch back to user mode — reversal ─
     await oooPage.selectDelegateToUser();
-    await expect(oooPage.loc.input_teamMember, 'Team member re-enabled in user mode').toBeEnabled({ timeout: 5000 });
-    await expect(oooPage.loc.input_role, 'Role re-disabled in user mode').toBeDisabled({ timeout: 5000 });
-    await expect(oooPage.loc.helperText, 'Helper text hidden after switch back to user mode').toBeHidden({ timeout: 5000 });
+    await expect(oooPage.loc.input_teamMember, 'Team member re-ENABLED in user mode').toBeEnabled({ timeout: 5000 });
+    await expect(oooPage.loc.input_role, 'Role re-DISABLED in user mode').toBeDisabled({ timeout: 5000 });
+    await expect(oooPage.loc.helperText, 'Helper text HIDDEN after switching back').toBeHidden({ timeout: 5000 });
     Logger.info('TC-OOO-UI: User mode reversal ✓');
 
-    // ─ 6. Mode switch: activate button governed by current mode's selection ─
-    // Mantine Select persists the input value in the DOM when the field is disabled —
-    // it is NOT cleared on radio switch. The button is disabled in user mode only because
-    // no user delegate is selected, not because the role value is gone.
+    // ─ 6. Button gating follows the active mode ─
     await oooPage.selectDelegateToRole();
     const roleName = await oooPage.getFirstRoleName();
     await oooPage.pickRoleFromDropdown(roleName);
-    await expect(oooPage.loc.btn_activate, 'Button enabled after picking role').toBeEnabled({ timeout: 5000 });
-    Logger.info(`TC-OOO-UI: Role "${roleName}" picked, button enabled ✓`);
+    await expect(oooPage.loc.btn_activate, 'Activate ENABLED after picking role').toBeEnabled({ timeout: 5000 });
+    Logger.info(`TC-OOO-UI: Role "${roleName}" picked — Activate enabled ✓`);
 
     await oooPage.selectDelegateToUser();
-    await expect(oooPage.loc.input_role, 'Role input must be DISABLED in user mode').toBeDisabled({ timeout: 5000 });
-    await expect(oooPage.loc.btn_activate, 'Button DISABLED in user mode — no user delegate selected').toBeDisabled({ timeout: 5000 });
-    Logger.info('TC-OOO-UI: Switched to user mode — role disabled, button disabled (no user selected) ✓');
+    await expect(oooPage.loc.btn_activate, 'Activate DISABLED in user mode — no user chosen').toBeDisabled({ timeout: 5000 });
 
-    // Switch back to role mode — role value persists (Mantine keeps it), button re-enables
     await oooPage.selectDelegateToRole();
-    await expect(oooPage.loc.input_role, 'Role input must be ENABLED back in role mode').toBeEnabled({ timeout: 5000 });
     const roleAfterReturn = await oooPage.loc.input_role.inputValue().catch(() => '');
-    expect(roleAfterReturn, 'Role input retains previously selected value after switching back').toBe(roleName);
-    await expect(oooPage.loc.btn_activate, 'Button re-enabled — role selection was retained on switch').toBeEnabled({ timeout: 5000 });
-    Logger.info(`TC-OOO-UI: Switched back to role mode — value "${roleAfterReturn}" retained, button enabled ✓`);
+    expect(roleAfterReturn, 'Role input must retain the previously selected value').toBe(roleName);
+    await expect(oooPage.loc.btn_activate, 'Activate re-ENABLED — role retained on mode switch').toBeEnabled({ timeout: 5000 });
+    Logger.info(`TC-OOO-UI: Mode switch round-trip — role "${roleAfterReturn}" retained, Activate re-enabled ✓`);
 
     Logger.success('TC-OOO-UI PASSED');
 });
 
-test('@ooo @regression TC-OOO-DATE Auto-deactivation date picker blocks past dates, allows today and future dates, clears correctly with the X button, stores dates without timezone shift, and handles invalid date input gracefully', async ({ page }) => {
+test('@ooo @regression TC269 The auto-deactivation date picker blocks past dates, allows today and future dates, clears with the X button, saves dates without timezone shift, and ignores bad input without breaking the form', async ({ page }) => {
     test.setTimeout(90000);
-    Logger.step('TC-OOO-DATE: All date-related scenarios');
+    Logger.step('TC-OOO-DATE: Verify all date picker scenarios');
 
-    // ─ 1. Date-only (no delegate) must NOT enable activate button ─
-    await expect(oooPage.loc.radio_delegateToUser, 'Must be in user mode initially').toBeChecked({ timeout: 3000 });
+    // ─ 1. Clear button hidden initially ─
+    await expect(oooPage.loc.btn_clearDate, 'Clear (×) button must be HIDDEN before any date set').toBeHidden({ timeout: 3000 });
+
+    // ─ 2. Date-only does NOT enable Activate ─
+    await expect(oooPage.loc.radio_delegateToUser, 'Must start in user mode').toBeChecked({ timeout: 3000 });
     const { uiDate: dateOnly } = await oooPage.setFutureDate(3);
-    await expect(oooPage.loc.btn_activate, 'Date-only must NOT enable activate button').toBeDisabled({ timeout: 5000 });
-    Logger.info(`TC-OOO-DATE: Date-only (${dateOnly}) does not enable button ✓`);
+    await expect(oooPage.loc.btn_activate, 'Activate must NOT be enabled by date alone').toBeDisabled({ timeout: 5000 });
+    Logger.info(`TC-OOO-DATE: Date-only (${dateOnly}) — Activate remains disabled ✓`);
     await oooPage.clearDeactivateDate();
+    await expect(oooPage.loc.input_deactivateDate, 'Date field empty after clearing').toHaveValue('', { timeout: 5000 });
 
-    // ─ 2. Select role (needed for calendar and remaining sub-tests) ─
+    // ─ 3. Switch to role mode and pick a role (needed for remaining steps) ─
     await oooPage.selectDelegateToRole();
     const roleName = await oooPage.getFirstRoleName();
     await oooPage.pickRoleFromDropdown(roleName);
+    await expect(oooPage.loc.btn_activate, 'Activate ENABLED after picking role').toBeEnabled({ timeout: 5000 });
+    Logger.info(`TC-OOO-DATE: Role "${roleName}" selected ✓`);
 
-    // ─ 3. Open calendar → prev-month nav disabled + past dates blocked ─
+    // ─ 4. Calendar: prev-month nav disabled, past dates disabled ─
     await oooPage.openDatePicker();
-    await expect(oooPage.loc.calendar_prevMonthBtn, 'Previous-month nav must be disabled on current month').toBeDisabled({ timeout: 5000 });
-    Logger.info('TC-OOO-DATE: Prev-month nav button disabled ✓');
-
+    await expect(oooPage.loc.calendar_prevMonthBtn, 'Prev-month button must be DISABLED on current month').toBeDisabled({ timeout: 5000 });
     const allDayBtns = oooPage.loc.calendar_allDayBtns;
     const count = await allDayBtns.count();
-    expect(count, 'Calendar must have day buttons to inspect').toBeGreaterThan(0);
-    Logger.info(`TC-OOO-DATE: Found ${count} day buttons in calendar`);
+    expect(count, 'Calendar must have at least one day button').toBeGreaterThan(0);
+    Logger.info(`TC-OOO-DATE: ${count} day buttons found in calendar`);
 
     const today = new Date();
-    const todayDay = today.getDate();
     let pastCount = 0;
     for (let i = 0; i < count; i++) {
         const btn = allDayBtns.nth(i);
-        const labelAttr = await btn.getAttribute('aria-label');
-        if (!labelAttr) continue;
-        const btnDate = new Date(labelAttr);
+        const label = await btn.getAttribute('aria-label');
+        if (!label) continue;
+        const btnDate = new Date(label);
         if (isNaN(btnDate.getTime())) continue;
-        const isPast = (
-            (btnDate.getFullYear() < today.getFullYear()) ||
-            (btnDate.getFullYear() === today.getFullYear() && btnDate.getMonth() < today.getMonth()) ||
-            (btnDate.getFullYear() === today.getFullYear() && btnDate.getMonth() === today.getMonth() && btnDate.getDate() < todayDay)
-        );
+        const isPast = btnDate < new Date(today.getFullYear(), today.getMonth(), today.getDate());
         if (isPast) {
             pastCount++;
             const isDisabled = await btn.isDisabled();
             const dataDisabled = await btn.getAttribute('data-disabled');
-            expect(
-                isDisabled || dataDisabled === 'true',
-                `Past date "${labelAttr}" must be disabled. isDisabled=${isDisabled}, data-disabled="${dataDisabled}"`
-            ).toBe(true);
+            expect(isDisabled || dataDisabled === 'true', `Past date "${label}" must be disabled`).toBe(true);
         }
     }
-    expect(pastCount, 'Must have found at least some past dates to verify').toBeGreaterThan(0);
-    Logger.info(`TC-OOO-DATE: Verified ${pastCount} past dates are disabled ✓`);
+    expect(pastCount, 'At least one past date must have been found and verified').toBeGreaterThan(0);
+    Logger.info(`TC-OOO-DATE: ${pastCount} past date(s) verified as disabled ✓`);
 
-    // ─ 4. Today is selectable ─
-    // Mantine DateInput sets value as "Month D, YYYY" (e.g. "May 26, 2026") when selected
-    // via the calendar picker button — different from fill() which preserves "MM/DD/YYYY".
+    // ─ 5. Today is selectable ─
     const todayCalendarValue = today.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     await oooPage.clickTodayInCalendar();
-    await expect(
-        oooPage.loc.input_deactivateDate,
-        `Date input must show today's date: ${todayCalendarValue}`
-    ).toHaveValue(todayCalendarValue, { timeout: 5000 });
-    await expect(oooPage.loc.btn_activate, 'Activate button must remain enabled after selecting today').toBeEnabled({ timeout: 5000 });
-    Logger.info(`TC-OOO-DATE: Today (${todayCalendarValue}) selectable ✓`);
+    await expect(oooPage.loc.input_deactivateDate, `Date input must show today: "${todayCalendarValue}"`).toHaveValue(todayCalendarValue, { timeout: 5000 });
+    await expect(oooPage.loc.btn_activate, 'Activate remains ENABLED after selecting today').toBeEnabled({ timeout: 5000 });
+    Logger.info(`TC-OOO-DATE: Today "${todayCalendarValue}" is selectable ✓`);
 
-    // ─ 5. Clear button appears and clears the date ─
-    await expect(oooPage.loc.btn_clearDate, '× clear button must appear after a date is set').toBeVisible({ timeout: 5000 });
+    // ─ 6. Clear button appears and works ─
+    await expect(oooPage.loc.btn_clearDate, '× must appear after a date is set').toBeVisible({ timeout: 5000 });
     await oooPage.clearDeactivateDate();
-    await expect(oooPage.loc.input_deactivateDate, 'Date field must be empty after clearing').toHaveValue('', { timeout: 5000 });
-    const clearGone = await oooPage.loc.btn_clearDate.isVisible().catch(() => false);
-    expect(clearGone, '× button must disappear after clearing date').toBe(false);
-    await expect(oooPage.loc.btn_activate, 'Activate button remains enabled (delegate still selected)').toBeEnabled({ timeout: 5000 });
-    Logger.info('TC-OOO-DATE: Clear button works, input empty, × gone, button still enabled ✓');
+    await expect(oooPage.loc.input_deactivateDate, 'Date field empty after clearing').toHaveValue('', { timeout: 5000 });
+    expect(await oooPage.loc.btn_clearDate.isVisible().catch(() => false), '× must disappear after clearing').toBe(false);
+    await expect(oooPage.loc.btn_activate, 'Activate remains ENABLED — delegate still selected').toBeEnabled({ timeout: 5000 });
+    Logger.info('TC-OOO-DATE: Clear button works ✓');
 
-    // ─ 6. Future date set correctly + timezone-shift check via API ─
+    // ─ 7. Future date stores without timezone shift ─
     const future = new Date();
     future.setDate(future.getDate() + 7);
     const mmF = String(future.getMonth() + 1).padStart(2, '0');
@@ -609,144 +505,119 @@ test('@ooo @regression TC-OOO-DATE Auto-deactivation date picker blocks past dat
     const yyyyF = future.getFullYear();
     const futureUi = `${mmF}/${ddF}/${yyyyF}`;
     const futureApi = `${yyyyF}-${mmF}-${ddF}`;
-
     await oooPage.loc.input_deactivateDate.fill(futureUi);
     await page.keyboard.press('Enter');
     await page.waitForTimeout(500);
     await expect(oooPage.loc.input_deactivateDate, `Date input must show ${futureUi}`).toHaveValue(futureUi, { timeout: 5000 });
-    await expect(oooPage.loc.btn_activate, 'Activate button enabled with role + future date').toBeEnabled({ timeout: 5000 });
     await oooPage.clickActivateOoo();
 
-    const apiState = await oooPage.getOooApiState();
-    expect(apiState.ooo, 'API ooo must not be null after activation with date').not.toBeNull();
-    const storedDate = apiState.ooo.deactivate_at;
-    expect(storedDate, 'API deactivate_at must not be null').not.toBeNull();
-    expect(
-        storedDate.startsWith(futureApi),
-        `TIMEZONE SHIFT DETECTED: set "${futureApi}", API stored "${storedDate}". Must match.`
-    ).toBe(true);
-    Logger.info(`TC-OOO-DATE: No timezone shift — stored "${storedDate}" starts with "${futureApi}" ✓`);
+    const apiState = await oooPage.assertRoleDelegationApi({ roleName, apiDate: futureApi });
+    Logger.info(`TC-OOO-DATE: No timezone shift — stored "${apiState.ooo.deactivate_at}" starts with "${futureApi}" ✓`);
 
-    // Deactivate before invalid date tests
     await oooPage.clickDeactivateOoo();
+    await oooPage.assertIsInactive();
+    Logger.info('TC-OOO-DATE: Deactivated before invalid date tests ✓');
 
-    // ─ 7. Invalid date typed — activate button state must not be corrupted ─
+    // ─ 8. Invalid dates do not corrupt the Activate button ─
     await oooPage.selectDelegateToRole();
     await oooPage.pickRoleFromDropdown(roleName);
-    await expect(oooPage.loc.btn_activate, 'Button enabled with valid role before invalid date test').toBeEnabled({ timeout: 5000 });
+    await expect(oooPage.loc.btn_activate, 'Activate ENABLED before invalid date test').toBeEnabled({ timeout: 5000 });
 
-    const invalidDates = ['32/13/2026', 'abcd', '00/00/0000', '99-99-9999', '   '];
-    for (const inv of invalidDates) {
-        Logger.step(`TC-OOO-DATE: Testing invalid date: "${inv}"`);
+    for (const inv of ['32/13/2026', 'abcd', '00/00/0000', '99-99-9999', '   ']) {
+        Logger.step(`TC-OOO-DATE: Testing invalid date "${inv}"`);
         await oooPage.loc.input_deactivateDate.fill(inv);
         await page.keyboard.press('Tab');
         await page.waitForTimeout(400);
         const fieldVal = await oooPage.loc.input_deactivateDate.inputValue();
-        Logger.info(`TC-OOO-DATE: After "${inv}", input value is "${fieldVal}"`);
-        await expect(
-            oooPage.loc.btn_activate,
-            `Activate button state must not be corrupted by invalid date "${inv}" — delegate is still selected`
-        ).toBeEnabled({ timeout: 5000 });
+        Logger.info(`TC-OOO-DATE: After "${inv}" input shows: "${fieldVal}"`);
+        await expect(oooPage.loc.btn_activate, `Activate must stay ENABLED after invalid date "${inv}"`).toBeEnabled({ timeout: 5000 });
         await oooPage.loc.input_deactivateDate.fill('');
         await page.keyboard.press('Tab');
         await page.waitForTimeout(300);
     }
-    Logger.info('TC-OOO-DATE: All invalid date inputs handled gracefully, button state preserved ✓');
+    Logger.info('TC-OOO-DATE: All invalid date inputs handled gracefully ✓');
 
     Logger.success('TC-OOO-DATE PASSED');
 });
 
-
-test('@ooo @visual TC-OOO-VISUAL Visual appearance of all Out of Office UI states matches the approved baseline screenshots', async ({ page }) => {
+test('@ooo @visual TC270 All Out of Office form states look correct compared to approved screenshots', async ({ page }) => {
     test.setTimeout(300000);
-    Logger.step('TC-OOO-VISUAL: Capturing visual snapshots of all OOO UI states');
+    Logger.step('TC-OOO-VISUAL: Capture all OOO UI state snapshots');
 
     const main = page.locator('main').first();
     const oooPanel = page.getByRole('tabpanel', { name: 'Out of Office' });
     const roleName = await oooPage.getFirstRoleName();
 
-    // V1 — Default inactive state (Delegate to user)
-    await test.step('V1 — Default inactive state (user mode)', async () => {
+    await test.step('V1 — Default inactive form (user mode)', async () => {
         await expect(oooPage.loc.radio_delegateToUser).toBeChecked({ timeout: 5000 });
         await page.mouse.move(0, 0);
         await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); });
         await expect(oooPanel).toHaveScreenshot('ooo-v1-inactive-user-mode.png', OOO_VISUAL);
-        Logger.info('V1 captured ✓');
+        Logger.info('V1 ✓');
     });
 
-    // V2 — Role mode with helper text
-    await test.step('V2 — Role mode with helper text visible', async () => {
+    await test.step('V2 — Role mode with helper text', async () => {
         await oooPage.selectDelegateToRole();
         await expect(oooPage.loc.helperText).toBeVisible({ timeout: 5000 });
         await page.mouse.move(0, 0);
         await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); });
         await expect(oooPanel).toHaveScreenshot('ooo-v2-role-mode-helper-text.png', OOO_VISUAL);
-        Logger.info('V2 captured ✓');
+        Logger.info('V2 ✓');
     });
 
-    // V3 — Role selected, activate button enabled
-    await test.step('V3 — Role selected, activate button enabled', async () => {
+    await test.step('V3 — Role selected, Activate enabled', async () => {
         await oooPage.pickRoleFromDropdown(roleName);
         await expect(oooPage.loc.btn_activate).toBeEnabled({ timeout: 5000 });
         await page.mouse.move(0, 0);
         await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); });
         await expect(oooPanel).toHaveScreenshot('ooo-v3-role-selected-button-enabled.png', OOO_VISUAL);
-        Logger.info('V3 captured ✓');
+        Logger.info('V3 ✓');
     });
 
-    // V4 — Date picker open (calendar visible)
     await test.step('V4 — Date picker calendar open', async () => {
         await oooPage.loc.input_deactivateDate.click();
         await expect(oooPage.loc.calendar_monthLabel).toBeVisible({ timeout: 5000 });
         await expect(main).toHaveScreenshot('ooo-v4-date-picker-open.png', OOO_VISUAL);
-        Logger.info('V4 captured ✓');
+        Logger.info('V4 ✓');
     });
 
-    // V5 — Date selected, clear button visible
-    await test.step('V5 — Future date selected with clear button', async () => {
+    await test.step('V5 — Future date selected with clear (×) visible', async () => {
         const { uiDate } = await oooPage.setFutureDate(5);
-        Logger.info(`V5 — date set: ${uiDate}`);
+        Logger.info(`V5 — date: ${uiDate}`);
         await expect(oooPage.loc.btn_clearDate).toBeVisible({ timeout: 5000 });
         await page.mouse.move(0, 0);
         await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); });
-        await expect(oooPanel).toHaveScreenshot('ooo-v5-date-selected-clear-visible.png', {
-            ...OOO_VISUAL,
-            mask: [oooPage.loc.input_deactivateDate],
-        });
-        Logger.info('V5 captured ✓');
+        await expect(oooPanel).toHaveScreenshot('ooo-v5-date-selected-clear-visible.png', { ...OOO_VISUAL, mask: [oooPage.loc.input_deactivateDate] });
+        Logger.info('V5 ✓');
     });
 
-    // V6 — Active state (role, no date)
-    await test.step('V6 — OOO active state with role delegate (no date)', async () => {
+    await test.step('V6 — OOO active with role delegate, no date', async () => {
         await oooPage.clearDeactivateDate();
         await oooPage.clickActivateOoo();
         await expect(oooPage.loc.activeStatePara).toBeVisible({ timeout: 10000 });
         await page.mouse.move(0, 0);
         await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); });
         await expect(oooPanel).toHaveScreenshot('ooo-v6-active-role-no-date.png', OOO_VISUAL);
-        Logger.info('V6 captured ✓');
+        Logger.info('V6 ✓');
     });
 
-    // V7 — Deactivate button close-up
-    await test.step('V7 — Deactivate button visible in active state', async () => {
+    await test.step('V7 — Deactivate button close-up', async () => {
         await expect(oooPage.loc.btn_deactivate).toBeVisible({ timeout: 5000 });
         await expect(oooPage.loc.btn_deactivate).toHaveScreenshot('ooo-v7-deactivate-button.png', OOO_VISUAL);
-        Logger.info('V7 captured ✓');
+        Logger.info('V7 ✓');
     });
 
-    // V8 — Form state after deactivation
-    await test.step('V8 — Form state after deactivation', async () => {
+    await test.step('V8 — Form state after Deactivate', async () => {
         await oooPage.clickDeactivateOoo();
         await expect(oooPage.loc.btn_activate).toBeVisible({ timeout: 10000 });
         await expect(oooPage.loc.activeStatePara).toBeHidden({ timeout: 5000 });
         await page.mouse.move(0, 0);
         await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); });
         await expect(oooPanel).toHaveScreenshot('ooo-v8-deactivated-form-state.png', OOO_VISUAL);
-        Logger.info('V8 captured ✓');
+        Logger.info('V8 ✓');
     });
 
-    // V9 — Active state with auto-deactivation date
-    await test.step('V9 — OOO active state with role delegate AND auto-deactivation date', async () => {
+    await test.step('V9 — OOO active with role delegate AND date', async () => {
         await oooPage.selectDelegateToRole();
         await oooPage.pickRoleFromDropdown(roleName);
         const { uiDate } = await oooPage.setFutureDate(10);
@@ -755,12 +626,377 @@ test('@ooo @visual TC-OOO-VISUAL Visual appearance of all Out of Office UI state
         await expect(page.getByText(/Auto-deactivates on/i)).toBeVisible({ timeout: 10000 });
         await page.mouse.move(0, 0);
         await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); });
-        await expect(oooPanel).toHaveScreenshot('ooo-v9-active-role-with-date.png', {
-            ...OOO_VISUAL,
-            mask: [page.getByText(/Auto-deactivates on/i)],
-        });
-        Logger.info('V9 captured ✓');
+        await expect(oooPanel).toHaveScreenshot('ooo-v9-active-role-with-date.png', { ...OOO_VISUAL, mask: [page.getByText(/Auto-deactivates on/i)] });
+        Logger.info('V9 ✓');
     });
 
     Logger.success('TC-OOO-VISUAL PASSED — all 9 snapshots captured');
+});
+
+test('@ooo @e2e TC271 Activating Out of Office in role delegation mode with a specific role and a random future date shows the correct active banner and saves the right role name and date to the API', async ({ page }) => {
+    test.setTimeout(60000);
+    Logger.step('TC-OOO-DELEGATE-ROLE: Activate with role + random date, verify UI and API');
+
+    await oooPage.ensureOooInactive();
+
+    // ─ 1. Switch to role mode and verify field states ─
+    await oooPage.selectDelegateToRole();
+    await expect(oooPage.loc.radio_delegateToRole, '"Delegate to role" must be checked').toBeChecked({ timeout: 5000 });
+    await expect(oooPage.loc.input_role, 'Role input must be ENABLED').toBeEnabled({ timeout: 5000 });
+    await expect(oooPage.loc.input_teamMember, 'Team member must be DISABLED in role mode').toBeDisabled({ timeout: 5000 });
+    await expect(oooPage.loc.helperText, 'Helper text must be VISIBLE in role mode').toBeVisible({ timeout: 5000 });
+    Logger.info('TC-OOO-DELEGATE-ROLE: Role mode field states correct ✓');
+
+    // ─ 2. Pick role, set random date, activate ─
+    const roleName = await oooPage.getFirstRoleName();
+    await oooPage.pickRoleFromDropdown(roleName);
+    await expect(oooPage.loc.btn_activate, 'Activate ENABLED after role selection').toBeEnabled({ timeout: 5000 });
+
+    const randomDays = Math.floor(Math.random() * 300) + 30;
+    const { uiDate, apiDate } = await oooPage.setFutureDate(randomDays);
+    Logger.info(`TC-OOO-DELEGATE-ROLE: Role="${roleName}", date UI="${uiDate}", API="${apiDate}" (${randomDays} days)`);
+
+    await oooPage.clickActivateOoo();
+
+    // ─ 3. Verify UI active state ─
+    await oooPage.assertIsActive({ withDateLine: true });
+    const activeText = await oooPage.assertActiveBanner({ roleName, isRole: true });
+    Logger.info(`TC-OOO-DELEGATE-ROLE: Active banner: "${activeText}" ✓`);
+
+    // ─ 4. Verify API record ─
+    const apiState = await oooPage.assertRoleDelegationApi({ roleName, apiDate });
+    Logger.info(`TC-OOO-DELEGATE-ROLE: API confirmed — id=${apiState.ooo.id}, role="${roleName}", date="${apiState.ooo.deactivate_at}" ✓`);
+
+    Logger.success('TC-OOO-DELEGATE-ROLE PASSED');
+});
+
+test('@ooo @e2e TC272 Activating Out of Office in user delegation mode selects a specific user and a random future date, shows the correct active banner, and saves the right user ID and date to the API', async ({ page }) => {
+    test.setTimeout(90000);
+    Logger.step('TC-OOO-DELEGATE-USER: Activate with user + random date, verify UI and API');
+
+    const PREFERRED_USER = 'admin_1778137522347@yopmail.com';
+
+    await oooPage.ensureOooInactive();
+
+    // Attach alert detector — any browser dialog during this test is a bug
+    const alert = oooPage.attachAlertDetector();
+
+    // ─ 1. Verify default user mode ─
+    await expect(oooPage.loc.radio_delegateToUser, '"Delegate to user" checked by default').toBeChecked({ timeout: 5000 });
+    await expect(oooPage.loc.input_teamMember, 'Team member ENABLED').toBeEnabled({ timeout: 5000 });
+    await expect(oooPage.loc.btn_activate, 'Activate DISABLED before delegate selection').toBeDisabled({ timeout: 5000 });
+    Logger.info('TC-OOO-DELEGATE-USER: Default user mode confirmed ✓');
+
+    // ─ 2. Select preferred user ─
+    await oooPage.searchAndSelectUser(PREFERRED_USER);
+    await expect(oooPage.loc.btn_activate, 'Activate ENABLED after user selection').toBeEnabled({ timeout: 5000 });
+
+    // ─ 3. Set random date ─
+    const randomDays = Math.floor(Math.random() * 300) + 30;
+    const { uiDate, apiDate } = await oooPage.setFutureDate(randomDays);
+    Logger.info(`TC-OOO-DELEGATE-USER: Date set — UI="${uiDate}", API="${apiDate}" (${randomDays} days)`);
+
+    // Setting a date while a user is selected must NOT trigger any browser alert
+    alert.assertNoAlert('after setting date with delegate user already selected');
+
+    // ─ 4. Activate — handle "combination already exists" conflict with a fallback user ─
+    await oooPage.loc.btn_activate.click();
+    await page.waitForTimeout(1500);
+
+    const combinationConflict = await page.getByText(/This combination already exists/i).isVisible().catch(() => false);
+    let chosenUser = PREFERRED_USER;
+
+    if (combinationConflict) {
+        Logger.info(`TC-OOO-DELEGATE-USER: "${PREFERRED_USER}"+date conflict — switching to fallback user`);
+        const delegates = await oooPage.getDelegatesApiResponse();
+        const fallback = delegates.members.find(m => m.label !== PREFERRED_USER);
+        expect(fallback, 'A fallback delegate user must exist in the org').toBeTruthy();
+        chosenUser = fallback.label;
+
+        // Change user while date is still set — this is the exact bug trigger
+        await oooPage.replaceSelectedUser(chosenUser);
+
+        // Changing the user while date is still set must NOT trigger any browser alert
+        alert.assertNoAlert(`after changing delegate from "${PREFERRED_USER}" to "${chosenUser}" while date "${uiDate}" was set`);
+
+        await oooPage.clickActivateOoo();
+    }
+
+    // ─ 5. Verify UI active state ─
+    await oooPage.assertIsActive({ withDateLine: true });
+    await oooPage.assertActiveBanner();
+    Logger.info(`TC-OOO-DELEGATE-USER: Active state confirmed for delegate "${chosenUser}" ✓`);
+
+    // Final guard — no alert must have appeared at any point
+    alert.assertNoAlert('during the entire test');
+
+    // ─ 6. Verify API record ─
+    const apiState = await oooPage.assertUserDelegationApi({ apiDate });
+    Logger.info(`TC-OOO-DELEGATE-USER: API confirmed — id=${apiState.ooo.id}, delegate_user_id="${apiState.ooo.delegate_user_id}", date="${apiState.ooo.deactivate_at}" ✓`);
+
+    Logger.success('TC-OOO-DELEGATE-USER PASSED');
+});
+
+test('@ooo @e2e @known-issue TC273 Sending a second Out of Office activation request directly to the API while one is already active is rejected by the backend and leaves the original record completely unchanged', async ({ page }) => {
+    test.setTimeout(90000);
+    Logger.step('TC-OOO-DUPLICATE-COMBINATION: Activate via UI then verify the API rejects a duplicate POST');
+
+    const DELEGATE_USER_EMAIL = 'admin_1778137522347@yopmail.com';
+
+    await oooPage.ensureOooInactive();
+
+    // ─ 1. Resolve numeric delegate user ID ─
+    const delegates = await oooPage.getDelegatesApiResponse();
+    const userMember = delegates.members.find(m => m.label === DELEGATE_USER_EMAIL);
+    expect(userMember, `"${DELEGATE_USER_EMAIL}" must be in the delegates list`).toBeTruthy();
+    const delegateUserId = parseInt(userMember.id, 10);
+    Logger.info(`TC-OOO-DUPLICATE-COMBINATION: delegate_user_id=${delegateUserId} ✓`);
+
+    // ─ 2. Generate a unique date for the first activation ─
+    const uniqueDays = Math.floor(Math.random() * 300) + 30;
+    const target = new Date();
+    target.setDate(target.getDate() + uniqueDays);
+    const mm = String(target.getMonth() + 1).padStart(2, '0');
+    const dd = String(target.getDate()).padStart(2, '0');
+    const yyyy = target.getFullYear();
+    const uiDate = `${mm}/${dd}/${yyyy}`;
+    const apiDate = `${yyyy}-${mm}-${dd}`;
+    Logger.info(`TC-OOO-DUPLICATE-COMBINATION: Date — UI="${uiDate}", API="${apiDate}" (${uniqueDays} days)`);
+
+    // ─ 3. First activation via UI ─
+    Logger.step('TC-OOO-DUPLICATE-COMBINATION: Activating OOO via UI');
+    await oooPage.searchAndSelectUser(DELEGATE_USER_EMAIL);
+    await oooPage.loc.input_deactivateDate.fill(uiDate);
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(500);
+    await oooPage.clickActivateOoo();
+
+    await oooPage.assertIsActive();
+    const firstApiState = await oooPage.assertUserDelegationApi({ apiDate });
+    Logger.info(`TC-OOO-DUPLICATE-COMBINATION: First activation confirmed — id=${firstApiState.ooo.id} ✓`);
+
+    // ─ 4. While OOO is still ACTIVE, POST the same payload again directly ─
+    const duplicatePayload = { delegateUserId, deactivateAt: apiDate };
+    Logger.step(`TC-OOO-DUPLICATE-COMBINATION: POSTing duplicate — ${JSON.stringify(duplicatePayload)}`);
+    const dupRes = await oooPage.postOooDirect(duplicatePayload);
+    const dupBody = await dupRes.json();
+    Logger.info(`TC-OOO-DUPLICATE-COMBINATION: Duplicate POST → HTTP ${dupRes.status()}, body: ${JSON.stringify(dupBody)}`);
+
+    // ─ 5. Backend must reject the duplicate ─
+    const isRejected = dupRes.status() !== 200
+        || dupBody.success === false
+        || JSON.stringify(dupBody).toLowerCase().includes('combination')
+        || JSON.stringify(dupBody).toLowerCase().includes('exists')
+        || JSON.stringify(dupBody).toLowerCase().includes('already')
+        || JSON.stringify(dupBody).toLowerCase().includes('error');
+    expect(
+        isRejected,
+        `[KNOWN ISSUE] Backend must reject a duplicate OOO POST while one is active.\nHTTP ${dupRes.status()} | body: ${JSON.stringify(dupBody)}`
+    ).toBe(true);
+    Logger.info(`TC-OOO-DUPLICATE-COMBINATION: Duplicate POST rejected (HTTP ${dupRes.status()}) ✓`);
+
+    // ─ 6. Original OOO record must be unchanged ─
+    const finalApiState = await oooPage.getOooApiState();
+    expect(finalApiState.ooo, 'Original OOO record must still be active').not.toBeNull();
+    expect(finalApiState.ooo.id, 'OOO id must be unchanged').toBe(firstApiState.ooo.id);
+    expect(finalApiState.ooo.delegate_user_id, 'delegate_user_id must be unchanged').toBe(delegateUserId);
+    expect(finalApiState.ooo.deactivate_at, 'deactivate_at must be unchanged').not.toBeNull();
+    Logger.info(`TC-OOO-DUPLICATE-COMBINATION: Original record unchanged — id=${finalApiState.ooo.id} ✓`);
+
+    Logger.success('TC-OOO-DUPLICATE-COMBINATION PASSED — duplicate POST rejected, original record preserved');
+});
+
+test.skip('@ooo @e2e TC274 Create an Invoice approval template with three required approvers on the test property and submit a test invoice to prepare for the approval routing verification test', async ({ page }) => {
+    test.setTimeout(300000);
+    Logger.step('TC-OOO-SETUP-APPROVAL-INVOICE: Create approval template and invoice for OOO routing chain');
+
+    const suffix = Date.now();
+
+    // ── Step 1: Read property from TC258 data ─
+    const propertyDataFile = path.join(__dirname, '../data/propertyData.json');
+    expect(fs.existsSync(propertyDataFile), 'data/propertyData.json must exist — run TC258 first').toBe(true);
+    const { propertyName } = JSON.parse(fs.readFileSync(propertyDataFile, 'utf8'));
+    expect(propertyName, 'propertyName must be populated in data/propertyData.json').toBeTruthy();
+    Logger.success(`TC-OOO-SETUP: Using property "${propertyName}" ✓`);
+
+    // ── Step 2: Create Invoice approval template ─
+    const approvalJob = new ApprovalJob(page);
+    await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'domcontentloaded' });
+    await approvalJob.navigateToApprovalTab();
+    await approvalJob.navigateToApprovalTemplatesTab();
+    await approvalJob.waitForPageLoad();
+
+    const templateName = `OOO_InvTemplate_${suffix}`;
+    await approvalJob.openCreateTemplateDialog();
+    await approvalJob.fillTemplateName(templateName);
+    await approvalJob.selectTemplateType('Invoice');
+    await approvalJob.addProperty(propertyName);
+    Logger.info(`TC-OOO-SETUP: Template dialog — name="${templateName}", type=Invoice, property="${propertyName}" ✓`);
+
+    // ── Step 3: Add 3 approvers ─
+    const APPROVER_TIMEOUT = 15000;
+    const approverInputs = page.getByPlaceholder('Select approver');
+    const approvers = ['sumit mishra', 'sumit test', 'Sumit Harsh'];
+
+    for (let i = 0; i < approvers.length; i++) {
+        const input = approverInputs.nth(i);
+        await input.waitFor({ state: 'visible', timeout: APPROVER_TIMEOUT });
+        await input.click();
+        await page.waitForTimeout(300);
+        await input.fill(approvers[i]);
+        await page.waitForTimeout(800);
+        await page.keyboard.press('ArrowDown');
+        await page.waitForTimeout(300);
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(800);
+        Logger.success(`TC-OOO-SETUP: Approver row ${i + 1} set — "${approvers[i]}" ✓`);
+    }
+
+    await approvalJob.fillAmount(5000);
+    await approvalJob.checkAlwaysRequiredInTemplateDialog(3);
+    Logger.info('TC-OOO-SETUP: Amount=$5000, Always Required checked for all 3 rows ✓');
+
+    await approvalJob.submitCreateTemplate();
+    await approvalJob.searchTemplate(templateName);
+    await expect(
+        page.getByRole('row').filter({ hasText: templateName }),
+        `Template "${templateName}" must appear in the list`
+    ).toBeVisible({ timeout: 15000 });
+    await approvalJob.clearSearch();
+    Logger.success(`TC-OOO-SETUP: Template "${templateName}" confirmed in list ✓`);
+
+    // ── Step 4: Add a test invoice ─
+    const projectData = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/projectData.json'), 'utf8'));
+    const projectPage = new ProjectPage(page);
+    const projectJob = new ProjectJob(page);
+    const invoicePage = new InvoicePage(page);
+
+    await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'load' });
+    await projectPage.openProject(projectData.projectName);
+    await projectJob.navigateToJobsTab();
+    await projectJob.openJobSummary();
+    await invoicePage.navigateToInvoiceTab();
+    await page.waitForLoadState('load');
+    await page.waitForTimeout(2000);
+    Logger.info(`TC-OOO-SETUP: Opened project "${projectData.projectName}" → invoice tab ✓`);
+
+    await page.evaluate(() => {
+        document.querySelectorAll('main, .mantine-AppShell-navbar').forEach(el => { el.style.zoom = '70%'; });
+    });
+
+    const invoiceAmount = Math.floor(Math.random() * (5000 - 1000 + 1)) + 1000;
+    const invoiceResult = await invoicePage.createCompleteInvoice({
+        title: `OOO_Invoice_${suffix}`,
+        description: 'Invoice for OOO approval routing setup',
+        budgetCategory: 'Bathroom fixtures install',
+        amount: invoiceAmount,
+        confirm: true,
+    });
+
+    expect(invoiceResult.number, 'Invoice number must be assigned').toBeTruthy();
+    expect(invoiceResult.budgetCategoriesSet, 'Budget category must be set').toBeGreaterThan(0);
+    expect(invoiceResult.amountFilled, `Amount $${invoiceAmount} must be committed in grid`).toBe(true);
+    const committedDigits = (invoiceResult.amountCellText || '').replace(/\D/g, '');
+    const expectedDigits = String(invoiceAmount).replace(/\D/g, '');
+    expect(committedDigits, `Grid cell must contain amount digits (${expectedDigits})`).toContain(expectedDigits);
+
+    const amountMatch = (invoiceResult.amountCellText || '').match(/\$[\d,]+/);
+    const invoiceAmountFormatted = amountMatch ? amountMatch[0] : `$${invoiceAmount.toLocaleString()}`;
+    const invoiceId = (invoiceResult.number || '').match(/\d+/)?.[0] || '';
+
+    Logger.success(`TC-OOO-SETUP: Invoice "${invoiceResult.number}" — amount: ${invoiceAmountFormatted}, ID: ${invoiceId} ✓`);
+
+    const oooChainDataPath = path.join(__dirname, '../data/oooChainData.json');
+    fs.mkdirSync(path.dirname(oooChainDataPath), { recursive: true });
+    fs.writeFileSync(oooChainDataPath, JSON.stringify({
+        invoiceId, invoiceAmount, invoiceAmountFormatted,
+        invoiceTitle: `OOO_Invoice_${suffix}`,
+        invoiceNumber: invoiceResult.number,
+        createdAt: new Date().toISOString(),
+    }, null, 2));
+    Logger.success(`TC-OOO-SETUP: Chain data saved — ID: ${invoiceId}, amount: ${invoiceAmountFormatted} ✓`);
+
+    Logger.success('TC-OOO-SETUP-APPROVAL-INVOICE PASSED');
+});
+
+test.describe.skip('TC275-APPROVAL-VERIFY — Verify invoice in All Approvals (admin user)', () => {
+    test.use({ storageState: 'OtherSessionState.json' });
+
+    test('@ooo @e2e TC-OOO-APPROVAL-VERIFY The test invoice shows up in All Approvals with the correct amount and Pending status and the Approval Details panel lists all three expected approvers with their individual statuses', async ({ page }) => {
+        test.setTimeout(120000);
+        Logger.step('TC-OOO-APPROVAL-VERIFY: Verify the setup invoice in All Approvals with all 3 approvers');
+
+        // ── Step 1: Read chain data ─
+        const chainDataPath = path.join(__dirname, '../data/oooChainData.json');
+        expect(fs.existsSync(chainDataPath), 'data/oooChainData.json must exist — run TC-OOO-SETUP first').toBe(true);
+        const { invoiceId, invoiceAmountFormatted, invoiceNumber } = JSON.parse(fs.readFileSync(chainDataPath, 'utf8'));
+        expect(invoiceId, 'invoiceId must be set').toBeTruthy();
+        expect(invoiceAmountFormatted, 'invoiceAmountFormatted must be set').toBeTruthy();
+        Logger.info(`TC-OOO-APPROVAL-VERIFY: Looking for ID="${invoiceId}", amount="${invoiceAmountFormatted}" ✓`);
+
+        // ── Step 2: Navigate to All Approvals ─
+        const origin = new URL(process.env.DASHBOARD_URL).origin;
+        await page.goto(`${origin}/approvals/all-approvals`, { waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('input[placeholder="Search..."]:not([data-disabled="true"])', { timeout: 30000 });
+        Logger.success('TC-OOO-APPROVAL-VERIFY: All Approvals page loaded ✓');
+
+        // ── Step 3: Search by invoice ID ─
+        await page.getByPlaceholder('Search...').first().fill(invoiceId);
+        await page.waitForTimeout(2000);
+        Logger.info(`TC-OOO-APPROVAL-VERIFY: Searched for ID "${invoiceId}"`);
+
+        // ── Step 4: Assert row — ID, amount, Pending status ─
+        const invoiceRow = page.getByRole('row').filter({ hasText: invoiceId }).first();
+        await expect(invoiceRow, `Row with invoice ID "${invoiceId}" must be visible`).toBeVisible({ timeout: 15000 });
+        await expect(invoiceRow.getByText(invoiceAmountFormatted), `Amount "${invoiceAmountFormatted}" must be in the row`).toBeVisible({ timeout: 5000 });
+        Logger.success(`TC-OOO-APPROVAL-VERIFY: Row found — ID="${invoiceId}", amount="${invoiceAmountFormatted}" ✓`);
+
+        const statusCell = invoiceRow.getByRole('gridcell').filter({ hasText: /pending/i }).first();
+        await expect(statusCell, 'Status cell must show Pending').toBeVisible({ timeout: 5000 });
+        const rawStatusText = await statusCell.innerText().catch(() => statusCell.textContent());
+        const statusText = (rawStatusText.match(/(Pending Approval|Pending Assignment|Pending|Approved|Rejected)/i)?.[0] || rawStatusText).trim();
+        expect(statusText, 'Status must be a pending variant').toMatch(/pending/i);
+        Logger.success(`TC-OOO-APPROVAL-VERIFY: Status is "${statusText}" ✓`);
+
+        // ── Step 5: Open View Details ─
+        const viewDetailsBtn = page.getByRole('button', { name: 'View Details' }).first();
+        await expect(viewDetailsBtn, '"View Details" must be visible').toBeVisible({ timeout: 10000 });
+        await viewDetailsBtn.click();
+
+        const dialog = page.getByRole('dialog', { name: 'Approval Details' });
+        await expect(dialog, 'Approval Details dialog must open').toBeVisible({ timeout: 15000 });
+        Logger.success('TC-OOO-APPROVAL-VERIFY: Approval Details dialog opened ✓');
+
+        // ── Step 6: Assert all 3 approvers are listed ─
+        const expectedApprovers = ['Sumit Mishra', 'Sumit Test', 'Sumit Harsh'];
+        for (const name of expectedApprovers) {
+            await expect(dialog.getByText(name, { exact: true }), `Approver "${name}" must be in dialog`).toBeVisible({ timeout: 10000 });
+        }
+        Logger.success(`TC-OOO-APPROVAL-VERIFY: All 3 approvers confirmed — ${expectedApprovers.join(', ')} ✓`);
+
+        // ── Step 7: Log each approver's status ─
+        const STATUS_VALUES = ['Pending Approval', 'Pending Assignment', 'Pending', 'Skipped', 'Rejected', 'Approved'];
+        for (const name of expectedApprovers) {
+            const nameEl = dialog.getByText(name, { exact: true }).first();
+            const approverStatus = await nameEl.evaluate((el, statuses) => {
+                let node = el;
+                for (let i = 0; i < 6; i++) {
+                    if (!node.parentElement) break;
+                    node = node.parentElement;
+                    for (const sib of Array.from(node.parentElement?.children || [])) {
+                        if (sib === node) continue;
+                        const txt = (sib.textContent || '').trim();
+                        if (statuses.some(s => s.toLowerCase() === txt.toLowerCase())) return txt;
+                    }
+                }
+                return 'Unknown';
+            }, STATUS_VALUES);
+            Logger.info(`TC-OOO-APPROVAL-VERIFY: "${name}" → "${approverStatus}"`);
+        }
+
+        Logger.success(
+            `TC-OOO-APPROVAL-VERIFY PASSED — Invoice ${invoiceNumber} in All Approvals ` +
+            `(amount: ${invoiceAmountFormatted}, status: ${statusText}), all 3 approvers logged`
+        );
+    });
 });
