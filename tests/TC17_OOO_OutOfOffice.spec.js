@@ -457,6 +457,25 @@ test('@ooo @regression TC269 The auto-deactivation date picker blocks past dates
 
     // ─ 4. Calendar: prev-month nav disabled, past dates disabled ─
     await oooPage.openDatePicker();
+    // Mantine DateInput remembers the last-viewed month even after the value is cleared.
+    // Step 2 set a future date crossing a month boundary (e.g. June when today is late May),
+    // so the calendar may open on a future month where prev-month is enabled.
+    // Navigate back to the current month before asserting the prev-month button is disabled.
+    {
+        const now = new Date();
+        const calLabel = oooPage.loc.calendar_monthLabel;
+        for (let i = 0; i < 12; i++) {
+            const labelText = await calLabel.textContent().catch(() => '');
+            const calDate = new Date(labelText);
+            if (!isNaN(calDate.getTime()) &&
+                calDate.getFullYear() === now.getFullYear() &&
+                calDate.getMonth() === now.getMonth()) break;
+            if (calDate > now && await oooPage.loc.calendar_prevMonthBtn.isEnabled().catch(() => false)) {
+                await oooPage.loc.calendar_prevMonthBtn.click();
+                await page.waitForTimeout(300);
+            } else break;
+        }
+    }
     await expect(oooPage.loc.calendar_prevMonthBtn, 'Prev-month button must be DISABLED on current month').toBeDisabled({ timeout: 5000 });
     const allDayBtns = oooPage.loc.calendar_allDayBtns;
     const count = await allDayBtns.count();
@@ -806,18 +825,27 @@ test('@ooo @e2e @known-issue TC273 Sending a second Out of Office activation req
     Logger.success('TC-OOO-DUPLICATE-COMBINATION PASSED — duplicate POST rejected, original record preserved');
 });
 
-test.skip('@ooo @e2e TC274 Create an Invoice approval template with three required approvers on the test property and submit a test invoice to prepare for the approval routing verification test', async ({ page }) => {
+test('@ooo @e2e TC274 Create an Invoice approval template with three required approvers on the test property and submit a test invoice to prepare for the approval routing verification test', async ({ page }) => {
+    test.skip(!fs.existsSync(path.join(__dirname, '../data/projectData.json')), 'data/projectData.json missing — run TC258 first');
     test.setTimeout(300000);
     Logger.step('TC-OOO-SETUP-APPROVAL-INVOICE: Create approval template and invoice for OOO routing chain');
 
     const suffix = Date.now();
 
-    // ── Step 1: Read property from TC258 data ─
-    const propertyDataFile = path.join(__dirname, '../data/propertyData.json');
-    expect(fs.existsSync(propertyDataFile), 'data/propertyData.json must exist — run TC258 first').toBe(true);
-    const { propertyName } = JSON.parse(fs.readFileSync(propertyDataFile, 'utf8'));
-    expect(propertyName, 'propertyName must be populated in data/propertyData.json').toBeTruthy();
-    Logger.success(`TC-OOO-SETUP: Using property "${propertyName}" ✓`);
+    // ── Step 1: Create a fresh property for TC274 so it never conflicts with
+    //            the template already created for the TC258 property by TC259. ─
+    const tc274PropertyName = `OOO_TC274_prop_${suffix}`;
+    const prop = new PropertiesHelper(page);
+    await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(7000);
+    await prop.goToProperties();
+    await prop.createProperty(
+        tc274PropertyName,
+        'Domestic Terminal, College Park, GA 30337, USA',
+        'College Park', 'GA', '30337', 'Garden Style'
+    );
+    const propertyName = tc274PropertyName;
+    Logger.success(`TC-OOO-SETUP: Created fresh property "${propertyName}" for TC274 ✓`);
 
     // ── Step 2: Create Invoice approval template ─
     const approvalJob = new ApprovalJob(page);
@@ -857,6 +885,7 @@ test.skip('@ooo @e2e TC274 Create an Invoice approval template with three requir
     Logger.info('TC-OOO-SETUP: Amount=$5000, Always Required checked for all 3 rows ✓');
 
     await approvalJob.submitCreateTemplate();
+    await page.waitForTimeout(7000);
     await approvalJob.searchTemplate(templateName);
     await expect(
         page.getByRole('row').filter({ hasText: templateName }),
@@ -919,10 +948,12 @@ test.skip('@ooo @e2e TC274 Create an Invoice approval template with three requir
     Logger.success('TC-OOO-SETUP-APPROVAL-INVOICE PASSED');
 });
 
-test.describe.skip('TC275-APPROVAL-VERIFY — Verify invoice in All Approvals (admin user)', () => {
-    test.use({ storageState: 'OtherSessionState.json' });
+const _hasOtherSession17 = fs.existsSync(path.join(__dirname, '../OtherSessionState.json'));
+test.describe('TC275-APPROVAL-VERIFY — Verify invoice in All Approvals (admin user)', () => {
+    test.use({ storageState: _hasOtherSession17 ? 'OtherSessionState.json' : 'sessionState.json' });
 
     test('@ooo @e2e TC-OOO-APPROVAL-VERIFY The test invoice shows up in All Approvals with the correct amount and Pending status and the Approval Details panel lists all three expected approvers with their individual statuses', async ({ page }) => {
+        test.skip(!fs.existsSync(path.join(__dirname, '../OtherSessionState.json')), 'OtherSessionState.json missing — provide a second authenticated user session to run this test');
         test.setTimeout(120000);
         Logger.step('TC-OOO-APPROVAL-VERIFY: Verify the setup invoice in All Approvals with all 3 approvers');
 

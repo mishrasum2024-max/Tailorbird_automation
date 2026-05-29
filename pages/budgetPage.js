@@ -44,7 +44,7 @@ exports.BudgetJob = class BudgetJob {
 
     async navigateToBudget() {
         await this.page.goto('https://beta.tailorbird.com/financials/budget', { waitUntil: 'load' });
-        await this.page.waitForLoadState('networkidle');
+        await this.page.waitForTimeout(7000);
         await this.page.waitForURL('**/financials/budget**', { timeout: 15000 }).catch(() => {});
     }
 
@@ -60,8 +60,7 @@ exports.BudgetJob = class BudgetJob {
         await budget.propertyDropdownButton.click();
         await this.page.waitForTimeout(1000);
         await budget.brookProperty.click();
-        await this.page.waitForLoadState('networkidle');
-        await this.page.waitForTimeout(2000);
+        await this.page.waitForTimeout(7000);
         await this.page.keyboard.press('Escape');
         await this.page.waitForTimeout(200);
     }
@@ -591,12 +590,10 @@ exports.BudgetJob = class BudgetJob {
 
         if (!enabled) {
             Logger.info('Revise Budgets still disabled after 15s, reloading page...');
-            await this.page.reload({ waitUntil: 'networkidle' });
-            await this.page.waitForTimeout(3000);
+            await this.page.reload({ waitUntil: 'load' });
+            await this.page.waitForTimeout(7000);
             if (await budget.propertyDropdownButton.isVisible({ timeout: 3000 }).catch(() => false)) {
                 await this.selectBrookProperty();
-                await this.page.waitForLoadState('networkidle');
-                await this.page.waitForTimeout(3000);
             }
             btn = budget.reviseBudgetsBtn;
             enabled = await btn.isEnabled({ timeout: 15000 }).catch(() => false);
@@ -612,8 +609,7 @@ exports.BudgetJob = class BudgetJob {
 
         await expect(btn).toBeEnabled({ timeout: 10000 });
         await btn.click();
-        await this.page.waitForLoadState('networkidle');
-        await this.page.waitForTimeout(2000);
+        await this.page.waitForTimeout(7000);
     }
 
     async openRevisionEditor() {
@@ -622,27 +618,23 @@ exports.BudgetJob = class BudgetJob {
         await this.page.keyboard.press('Escape');
         await this.page.waitForTimeout(500);
         await this.clickReviseBudgets();
-        await this.page.waitForLoadState('networkidle');
-        await this.page.waitForTimeout(3000);
+        await this.page.waitForTimeout(7000);
         // The revision editor may open via URL navigation (/budget-revision/) or as an in-place
         // dialog/drawer (no URL change). Soft-wait for URL, then confirm via verifyRevisionEditorOpen().
         await this.page.waitForURL(/budget-revision/, { timeout: 15000 }).catch(() => {});
-        await this.page.waitForLoadState('networkidle');
-        await this.page.waitForTimeout(2000);
+        await this.page.waitForTimeout(7000);
         await this.verifyRevisionEditorOpen();
 
         const createRev = budget.createBudgetRevisionBtn;
         if (await createRev.first().isVisible({ timeout: 5000 }).catch(() => false)) {
             Logger.step('Create budget revision CTA visible (e.g. first budget) — confirming');
             await createRev.first().click({ force: true });
-            await this.page.waitForLoadState('networkidle');
-            await this.page.waitForTimeout(2500);
+            await this.page.waitForTimeout(7000);
         }
     }
 
     async verifyRevisionEditorOpen() {
-        await this.page.waitForLoadState('networkidle');
-        await this.page.waitForTimeout(2000);
+        await this.page.waitForTimeout(7000);
         const url = this.page.url();
         const hasRevisionUrl = url.includes('budget-revision');
         const hasTreegridRows = await budget.treegridDataRows.first().isVisible({ timeout: 8000 }).catch(() => false);
@@ -762,8 +754,7 @@ exports.BudgetJob = class BudgetJob {
                         if (await confirmBtn.isEnabled().catch(() => false)) {
                             await confirmBtn.click();
                             Logger.info('Clicked Submit for Approval in confirmation dialog');
-                            await this.page.waitForLoadState('networkidle');
-                            await this.page.waitForTimeout(3000);
+                            await this.page.waitForTimeout(7000);
                             Logger.success('Submit for Approval completed');
                             return;
                         }
@@ -779,8 +770,7 @@ exports.BudgetJob = class BudgetJob {
                         if (await anyConfirmBtn.isEnabled().catch(() => false)) {
                             await anyConfirmBtn.click();
                             Logger.info('Clicked confirm button in dialog');
-                            await this.page.waitForLoadState('networkidle');
-                            await this.page.waitForTimeout(3000);
+                            await this.page.waitForTimeout(7000);
                             Logger.success('Submit for Approval completed');
                             return;
                         }
@@ -793,8 +783,7 @@ exports.BudgetJob = class BudgetJob {
             if (newCount > 1) {
                 await newSubmitBtns.last().click();
                 Logger.info('Clicked the last Submit for Approval button (likely confirmation)');
-                await this.page.waitForLoadState('networkidle');
-                await this.page.waitForTimeout(3000);
+                await this.page.waitForTimeout(7000);
                 Logger.success('Submit for Approval completed');
                 return;
             }
@@ -802,8 +791,7 @@ exports.BudgetJob = class BudgetJob {
             await this.page.waitForTimeout(1000);
         }
 
-        await this.page.waitForLoadState('networkidle');
-        await this.page.waitForTimeout(3000);
+        await this.page.waitForTimeout(7000);
         await this.page.waitForURL('**/financials/budget**', { timeout: 30000 }).catch(() => {
             Logger.info('URL did not change to main budget page after submit');
         });

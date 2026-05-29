@@ -288,6 +288,7 @@ test.describe.serial('Finalize bid / contract + OOO approval chain', () => {
         Logger.info('TC-OOO-SETUP: Amount=$5000, Always Required checked for all 3 rows ✓');
 
         await approvalJob.submitCreateTemplate();
+        await page.waitForTimeout(7000);
         await approvalJob.searchTemplate(templateName);
         await expect(
             page.getByRole('row').filter({ hasText: templateName }),
@@ -348,10 +349,12 @@ test.describe.serial('Finalize bid / contract + OOO approval chain', () => {
         Logger.success('TC-OOO-SETUP-APPROVAL-INVOICE PASSED');
     });
 
+    const _hasOtherSession15 = fs.existsSync(path.join(__dirname, '../OtherSessionState.json'));
     test.describe('TC260-APPROVAL-VERIFY — verify Other user can see the created approval for OUt of Office', () => {
-        test.use({ storageState: 'OtherSessionState.json' });
+        test.use({ storageState: _hasOtherSession15 ? 'OtherSessionState.json' : 'sessionState.json' });
 
         test('@ooo @e2e TC-OOO-APPROVAL-VERIFY The test invoice shows up in All Approvals with the correct amount and Pending status and the Approval Details panel lists all three expected approvers with their individual statuses', async ({ page }) => {
+            test.skip(!_hasOtherSession15, 'OtherSessionState.json missing — provide a second authenticated user session to run this test');
             test.setTimeout(120000);
             Logger.step('TC-OOO-APPROVAL-VERIFY: Verify the setup invoice in All Approvals with all 3 approvers');
 

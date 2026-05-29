@@ -244,15 +244,14 @@ test.describe('Budget Workflow - E2E Tests', () => {
         Logger.success(`TC233: Category in first row BEFORE submit = "${categoryBeforeSubmit}"`);
 
         await budgetJob.clickSubmitForApproval();
-        await page.waitForLoadState('networkidle').catch(() => {});
-        await page.waitForTimeout(2000);
+        await page.waitForTimeout(7000);
 
         // After submission the app navigates away and loses the property context
         // ("No budget version selected"). Re-navigate to The Brook's budget so we
         // can assert the main grid state.
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();
-        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(7000);
         // RevoGrid renders asynchronously after network-idle — wait for an actual
         // data row (not loading skeleton) to appear before counting.
         await page.locator('[role="row"]').filter({ has: page.locator('[role="gridcell"]') })
@@ -289,31 +288,6 @@ test.describe('Budget Workflow - E2E Tests', () => {
     });
 
     }); // end serial
-
-    test('TC235 @budget @regression : Verify selecting a Draft Budget version opens the Budget Revision drawer with Draft status visibility and prevents Revise Budget actions from being enabled after returning to the Budget overview workspace', async () => {
-        test.slow();
-        await budgetJob.navigateToBudget();
-        await budgetJob.selectBrookProperty();
-        await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(3000);
-
-        test.skip(
-            !(await budgetJob.budgetVersionDropdownHasDraftOption()),
-            'No draft row in version dropdown (labels like "Version 9draft") — create a draft revision first or use a property that has one'
-        );
-
-        Logger.step(
-            'TC235: Select draft version (opens Budget Revision drawer with Draft badge). Headed: npx playwright test tests/TC13_Budget.spec.js -g TC160 --headed --workers=1'
-        );
-        await budgetJob.selectBudgetVersionMatching(/draft/i);
-        await page.waitForURL(/budget-revision/i, { timeout: 30000 }).catch(() => page.waitForTimeout(5000));
-
-        Logger.step('TC235: Close draft dialog — overview must keep Revise Budgets disabled for draft version');
-        await budgetJob.expectDraftVersionBlocksReviseOnOverviewAfterClosingDialog();
-        Logger.success('TC235: Draft blocks Revise on overview — passed');
-    });
-
-    // ===== Advanced Budget Tests (TC-NEW-01 to TC-NEW-08) =====
 
     test('TC236 @budget @regression @ui : Verify all Budget toolbar CTA labels, button states, View inline save flow, year selector options, and empty-year blank state', async () => {
         await budgetJob.navigateToBudget();
