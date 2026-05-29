@@ -67,7 +67,7 @@ class FinancialsCategoryPage {
         if (visible) {
             await this.categoryLink.click();
         } else {
-            await this.page.goto("https://beta.tailorbird.com/financials/category", { waitUntil: "domcontentloaded" });
+            await this.page.goto("/financials/category", { waitUntil: "domcontentloaded" });
         }
 
         await this.page.waitForLoadState("domcontentloaded");

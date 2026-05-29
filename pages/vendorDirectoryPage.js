@@ -4,7 +4,7 @@ const { expect } = require('@playwright/test');
 const { Logger } = require('../utils/logger');
 const { vendorLocators } = require('../locators/vendorLocator');
 
-const VENDORS_DIRECTORY_URL = 'https://beta.tailorbird.com/vendors/directory';
+const VENDORS_DIRECTORY_URL = '/vendors/directory';
 
 class VendorDirectoryPage {
     constructor(page) {

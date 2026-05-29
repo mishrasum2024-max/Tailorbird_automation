@@ -123,6 +123,8 @@ test('@ooo @regression TC263 Setting an auto-deactivation date when activating O
     await oooPage.loc.input_deactivateDate.fill(uiDate);
     await page.keyboard.press('Enter');
     await page.waitForTimeout(500);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
     await oooPage.clickActivateOoo();
 
     await oooPage.assertIsActive({ withDateLine: true });
@@ -674,6 +676,8 @@ test('@ooo @e2e TC271 Activating Out of Office in role delegation mode with a sp
     const randomDays = Math.floor(Math.random() * 300) + 30;
     const { uiDate, apiDate } = await oooPage.setFutureDate(randomDays);
     Logger.info(`TC-OOO-DELEGATE-ROLE: Role="${roleName}", date UI="${uiDate}", API="${apiDate}" (${randomDays} days)`);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
 
     await oooPage.clickActivateOoo();
 

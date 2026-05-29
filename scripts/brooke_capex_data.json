@@ -186,6 +186,6 @@
         "Invoiced Amount": ""
       }
     ],
-    "pageUrl": "https://beta.tailorbird.com/financials/capex?propertyId=766"
+    "pageUrl": "/financials/capex?propertyId=766"
   }
 }

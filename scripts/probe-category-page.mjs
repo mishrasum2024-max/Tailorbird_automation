@@ -13,8 +13,8 @@ const root = path.resolve(__dirname, '..');
 const storagePath = path.join(root, 'sessionState.json');
 
 const urls = [
-  'https://beta.tailorbird.com/financials/category',
-  'https://beta.tailorbird.com/financials/category?propertyId=765',
+  '/financials/category',
+  '/financials/category?propertyId=765',
 ];
 
 async function main() {

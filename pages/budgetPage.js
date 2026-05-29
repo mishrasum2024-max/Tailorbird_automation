@@ -29,10 +29,11 @@ exports.BudgetJob = class BudgetJob {
             const nowVisible = await budget.budgetTab.isVisible().catch(() => false);
             if (nowVisible) {
                 await budget.budgetTab.click();
-                await this.page.waitForLoadState('networkidle');
+                await this.page.waitForTimeout(7000);
             } else {
                 Logger.info('Budget tab not visible in sidebar — navigating directly');
-                await this.page.goto('https://beta.tailorbird.com/financials/budget', { waitUntil: 'networkidle' });
+                await this.page.goto(process.env.DASHBOARD_URL.replace(/\/$/, '') + '/financials/budget', { waitUntil: 'load' });
+                await this.page.waitForTimeout(7000);
             }
             await this.page.waitForURL('**/financials/budget', { timeout: 15000 });
             Logger.success('Navigated to Budget tab');
@@ -43,14 +44,13 @@ exports.BudgetJob = class BudgetJob {
     }
 
     async navigateToBudget() {
-        await this.page.goto('https://beta.tailorbird.com/financials/budget', { waitUntil: 'load' });
+        await this.page.goto('/financials/budget', { waitUntil: 'load' });
         await this.page.waitForTimeout(7000);
         await this.page.waitForURL('**/financials/budget**', { timeout: 15000 }).catch(() => {});
     }
 
     async waitForPageLoad() {
-        await this.page.waitForLoadState('networkidle');
-        await this.page.waitForTimeout(4000);
+        await this.page.waitForTimeout(7000);
     }
 
     // ===================== Property Selection =====================
@@ -171,7 +171,7 @@ exports.BudgetJob = class BudgetJob {
             throw e;
         }
 
-        await this.page.goto(process.env.DASHBOARD_URL || 'https://beta.tailorbird.com/projects', { waitUntil: 'load' });
+        await this.page.goto(process.env.DASHBOARD_URL || '/projects', { waitUntil: 'load' });
         await this.page.waitForLoadState('networkidle');
         await this.page.waitForTimeout(1000);
 

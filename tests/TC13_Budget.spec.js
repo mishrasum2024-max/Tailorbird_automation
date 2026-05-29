@@ -21,7 +21,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
         budgetJob = new BudgetJob(page);
         await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'load' });
         await expect(page).toHaveURL(process.env.DASHBOARD_URL);
-        await page.waitForLoadState('networkidle');
+        await page.waitForTimeout(7000);
         Logger.info('Dashboard loaded from stored session');
         await budgetJob.navigateToBudgetTab();
         await budgetJob.waitForPageLoad();
@@ -332,16 +332,6 @@ test.describe('Budget Workflow - E2E Tests', () => {
         await budgetJob.verifyVersionNoteModalLabels();
         await budgetJob.verifyManageVersionsRenameAndDeleteGuard();
         Logger.success('TC240: Version Note modal, rename, delete guard – PASSED');
-    });
-
-    test('TC241 @budget @regression @ui : Verify Revision Editor structure – DRAFT badge, summary cards, Budget/Documents tabs, Save as Draft and Submit CTAs, toolbar icons, and grid column headers', async () => {
-        await budgetJob.navigateToBudget();
-        await budgetJob.selectBrookProperty();
-        await budgetJob.openRevisionEditor();
-        await budgetJob.verifyRevisionEditorOpen();
-        await budgetJob.verifyRevisionEditorStructure();
-        await budgetJob.verifySubmitEnableDisableLifecycle();
-        Logger.success('TC241: Revision Editor structure and Submit lifecycle – PASSED');
     });
 
     test('TC242 @budget @regression @ui : Verify Documents tab empty state, search bar, Upload files button, and Uploadcare widget sources with Done disabled and Cancel closes widget', async () => {

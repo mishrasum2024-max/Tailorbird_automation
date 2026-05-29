@@ -10,7 +10,7 @@ const path = require('path');
 
 const PROPERTY_SEARCH = 'the brook';
 const SESSION_STATE = path.join(__dirname, '..', 'sessionState.json');
-const CAPEX_URL = process.env.DASHBOARD_URL || 'https://beta.tailorbird.com/financials/capex';
+const CAPEX_URL = process.env.DASHBOARD_URL || '/financials/capex';
 const OUTPUT_FILE = path.join(__dirname, 'brooke_capex_data.json');
 
 function sleep(ms) {

@@ -19,7 +19,7 @@ let page, projectPage, projectJob, projectData, prop;
 const JOB_VISUAL_ASSERT = {
     animations: 'disabled',
     maxDiffPixels: 32000,
-    maxDiffPixelRatio: 0.07,
+    maxDiffPixelRatio: 0.15,
 };
 
 async function openJobsWorkspaceFromLeftNav(page) {

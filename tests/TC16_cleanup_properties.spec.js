@@ -329,7 +329,7 @@ test.describe('Organization pending users cleanup', () => {
     try {
       try {
         await test.step('Open Manage Organization (reuse existing session)', async () => {
-          await org.goto(process.env.ORGANIZATION_URL || 'https://beta.tailorbird.com/organization');
+          await org.goto(process.env.ORGANIZATION_URL || '/organization');
           await page.waitForLoadState('networkidle').catch(() => {});
 
           // Hard fail fast when session is stale; avoids relogin in this cleanup flow.

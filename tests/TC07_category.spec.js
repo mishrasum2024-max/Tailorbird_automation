@@ -172,7 +172,7 @@ test.describe('Verify category tab', () => {
     });
 
     test('TC94 @sanity @regression @category : filter option is working as expected', async () => {
-        await page.goto('https://beta.tailorbird.com/financials/category?propertyId=765', { waitUntil: 'domcontentloaded' });
+        await page.goto('/financials/category?propertyId=765', { waitUntil: 'domcontentloaded' });
         await expect(page, 'UI changed: expected category route').toHaveURL(/category/);
 
         await page.waitForTimeout(10000);

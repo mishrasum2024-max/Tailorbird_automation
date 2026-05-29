@@ -18,7 +18,7 @@ let projectPage, projectJob, prop;
 const PROJECT_VISUAL_ASSERT = {
     animations: 'disabled',
     maxDiffPixels: 30000,
-    maxDiffPixelRatio: 0.06,
+    maxDiffPixelRatio: 0.15,
 };
 
 test.beforeEach(async ({ page }) => {

@@ -469,7 +469,7 @@ test.describe('CapEx Sidebar One-Page QA Checklist', () => {
         }
 
         // ── 3. Navigate to CapEx without propertyId → "Select a Property" shown ──
-        const baseUrl = 'https://beta.tailorbird.com/financials/capex';
+        const baseUrl = '/financials/capex';
         await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
         const selectBtn = page.getByRole('button', { name: /Select a Property/i }).first();
         const breadcrumb = page.locator('text=Select a Property').first();

@@ -247,11 +247,20 @@ test.describe.serial('Finalize bid / contract + OOO approval chain', () => {
 
         const suffix = Date.now();
 
-        const propertyDataFile = path.join(__dirname, '../data/propertyData.json');
-        expect(fs.existsSync(propertyDataFile), 'data/propertyData.json must exist — TC258 must have run first').toBe(true);
-        const { propertyName } = JSON.parse(fs.readFileSync(propertyDataFile, 'utf8'));
-        expect(propertyName, 'propertyName must be populated in data/propertyData.json').toBeTruthy();
-        Logger.success(`TC-OOO-SETUP: Using property "${propertyName}" from TC258 ✓`);
+        // Create a fresh property for this TC259 run to avoid conflicts with
+        // Invoice templates already created for TC258's property in prior runs.
+        const tc259PropertyName = `OOO_TC259_prop_${suffix}`;
+        const propHelper = new PropertiesHelper(page);
+        await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'domcontentloaded' });
+        await page.waitForTimeout(7000);
+        await propHelper.goToProperties();
+        await propHelper.createProperty(
+            tc259PropertyName,
+            'Domestic Terminal, College Park, GA 30337, USA',
+            'College Park', 'GA', '30337', 'Garden Style'
+        );
+        const propertyName = tc259PropertyName;
+        Logger.success(`TC-OOO-SETUP: Created fresh property "${propertyName}" for TC259 ✓`);
 
         const approvalJob = new ApprovalJob(page);
         await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'domcontentloaded' });

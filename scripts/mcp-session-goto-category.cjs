@@ -14,7 +14,7 @@ module.exports = async (page) => {
     viewport: { width: 1920, height: 1080 },
   });
   const p = await ctx.newPage();
-  await p.goto('https://beta.tailorbird.com/financials/category', {
+  await p.goto('/financials/category', {
     waitUntil: 'domcontentloaded',
     timeout: 90000,
   });

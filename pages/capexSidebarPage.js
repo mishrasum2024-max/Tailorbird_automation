@@ -19,7 +19,7 @@ class CapexSidebarPage {
     }
 
     async gotoCapexWithPropertyId(propertyId) {
-        const base = process.env.DASHBOARD_URL || 'https://beta.tailorbird.com/financials/capex';
+        const base = process.env.DASHBOARD_URL || '/financials/capex';
         const url = `${base.split('?')[0]}?propertyId=${propertyId}`;
         try {
             await this.page.goto(url, { waitUntil: 'domcontentloaded' });
