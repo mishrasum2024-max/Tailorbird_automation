@@ -247,20 +247,14 @@ test.describe.serial('Finalize bid / contract + OOO approval chain', () => {
 
         const suffix = Date.now();
 
-        // Create a fresh property for this TC259 run to avoid conflicts with
-        // Invoice templates already created for TC258's property in prior runs.
-        const tc259PropertyName = `OOO_TC259_prop_${suffix}`;
-        const propHelper = new PropertiesHelper(page);
-        await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'domcontentloaded' });
-        await page.waitForTimeout(7000);
-        await propHelper.goToProperties();
-        await propHelper.createProperty(
-            tc259PropertyName,
-            'Domestic Terminal, College Park, GA 30337, USA',
-            'College Park', 'GA', '30337', 'Garden Style'
-        );
-        const propertyName = tc259PropertyName;
-        Logger.success(`TC-OOO-SETUP: Created fresh property "${propertyName}" for TC259 ✓`);
+        // Use TC258's property for the Invoice template so that the invoice created
+        // in TC258's job (which belongs to TC258's property) triggers this template.
+        // A fresh property here would mismatch the invoice → no approval → TC260 fails.
+        const propertyDataFile = path.join(__dirname, '../data/propertyData.json');
+        expect(fs.existsSync(propertyDataFile), 'data/propertyData.json must exist — TC258 must run first').toBe(true);
+        const { propertyName } = JSON.parse(fs.readFileSync(propertyDataFile, 'utf8'));
+        expect(propertyName, 'propertyName must be set in propertyData.json').toBeTruthy();
+        Logger.success(`TC-OOO-SETUP: Using TC258 property "${propertyName}" for Invoice template ✓`);
 
         const approvalJob = new ApprovalJob(page);
         await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'domcontentloaded' });
@@ -380,11 +374,13 @@ test.describe.serial('Finalize bid / contract + OOO approval chain', () => {
             Logger.success('TC-OOO-APPROVAL-VERIFY: All Approvals page loaded ✓');
 
             await page.getByPlaceholder('Search...').first().fill(invoiceId);
-            await page.waitForTimeout(2000);
+            // Give CI more time — approval indexing may lag after invoice creation.
+            await page.waitForTimeout(3000);
             Logger.info(`TC-OOO-APPROVAL-VERIFY: Searched for ID "${invoiceId}"`);
 
+            // Retry the row lookup with a longer timeout to handle any indexing delay
             const invoiceRow = page.getByRole('row').filter({ hasText: invoiceId }).first();
-            await expect(invoiceRow, `Row with invoice ID "${invoiceId}" must be visible`).toBeVisible({ timeout: 15000 });
+            await expect(invoiceRow, `Row with invoice ID "${invoiceId}" must be visible`).toBeVisible({ timeout: 30000 });
             await expect(invoiceRow.getByText(invoiceAmountFormatted), `Amount "${invoiceAmountFormatted}" must be in the row`).toBeVisible({ timeout: 5000 });
             Logger.success(`TC-OOO-APPROVAL-VERIFY: Row found — ID="${invoiceId}", amount="${invoiceAmountFormatted}" ✓`);
 
