@@ -1034,14 +1034,17 @@ exports.ProjectJob = class ProjectJob {
             }
         };
     
+        const _now = new Date();
+        const _yr = _now.getFullYear();
+        const _mo = String(_now.getMonth() + 1).padStart(2, '0');
         const CONTRACT_DATA = {
             scope: 'Bid with material',
             budgetCategory: 'Bathroom fixtures install',
             scheduleOfValue: '15000',
             costItem: 'Mirror clipped',
             contractAmount: '25000',
-            startDate: '2026-05-01',
-            endDate: '2026-05-30',
+            startDate: `${_yr}-${_mo}-01`,
+            endDate: `${_yr}-${_mo}-28`,
         };
     
         try {
@@ -1105,15 +1108,17 @@ exports.ProjectJob = class ProjectJob {
             const innerContractPanel = contractsJobPanel.getByRole('tabpanel', { name: 'Contract' }).first();
             await expect(innerContractPanel).toBeVisible({ timeout: 15000 });
     
+            // Delete any pre-existing contract rows using the revogr-data action section
+            // (svg.lucide-trash-2 selectors never match — contract grid uses <img> buttons).
             await page.waitForTimeout(2500);
-            const deleteButtons = page.locator(
-                'button:has(svg.lucide-trash-2), button:has(svg.lucide-trash2), button[aria-label="Delete Row"]'
-            );
+            const contractsGridPre = innerContractPanel.locator('revo-grid[role="treegrid"]').first();
+            const actionSectionPre = contractsGridPre.locator('revogr-data[type="rgRow"]').nth(1);
             let guard = 0;
             while (guard < 40) {
-                const count = await deleteButtons.count().catch(() => 0);
+                const delBtns = actionSectionPre.locator('[data-rgrow] button');
+                const count = await delBtns.count().catch(() => 0);
                 if (count === 0) break;
-                const delBtn = deleteButtons.first();
+                const delBtn = delBtns.first();
                 await delBtn.scrollIntoViewIfNeeded();
                 const isDisabled = await delBtn.isDisabled().catch(() => true);
                 if (isDisabled) {
@@ -1447,12 +1452,15 @@ exports.ProjectJob = class ProjectJob {
             const clickCalendarDayAfterOpen = async (dateStr) => {
                 const fullName = toCalendarBtnName(dateStr);
                 const dayNum = Number(dateStr.split('-')[2]);
+                // Primary: match by aria-label (e.g. "1 June 2026")
                 const full = page.getByRole('button', { name: fullName, exact: true });
                 if (await full.isVisible({ timeout: 3000 }).catch(() => false)) {
-                    await full.click(); 
+                    await full.click();
                     return;
                 }
-                const short = page.getByRole('button', { name: new RegExp(`^${dayNum}$`) }).first();
+                // Fallback: match by visible text content — getByRole uses accessible name
+                // (which may be "1 June 2026") not text, so filter by text instead.
+                const short = page.locator('button').filter({ hasText: new RegExp(`^${dayNum}$`) }).first();
                 await expect(short).toBeVisible({ timeout: 10000 });
                 await short.click();
             };
@@ -1584,33 +1592,31 @@ exports.ProjectJob = class ProjectJob {
                 await expect(savedCaCell).toBeVisible({ timeout: 8000 });
             }
     
-            Logger.step('Delete bids again before finalize...');
-            await this.deleteExistingBids();
-            const contractsTabBack = page.getByRole('tab', { name: 'Contracts' });
-            await expect(contractsTabBack).toBeVisible({ timeout: 10000 });
-            await contractsTabBack.click();
-            await page.waitForLoadState('load');
-            await page.waitForTimeout(1000);
-
-            // Delete any auto-created incomplete rows (no scope) before finalizing
+            // Delete any auto-created incomplete rows (no scope) before finalizing.
+            // revo-grid splits data and action columns into separate DOM trees — scope
+            // row iteration to the first revogr-data[type="rgRow"] (content section)
+            // and find delete buttons in the second one (Actions/pinned-right section).
             Logger.info('Pre-finalize: purging any incomplete contract rows...');
+            const contentSection = contractsGrid.locator('revogr-data[type="rgRow"]').first();
+            const actionSection = contractsGrid.locator('revogr-data[type="rgRow"]').nth(1);
             let purgeGuard = 0;
             while (purgeGuard < 10) {
                 await page.waitForTimeout(300);
-                const rowsWithDelete = contractsGrid.locator('div[role="row"]').filter({
-                    has: page.locator('button:has(svg.lucide-trash-2), button:has(svg.lucide-trash2), button[aria-label="Delete Row"]'),
-                });
-                const total = await rowsWithDelete.count().catch(() => 0);
+                const dataRows = contentSection.locator('div[role="row"][data-rgrow]');
+                const total = await dataRows.count().catch(() => 0);
                 let deleted = false;
                 for (let ri = 0; ri < total; ri++) {
-                    const row = rowsWithDelete.nth(ri);
+                    const row = dataRows.nth(ri);
                     const hasScope = await row
                         .locator(`div[role="gridcell"]:has-text("${CONTRACT_DATA.scope}")`)
                         .isVisible({ timeout: 500 })
                         .catch(() => false);
                     if (!hasScope) {
-                        const delBtn = row
-                            .locator('button:has(svg.lucide-trash-2), button:has(svg.lucide-trash2), button[aria-label="Delete Row"]')
+                        const rgrow = await row.getAttribute('data-rgrow').catch(() => null);
+                        if (rgrow === null) continue;
+                        // Locate the delete button in the actions column at the same row index.
+                        const delBtn = actionSection
+                            .locator(`[data-rgrow="${rgrow}"] button`)
                             .first();
                         if (await delBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
                             await delBtn.click({ force: true });
