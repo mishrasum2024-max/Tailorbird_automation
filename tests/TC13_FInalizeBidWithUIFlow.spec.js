@@ -24,7 +24,7 @@ test.use({
 
 const PROPERTY_TYPES = ['Garden Style', 'Mid Rise', 'High Rise', 'Military Housing'];
 
-test.describe.serial.only('Finalize bid / contract + OOO approval chain', () => {
+test.describe.serial('Finalize bid / contract + OOO approval chain', () => {
     test('TC258 @regression @contract @finalizeBidUi @property @projectAndJob : E2E flow to finalize contract', async ({
         page,
     }) => {
