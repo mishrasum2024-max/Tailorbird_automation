@@ -876,7 +876,8 @@ exports.BudgetJob = class BudgetJob {
         };
 
         const tryDirectFileInput = async () => {
-            const deadline = Date.now() + 20000;
+            // 45 s gives CI environments (slower Uploadcare CDN) enough time to initialize.
+            const deadline = Date.now() + 45000;
             const buildCandidates = () => [
                 uploadRoot.locator('input[type="file"]'),
                 tabpanel.locator('input[type="file"]'),
@@ -940,7 +941,17 @@ exports.BudgetJob = class BudgetJob {
             let clicked = false;
             for (const btn of uploadBtnCandidates) {
                 if (await btn.first().isVisible({ timeout: 3500 }).catch(() => false)) {
+                    // In CI headless mode the button may directly open a native file dialog;
+                    // capture filechooser event first so we don't miss the window.
+                    const fcPromise = this.page.waitForEvent('filechooser', { timeout: 3000 }).catch(() => null);
                     await btn.first().click({ force: true });
+                    const fc = await fcPromise;
+                    if (fc) {
+                        Logger.success('File chooser opened via upload button — attaching file');
+                        await fc.setFiles(fullPath);
+                        await finishAfterFileAttached();
+                        return;
+                    }
                     clicked = true;
                     break;
                 }
