@@ -321,7 +321,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
     };
 
     await safe("Changing table view", async () => await prop.changeView("Table View"))
-    await safe("Searching property", async () => await prop.searchProperty("The Brook (Sample Property 2)"))
+    await safe("Searching property", async () => await prop.searchProperty("Test Property 2_The Westerham"))
     await safe("Opening View Details", async () => await prop.viewDetailsButton())
     await safe("Opening Asset Viewer", async () => await page.locator('button:has-text("Asset Viewer")').click({ force: true }))
 

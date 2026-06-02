@@ -147,12 +147,12 @@ test.describe('Budget Workflow - E2E Tests', () => {
         const content = fs.readFileSync(savePath, 'utf-8');
         expect(content.length).toBeGreaterThan(100);
         expect(content).toContain('Description');
-        // Brook sample data may include Site Prep; other properties often show Construction, etc.
+        // Westerham sample data may include Site Prep; other properties often show Construction, etc.
         expect(content).toMatch(/Site Prep|Construction/i);
         Logger.success('TC227: Export verified with budget data');
     });
 
-    // ===== Revise Budget Flow (serial - share Brook property / revision editor) =====
+    // ===== Revise Budget Flow (serial - share Westerham property / revision editor) =====
 
     test.describe.serial('Revise Budget - Serial', () => {
 
@@ -247,7 +247,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
         await page.waitForTimeout(7000);
 
         // After submission the app navigates away and loses the property context
-        // ("No budget version selected"). Re-navigate to The Brook's budget so we
+        // ("No budget version selected"). Re-navigate to the Westerham budget so we
         // can assert the main grid state.
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();

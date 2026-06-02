@@ -217,7 +217,7 @@ exports.BudgetJob = class BudgetJob {
         const count = await items.count();
         for (let i = 0; i < count; i++) {
             const text = await items.nth(i).textContent();
-            if (text && !/brook|harbor/i.test(text)) {
+            if (text && !/brook|harbor|westerham/i.test(text)) {
                 await items.nth(i).click();
                 await this.page.waitForLoadState('networkidle');
                 await this.page.waitForTimeout(2000);
@@ -225,7 +225,7 @@ exports.BudgetJob = class BudgetJob {
                 return text.trim();
             }
         }
-        throw new Error('No non-Brook/Harbor property found');
+        throw new Error('No non-Brook/Harbor/Westerham property found');
     }
 
     // ===================== Page Verification =====================
