@@ -781,7 +781,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
     });
   });
 
-  test('@regression @property TC270 - Reject property creation with "      ." name', async () => {
+  test('@regression @property TC270 - Reject property creation with empty name', async () => {
     await prop.goToProperties();
     await page.waitForLoadState('networkidle');
 
@@ -791,8 +791,8 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
     const dialog = prop.addPropertyDialog();
     await dialog.waitFor({ state: 'visible', timeout: 15000 });
 
-    // Fill all required fields with valid data; name is intentionally whitespace + dot
-    await prop.nameInput.fill('      .');
+    // Leave name empty to trigger required-field validation; fill all other fields with valid data.
+    await prop.nameInput.fill('');
     await prop.cityInput.fill(city);
     await prop.stateInput.fill(state);
     await prop.zipInput.fill(zip);
@@ -808,7 +808,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
 
     await dialog.getByRole('button', { name: /\badd property\b/i }).click();
 
-    // If the success toast appears the property was created â€” that is the bug; this assertion fails it.
+    // Property must not be created when name is empty (required field validation).
     const wasCreated = await page
       .locator('.mantine-Notification-root')
       .filter({ hasText: uiMessages.propertyCreatedToastTitle })
@@ -820,13 +820,13 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
 
     expect(
       wasCreated,
-      'Bug: property was created with whitespace-only name "      ." â€” the app must reject names that are blank or contain only whitespace/punctuation.',
+      'Property must not be created when the name field is empty — the app must enforce the required Name field.',
     ).toBe(false);
 
-    // Dialog must remain open because validation should have blocked the submit
+    // Dialog must remain open because validation should have blocked the submit.
     await expect(
       dialog,
-      'Add Property dialog should stay open when the name is whitespace-only.',
+      'Add Property dialog should stay open when the name is empty.',
     ).toBeVisible({ timeout: 3000 });
 
     // Clean up

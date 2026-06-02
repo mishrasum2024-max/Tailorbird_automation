@@ -402,12 +402,37 @@ class PropertiesHelper {
             const byBirdTable = mainScope.locator(propertyLocators.birdTableExportButton);
             const nBt = await byBirdTable.count();
             if (nBt > 0) {
-                exportBtn = onDetails && nBt > 1 ? byBirdTable.last() : byBirdTable.first();
+                if (onDetails && nBt > 1) {
+                    // Multiple tabs each render an Export button; pick the visible one (active tab).
+                    let visibleBtn = null;
+                    for (let i = 0; i < nBt; i++) {
+                        const candidate = byBirdTable.nth(i);
+                        if (await candidate.isVisible().catch(() => false)) {
+                            visibleBtn = candidate;
+                            break;
+                        }
+                    }
+                    exportBtn = visibleBtn || byBirdTable.first();
+                } else {
+                    exportBtn = byBirdTable.first();
+                }
             } else {
                 const byBirdTablePage = this.page.locator(propertyLocators.birdTableExportButton);
                 const nPage = await byBirdTablePage.count();
                 if (nPage > 0) {
-                    exportBtn = onDetails && nPage > 1 ? byBirdTablePage.last() : byBirdTablePage.first();
+                    if (onDetails && nPage > 1) {
+                        let visibleBtn = null;
+                        for (let i = 0; i < nPage; i++) {
+                            const candidate = byBirdTablePage.nth(i);
+                            if (await candidate.isVisible().catch(() => false)) {
+                                visibleBtn = candidate;
+                                break;
+                            }
+                        }
+                        exportBtn = visibleBtn || byBirdTablePage.first();
+                    } else {
+                        exportBtn = byBirdTablePage.first();
+                    }
                 }
             }
             if (!exportBtn) {
@@ -1218,7 +1243,7 @@ class PropertiesHelper {
         }
     }
 
-    /** Pick first entry in takeoff version dropdown when shown (Unit Mix modal removed from product). */
+    /** Pick first entry in takeoff version dropdown only when no version is already selected. */
     async ensureTakeoffVersionSelected() {
         await this.page.waitForLoadState('networkidle').catch(() => {});
         await this.page.waitForTimeout(400);
@@ -1226,6 +1251,13 @@ class PropertiesHelper {
         const visible = await versionInput.isVisible({ timeout: 12000 }).catch(() => false);
         if (!visible) {
             console.log("ℹ️ No Select Version control; continuing");
+            return;
+        }
+        // Skip re-selection when a version is already shown — re-clicking the same option
+        // triggers a data reload that removes revo-grids from the DOM.
+        const currentValue = await versionInput.inputValue().catch(() => '');
+        if (currentValue.trim()) {
+            console.log(`ℹ️ Version already selected ("${currentValue.trim()}"); skipping re-selection`);
             return;
         }
         console.log("⏳ Select Version → first option");
@@ -1255,13 +1287,22 @@ class PropertiesHelper {
             if (cells < 1) return -1;
             return cells * 1000 + Math.min(box.width * box.height, 1e6);
         };
-        /** revo-grid can be attached with cells but fail isVisible() (shadow / clipping). */
+        /**
+         * revo-grid can be attached with cells but fail isVisible() (shadow / clipping).
+         * Visible grids use the same scale as scoreGridStrict so they always outscore
+         * hidden grids from inactive tabs (e.g. Locations revo-grid with hundreds of rows).
+         */
         const scoreGridLoose = async (g) => {
             const cells = await g.locator('[role="gridcell"]').count().catch(() => 0);
             if (cells < 1) return -1;
+            const vis = await g.isVisible().catch(() => false);
             const box = await g.boundingBox().catch(() => null);
-            const area = box && box.width >= 2 && box.height >= 2 ? Math.min(box.width * box.height, 1e6) : 100;
-            return cells * 1000 + area;
+            if (vis && box && box.width >= 2 && box.height >= 2) {
+                return cells * 1000 + Math.min(box.width * box.height, 1e6);
+            }
+            // Hidden / clipped grid — use only cell count (no ×1000 multiplier) so any
+            // visible grid found by scoreGridStrict always wins.
+            return cells;
         };
         const pickBestFrom = async (locator, scoreFn) => {
             const n = await locator.count();
@@ -1277,9 +1318,13 @@ class PropertiesHelper {
             }
             return { best, bestScore };
         };
-        const revo = this.page.locator('revo-grid[role="treegrid"]');
-        const tree = this.page.locator('[role="treegrid"]');
-        const ag = this.page.locator('.ag-root[role="grid"]');
+        // Scope grid search to the Takeoffs tabpanel to exclude revo-grids from other
+        // tabs (e.g. Locations which can have hundreds of rows and outscore the visible grid).
+        const takeoffsScope = this.page.getByRole('tabpanel', { name: 'Takeoffs' }).first();
+        const scopeEl = (await takeoffsScope.count()) > 0 ? takeoffsScope : this.page;
+        const revo = scopeEl.locator('revo-grid[role="treegrid"]');
+        const tree = scopeEl.locator('[role="treegrid"]');
+        const ag = scopeEl.locator('.ag-root[role="grid"]');
 
         let winner = null;
         let winScore = -1;
@@ -1375,11 +1420,19 @@ class PropertiesHelper {
                 return inventory1Cell.click({ timeout: 5000, force: true });
             });
             await this.page.waitForTimeout(500);
-            await this.page.keyboard.press('Control+A');
-            await this.page.waitForTimeout(100);
-            await this.page.keyboard.type('50');
-            await this.page.waitForTimeout(100);
-            await this.page.keyboard.press('Enter');
+            // Only type if an inline editor appeared; avoids unintended keyboard events on read-only grids.
+            const hasEditor = await this.page
+                .locator('input:visible, textarea:visible, [contenteditable="true"]:visible')
+                .first()
+                .isVisible({ timeout: 800 })
+                .catch(() => false);
+            if (hasEditor) {
+                await this.page.keyboard.press('Control+A');
+                await this.page.waitForTimeout(100);
+                await this.page.keyboard.type('50');
+                await this.page.waitForTimeout(100);
+                await this.page.keyboard.press('Enter');
+            }
 
             await this.page.waitForLoadState('networkidle').catch(() => {});
             await this.page.waitForTimeout(1000);
@@ -1999,13 +2052,22 @@ class PropertiesHelper {
         const filterButton = this.page.getByRole('button', { name: /^Filter$/i }).first();
         await filterButton.waitFor({ state: "visible" });
         await filterButton.click();
-        await this.filterPropertyNew('CALEDESI');
-        await this.filterPropertyNew('CAPTIVA');
-        await this.filterPropertyNew('CLEARWTR');
-        await this.filterPropertyNew('DESOTO');
-        await this.filterPropertyNew('MADEIRA');
+        await this.filterPropertyNew('ce-gm');
+        await this.filterPropertyNew('ce-i');
+        await this.filterPropertyNew('ce-l');
+        await this.filterPropertyNew('ce-r');
+        await this.filterPropertyNew('ce-t v1');
+        // Clear all active filters so the grid is fully restored before closing the panel.
+        const resetFilters = this.page.locator('button:has-text("Reset Filters")').first();
+        if (await resetFilters.isVisible({ timeout: 3000 }).catch(() => false)) {
+            await resetFilters.click();
+            await this.page.waitForLoadState('networkidle').catch(() => {});
+            await this.page.waitForTimeout(800);
+        }
         await this.page.locator(".mantine-Paper-root .mantine-CloseButton-root").waitFor({ state: "visible" });
         await this.page.locator(".mantine-Paper-root .mantine-CloseButton-root").click();
+        await this.page.waitForLoadState('networkidle').catch(() => {});
+        await this.page.waitForTimeout(800);
     }
     async clickExteriortab() {
         const exteriorTab = this.page.locator(propertyLocators.exteriorTab);
