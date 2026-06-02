@@ -106,7 +106,7 @@ test('TC66 @regression @projectAndJob : User should be able to search project us
 test('TC67 @regression @projectAndJob : User should be able to apply filter and export project', async () => {
     await projectPage.navigateToProjects();
     await projectPage.setProjectsTableView();
-    await projectJob.applyProjectFilterAndExport('Harbor Bay at MacDill_Liberty Cove (Sample Property 1)', 'Automa_Test');
+    await projectJob.applyProjectFilterAndExport('Test Property 1_Cottages on Elm', 'Automa_Test');
     // await projectJob.deleteFirstProjectRow();
 });
 
@@ -524,7 +524,7 @@ test('@regression @projectAndJob TC271 - Reject project creation with "      ." 
     await projectPage.nameInput.fill('      .');
 
     // Property: read from run-data if available, fall back to known sample property
-    let propertyName = 'Harbor Bay at MacDill_Liberty Cove (Sample Property 1)';
+    let propertyName = 'Test Property 1_Cottages on Elm';
     try {
         const propertyDataPath = path.join(__dirname, '../data/propertyData.json');
         const downloadsPropertyPath = path.join(process.cwd(), 'downloads', 'property.json');

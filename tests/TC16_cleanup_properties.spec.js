@@ -8,8 +8,10 @@ const PropertiesHelper = require('../pages/properties');
 const OrganizationHelper = require('../pages/organizationHelper');
 const data = require('../fixture/organization.json');
 
-const SAMPLE_PROPERTY_1 = 'Harbor Bay at MacDill_Liberty Cove (Sample Property 1)';
-const SAMPLE_PROPERTY_2 = 'The Brook (Sample Property 2)';
+const SAMPLE_PROPERTY_1 = 'Test Property 1_Cottages on Elm';
+const SAMPLE_PROPERTY_2 = 'Test Property 2_The Westerham';
+const SAMPLE_PROPERTY_3 = 'Test Property 3_Courtney Ridge Apartments';
+const SAMPLE_PROPERTY_4 = 'Test Property 4_Malmstrom';
 
 /**
  * Loads recently created property name.
@@ -226,9 +228,9 @@ test.describe.skip('Properties cleanup', () => {
     test.setTimeout(180000);
 
     const recent = loadRecentPropertyName();
-    const keep = new Set([SAMPLE_PROPERTY_1, SAMPLE_PROPERTY_2]);
+    const keep = new Set([SAMPLE_PROPERTY_1, SAMPLE_PROPERTY_2, SAMPLE_PROPERTY_3, SAMPLE_PROPERTY_4]);
     if (recent) keep.add(recent);
-    const requiredKeep = new Set([SAMPLE_PROPERTY_1, SAMPLE_PROPERTY_2]);
+    const requiredKeep = new Set([SAMPLE_PROPERTY_1, SAMPLE_PROPERTY_2, SAMPLE_PROPERTY_3, SAMPLE_PROPERTY_4]);
 
     const context = await browser.newContext({ storageState: 'sessionState.json' });
     const page = await context.newPage();
