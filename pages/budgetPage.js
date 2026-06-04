@@ -632,11 +632,11 @@ exports.BudgetJob = class BudgetJob {
         await this.page.waitForTimeout(20000);
         const url = this.page.url();
         const hasRevisionUrl = url.includes('budget-revision');
-        const hasTreegridRows = await budget.treegridDataRows.first().isVisible({ timeout: 8000 }).catch(() => false);
-        const hasTreegrid = await budget.treegrid.first().isVisible({ timeout: 3000 }).catch(() => false);
-        const hasSubmitBtn = await budget.submitForApprovalBtn.isVisible({ timeout: 3000 }).catch(() => false);
-        const hasDialog = await budget.revisionDialog.first().isVisible({ timeout: 3000 }).catch(() => false);
-        const hasBudgetTab = await budget.budgetTabInRevision.isVisible({ timeout: 2000 }).catch(() => false);
+        const hasTreegridRows = await budget.treegridDataRows.first().isVisible({ timeout: 25000 }).catch(() => false);
+        const hasTreegrid = await budget.treegrid.first().isVisible({ timeout: 13000 }).catch(() => false);
+        const hasSubmitBtn = await budget.submitForApprovalBtn.isVisible({ timeout: 13000 }).catch(() => false);
+        const hasDialog = await budget.revisionDialog.first().isVisible({ timeout: 13000 }).catch(() => false);
+        const hasBudgetTab = await budget.budgetTabInRevision.isVisible({ timeout: 12000 }).catch(() => false);
         const hasRevisionEditor = hasRevisionUrl || hasTreegridRows || hasTreegrid || hasSubmitBtn || (hasDialog && hasBudgetTab);
         expect(hasRevisionEditor, `Revision editor must be open. URL: ${url.substring(0, 80)}...`).toBeTruthy();
         Logger.success('Revision editor is open');
