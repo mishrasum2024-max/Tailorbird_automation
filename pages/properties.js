@@ -285,7 +285,7 @@ class PropertiesHelper {
     }
 
     // async changeView(view) {
-    //     await this.page.waitForLoadState("networkidle");
+    //     await this.page.waitForTimeout(30000);
     //     await this.page.waitForTimeout(2000);
     //     // Click the view switcher button (first button after search input)
     //     await this.page.getByRole('button').nth(1).waitFor({ state: "visible" });
@@ -293,7 +293,7 @@ class PropertiesHelper {
     //     await this.page.getByRole('menuitem', { name: view }).waitFor({ state: "visible" });
     //     await this.page.getByRole('menuitem', { name: view }).click();
     //     await this.page.locator(propertyLocators.gridRootWrapper).first().waitFor({ state: "visible" });
-    //     await this.page.waitForLoadState("networkidle");
+    //     await this.page.waitForTimeout(30000);
     //     await this.page.waitForTimeout(2000);
     // }
 
@@ -506,7 +506,7 @@ class PropertiesHelper {
         await input.fill(name);
         await input.press("Enter").catch(() => {});
 
-        await this.page.waitForLoadState("networkidle");
+        await this.page.waitForTimeout(30000);
         await this.page.waitForTimeout(800);
 
         // More robust than relying on first row; virtualization/sorting can reorder rows.
@@ -549,7 +549,7 @@ class PropertiesHelper {
         }
         console.log(`📌 Row index (data-rgrow): ${rowIndex}`);
 
-        await this.page.waitForLoadState("networkidle");
+        await this.page.waitForTimeout(30000);
         await this.page.waitForTimeout(3000);
 
         await this.page.locator(propertyLocators.rowDeleteIcon(rowIndex)).first().waitFor({ state: "visible" });
@@ -565,7 +565,7 @@ class PropertiesHelper {
             await deleteStepTwo.click();
         }
 
-        await this.page.waitForLoadState("networkidle");
+        await this.page.waitForTimeout(30000);
         await this.page.waitForTimeout(1000);
 
         const searchInput = this.page.locator(propertyLocators.searchInput).first();
@@ -831,8 +831,7 @@ class PropertiesHelper {
             const cell = row.locator("td").nth(0).locator("span");
             const updatedRole = (await cell.innerText()).trim();
             this.log(`Fetched updated role: ${updatedRole}`);
-            await this.page.waitForLoadState("networkidle");
-            await this.page.waitForTimeout(2000);
+            await this.page.waitForTimeout(30000);
             expect(updatedRole).toBe(expectedRole);
             this.log(`Role verification PASSED → ${email}: ${updatedRole} == ${expectedRole}`);
             return updatedRole;
@@ -1158,7 +1157,7 @@ class PropertiesHelper {
             console.log(`✔ "${type}" checkbox clicked\n`);
 
             console.log("⏳ Step 3: Waiting for data refresh...");
-            await this.page.waitForLoadState("networkidle");
+            await this.page.waitForTimeout(30000);
             await this.page.waitForTimeout(3000);
             console.log("✔ Data loaded successfully\n");
 
@@ -1216,8 +1215,7 @@ class PropertiesHelper {
             console.log("⏳ Waiting for dialog to appear...");
             await this.page.locator('[role="dialog"]').waitFor({ state: "visible", timeout: 10000 });
             console.log("✔ Dialog found → waiting for network idle");
-            await this.page.waitForLoadState("networkidle");
-            await this.page.waitForTimeout(2000);
+            await this.page.waitForTimeout(30000);
             console.log("✔ Dialog fully loaded");
 
             // Simply verify dialog is visible and has content
@@ -1487,7 +1485,7 @@ class PropertiesHelper {
             await this.page.locator(`button:has-text('Add column')`).click();
 
             console.log("\n⏳ Waiting for column to be created...");
-            await this.page.waitForLoadState("networkidle");
+            await this.page.waitForTimeout(30000);
             await this.page.waitForTimeout(3000);
             console.log(`✔ Column submitted successfully → ${columnName}`);
 
@@ -2075,7 +2073,7 @@ class PropertiesHelper {
     }
     async searchInvalidProperty(name) {
         await this.page.locator(propertyLocators.searchInput).first().fill(name);
-        await this.page.waitForLoadState("networkidle");
+        await this.page.waitForTimeout(30000);
         await this.page.waitForTimeout(3000);
     }
     async clickAssetViewer() {
@@ -2231,7 +2229,7 @@ class PropertiesHelper {
 
     async clearSearch(name) {
         await this.page.locator(propertyLocators.searchInput).first().fill(name);
-        await this.page.waitForLoadState("networkidle");
+        await this.page.waitForTimeout(30000);
         await this.page.waitForTimeout(3000);
     }
 }

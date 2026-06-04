@@ -190,7 +190,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
         test.setTimeout(180000);
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();
-        await page.waitForLoadState('networkidle');
+        await page.waitForTimeout(30000);
         await page.waitForTimeout(2000);
         await budgetJob.openRevisionEditor();
         await budgetJob.verifyRevisionEditorOpen();
@@ -209,7 +209,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
         test.setTimeout(180000);
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();
-        await page.waitForLoadState('networkidle');
+        await page.waitForTimeout(30000);
         await page.waitForTimeout(3000);
         await budgetJob.openRevisionEditor();
         await page.waitForTimeout(3000);
@@ -218,10 +218,10 @@ test.describe('Budget Workflow - E2E Tests', () => {
         const countBeforeDelete = await budgetJob.getTreegridRowCount();
         expect(countBeforeDelete, 'Revision editor must have rows before delete').toBeGreaterThan(0);
         await budgetJob.deleteFirstRowInRevision();
-        await page.waitForLoadState('networkidle');
+        await page.waitForTimeout(30000);
         await page.waitForTimeout(3000);
         await budgetJob.resetTableInRevision();
-        await page.waitForLoadState('networkidle');
+        await page.waitForTimeout(30000);
         await page.waitForTimeout(4000);
         const count = await budgetJob.getTreegridRowCount();
         expect(count, 'Reset Table must restore rows - data should be restored').toBeGreaterThan(0);

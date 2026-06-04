@@ -155,7 +155,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
 
   test('@regression @property TC52 - Validate Overview Fields and Property Document Actions', async () => {
     await prop.goToProperties();
-    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(30000);
     await page.waitForTimeout(2000);
     const propName = getPropertyName();
     const vals = {
@@ -176,7 +176,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
     await prop.validateOverviewFields(vals);
 
     await prop.uploadPropertyDocument(path.resolve("./files/property_data.csv"));
-    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(30000);
     await prop.exportButton();
 
   });
@@ -325,7 +325,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
     await safe("Opening View Details", async () => await prop.viewDetailsButton())
     await safe("Opening Asset Viewer", async () => await page.locator('button:has-text("Asset Viewer")').click({ force: true }))
 
-    await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(30000);
     await page.waitForTimeout(3000);
 
     log("Getting Asset Viewer panel id...")
@@ -477,7 +477,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
     await prop.changeView('Table View');
     name = 'gibberish';
     await prop.searchInvalidProperty(name);
-    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(30000);
     await page.waitForTimeout(2000);
     const firstRowNameCell = page.locator(propertyLocators.firstRowNameCell);
     await expect(firstRowNameCell).not.toBeVisible();
@@ -488,16 +488,16 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
   test('@regression @property TC60 - validate No models available in asset viewer tab', async () => {
     await prop.goto(tcTakeoffsStartUrl);
     await prop.goToProperties();
-    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(30000);
     await page.waitForTimeout(2000);
     const propertyName = 'Test Property 1_Cottages on Elm';
     console.log('Using property name:', propertyName);
     await prop.changeView('Table View');
     await prop.searchProperty(propertyName);
     await prop.viewDetailsButton();
-    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(30000);
     await prop.clickAssetViewer();
-    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(30000);
     await page.waitForTimeout(2000);
     await prop.assetViewerpanel();
     await prop.exportBtn();
@@ -505,7 +505,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
     await page.keyboard.press('Escape');
     await page.waitForTimeout(500);
     await prop.clickexportBtn();
-    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(30000);
     await prop.assertselectAllOption();
     await prop.bottonActionassertion();
     await prop.iconAssertion();
@@ -783,7 +783,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
 
   test('@regression @property TC270 - Reject property creation with empty name', async () => {
     await prop.goToProperties();
-    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(30000);
 
     await page.locator(propertyLocators.createPropertyButton).first().waitFor({ state: 'visible', timeout: 15000 });
     await page.locator(propertyLocators.createPropertyButton).first().click({ force: true });

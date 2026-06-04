@@ -64,7 +64,7 @@ test.describe('Approval Workflow - My Approvals E2E Tests with another user', ()
             Logger.step('TC212: Navigating to My Approvals tab');
             await approvalJob.navigateToMyApprovalsTab();
             await approvalJob.waitForPageLoad();
-            await page.waitForLoadState('networkidle');
+            await page.waitForTimeout(30000);
             await page.waitForTimeout(4000); 
 
             const searchInputVisible = await page

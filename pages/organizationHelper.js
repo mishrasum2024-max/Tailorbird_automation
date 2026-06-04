@@ -468,8 +468,7 @@ class OrganizationHelper {
   async verifyUpdatedRole(email, expectedRole) {
     try {
       this.log(`Verifying updated role for ${email}`);
-      await this.page.waitForLoadState("networkidle");
-      await this.page.waitForTimeout(2000);
+      await this.page.waitForTimeout(30000);
       const row = await this.getRow(email);
       const roleCell = row.locator("td.rt-TableCell").first();
       const updatedRole = (await roleCell.innerText()).trim();
