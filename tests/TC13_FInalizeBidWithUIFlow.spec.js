@@ -116,7 +116,7 @@ test.describe.serial('Finalize bid / contract + OOO approval chain', () => {
 
         await projectPage.fillJobForm({
             title: jobTitle,
-            jobType: 'Capex',
+            jobType: 'Unit Interior',
             financialType: 'Contract',
             vendor: 'Sumit_Corp',
             description: 'Job created via automation',
@@ -135,7 +135,7 @@ test.describe.serial('Finalize bid / contract + OOO approval chain', () => {
 
         await prop.validateJobDetails({
             'Job Name': jobTitle,
-            'Job Type': 'Capex',
+            'Job Type': 'Unit Interior',
             'Financial Type': 'Contract',
             Description: 'Job created via automation',
         });
