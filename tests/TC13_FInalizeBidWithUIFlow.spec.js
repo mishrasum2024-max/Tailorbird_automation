@@ -132,6 +132,11 @@ test.describe.serial('Finalize bid / contract + OOO approval chain', () => {
         }
 
         await projectPage.submitJob();
+        // After creation the app navigates to the job detail page; wait for that
+        // navigation to complete before validating, since submitJob() has no waitForURL.
+        await page.waitForURL(/\/jobs\/\d+/, { timeout: 20000 }).catch(() => {});
+        await page.waitForLoadState('domcontentloaded');
+        await page.waitForTimeout(1500);
 
         await prop.validateJobDetails({
             'Job Name': jobTitle,
