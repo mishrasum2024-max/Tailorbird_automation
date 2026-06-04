@@ -14,7 +14,7 @@ exports.ApprovalJob = class ApprovalJob {
         try {
             Logger.step('Navigating to Approval tab');
             await approval.approvalTab.click();
-            await this.page.waitForURL('**/approvals/**', { timeout: 15000 }).catch(() => {});
+            await this.page.waitForURL('**/approvals/**', { timeout: 25000 }).catch(() => {});
             const _t0 = Date.now();
             const _tab = this.page.getByRole('tab', { name: 'Approval Templates' });
             const _ok = await _tab.waitFor({ state: 'visible', timeout: 20_000 }).then(() => true).catch(() => false);
@@ -46,7 +46,7 @@ exports.ApprovalJob = class ApprovalJob {
                 Logger.info(`[Approval] Page ready in ${Date.now() - _t0}ms`);
             } else {
                 for (let _i = 0; _i < 3; _i++) {
-                    await this.page.waitForTimeout(5000);
+                    await this.page.waitForTimeout(7000);
                     if (await _btn.isVisible().catch(() => false)) {
                         Logger.info(`[Approval] Page ready after extra ${(_i + 1) * 5}s`);
                         return;

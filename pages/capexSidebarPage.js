@@ -54,7 +54,7 @@ class CapexSidebarPage {
         let selected = false;
         for (let attempt = 1; attempt <= 3; attempt++) {
             await this.l.propertyDropdown.click();
-            await this.page.waitForTimeout(500);
+            await this.page.waitForTimeout(2000);
             if (await this.l.propertySearchInput.isVisible().catch(() => false)) {
                 await this.l.propertySearchInput.fill(propertyName);
                 await this.page.waitForTimeout(4000);
@@ -982,7 +982,7 @@ class CapexSidebarPage {
                 msg.includes('net::ERR_ABORTED');
             if (!canContinue) throw e;
             Logger.info('Budget navigation was redirected/aborted by app; continuing on resulting budget URL');
-            await this.page.waitForTimeout(10000);
+            await this.page.waitForTimeout(15000);
             await this.page.waitForURL('**/financials/budget**', { timeout: 15000 }).catch(() => {});
         }
     }

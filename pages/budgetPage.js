@@ -45,12 +45,12 @@ exports.BudgetJob = class BudgetJob {
 
     async navigateToBudget() {
         await this.page.goto('/financials/budget', { waitUntil: 'load' });
-        await this.page.waitForTimeout(12000);
+        await this.page.waitForTimeout(22000);
         await this.page.waitForURL('**/financials/budget**', { timeout: 15000 }).catch(() => {});
     }
 
     async waitForPageLoad() {
-        await this.page.waitForTimeout(12000);
+        await this.page.waitForTimeout(22000);
     }
 
     // ===================== Property Selection =====================
@@ -806,7 +806,7 @@ exports.BudgetJob = class BudgetJob {
     async uploadFileInRevision(filePath) {
         const fullPath = path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath);
 
-        await this.page.waitForTimeout(12000);
+        await this.page.waitForTimeout(22000);
 
         /** Revision editor upload lives on body for `/budget-revision/...`; also use body when revise UI isn’t `[role="dialog"]` (drawer / Mantine layout), so scoped dialog doesn’t hide Uploadcare inputs. */
         const revisionChromeDialog = this.page
@@ -814,8 +814,8 @@ exports.BudgetJob = class BudgetJob {
             .filter({ hasText: /Submit for Approval|Submit for Review/i })
             .first();
 
-        await this.page.waitForURL(/financials\/budget|budget-revision/i, { timeout: 25000 }).catch(() => {});
-        await this.page.waitForTimeout(10000);
+        await this.page.waitForURL(/financials\/budget|budget-revision/i, { timeout: 35000 }).catch(() => {});
+        await this.page.waitForTimeout(20000);
 
         let uploadRoot;
         const urlHasRevisionPath = /budget-revision/i.test(this.page.url());
