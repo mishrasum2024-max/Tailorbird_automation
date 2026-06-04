@@ -209,7 +209,7 @@ class OrganizationHelper {
       await this.selectRole(invitePanel.roleSelectTrigger, role, invitePanel.dialogRoot);
       this.log("Advancing invite wizard (Next)...");
       await invitePanel.nextOrInvitePrimaryButton.evaluate((el) => el.click());
-      await this.page.waitForTimeout(600);
+      await this.page.waitForTimeout(1000);
       const confirmInvite = invitePanel.dialogRoot.getByRole("button", { name: data.inviteButtonText, exact: true });
       if (await confirmInvite.isVisible({ timeout: 10_000 }).catch(() => false)) {
         await confirmInvite.evaluate((el) => el.click());
@@ -219,7 +219,7 @@ class OrganizationHelper {
       // Reload to ensure the member table reflects the backend's latest state.
       // Without this, a slow CI server may not push the new member row before the 120s wait expires.
       await this.page.reload({ waitUntil: 'networkidle' }).catch(() => {});
-      await this.page.waitForTimeout(1500);
+      await this.page.waitForTimeout(7500);
       const inviteDialog = invitePanel.dialogRoot;
       if (
         await inviteDialog

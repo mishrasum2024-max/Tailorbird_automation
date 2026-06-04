@@ -561,7 +561,7 @@ test.describe.serial('Out of Office — OOO suite', () => {
         test.setTimeout(90000);
         Logger.step('TC272: Activate with user + random date, verify UI and API');
 
-        const PREFERRED_USER = 'admin_1778137522347@yopmail.com';
+        const PREFERRED_USER = 'Sumit tailorbird';
 
         await oooPage.ensureOooInactive();
 

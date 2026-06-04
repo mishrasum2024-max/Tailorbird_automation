@@ -333,7 +333,7 @@ class CapexSidebarPage {
             Logger.info(`[WARN] assertMoneyFormat: non-monetary value "${value}" in money column — grid mapping edge case`);
             return;
         }
-        expect(value).toMatch(/^-?\$[\d,]+(\.\d{1,2})?$/);
+        expect(value).toMatch(/^-?\$[\d,]+(\.\d{2})?$/);
     }
 
     async validateCurrencyFormatting() {
