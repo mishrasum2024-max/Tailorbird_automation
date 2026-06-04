@@ -62,7 +62,7 @@ test('TC65 @regression @sanity @mandatory @projectAndJob @contract : User should
     expect(fs.existsSync(budgetDataPath), 'files/budget_data.csv must exist for budget upload').toBeTruthy();
 
     await budgetJob.navigateToBudget();
-    await budgetJob.waitForPageLoad();
+    // await budgetJob.waitForPageLoad();
 
     const propertySelected = await budgetJob.selectPropertyByName(propertyName);
     expect(propertySelected, `Property "${propertyName}" must exist in Budget property dropdown`).toBeTruthy();

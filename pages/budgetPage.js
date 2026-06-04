@@ -45,12 +45,12 @@ exports.BudgetJob = class BudgetJob {
 
     async navigateToBudget() {
         await this.page.goto('/financials/budget', { waitUntil: 'load' });
-        await this.page.waitForTimeout(7000);
+        await this.page.waitForTimeout(12000);
         await this.page.waitForURL('**/financials/budget**', { timeout: 15000 }).catch(() => {});
     }
 
     async waitForPageLoad() {
-        await this.page.waitForTimeout(7000);
+        await this.page.waitForTimeout(12000);
     }
 
     // ===================== Property Selection =====================
