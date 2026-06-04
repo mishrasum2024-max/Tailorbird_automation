@@ -244,9 +244,19 @@ class UnitInteriorPage {
         }
     }
 
-    /** Unchecks all currently selected rows. */
+    /** Unchecks all currently selected rows (dismisses any blocking overlay first). */
     async clearAllSelections() {
         Logger.info('[UnitInterior] Clearing all row selections');
+
+        // Dismiss any stray Mantine modal overlay that might block checkbox clicks
+        const overlay = this.page.locator('[data-fixed="true"].mantine-Modal-overlay, .mantine-Overlay-root[data-fixed="true"]').first();
+        if (await overlay.isVisible({ timeout: 800 }).catch(() => false)) {
+            Logger.info('[UnitInterior] clearAllSelections: overlay blocking — pressing Escape');
+            await this.page.keyboard.press('Escape');
+            await overlay.waitFor({ state: 'hidden', timeout: 8000 }).catch(() => {});
+            await this.page.waitForTimeout(500);
+        }
+
         const checkboxes = await this.loc.allGridRows.getByRole('checkbox').all();
         for (const cb of checkboxes) {
             if (await cb.isChecked().catch(() => false)) {
@@ -326,8 +336,11 @@ class UnitInteriorPage {
     }
 
     /**
-     * Selects a specific option from the already-open dropdown and waits
-     * for the grid to reflect the change.
+     * Selects a specific option from the already-open dropdown and waits for
+     * the grid to settle.  Some transitions (e.g. reverting a Released unit to
+     * "Not in Reno") trigger a Mantine confirmation/warning modal.  We handle it
+     * by clicking the primary action button when present, or pressing Escape when
+     * no actionable button is found, so the overlay never blocks subsequent steps.
      * @param {string} statusName
      */
     async selectStatusOption(statusName) {
@@ -335,8 +348,52 @@ class UnitInteriorPage {
         await option.waitFor({ state: 'visible', timeout: 10000 });
         InteractionLogger.logButtonClick(`Status option "${statusName}"`, statusName);
         await option.click();
-        await this.page.waitForTimeout(2000);
-        Logger.success(`[UnitInterior] Status "${statusName}" applied`);
+        await this.page.waitForTimeout(1200);
+
+        // Detect and dismiss any confirmation/error modal that may appear
+        const modal = this.page.locator('[role="dialog"], .mantine-Modal-content').first();
+        const overlay = this.page.locator('[data-fixed="true"].mantine-Modal-overlay, .mantine-Overlay-root[data-fixed="true"]').first();
+        const hasOverlay = await overlay.isVisible({ timeout: 1500 }).catch(() => false);
+
+        if (hasOverlay) {
+            Logger.info(`[UnitInterior] Modal overlay detected after selecting "${statusName}" — scanning buttons`);
+            // Log ALL button texts so we can see exactly what the modal offers
+            const allBtns = await modal.getByRole('button').all();
+            const btnTexts = [];
+            for (const b of allBtns) {
+                const t = (await b.textContent().catch(() => '')).trim();
+                if (t) btnTexts.push(t);
+            }
+            Logger.info(`[UnitInterior] Modal buttons found: ${JSON.stringify(btnTexts)}`);
+
+            // Click the FIRST button that is: not Cancel/Close/Dismiss AND is enabled
+            // (e.g. Release Units dialog has "Apply same Scope to all Units" [disabled] + "Release with Scopes" [enabled])
+            let clicked = false;
+            for (const b of allBtns) {
+                const t = (await b.textContent().catch(() => '')).trim();
+                if (!t || /^(cancel|close|no|back|dismiss|skip)$/i.test(t)) continue;
+                const visible = await b.isVisible({ timeout: 1000 }).catch(() => false);
+                const enabled = await b.isEnabled().catch(() => false);
+                if (visible && enabled) {
+                    Logger.info(`[UnitInterior] Clicking modal action button: "${t}"`);
+                    await b.click();
+                    clicked = true;
+                    break;
+                }
+                Logger.info(`[UnitInterior] Skipping modal button "${t}" (visible=${visible}, enabled=${enabled})`);
+            }
+            if (!clicked) {
+                Logger.info(`[UnitInterior] No actionable button found — pressing Escape to dismiss`);
+                await this.page.keyboard.press('Escape');
+            }
+
+            await this.page.waitForTimeout(1000);
+            // Ensure overlay is gone before returning
+            await overlay.waitFor({ state: 'hidden', timeout: 10000 }).catch(() => {});
+        }
+
+        await this.page.waitForTimeout(800);
+        Logger.success(`[UnitInterior] Status option "${statusName}" handled`);
     }
 
     /**
@@ -478,6 +535,64 @@ class UnitInteriorPage {
         await this.loc.applyToAllUnitsBtn.click();
         await this.page.waitForTimeout(1000);
         Logger.success('[UnitInterior] "Apply same Scope to all Units" clicked');
+    }
+
+    /**
+     * Re-releases a unit back to "Released" state via the Release Units dialog.
+     * When the unit was previously de-released, the dialog opens with no scopes
+     * checked and "Release with Scopes" is disabled.  We click "Select all scopes"
+     * to enable it before proceeding.
+     * @param {number} unitNumber
+     */
+    async restoreUnitToReleased(unitNumber) {
+        Logger.info(`[UnitInterior] Restoring unit ${unitNumber} to Released via Release Units dialog`);
+        await this.selectUnit(unitNumber);
+        await this.clickReleaseUnitsButton();
+
+        // When no scope checkboxes are pre-selected, "Release with Scopes" is disabled.
+        // The "Select all scopes" checkbox may be in indeterminate state — one click moves
+        // it to UNCHECKED; a second click then moves it to CHECKED and enables the button.
+        const releaseBtn = this.loc.releaseWithScopesBtn;
+        const btnEnabled = await releaseBtn.isEnabled({ timeout: 3000 }).catch(() => false);
+        if (!btnEnabled) {
+            Logger.info(`[UnitInterior] restoreUnitToReleased: "Release with Scopes" disabled — enabling scopes`);
+            const selectAllCb = this.loc.selectAllScopesCheckbox;
+
+            // Click up to 3 times until the checkbox is checked and button is enabled
+            for (let attempt = 0; attempt < 3; attempt++) {
+                const isChecked = await selectAllCb.isChecked({ timeout: 2000 }).catch(() => false);
+                const isBtnOk   = await releaseBtn.isEnabled({ timeout: 1000 }).catch(() => false);
+                if (isChecked || isBtnOk) break;
+                Logger.info(`[UnitInterior] restoreUnitToReleased: clicking "Select all scopes" (attempt ${attempt + 1})`);
+                await selectAllCb.click().catch(() => {});
+                await this.page.waitForTimeout(600);
+            }
+
+            // Fallback: check individual scope checkboxes inside the dialog table
+            const stillDisabled = !(await releaseBtn.isEnabled({ timeout: 2000 }).catch(() => false));
+            if (stillDisabled) {
+                Logger.info('[UnitInterior] restoreUnitToReleased: selecting individual scope checkboxes');
+                const scopeCbs = this.page.getByRole('dialog').locator('table input[type="checkbox"]');
+                const total = await scopeCbs.count().catch(() => 0);
+                for (let i = 0; i < total; i++) {
+                    const cb = scopeCbs.nth(i);
+                    if (!(await cb.isChecked().catch(() => false))) {
+                        await cb.click().catch(() => {});
+                        await this.page.waitForTimeout(300);
+                    }
+                }
+            }
+
+            // Final assertion — if still disabled, test will fail with a clear message
+            await expect(releaseBtn, '"Release with Scopes" must be enabled after selecting scopes').toBeEnabled({ timeout: 10000 });
+        }
+
+        await this.performReleaseWithScopes();
+        await this.clearAllSelections();
+        await this.page.waitForTimeout(500);
+        const status = await this.getUnitStatus(unitNumber);
+        Logger.success(`[UnitInterior] Unit ${unitNumber} restored — current status: "${status}"`);
+        return status;
     }
 
     /** Clicks "Release with Scopes" and waits for the dialog to disappear. */

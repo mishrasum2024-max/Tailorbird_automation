@@ -145,10 +145,10 @@ test.describe('Unit Interior — Contracts > Units tab full E2E suite', () => {
                     Logger.info(`[TC_UI_001-S4] Label "${label}" (${key}): ${visible ? 'visible' : 'NOT FOUND'}`);
                     expect(visible, `Overview label "${label}" must be visible`).toBe(true);
                 }
-                // Edit button CTA
+                // Edit button CTA — use .first() because multiple "Edit" buttons may exist in the panel
                 const editCTA = fixture.contractOverview.editButtonCTA;
                 await expect(
-                    overview.getByRole('button', { name: editCTA }),
+                    overview.getByRole('button', { name: editCTA }).first(),
                     `"${editCTA}" button must be visible in contract overview`,
                 ).toBeVisible({ timeout: 8000 });
                 InteractionLogger.logVisibility(`"${editCTA}" CTA`, true);
@@ -395,10 +395,28 @@ test.describe('Unit Interior — Contracts > Units tab full E2E suite', () => {
 
             const allOptions = fixture.unitsTab.updateStatusDropdown.options;
 
-            await test.step('S1: Cycle through every Update Status option on unit 105 and verify grid after each', async () => {
-                for (const targetStatus of allOptions) {
-                    Logger.info(`[TC_UI_004-S1] → Applying status "${targetStatus}" to unit 105`);
+            await test.step('S1: Cycle 5 restorable Update Status options on unit 105 — apply, verify grid, restore to Released between each', async () => {
+                // The 6 dropdown options include "Not in Reno" which the app treats as a one-way
+                // de-release: it removes all scope associations so the Release Units dialog can no
+                // longer re-release that unit.  We test the 5 options that support the full
+                // apply → verify → restore cycle.  "Not in Reno" is documented in TC_UI_003 as a
+                // visible option and its presence in the dropdown is already asserted.
+                const cyclableOptions = ['Not Started', 'In Progress', 'Completed', 'Cancelled', 'Released'];
+                // ("Released" triggers the Release Units with Scopes dialog — valid path, keep it)
+
+                // Precondition: start from Released (recover from any previous test state)
+                let startStatus = await po.getUnitStatus(105);
+                if (startStatus !== 'Released') {
+                    Logger.info(`[TC_UI_004-S1] Unit 105 starts as "${startStatus}" — restoring to Released first`);
+                    const restored = await po.restoreUnitToReleased(105);
+                    expect(restored, 'Unit 105 must be Released before starting status cycle').toBe('Released');
+                }
+
+                for (const targetStatus of cyclableOptions) {
+                    Logger.info(`[TC_UI_004-S1] → Applying "${targetStatus}" to unit 105`);
+
                     const applied = await po.updateUnitStatus(105, targetStatus);
+                    Logger.info(`[TC_UI_004-S1] After "${targetStatus}": grid shows "${applied}"`);
 
                     InteractionLogger.logAssertion(
                         'GridStatus',
@@ -410,21 +428,33 @@ test.describe('Unit Interior — Contracts > Units tab full E2E suite', () => {
                         applied,
                         `Unit 105 must show "${targetStatus}" in grid. Got: "${applied}"`,
                     ).toBe(targetStatus);
-                    Logger.success(`[TC_UI_004-S1] ✔ Status "${targetStatus}" applied and verified in grid`);
+                    Logger.success(`[TC_UI_004-S1] ✔ "${targetStatus}" applied and verified`);
 
-                    // Brief clear before next iteration
                     await po.clearAllSelections();
                     await page.waitForTimeout(300);
+
+                    // Restore to Released for next iteration (skip when already Released)
+                    if (applied !== 'Released') {
+                        const restored = await po.restoreUnitToReleased(105);
+                        expect(restored, `Unit 105 must be back to Released after "${targetStatus}"`).toBe('Released');
+                        Logger.success(`[TC_UI_004-S1] Restored to Released after "${targetStatus}"`);
+                    }
                 }
-                Logger.success('[TC_UI_004-S1] All 6 status options cycled and verified in grid');
+                Logger.success(`[TC_UI_004-S1] All ${cyclableOptions.length} cyclable options verified E2E`);
             });
 
-            await test.step('S2: Restore unit 105 to "Released" (its original state) and verify', async () => {
-                const restored = await po.updateUnitStatus(105, 'Released');
-                InteractionLogger.logAssertion('GridStatus', 'Unit 105 restored to Released', 'Released', restored ?? '', restored === 'Released');
-                expect(restored, 'Unit 105 must be restored to "Released"').toBe('Released');
-                await po.clearAllSelections();
-                Logger.success('[TC_UI_004-S2] Unit 105 restored to "Released"');
+            await test.step('S2: Confirm unit 105 is in Released state (cleanup after S1 cycle)', async () => {
+                const currentStatus = await po.getUnitStatus(105);
+                Logger.info(`[TC_UI_004-S2] Unit 105 status after S1 cycle: "${currentStatus}"`);
+                if (currentStatus !== 'Released') {
+                    Logger.info(`[TC_UI_004-S2] Not Released — restoring via Release Units dialog`);
+                    const restored = await po.restoreUnitToReleased(105);
+                    InteractionLogger.logAssertion('GridStatus', 'Unit 105 restored to Released', 'Released', restored ?? '', restored === 'Released');
+                    expect(restored, 'Unit 105 must be in Released state after S1 cycle cleanup').toBe('Released');
+                } else {
+                    Logger.info('[TC_UI_004-S2] Unit 105 is already Released — S1 cycle ended cleanly');
+                }
+                Logger.success('[TC_UI_004-S2] Unit 105 confirmed Released');
             });
 
             await test.step('S3: Conditional In Progress ↔ Not Started toggle on units 105 + 106 (2 passes)', async () => {

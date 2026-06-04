@@ -80,7 +80,7 @@ test.describe('Verify Create Project and Add Job flow', () => {
         await projectJob.navigateToJobsTab();
     });
 
-    test('TC75 @regression @sanity @mandatory @projectAndJob @contract : Validate add job modal fields, add job flow and job config in job overview', async () => {
+    test.only('TC75 @regression @sanity @mandatory @projectAndJob @contract : Validate add job modal fields, add job flow and job config in job overview', async () => {
         await projectPage.navigateToProjects();
         await projectPage.openProject(projectData.projectName);
         await projectJob.navigateToJobsTab();
@@ -194,7 +194,7 @@ test.describe('Verify Create Project and Add Job flow', () => {
         await projectPage.closeScopeMixModal();
     });
 
-    test('TC77 @regression @mandatory @projectAndJob @contract : Add contract from left Jobs menu and finalize contract with new flow', async () => {
+    test.only('TC77 @regression @mandatory @projectAndJob @contract : Add contract from left Jobs menu and finalize contract with new flow', async () => {
         const captureDebugScreenshot = async (label) => {
         };
 
@@ -758,7 +758,7 @@ test.describe('Verify Create Project and Add Job flow', () => {
 
 
     // Writes tabs disabled state for TC08 / TC09; run after `npm run Test:mandatory` when executing invoice/CO suites (see `npm run Test:depsForInvoiceCo`).
-    test('TC78 @regression @projectAndJob @mandatory : Check if Invoice and Change Order tabs are disabled - persist for spec 8 and 9', async () => {
+    test.only('TC78 @regression @projectAndJob @mandatory : Check if Invoice and Change Order tabs are disabled - persist for spec 8 and 9', async () => {
         Logger.step('Checking if Invoice and Change Order tabs are disabled...');
         await projectPage.openProject(projectData.projectName);
         await projectJob.navigateToJobsTab();

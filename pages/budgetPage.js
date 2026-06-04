@@ -73,7 +73,7 @@ exports.BudgetJob = class BudgetJob {
         const option = this.page.getByRole('option', { name: new RegExp(`^${esc}`) }).first();
         if (await option.isVisible({ timeout: 3000 }).catch(() => false)) {
             await option.click();
-            await this.page.waitForTimeout(30000);
+            await this.page.waitForTimeout(8000);
             Logger.success(`Selected property: ${propertyName}`);
             return true;
         }
@@ -88,7 +88,7 @@ exports.BudgetJob = class BudgetJob {
             if (!text.includes(propertyName)) continue;
             if (text === propertyName || text.startsWith(`${propertyName} `) || text.startsWith(`${propertyName}\n`)) {
                 await items.nth(i).click();
-                await this.page.waitForTimeout(30000);
+                await this.page.waitForTimeout(10000);
                 Logger.success(`Selected property: ${text.substring(0, 72)}`);
                 return true;
             }
@@ -170,7 +170,7 @@ exports.BudgetJob = class BudgetJob {
         }
 
         await this.page.goto(process.env.DASHBOARD_URL || '/projects', { waitUntil: 'load' });
-        await this.page.waitForTimeout(30000);
+        await this.page.waitForTimeout(20000);
         await this.page.waitForTimeout(1000);
 
         Logger.success('Budget category data added successfully for property');
@@ -196,8 +196,7 @@ exports.BudgetJob = class BudgetJob {
             return false;
         }
 
-        await this.page.waitForTimeout(30000);
-        await this.page.waitForTimeout(3000);
+        await this.page.waitForTimeout(10000);
         await this.page.waitForURL(/budget-revision|financials\/budget-revision/, { timeout: 15000 }).catch(() => {});
         try {
             await this.verifyRevisionEditorOpen();
@@ -217,7 +216,7 @@ exports.BudgetJob = class BudgetJob {
             const text = await items.nth(i).textContent();
             if (text && !/brook|harbor|westerham/i.test(text)) {
                 await items.nth(i).click();
-                await this.page.waitForTimeout(30000);
+                await this.page.waitForTimeout(10000);
                 Logger.success(`Selected property: ${text.substring(0, 50)}...`);
                 return text.trim();
             }
@@ -288,7 +287,7 @@ exports.BudgetJob = class BudgetJob {
     }
 
     async verifyBudgetCategoryInNav() {
-        await this.page.waitForTimeout(30000);
+        await this.page.waitForTimeout(10000);
         await this.page.waitForTimeout(800);
         await this.page.locator('nav').waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
         const budgetVisible = await budget.budgetNavText.first().isVisible().catch(() => false);
@@ -432,7 +431,7 @@ exports.BudgetJob = class BudgetJob {
             await viewItem.waitFor({ state: 'visible', timeout: 10000 });
             await viewItem.click({ timeout: 5000 });
 
-            await this.page.waitForTimeout(30000);
+            await this.page.waitForTimeout(10000);
             await this.page.waitForTimeout(1000);
             Logger.success(`Loaded view "${viewName}"`);
         } catch (err) {
@@ -526,7 +525,7 @@ exports.BudgetJob = class BudgetJob {
                         const deleteDialog = budget.deleteDraftDialog;
                         if (await deleteDialog.isVisible({ timeout: 3000 }).catch(() => false)) {
                             await deleteDialog.getByRole('button', { name: 'Delete' }).click();
-                            await this.page.waitForTimeout(30000);
+                            await this.page.waitForTimeout(10000);
                         }
                         await versionDropdown.click({ force: true });
                         await this.page.waitForTimeout(300);
@@ -573,7 +572,7 @@ exports.BudgetJob = class BudgetJob {
                     if (await delDlg.isVisible({ timeout: 2000 }).catch(() => false)) {
                         await delDlg.getByRole('button', { name: 'Delete' }).click();
                     }
-                    await this.page.waitForTimeout(30000);
+                    await this.page.waitForTimeout(10000);
                     
                 }
             }
@@ -688,8 +687,7 @@ exports.BudgetJob = class BudgetJob {
         if (await budget.resetConfirmBtn.first().isVisible({ timeout: 2000 }).catch(() => false)) {
             await budget.resetConfirmBtn.first().click();
         }
-        await this.page.waitForTimeout(30000);
-        await this.page.waitForTimeout(3000);
+        await this.page.waitForTimeout(10000);
         const rowsLocator = dialog.locator('[role="treegrid"] [role="row"][data-rgrow]');
         await expect(rowsLocator.first()).toBeVisible({ timeout: 15000 });
         Logger.success('Reset table completed in revision editor');
@@ -801,16 +799,14 @@ exports.BudgetJob = class BudgetJob {
         const fullPath = path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath);
         const fileInput = budget.uploadBudgetFileInput;
         await fileInput.setInputFiles(fullPath);
-        await this.page.waitForTimeout(30000);
-        await this.page.waitForTimeout(3000);
+        await this.page.waitForTimeout(10000);
         Logger.success(`Uploaded budget file: ${filePath}`);
     }
 
     async uploadFileInRevision(filePath) {
         const fullPath = path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath);
 
-        await this.page.waitForTimeout(30000);
-        await this.page.waitForTimeout(1200);
+        await this.page.waitForTimeout(12000);
 
         /** Revision editor upload lives on body for `/budget-revision/...`; also use body when revise UI isn’t `[role="dialog"]` (drawer / Mantine layout), so scoped dialog doesn’t hide Uploadcare inputs. */
         const revisionChromeDialog = this.page
@@ -819,7 +815,7 @@ exports.BudgetJob = class BudgetJob {
             .first();
 
         await this.page.waitForURL(/financials\/budget|budget-revision/i, { timeout: 25000 }).catch(() => {});
-        await this.page.waitForTimeout(30000);
+        await this.page.waitForTimeout(10000);
 
         let uploadRoot;
         const urlHasRevisionPath = /budget-revision/i.test(this.page.url());
@@ -853,8 +849,7 @@ exports.BudgetJob = class BudgetJob {
         }
 
         const finishAfterFileAttached = async () => {
-            await this.page.waitForTimeout(30000);
-            await this.page.waitForTimeout(3000);
+            await this.page.waitForTimeout(10000);
 
             const modalVisible = await budget.uploadModal.first().isVisible({ timeout: 5000 }).catch(() => false);
             if (modalVisible) {
@@ -867,8 +862,8 @@ exports.BudgetJob = class BudgetJob {
                     await budget.doneBtn.first().click();
                 }
             }
-            await this.page.waitForTimeout(30000);
-            await this.page.waitForTimeout(3000);
+            await this.page.waitForTimeout(10000);
+         
         };
 
         const tryDirectFileInput = async () => {
@@ -1007,7 +1002,7 @@ exports.BudgetJob = class BudgetJob {
         if (enabled) return;
         Logger.step('Submit disabled after upload - assigning Category Code to first row to satisfy validation');
         await this.fillCategoryInRevision('Construction');
-        await this.page.waitForTimeout(30000);
+        await this.page.waitForTimeout(10000);
         const nowEnabled = await this.waitForSubmitForApprovalEnabled(10000);
         if (!nowEnabled) {
             throw new Error('Submit for Approval remained disabled after assigning category - validation may require additional fields');
@@ -1065,7 +1060,7 @@ exports.BudgetJob = class BudgetJob {
         await this.page.keyboard.press('Tab');
         await this.page.keyboard.type(description);
         await this.page.keyboard.press('Escape');
-        await this.page.waitForTimeout(30000);
+        await this.page.waitForTimeout(10000);
         await this.page.waitForTimeout(1500);
 
         const hasNewRow = await budget.budgetItemText(itemName).isVisible({ timeout: 5000 }).catch(() => false);
@@ -1299,7 +1294,7 @@ exports.BudgetJob = class BudgetJob {
         await this.addRowInRevision();
         await this.fillCategoryInRevision(category);
         await this.fillRowDataInRevision(itemName, description, originalBudget);
-        await this.page.waitForTimeout(30000);
+        await this.page.waitForTimeout(10000);
         Logger.success(`Row added with category: ${itemName} (${category})`);
     }
 
@@ -1351,7 +1346,7 @@ exports.BudgetJob = class BudgetJob {
         if (await budget.resetConfirmBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
             await budget.resetConfirmBtn.click();
         }
-        await this.page.waitForTimeout(30000);
+        await this.page.waitForTimeout(10000);
         const count = await budget.dataRows.count();
         Logger.success(`Reset table completed - ${count} rows in grid`);
         return true;
