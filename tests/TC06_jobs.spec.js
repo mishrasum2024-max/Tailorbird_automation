@@ -217,7 +217,7 @@ test.describe('Verify Create Project and Add Job flow', () => {
                 .first();
             await expect(jobsMenu).toBeVisible({ timeout: 15000 });
             await jobsMenu.click();
-            await page.waitForLoadState('networkidle');
+            await this.page.waitForTimeout(20000);
 
             Logger.step('Opening target job from Jobs listing...');
             const searchInput = page.locator('input[placeholder="Search..."]').first();
