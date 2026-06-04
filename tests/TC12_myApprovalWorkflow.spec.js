@@ -21,7 +21,7 @@ test.describe('Approval Workflow - My Approvals E2E Tests with another user', ()
 
         await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'load' });
         await expect(page).toHaveURL(process.env.DASHBOARD_URL);
-        await page.waitForLoadState('networkidle');
+        await this.page.waitForTimeout(10000);
         Logger.info('Dashboard loaded from stored session');
 
         await approvalJob.navigateToApprovalTab();

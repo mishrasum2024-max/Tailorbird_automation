@@ -40,7 +40,6 @@ test.describe('Verify category tab', () => {
 
         await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'load' });
         await expect(page).toHaveURL(process.env.DASHBOARD_URL);
-        await page.waitForLoadState('domcontentloaded');
         await page.waitForTimeout(10000);
 
         page.on('domcontentloaded', async () => {

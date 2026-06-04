@@ -50,7 +50,7 @@ test.describe('Verify Create Project and Add Job flow', () => {
 
         await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'load' });
         await expect(page).toHaveURL(process.env.DASHBOARD_URL);
-        await page.waitForLoadState('networkidle');
+        await this.page.waitForTimeout(10000);
 
         page.on('domcontentloaded', async () => {
             await page.evaluate(() => {

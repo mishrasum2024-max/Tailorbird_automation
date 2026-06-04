@@ -80,7 +80,7 @@ test('TC65 @regression @sanity @mandatory @projectAndJob @contract : User should
 
     await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'load' });
     await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(10000);
 
     await projectPage.navigateToProjects();
     await projectPage.openCreateProjectModal();
