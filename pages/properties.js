@@ -107,7 +107,7 @@ class PropertiesHelper {
             this.log(`Navigating to URL: ${url}`);
             const apiWait = this.waitForApi200('goto', [/\/api\/organization\/current/, /\/api\/profile/, /\/api\/auth\/feature-flags/], 60_000);
             await this.page.goto(url, { waitUntil: "load" });
-            await this.page.waitForLoadState("networkidle");
+            await this.page.waitForTimeout(35000);
             await apiWait;
             this.log(`Navigation successful: ${url}`);
         } catch (err) {
