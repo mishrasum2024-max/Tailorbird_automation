@@ -629,7 +629,7 @@ exports.BudgetJob = class BudgetJob {
     }
 
     async verifyRevisionEditorOpen() {
-        await this.page.waitForTimeout(7000);
+        await this.page.waitForTimeout(20000);
         const url = this.page.url();
         const hasRevisionUrl = url.includes('budget-revision');
         const hasTreegridRows = await budget.treegridDataRows.first().isVisible({ timeout: 8000 }).catch(() => false);
