@@ -310,6 +310,7 @@ class InvoicePage {
             await invoiceTab.waitFor({ state: 'visible', timeout: 10000 });
             await invoiceTab.click();
             await this.page.waitForLoadState('load');
+            await this.page.waitForTimeout(1000);
             await this.page.waitForURL(/tab=invoices/);
             await this.page.waitForTimeout(2000);
             Logger.success('Navigated to Invoice tab successfully.');
@@ -1291,6 +1292,7 @@ class InvoicePage {
         Logger.step('Waiting for Change Order Details screen to load...');
         await this.page.waitForLoadState('domcontentloaded');
         await this.page.waitForLoadState('load');
+        await this.page.waitForTimeout(2000);
 
         const dialog = this.page.locator('[role="dialog"]').filter({ hasText: 'Change Order Details' });
         const headerOrGrid = dialog.locator('text=Change Order Details')
@@ -1948,6 +1950,7 @@ class InvoicePage {
                     }
 
                     await this.page.waitForLoadState('load');
+                    await this.page.waitForTimeout(2000);
                     await this.page
                         .waitForURL(/tab=invoices/, { timeout: 15000 })
                         .catch(() => null);

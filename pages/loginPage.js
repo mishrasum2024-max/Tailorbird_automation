@@ -360,6 +360,9 @@ class LoginPage {
         // Combobox triggers (Mantine Select, etc.) rely on visual context — demote to WARN
         if (el.ariaHasPopup === 'listbox' || el.ariaLabelledBy) {
           issues.push(`WARN: combobox/select <${el.tag}> has no explicit aria-label or placeholder (aria-haspopup="${el.ariaHasPopup || ''}")`);
+        } else if (el.visible === false) {
+          // Hidden inputs (collapsed dropdowns, off-screen Mantine internals) don't need labels
+          issues.push(`WARN: hidden <${el.tag}> has no label, placeholder, or aria-label`);
         } else {
           issues.push(`<${el.tag}> has no label, placeholder, or aria-label — inaccessible input`);
         }

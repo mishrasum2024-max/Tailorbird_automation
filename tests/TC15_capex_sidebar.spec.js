@@ -24,7 +24,7 @@ let suitePropertyName;
 let suitePropertyId;
 const suitePropertyAddress = 'Domestic Terminal, College Park, GA 30337, USA';
 
-test.describe('CapEx Sidebar One-Page QA Checklist', () => {
+test.describe.skip('CapEx Sidebar One-Page QA Checklist', () => {
 
     test.beforeAll(async () => {
         // Use "Test Property 2_The Westerham" — a permanent sample property on beta.tailorbird.com

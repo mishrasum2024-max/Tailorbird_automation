@@ -629,9 +629,8 @@ exports.BudgetJob = class BudgetJob {
     }
 
     async verifyRevisionEditorOpen() {
-        await this.page.waitForTimeout(20000);
         const url = this.page.url();
-        const hasRevisionUrl = url.includes('budget-revision');
+        const hasRevisionUrl = url.includes('budget-revision',{timeout: 30000});
         const hasTreegridRows = await budget.treegridDataRows.first().isVisible({ timeout: 25000 }).catch(() => false);
         const hasTreegrid = await budget.treegrid.first().isVisible({ timeout: 13000 }).catch(() => false);
         const hasSubmitBtn = await budget.submitForApprovalBtn.isVisible({ timeout: 13000 }).catch(() => false);

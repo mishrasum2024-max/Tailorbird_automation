@@ -621,7 +621,7 @@ test.describe.serial('Out of Office — OOO suite', () => {
         test.setTimeout(90000);
         Logger.step('TC273: Activate via UI then verify the API rejects a duplicate POST');
 
-        const DELEGATE_USER_EMAIL = 'admin_1778137522347@yopmail.com';
+        const DELEGATE_USER_EMAIL = 'Sumit tailorbird';
 
         await oooPage.ensureOooInactive();
 

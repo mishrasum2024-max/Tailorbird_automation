@@ -524,7 +524,9 @@ test.describe('TC02 Menu — Text assertions', () => {
         test.skip(!process.env.DASHBOARD_URL, 'DASHBOARD_URL required');
         // beforeEach already navigated to DASHBOARD_URL and set up auth session
         InteractionLogger.logNavigation(process.env.DASHBOARD_URL, 'Dashboard — left nav Text Agent');
-        await page.getByRole('navigation').waitFor({ state: 'visible', timeout: 20_000 });
+        // Wait for nav skeleton to resolve: the container becomes visible immediately,
+        // but actual link text (Properties) only appears after JS hydration completes.
+        await page.getByRole('navigation').getByText('Properties', { exact: true }).first().waitFor({ state: 'visible', timeout: 30_000 });
 
         await test.step('STATE 1 | Dashboard nav — full scan of all text elements', async () => {
             const snapshot = await LoginPage.scanAllTextElements(page);
