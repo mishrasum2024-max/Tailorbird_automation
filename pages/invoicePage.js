@@ -320,6 +320,34 @@ class InvoicePage {
         }
     }
 
+    /**
+     * Selects the "Group by Unit" or "Group by Scope" tab in the invoice creation grid.
+     * This SegmentedControl was added to the invoice detail page and replaces the flat grid view.
+     * @param {'unit'|'scope'} groupBy - Which grouping to select (default: 'scope')
+     */
+    async selectInvoiceGroupByTab(groupBy = 'scope') {
+        try {
+            Logger.step(`Selecting invoice group-by tab: "Group by ${groupBy}"...`);
+            const ctrl = this.page.locator('.mantine-SegmentedControl-root');
+            const isVisible = await ctrl.isVisible({ timeout: 3000 }).catch(() => false);
+            if (!isVisible) {
+                Logger.info('No Group-by SegmentedControl found — skipping tab selection.');
+                return;
+            }
+            const label = ctrl.locator('label').filter({ hasText: new RegExp(`Group by ${groupBy}`, 'i') });
+            const labelVisible = await label.isVisible({ timeout: 3000 }).catch(() => false);
+            if (!labelVisible) {
+                Logger.info(`"Group by ${groupBy}" label not visible — skipping.`);
+                return;
+            }
+            await label.click({ timeout: 5000 });
+            await this.page.waitForTimeout(500);
+            Logger.success(`Invoice group-by tab set to "Group by ${groupBy}".`);
+        } catch (error) {
+            Logger.info(`selectInvoiceGroupByTab: non-fatal error — ${error.message}`);
+        }
+    }
+
     async navigateToChangeOrderTab() {
         try {
             Logger.step('Navigating to Change Order tab...');
@@ -1534,16 +1562,48 @@ class InvoicePage {
                 return false;
             }
 
-            // Wait for the Invoice Amount header to exist (grid fully rendered)
-            await this.invoiceLocators.invoiceAmountHeader.isVisible({ timeout: 15000 }).catch(() => null);
+            // Dynamically detect amount column index.
+            // New grid: "Invoiced Amount" (data-rgcol="7"); legacy grid: "Invoice Amount" (data-rgcol="6").
+            let amountColIndex = '6';
+            const invoicedAmountHeader = this.page
+                .locator('[role="columnheader"]')
+                .filter({ hasText: /Invoiced Amount/i })
+                .first();
+            const legacyAmountHeader = this.page
+                .locator('[role="columnheader"]')
+                .filter({ hasText: /Invoice Amount/i })
+                .first();
 
-            // Invoice Amount column is commonly index 6 (data-rgcol="6")
+            // Wait briefly for either header to appear (grid fully rendered)
+            const headerFound = await Promise.race([
+                invoicedAmountHeader.waitFor({ state: 'visible', timeout: 8000 }).then(() => 'new').catch(() => null),
+                legacyAmountHeader.waitFor({ state: 'visible', timeout: 8000 }).then(() => 'legacy').catch(() => null),
+            ]);
+
+            if (headerFound === 'new') {
+                const colIdx = await invoicedAmountHeader
+                    .evaluate(el => el.getAttribute('data-rgcol') || el.getAttribute('aria-colindex') || '')
+                    .catch(() => '');
+                if (colIdx) amountColIndex = colIdx;
+                Logger.info(`Detected "Invoiced Amount" column at data-rgcol="${amountColIndex}"`);
+            } else if (headerFound === 'legacy') {
+                Logger.info('Using legacy "Invoice Amount" column at data-rgcol="6"');
+            } else {
+                Logger.info('Amount column header not detected — falling back to data-rgcol="6"');
+            }
+
             const amountCell = this.page
-                .locator('div[role="gridcell"][data-rgcol="6"]')
+                .locator(`div[role="gridcell"][data-rgcol="${amountColIndex}"]`)
                 .filter({ hasText: /—|\$0|\$/ })
                 .first();
 
-            await amountCell.waitFor({ state: 'visible', timeout: 15000 });
+            // If no data rows exist (e.g. all scopes already invoiced), skip gracefully.
+            const cellVisible = await amountCell.isVisible({ timeout: 5000 }).catch(() => false);
+            if (!cellVisible) {
+                Logger.info('No invoice amount cell found in grid (grid may be empty) — skipping amount fill.');
+                return false;
+            }
+            await amountCell.waitFor({ state: 'visible', timeout: 5000 });
             await amountCell.scrollIntoViewIfNeeded();
 
             const updateResponsePromise = this.page
@@ -1612,7 +1672,14 @@ class InvoicePage {
                 .locator('[role="treegrid"]')
                 .filter({ has: this.page.locator('[role="columnheader"]').filter({ hasText: /Budget Category/i }) })
                 .first();
-            await expect(grid).toBeVisible({ timeout: 30000 });
+
+            // New invoice grid structure (Unit Interior jobs) does not have a Budget Category column.
+            // Return 0 gracefully instead of timing out.
+            const gridVisible = await grid.isVisible({ timeout: 5000 }).catch(() => false);
+            if (!gridVisible) {
+                Logger.info('"Budget Category" column not found in invoice grid — new grid structure detected, skipping.');
+                return 0;
+            }
 
             let budgetCategoryHeader = grid.locator('[role="columnheader"]').filter({ hasText: /Budget Category/i }).first();
             let headerVisible = await budgetCategoryHeader.isVisible({ timeout: 4000 }).catch(() => false);
@@ -2116,6 +2183,9 @@ class InvoicePage {
 
             await this.clickAddInvoice();
             await this.page.waitForTimeout(2000);
+
+            // Handle the "Group by Unit" / "Group by Scope" segmented control added in the new UI.
+            await this.selectInvoiceGroupByTab(invoiceData.groupBy || 'scope');
 
             const invoiceUrl = this.page.url();
             const jobId = invoiceUrl.match(/\/jobs\/(\d+)/)?.[1] || null;

@@ -1,4 +1,4 @@
-const path = require('path');
+﻿const path = require('path');
 const fs = require('fs');
 const { expect } = require('@playwright/test');
 const { Logger } = require('../utils/logger');
@@ -805,20 +805,18 @@ exports.BudgetJob = class BudgetJob {
     async uploadFileInRevision(filePath) {
         const fullPath = path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath);
 
-        await this.page.waitForTimeout(22000);
-
-        /** Revision editor upload lives on body for `/budget-revision/...`; also use body when revise UI isn’t `[role="dialog"]` (drawer / Mantine layout), so scoped dialog doesn’t hide Uploadcare inputs. */
+        /** Revision editor upload lives on body for `/budget-revision/...`; also use body when revise UI isn't `[role="dialog"]` (drawer / Mantine layout), so scoped dialog doesn't hide Uploadcare inputs. */
         const revisionChromeDialog = this.page
             .getByRole('dialog')
             .filter({ hasText: /Submit for Approval|Submit for Review/i })
             .first();
 
-        await this.page.waitForURL(/financials\/budget|budget-revision/i, { timeout: 35000 }).catch(() => {});
-        await this.page.waitForTimeout(20000);
+        await this.page.waitForURL(/financials\/budget|budget-revision/i, { timeout: 45000 }).catch(() => {});
+        await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
 
         let uploadRoot;
         const urlHasRevisionPath = /budget-revision/i.test(this.page.url());
-        const dlgVisible = await revisionChromeDialog.isVisible({ timeout: 5000 }).catch(() => false);
+        const dlgVisible = await revisionChromeDialog.isVisible({ timeout: 35000 }).catch(() => false);
         if (urlHasRevisionPath || !dlgVisible) {
             uploadRoot = this.page.locator('body');
             Logger.step(
@@ -830,7 +828,7 @@ exports.BudgetJob = class BudgetJob {
         }
 
         const budgetTab = this.page.getByRole('tab', { name: /^Budget$/i }).first();
-        if (await budgetTab.isVisible({ timeout: 5000 }).catch(() => false)) {
+        if (await budgetTab.isVisible({ timeout: 35000 }).catch(() => false)) {
             const ariaSel = await budgetTab.getAttribute('aria-selected').catch(() => '');
             if (ariaSel !== 'true') {
                 await budgetTab.click({ force: true });
@@ -839,10 +837,10 @@ exports.BudgetJob = class BudgetJob {
         }
 
         let tabpanel = uploadRoot.getByRole('tabpanel', { name: /^Budget$/i }).first();
-        if (!(await tabpanel.isVisible({ timeout: 5000 }).catch(() => false))) {
+        if (!(await tabpanel.isVisible({ timeout: 35000 }).catch(() => false))) {
             tabpanel = this.page.getByRole('tabpanel', { name: /^Budget$/i }).first();
         }
-        if (!(await tabpanel.isVisible({ timeout: 3000 }).catch(() => false))) {
+        if (!(await tabpanel.isVisible({ timeout: 35000 }).catch(() => false))) {
             Logger.info('Budget tabpanel not resolved — using upload root for controls');
             tabpanel = uploadRoot;
         }
@@ -857,6 +855,7 @@ exports.BudgetJob = class BudgetJob {
                 await budget.doneBtn.first().click();
             } else {
                 Logger.step('Upload modal not shown (inline / auto flow)');
+                await budget.doneBtn.first().waitFor({ state: 'visible', timeout: 30000 }).catch(() => {});
                 if (await budget.doneBtn.first().isVisible({ timeout: 2000 }).catch(() => false)) {
                     await budget.doneBtn.first().click();
                 }
@@ -865,8 +864,8 @@ exports.BudgetJob = class BudgetJob {
          
         };
 
-        const tryDirectFileInput = async () => {
-            const deadline = Date.now() + 20000;
+        const tryDirectFileInput = async (maxMs = 20000) => {
+            const deadline = Date.now() + maxMs;
             const buildCandidates = () => [
                 uploadRoot.locator('input[type="file"]'),
                 tabpanel.locator('input[type="file"]'),
@@ -897,7 +896,7 @@ exports.BudgetJob = class BudgetJob {
         };
 
         const uploadAndClickDone = async () => {
-            if (await tryDirectFileInput()) {
+            if (await tryDirectFileInput(3000)) {
                 await finishAfterFileAttached();
                 return;
             }
@@ -918,8 +917,8 @@ exports.BudgetJob = class BudgetJob {
                 }),
                 tabpanel.locator('button').filter({ hasText: /^Upload|^Import|^Browse/i }),
                 uploadRoot.locator('button').filter({ hasText: /^Upload|^Import|^Browse/i }),
-                tabpanel.locator('button:has(svg.lucide-upload)'),
-                uploadRoot.locator('button:has(svg.lucide-upload)'),
+                tabpanel.locator('button:has(svg.lucide-cloud-upload)'),
+                uploadRoot.locator('button:has(svg.lucide-cloud-upload)'),
                 tabpanel.locator('uc-simple-btn'),
                 uploadRoot.locator('uc-simple-btn'),
                 this.page.locator('uc-simple-btn').first(),

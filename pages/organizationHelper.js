@@ -362,8 +362,7 @@ class OrganizationHelper {
   async openFirstMenu() {
     try {
       this.log("Opening first row menu...");
-      await this.page.waitforTimeout(2000);
-      await this.page.locator(organizationLocators.firstRowMenuBtn).click();
+      await this.page.locator(organizationLocators.firstRowMenuBtn,{timeout:40000}).click();
       this.log("First row menu opened.");
     } catch (err) {
       this.log("ERROR opening first row menu: " + err);

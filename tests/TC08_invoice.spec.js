@@ -11,6 +11,8 @@ const { ProjectPage } = require('../pages/projectPage');
 const { ProjectJob } = require('../pages/projectJob');
 const { getTabsDisabledState } = require('../utils/tabsDisabledHelper');
 
+const TC08_SNAPSHOT_DIR = path.join(process.cwd(), 'committed_ui_snapshots', 'TC08_invoice.spec.js');
+
 test.use({
     storageState: 'sessionState.json',
     video: 'retain-on-failure',
@@ -82,6 +84,8 @@ test.describe('Verify Invoice tab', () => {
             test.skip(true, 'Skipping because Invoice tab is disabled');
             return;
         }
+
+        if (!fs.existsSync(TC08_SNAPSHOT_DIR)) fs.mkdirSync(TC08_SNAPSHOT_DIR, { recursive: true });
 
         page = p;
         invoicePage = new InvoicePage(page);
@@ -562,6 +566,13 @@ test.describe('Verify Invoice tab', () => {
         const isConfirmVisible = await confirmButton.isVisible({ timeout: 5000 }).catch(() => false);
         expect(isConfirmVisible).toBeTruthy();
         Logger.success('Confirm Invoice button is visible');
+        await page.screenshot({ path: path.join(TC08_SNAPSHOT_DIR, 'invoice_10316_confirm.png') });
+
+        if (isConfirmVisible) {
+            await confirmButton.click({ force: true }).catch(() => {});
+            await page.waitForTimeout(2000);
+            await page.screenshot({ path: path.join(TC08_SNAPSHOT_DIR, 'invoice_confirmed.png') });
+        }
 
         // Close without confirming
         await invoicePage.goBackToInvoiceList();
@@ -791,6 +802,7 @@ test.describe('Verify Invoice tab', () => {
             const stats = await invoicePage.getInvoiceStats();
             expect(stats.currentContract).toBeTruthy();
             expect(stats.pending).toBeTruthy();
+            await page.screenshot({ path: path.join(TC08_SNAPSHOT_DIR, 'invoice_tab_view.png') });
         });
 
         await test.step('P2 — List search probe and clear (missing-path)', async () => {
@@ -805,6 +817,7 @@ test.describe('Verify Invoice tab', () => {
             await search.press('Enter').catch(() => {});
             await page.waitForTimeout(500);
             await expect(loc.mainContainer).toBeVisible({ timeout: 10000 });
+            await page.screenshot({ path: path.join(TC08_SNAPSHOT_DIR, 'invoice_list_after.png') });
         });
     });
 
@@ -888,6 +901,7 @@ test.describe('Verify Invoice tab', () => {
             await invoicePage.clickAddInvoice();
             await expect(loc.invoiceNumberInput).toBeVisible({ timeout: 15000 });
             await page.waitForTimeout(2000);
+            await page.screenshot({ path: path.join(TC08_SNAPSHOT_DIR, 'invoice_create_view.png') });
             await expect(loc.mainContainer).toHaveScreenshot('tc08-v-invoice-create-overview.png', INVOICE_VISUAL_ASSERT);
         });
 
@@ -895,6 +909,7 @@ test.describe('Verify Invoice tab', () => {
             const documentsStrip = page.locator('main').filter({ has: loc.fromDeviceButton }).first();
             await loc.documentsLabel.scrollIntoViewIfNeeded().catch(() => {});
             await page.waitForTimeout(600);
+            await page.screenshot({ path: path.join(TC08_SNAPSHOT_DIR, 'invoice_create_scrolled.png') });
             if (await documentsStrip.isVisible({ timeout: 8000 }).catch(() => false)) {
                 await expect(documentsStrip).toHaveScreenshot('tc08-v-invoice-documents-strip.png', INVOICE_VISUAL_ASSERT);
             } else {
@@ -905,6 +920,7 @@ test.describe('Verify Invoice tab', () => {
         await test.step('V4 — Line items grid region', async () => {
             await expandInvoiceDetailsGridIfCollapsed(page);
             await page.waitForTimeout(800);
+            await page.screenshot({ path: path.join(TC08_SNAPSHOT_DIR, 'invoice_scrolled2.png') });
             await expect(loc.mainContainer).toHaveScreenshot('tc08-v-invoice-details-grid.png', INVOICE_VISUAL_ASSERT);
         });
 
@@ -913,6 +929,7 @@ test.describe('Verify Invoice tab', () => {
             await expect(page).toHaveURL(/tab=invoices/);
             await invoicePage.navigateToChangeOrderTab();
             await page.waitForTimeout(4000);
+            await page.screenshot({ path: path.join(TC08_SNAPSHOT_DIR, 'invoice_group_scope.png') });
             await expect(loc.mainContainer).toHaveScreenshot('tc08-v-change-orders-tab.png', shotMain);
         });
 
@@ -921,6 +938,7 @@ test.describe('Verify Invoice tab', () => {
             await page.waitForTimeout(2000);
             const tablist = page.getByRole('tablist').first();
             await expect(tablist).toBeVisible({ timeout: 10000 });
+            await page.screenshot({ path: path.join(TC08_SNAPSHOT_DIR, 'invoice_group_tabs.png') });
             await expect(tablist).toHaveScreenshot('tc08-v-invoice-tablist.png', INVOICE_VISUAL_ASSERT);
         });
     });
@@ -975,6 +993,7 @@ test.describe('Verify Invoice tab', () => {
         // Clean up — go back to invoice list
         await invoicePage.goBackToInvoiceList().catch(() => page.goBack().catch(() => {}));
         await expect(page).toHaveURL(/tab=invoices/, { timeout: 10000 }).catch(() => {});
+        await page.screenshot({ path: path.join(TC08_SNAPSHOT_DIR, 'invoice_after_confirm.png') });
     });
 
 });

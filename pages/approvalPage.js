@@ -141,12 +141,74 @@ exports.ApprovalJob = class ApprovalJob {
             await approval.createTemplateSubmit.click();
             await this.page.getByRole('button', { name: 'Create Template' }).first()
                 .waitFor({ state: 'visible', timeout: 20000 }).catch(() => {});
-            await this.page.waitForTimeout(400);
+            await this.page.waitForTimeout(600);
+
+            // Detect backend rejection (e.g. "already linked" property conflict).
+            const errorToast = this.page.locator('[role="alert"]').filter({ hasText: /already linked|already exists|duplicate/i });
+            if (await errorToast.isVisible({ timeout: 1500 }).catch(() => false)) {
+                const msg = (await errorToast.textContent().catch(() => '')).trim();
+                Logger.info(`submitCreateTemplate: server rejected — "${msg}"`);
+                throw new Error(`TEMPLATE_CONFLICT: ${msg}`);
+            }
+
             Logger.success('Template submitted');
             return true;
         } catch (error) {
             Logger.error('Error submitting template: ' + error.message);
             throw error;
+        }
+    }
+
+    /**
+     * Deletes existing templates whose names match a given prefix and type.
+     * The properties column in the Revogrid list does not expose property names as
+     * plain text, so matching by row text is unreliable. Instead, pass the name
+     * prefix used by the test suite (e.g. 'OOO_InvTemplate_') to target only
+     * templates created by prior runs of the same test.
+     *
+     * @param {string} namePrefix - Template name prefix to match (e.g. 'OOO_InvTemplate_')
+     * @param {string} templateType - Type label to also match (e.g. 'Invoice')
+     */
+    async deleteConflictingTemplatesForProperty(namePrefix, templateType = 'Invoice') {
+        try {
+            Logger.step(`Checking for existing "${templateType}" templates with prefix "${namePrefix}"...`);
+            await this.clearSearch();
+            await this.page.waitForTimeout(800);
+
+            const tree = this.page.locator('[role="treegrid"]');
+            const dataRows = tree.getByRole('row').filter({ has: this.page.locator('.revo-grid-cell-clear-btn') });
+
+            let deletedCount = 0;
+            const total = await dataRows.count();
+            // Iterate in reverse so indices stay stable after each deletion
+            for (let i = total - 1; i >= 0; i--) {
+                const row = dataRows.nth(i);
+                const rowText = (await row.textContent().catch(() => '')).toLowerCase();
+                if (!rowText.includes(templateType.toLowerCase())) continue;
+
+                const firstCell = row.locator('[role="gridcell"]').first();
+                const rawName = (await firstCell.textContent().catch(() => '')).trim();
+                // Strip the ✕ clear-button character that Revogrid appends
+                const templateName = rawName.replace(/✕.*$/, '').trim();
+                if (!templateName.startsWith(namePrefix)) continue;
+
+                Logger.info(`Deleting conflicting template: "${templateName}"`);
+                try {
+                    await this.deleteTemplate(templateName);
+                    deletedCount++;
+                    await this.page.waitForTimeout(500);
+                } catch (delErr) {
+                    Logger.info(`Could not delete "${templateName}": ${delErr.message}`);
+                }
+            }
+
+            if (deletedCount > 0) {
+                Logger.success(`Deleted ${deletedCount} conflicting template(s) with prefix "${namePrefix}"`);
+            } else {
+                Logger.info(`No conflicting templates found with prefix "${namePrefix}"`);
+            }
+        } catch (error) {
+            Logger.info(`deleteConflictingTemplatesForProperty: non-fatal — ${error.message}`);
         }
     }
 

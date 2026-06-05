@@ -190,8 +190,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
         test.setTimeout(180000);
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();
-        await page.waitForTimeout(30000);
-        await page.waitForTimeout(2000);
+        await page.locator('[role="treegrid"]').first().waitFor({ state: 'visible', timeout: 30000 }).catch(() => {});
         await budgetJob.openRevisionEditor();
         await budgetJob.verifyRevisionEditorOpen();
         const filePath = path.resolve(process.cwd(), 'files', 'budget_file_to_upload.csv');

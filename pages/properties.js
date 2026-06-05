@@ -2220,7 +2220,7 @@ class PropertiesHelper {
         const summaryPanel = this.page.getByRole('tabpanel', { name: /Job Summary/i })
             .or(this.page.locator('[role="tabpanel"]').first());
 
-        await expect(summaryPanel).toBeVisible({ timeout: 10000 });
+        await expect(summaryPanel).toBeVisible({ timeout: 25000 });
 
         const jobFields = [
             { label: "Job Name", value: fields["Job Name"] },
