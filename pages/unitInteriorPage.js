@@ -43,7 +43,7 @@ class UnitInteriorPage {
     async searchAndOpenJob() {
         Logger.info(`[UnitInterior] Searching for job: "${JOB_NAME}"`);
         const searchInput = this.page.locator('input[placeholder="Search..."]').first();
-        await searchInput.waitFor({ state: 'visible', timeout: 15000 });
+        await searchInput.waitFor({ state: 'visible', timeout: 30000 });
         InteractionLogger.logFormFill('Jobs search input', JOB_NAME);
         await searchInput.fill(JOB_NAME);
         await this.page.waitForTimeout(1500);
@@ -62,7 +62,7 @@ class UnitInteriorPage {
         InteractionLogger.logButtonClick(`Job ID link: ${jobIdText?.trim()}`, jobIdText?.trim() ?? '');
         await jobIdLink.click();
 
-        await this.page.waitForURL(new RegExp(`/jobs/${JOB_ID}`), { timeout: 20000 });
+        await this.page.waitForURL(new RegExp(`/jobs/${JOB_ID}`), { timeout: 30000 });
         await this.page.waitForTimeout(1500);
         Logger.success(`[UnitInterior] Opened job detail for "${JOB_NAME}" (confirmed URL contains ${JOB_ID})`);
     }
