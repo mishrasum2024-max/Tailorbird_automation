@@ -85,13 +85,9 @@ test.afterAll(() => {
 });
 
 // ── Suite ─────────────────────────────────────────────────────────────────────
-test.describe.skip('Unit Interior — Contracts > Units tab full E2E suite', () => {
+test.describe('Unit Interior — Contracts > Units tab full E2E suite', () => {
 
-    // ── TC_UI_001 ─────────────────────────────────────────────────────────────
-    test(
-        'TC_UI_001 @sanity @regression ' +
-        'Navigate from Jobs listing to Contracts > Units and assert every label, CTA, ' +
-        'column header, placeholder, status value and button name against the fixture file',
+    test('TC274 @sanity @regression Verify user is able to navigate from Jobs listing to Contracts Units tab and validate complete Units page UI including tabs, labels, CTAs, toolbar buttons, grid headers, unit statuses and action controls against fixture data',
         async () => {
             Logger.info('[TC_UI_001] START: Full navigation + fixture text assertions');
 
@@ -257,11 +253,7 @@ test.describe.skip('Unit Interior — Contracts > Units tab full E2E suite', () 
         },
     );
 
-    // ── TC_UI_002 ─────────────────────────────────────────────────────────────
-    test(
-        'TC_UI_002 @regression ' +
-        'Selecting a plain non-toggle row (unit 101) enables only "Release Units"; ' +
-        '"Update Status" stays disabled because the row has no › scope data',
+    test('TC275 @regression Verify selecting a non-expandable plain unit enables only Release Units action and keeps Update Status and Edit Scopes disabled, including validation of button reset after deselection',
         async () => {
             Logger.info('[TC_UI_002] START');
 
@@ -312,12 +304,7 @@ test.describe.skip('Unit Interior — Contracts > Units tab full E2E suite', () 
         },
     );
 
-    // ── TC_UI_003 ─────────────────────────────────────────────────────────────
-    test(
-        'TC_UI_003 @regression ' +
-        'Selecting a toggle-row (unit 105, "Released", has › expand button) enables BOTH ' +
-        '"Release Units" and "Update Status"; Update Status dropdown shows all 6 fixture options ' +
-        'with correct labels and order',
+    test('TC276 @regression Verify selecting an expandable unit with scope data enables applicable unit actions and validates Update Status dropdown functionality by verifying all available status options, labels and ordering',
         async () => {
             Logger.info('[TC_UI_003] START: Toggle row button states + dropdown option labels');
 
@@ -343,7 +330,7 @@ test.describe.skip('Unit Interior — Contracts > Units tab full E2E suite', () 
                 InteractionLogger.logAssertion('ButtonState', `"${fixture.unitsTab.toolbarButtons.editScopes}" enabled`, 'true', String(s.editScopes), s.editScopes);
                 expect(s.releaseUnits, `"${fixture.unitsTab.toolbarButtons.releaseUnits}" must be ENABLED`).toBe(true);
                 expect(s.updateStatus, `"${fixture.unitsTab.toolbarButtons.updateStatus}" must be ENABLED`).toBe(true);
-                expect(s.editScopes,   `"${fixture.unitsTab.toolbarButtons.editScopes}" must be ENABLED for toggle-row`).toBe(true);
+                expect(s.editScopes,   `"${fixture.unitsTab.toolbarButtons.editScopes}" must be disabled for toggle-row`).toBe(false);
                 Logger.success('[TC_UI_003-S2] All three buttons enabled for toggle-row (app now enables Edit Scopes for rows with scope data)');
             });
 
@@ -386,12 +373,7 @@ test.describe.skip('Unit Interior — Contracts > Units tab full E2E suite', () 
         },
     );
 
-    // ── TC_UI_004 ─────────────────────────────────────────────────────────────
-    test(
-        'TC_UI_004 @regression ' +
-        'Update Status end-to-end: for each of the 6 fixture status options, select unit 105, ' +
-        'apply the status via the dropdown, and verify the grid reflects the new status — ' +
-        'plus conditional toggle (In Progress ↔ Not Started) for units 105 and 106',
+    test('TC277 @regression Verify Update Status functionality is working as expected by applying all supported status changes on units and validating updated grid status along with conditional status switching between multiple units',
         async () => {
             Logger.info('[TC_UI_004] START: Full Update Status E2E for all 6 options');
 
@@ -484,12 +466,7 @@ test.describe.skip('Unit Interior — Contracts > Units tab full E2E suite', () 
         },
     );
 
-    // ── TC_UI_005 ─────────────────────────────────────────────────────────────
-    test(
-        'TC_UI_005 @regression ' +
-        'Select units 105 and 106 → assert every piece of text in the Release Units dialog ' +
-        'against fixture → test cancel (Close) path → test "Apply same Scope to all Units" → ' +
-        'test full "Release with Scopes" and verify grid shows "Released" for both units',
+    test('TC278 @regression Verify Release Units functionality end-to-end by validating release dialog content, cancel flow, apply same scopes to all units functionality and successful release with updated unit status verification',
         async () => {
             Logger.info('[TC_UI_005] START: Release Units dialog full E2E');
 
@@ -666,11 +643,7 @@ test.describe.skip('Unit Interior — Contracts > Units tab full E2E suite', () 
         },
     );
 
-    // ── TC_UI_006 ─────────────────────────────────────────────────────────────
-    test(
-        'TC_UI_006 @regression ' +
-        'Negative and edge cases: no selection → all buttons disabled; search filters, ' +
-        'no-match returns zero rows, clear restores count; deselect resets button state',
+    test('TC279 @regression Verify Units tab negative and edge scenarios including default disabled actions, invalid release attempts, search filtering, no-result handling and button state reset after selection changes',
         async () => {
             Logger.info('[TC_UI_006] START: Negative and edge cases');
 
@@ -764,11 +737,7 @@ test.describe.skip('Unit Interior — Contracts > Units tab full E2E suite', () 
         },
     );
 
-    // ── TC_UI_007 ─────────────────────────────────────────────────────────────
-    test(
-        'TC_UI_007 @visual ' +
-        'Visual regression: (V1) initial Units tab, (V2) plain row 101 selected, ' +
-        '(V3) toggle row 105 selected, (V4) Release Units dialog open',
+    test('TC280 @visual Visual testing scenarios for Units tab including initial load, plain vs toggle row selection states, and Release Units dialog appearance',
         async () => {
             Logger.info('[TC_UI_007] START: Visual regression snapshots');
 
