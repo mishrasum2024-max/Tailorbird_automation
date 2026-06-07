@@ -1826,6 +1826,24 @@ class InvoicePage {
         }
     }
 
+    /**
+     * Variant of fillBudgetCategoryInInvoice for Change-Order invoice pages.
+     * The Budget Category grid on CO invoices can take up to 30s to render.
+     * This method pre-waits for the grid (30s), then delegates to
+     * fillBudgetCategoryInInvoice — once the grid is visible the 5-second
+     * graceful-skip inside that method never fires.
+     * @param {string} categoryText - Category option to select in each row
+     * @returns {number} Number of rows where category was set
+     */
+    async fillBudgetCategoryInChangeOrderInvoice(categoryText) {
+        const grid = this.page
+            .locator('[role="treegrid"]')
+            .filter({ has: this.page.locator('[role="columnheader"]').filter({ hasText: /Budget Category/i }) })
+            .first();
+        await expect(grid).toBeVisible({ timeout: 30000 });
+        return this.fillBudgetCategoryInInvoice(categoryText);
+    }
+
     async getBudgetCategoryValues() {
         try {
             Logger.step('Getting budget category values from invoice grid');
