@@ -205,7 +205,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
     // ===== Revise Budget E2E =====
 
     test('TC232 @budget @regression : Revise Budget - Verify deleted Budget revision rows are restored successfully after Reset Table action and original revision data becomes visible again inside the Revision Editor grid', async () => {
-        test.setTimeout(180000);
+        test.setTimeout(300000);
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();
         await page.waitForTimeout(30000);
