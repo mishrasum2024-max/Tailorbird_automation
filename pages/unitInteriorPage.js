@@ -614,6 +614,162 @@ class UnitInteriorPage {
         await this.loc.releaseUnitsDialog.waitFor({ state: 'hidden', timeout: 10000 }).catch(() => {});
         Logger.info('[UnitInterior] Release dialog closed via Close button');
     }
+
+    // ── Filter panel operations ───────────────────────────────────────────
+
+    /** Clicks the Filter button to open the filter panel and waits for it to appear. */
+    async openFilterPanel() {
+        Logger.info('[UnitInterior] Opening filter panel');
+        await this.loc.filterButton.waitFor({ state: 'visible', timeout: 10000 });
+        await this.loc.filterButton.click();
+        await this.loc.filterDialog.waitFor({ state: 'visible', timeout: 8000 });
+        Logger.success('[UnitInterior] Filter panel open');
+    }
+
+    /**
+     * Reads all available options for a named filter.
+     * Opens filter panel if not already open, clicks the filter textbox so the listbox
+     * appears, reads option texts, then presses Escape to close everything.
+     * Panel will be CLOSED after this returns — caller must reopen for subsequent filter actions.
+     * @param {'Status'|'FP Type'|'Unit Type'} filterName
+     * @returns {Promise<string[]>}
+     */
+    async getAvailableFilterOptions(filterName) {
+        Logger.info(`[UnitInterior] Reading available options for filter "${filterName}"`);
+        const isOpen = await this.loc.filterDialog.isVisible({ timeout: 500 }).catch(() => false);
+        if (!isOpen) await this.openFilterPanel();
+
+        const textboxMap = {
+            'Status':    this.loc.filterStatusInput,
+            'FP Type':   this.loc.filterFpTypeInput,
+            'Unit Type': this.loc.filterUnitTypeInput,
+        };
+        const listboxMap = {
+            'Status':    this.loc.filterStatusListbox,
+            'FP Type':   this.loc.filterFpTypeListbox,
+            'Unit Type': this.loc.filterUnitTypeListbox,
+        };
+
+        const textbox = textboxMap[filterName];
+        const listbox = listboxMap[filterName];
+        if (!textbox || !listbox) throw new Error(`Unknown filter name: "${filterName}"`);
+
+        await textbox.click();
+        await listbox.waitFor({ state: 'visible', timeout: 8000 });
+        const options = await listbox.getByRole('option').allTextContents();
+        const cleaned = options.map(o => o.trim()).filter(Boolean);
+        Logger.info(`[UnitInterior] Filter "${filterName}" options: ${JSON.stringify(cleaned)}`);
+
+        // Escape closes the listbox (and possibly the whole panel) — either is acceptable
+        await this.page.keyboard.press('Escape');
+        await this.page.waitForTimeout(400);
+        return cleaned;
+    }
+
+    /**
+     * Applies a single filter value:
+     *   1. Opens filter panel if not already open
+     *   2. Clicks the filter textbox to open its listbox
+     *   3. Clicks the given option
+     *   4. Presses Escape to close the filter panel
+     * @param {'Status'|'FP Type'|'Unit Type'} filterName
+     * @param {string} optionText
+     */
+    async applyFilterValue(filterName, optionText) {
+        Logger.info(`[UnitInterior] Applying filter: ${filterName} = "${optionText}"`);
+        InteractionLogger.logInteraction('filter', filterName, optionText);
+
+        const isOpen = await this.loc.filterDialog.isVisible({ timeout: 500 }).catch(() => false);
+        if (!isOpen) await this.openFilterPanel();
+
+        const textboxMap = {
+            'Status':    this.loc.filterStatusInput,
+            'FP Type':   this.loc.filterFpTypeInput,
+            'Unit Type': this.loc.filterUnitTypeInput,
+        };
+        const listboxMap = {
+            'Status':    this.loc.filterStatusListbox,
+            'FP Type':   this.loc.filterFpTypeListbox,
+            'Unit Type': this.loc.filterUnitTypeListbox,
+        };
+
+        const textbox = textboxMap[filterName];
+        const listbox = listboxMap[filterName];
+        if (!textbox || !listbox) throw new Error(`Unknown filter name: "${filterName}"`);
+
+        await textbox.click();
+        await listbox.waitFor({ state: 'visible', timeout: 8000 });
+        await listbox.getByRole('option', { name: optionText, exact: true }).click();
+        await this.page.waitForTimeout(600);
+
+        // Close the filter panel
+        await this.page.keyboard.press('Escape');
+        await this.page.waitForTimeout(300);
+        Logger.success(`[UnitInterior] Filter applied: ${filterName} = "${optionText}"`);
+    }
+
+    /**
+     * Clears all active filters via the "Clear all" button.
+     * Opens filter panel if not already open.
+     * Uses JS evaluate to click in case the button is outside the visible viewport.
+     */
+    async clearAllFilterValues() {
+        Logger.info('[UnitInterior] Clearing all filter values');
+        const isOpen = await this.loc.filterDialog.isVisible({ timeout: 500 }).catch(() => false);
+        if (!isOpen) await this.openFilterPanel();
+
+        await this.loc.clearAllFiltersBtn.waitFor({ state: 'visible', timeout: 5000 });
+        // JS click handles cases where the button is positioned above the visible viewport
+        await this.loc.clearAllFiltersBtn.evaluate(btn => btn.click());
+        await this.page.waitForTimeout(600);
+
+        await this.page.keyboard.press('Escape');
+        await this.page.waitForTimeout(300);
+        Logger.success('[UnitInterior] All filters cleared');
+    }
+
+    /**
+     * Returns the number of grid rows that are currently VISIBLE on screen.
+     * RevoGrid keeps filtered-out rows in the DOM (hidden via CSS) so the regular
+     * allGridRows.count() includes them. This method checks isVisible() per row.
+     * @returns {Promise<number>}
+     */
+    async getVisibleGridRowCount() {
+        const rows = this.loc.allGridRows;
+        const total = await rows.count();
+        let visible = 0;
+        for (let i = 0; i < total; i++) {
+            if (await rows.nth(i).isVisible({ timeout: 0 }).catch(() => false)) visible++;
+        }
+        Logger.info(`[UnitInterior] Visible grid rows: ${visible} (DOM total: ${total})`);
+        return visible;
+    }
+
+    /**
+     * Returns the rendered text value at a specific column index for every VISIBLE data row.
+     * Skips rows that RevoGrid has hidden after a filter is applied.
+     * Uses element.innerText to avoid Mantine injected <style> content.
+     * Column indices: 0=toggle, 1=checkbox, 2=Unit, 3=FP Type, 4=Unit Type, 5=Status
+     * @param {number} colIndex
+     * @returns {Promise<string[]>}
+     */
+    async getColumnValuesFromAllRows(colIndex) {
+        const rows = this.loc.allGridRows;
+        const total = await rows.count();
+        const values = [];
+        for (let i = 0; i < total; i++) {
+            const row = rows.nth(i);
+            // RevoGrid may keep filtered rows in DOM — skip invisible ones
+            if (!(await row.isVisible({ timeout: 0 }).catch(() => false))) continue;
+            const cell = row.getByRole('gridcell').nth(colIndex);
+            const text = await cell
+                .evaluate(el => (el.innerText || el.textContent || '').trim())
+                .catch(() => '');
+            values.push(text);
+        }
+        Logger.info(`[UnitInterior] Column[${colIndex}] visible values (${values.length}): ${JSON.stringify(values)}`);
+        return values;
+    }
 }
 
 module.exports = { UnitInteriorPage, JOB_NAME, JOB_ID };
