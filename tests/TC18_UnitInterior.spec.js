@@ -833,7 +833,7 @@ test.describe('Unit Interior — Contracts > Units tab full E2E suite', () => {
         },
     );
 
-    test.only('TC281 @regression Verify filter functionality on Units tab — Status filter (Released and In Progress hardcoded), FP Type filter and Unit Type filter each reduce grid rows to matching records only, combined filters apply AND logic, and Clear all restores the full grid',
+    test('TC281 @regression Verify filter functionality on Units tab — Status filter (Released and In Progress hardcoded), FP Type filter and Unit Type filter each reduce grid rows to matching records only, combined filters apply AND logic, and Clear all restores the full grid',
         async () => {
             Logger.info('[TC_UI_008] START: Filter functionality E2E');
 
