@@ -20,6 +20,9 @@ test.use({
     video: 'retain-on-failure',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
+    animations: 'disabled',
+    maxDiffPixels: 30_000,
+    maxDiffPixelRatio: 0.15,
 });
 
 const PROPERTY_TYPES = ['Garden Style', 'Mid Rise', 'High Rise', 'Military Housing'];

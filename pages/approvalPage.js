@@ -930,14 +930,22 @@ exports.ApprovalJob = class ApprovalJob {
             const input2 = approverInputs.nth(2);
             await input2.waitFor({ state: 'visible', timeout: approverTimeout });
             await input2.click();
-            await this.page.waitForTimeout(500);
-            for (let k = 0; k < 3; k++) {
-                await this.page.keyboard.press('ArrowDown');
-                await this.page.waitForTimeout(150);
-            }
+            // await this.page.waitForTimeout(500);
+            // for (let k = 0; k < 3; k++) {
+            //     await this.page.keyboard.press('ArrowDown');
+            //     await this.page.waitForTimeout(150);
+            // }
+            // await this.page.keyboard.press('Enter');
+            // await this.page.waitForTimeout(800);
+            // Logger.success('Approver 3 added: selected from dropdown');
+            await this.page.waitForTimeout(300);
+            await input2.fill('sumit tailorbird', { timeout: approverTimeout });
+            await this.page.waitForTimeout(800);
+            await this.page.keyboard.press('ArrowDown');
+            await this.page.waitForTimeout(300);
             await this.page.keyboard.press('Enter');
             await this.page.waitForTimeout(800);
-            Logger.success('Approver 3 added: selected from dropdown');
+            Logger.success('Approver 3 added: sumit tailorbird');
         } catch (error) {
             Logger.error('Error adding approvers: ' + error.message);
             throw error;

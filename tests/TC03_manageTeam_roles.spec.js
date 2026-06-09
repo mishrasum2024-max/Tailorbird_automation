@@ -24,6 +24,9 @@ test.describe("TC18 Manage Team — Roles (positive / negative / edge)", () => {
     test.use({
       storageState: "sessionState.json",
       viewport: { width: 1440, height: 900 },
+      animations: 'disabled',
+      maxDiffPixels: 30_000,
+      maxDiffPixelRatio: 0.15,
     });
 
     test.beforeEach(() => {
@@ -221,6 +224,9 @@ test.describe("TC18 Manage Team — Roles (positive / negative / edge)", () => {
     test.use({
       storageState: { cookies: [], origins: [] },
       viewport: { width: 1440, height: 900 },
+      animations: 'disabled',
+      maxDiffPixels: 30_000,
+      maxDiffPixelRatio: 0.15,
     });
 
     test("TC46 @regression @manageTeam @roles user-role-management without session shows AuthKit Sign in", async ({

@@ -202,14 +202,14 @@ class OrganizationHelper {
     try {
       this.log(`Inviting user: ${email} with role: ${role}`);
       const invitePanel = await this.openInvite();
-      await invitePanel.dialogRoot.getByText("Loading roles").waitFor({ state: "hidden", timeout: 60_000 }).catch(() => {});
+      await invitePanel.dialogRoot.getByText("Loading roles",{timeout: 10000}).waitFor({ state: "hidden", timeout: 60_000 }).catch(() => {});
       this.log(`Filling email...${email}`);
-      await invitePanel.emailAddressInput.fill(email);
+      await invitePanel.emailAddressInput.fill(email,{delay: 50});
       this.log(`Selecting role: ${role}`);
       await this.selectRole(invitePanel.roleSelectTrigger, role, invitePanel.dialogRoot);
       this.log("Advancing invite wizard (Next)...");
       await invitePanel.nextOrInvitePrimaryButton.evaluate((el) => el.click());
-      await this.page.waitForTimeout(1000);
+      await this.page.waitForTimeout(5000);
       const confirmInvite = invitePanel.dialogRoot.getByRole("button", { name: data.inviteButtonText, exact: true });
       if (await confirmInvite.isVisible({ timeout: 10_000 }).catch(() => false)) {
         await confirmInvite.evaluate((el) => el.click());

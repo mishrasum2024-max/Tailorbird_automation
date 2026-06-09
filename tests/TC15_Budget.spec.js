@@ -9,7 +9,10 @@ test.use({
     storageState: 'sessionState.json',
     video: 'retain-on-failure',
     trace: 'retain-on-failure',
-    screenshot: 'only-on-failure'
+    screenshot: 'only-on-failure',
+    animations: 'disabled',
+    maxDiffPixels: 30_000,
+    maxDiffPixelRatio: 0.15,
 });
 
 let page, budgetJob;

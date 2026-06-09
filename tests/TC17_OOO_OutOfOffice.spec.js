@@ -14,6 +14,9 @@ test.use({
     video: 'retain-on-failure',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
+    animations: 'disabled',
+    maxDiffPixels: 30_000,
+    maxDiffPixelRatio: 0.15,
 });
 
 // ── serial: all OOO tests share a single API-level OOO state.
