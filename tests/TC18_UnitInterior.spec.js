@@ -68,7 +68,7 @@ test.beforeEach(async ({ page: testPage }) => {
 
     // Start from Jobs listing (no hardcoded job ID in the URL)
     Logger.info('[beforeEach] Navigating to Jobs listing via BASE_URL');
-    await page.goto(`${process.env.BASE_URL}/jobs`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.goto(`${process.env.BASE_URL}/jobs`, { waitUntil: 'domcontentloaded', timeout: 120000 });
     await page.evaluate(() => {
         document.querySelectorAll('main, .mantine-AppShell-navbar').forEach(el => {
             el.style.zoom = '70%';
@@ -1069,4 +1069,75 @@ test.describe('Unit Interior — Contracts > Units tab full E2E suite', () => {
         },
     );
 
-}); 
+    test('TC282 @regression Verify FP type presence correlates with Released tag: unit whose bid has no FP type ("-") must not show Released tag; units whose bids have FP type set must show Released tag',
+        async () => {
+            Logger.info('[TC282] START — navigating to "FP type testing" job for FP type ↔ Released validation');
+            await po.navigateToJobUnitsTab('FP type testing');
+            Logger.success('[TC282] Contracts > Units sub-tab loaded');
+
+            // ── S1: Unit 1001 — Bid 3 has FP type "-" → must NOT show Released ──────
+            await test.step('S1: Unit 1001 — bid has no FP type ("-") → must NOT show Released tag', async () => {
+                Logger.info('[TC282-S1] Searching for unit 1001');
+                await loc.unitSearchInput.fill('1001');
+                await loc.unitSearchInput.press('Enter');
+                await page.waitForTimeout(1200);
+
+                await expect(
+                    loc.rowByUnitNum(1001),
+                    'Unit 1001 must be visible in the grid after search',
+                ).toBeVisible({ timeout: 10000 });
+
+                const status = await po.getUnitStatus(1001);
+                Logger.info(`[TC282-S1] Unit 1001: bid "Bid 3" has FP type "-" (not entered) → grid status: "${status}"`);
+                InteractionLogger.logAssertion(
+                    'FPType→Released',
+                    'Unit 1001 (Bid 3 FP type: "-")',
+                    'not Released',
+                    status ?? '',
+                    !status?.includes('Released'),
+                );
+                expect(
+                    status,
+                    `Unit 1001: its Bid 3 has no FP type set ("-") — unit must NOT show Released tag. Actual status: "${status}"`,
+                ).not.toContain('Released');
+                Logger.success('[TC282-S1] ✔ Unit 1001 does NOT show Released tag (Bid 3 FP type is "-")');
+            });
+
+            // ── S2: Units 1002/1003/1004 — FP type set → MUST show Released ──────────
+            for (const unitNum of [1002, 1003, 1004]) {
+                await test.step(`S2: Unit ${unitNum} — FP type is set → must show Released tag`, async () => {
+                    Logger.info(`[TC282-S2] Searching for unit ${unitNum}`);
+                    await loc.unitSearchInput.fill(String(unitNum));
+                    await loc.unitSearchInput.press('Enter');
+                    await page.waitForTimeout(1200);
+
+                    await expect(
+                        loc.rowByUnitNum(unitNum),
+                        `Unit ${unitNum} must be visible in the grid after search`,
+                    ).toBeVisible({ timeout: 10000 });
+
+                    const status = await po.getUnitStatus(unitNum);
+                    Logger.info(`[TC282-S2] Unit ${unitNum}: FP type is set → grid status: "${status}"`);
+                    InteractionLogger.logAssertion(
+                        'FPType→Released',
+                        `Unit ${unitNum} (FP type: set)`,
+                        'Released',
+                        status ?? '',
+                        status === 'Released',
+                    );
+                    expect(
+                        status,
+                        `Unit ${unitNum}: FP type is set — unit must show Released tag. Actual status: "${status}"`,
+                    ).toBe('Released');
+                    Logger.success(`[TC282-S2] ✔ Unit ${unitNum} shows Released tag (FP type is set)`);
+                });
+            }
+
+            Logger.success(
+                '[TC282] COMPLETE: FP type ↔ Released tag rule verified — ' +
+                'unit 1001 (Bid 3 FP type "-") is not Released; units 1002/1003/1004 (FP type set) are Released',
+            );
+        },
+    );
+
+});

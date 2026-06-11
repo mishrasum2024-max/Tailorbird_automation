@@ -120,6 +120,49 @@ class UnitInteriorPage {
         await this.navigateToUnitsSubTab();
     }
 
+    /**
+     * Full navigation to Contracts > Units for ANY job, starting from any app state.
+     * Navigates to /jobs, applies zoom, searches for jobName, opens the result,
+     * then clicks Contracts → Units.
+     *
+     * Use when the target job differs from the default JOB_NAME/JOB_ID constants.
+     *
+     * @param {string} jobName  Exact job name to search for in the Jobs listing
+     */
+    async navigateToJobUnitsTab(jobName) {
+        await this.page.goto(`${process.env.BASE_URL}/jobs`, { waitUntil: 'domcontentloaded', timeout: 120000 });
+        await this.page.evaluate(() => {
+            document.querySelectorAll('main, .mantine-AppShell-navbar').forEach(el => { el.style.zoom = '70%'; });
+        });
+        await this.page.waitForTimeout(2000);
+
+        Logger.info(`[UnitInterior] Searching for job: "${jobName}"`);
+        const searchInput = this.page.locator('input[placeholder="Search..."]').first();
+        await searchInput.waitFor({ state: 'visible', timeout: 30000 });
+        InteractionLogger.logFormFill('Jobs search input', jobName);
+        await searchInput.fill(jobName);
+        await this.page.waitForTimeout(1500);
+
+        const matchingRow = this.page
+            .getByRole('row')
+            .filter({ hasText: jobName })
+            .first();
+        await matchingRow.waitFor({ state: 'visible', timeout: 15000 });
+
+        const jobIdLink = matchingRow.locator('a[href*="/jobs/"]').first();
+        await jobIdLink.waitFor({ state: 'visible', timeout: 10000 });
+        const jobIdText = await jobIdLink.textContent();
+        InteractionLogger.logButtonClick(`Job ID link: ${jobIdText?.trim()}`, jobIdText?.trim() ?? '');
+        await jobIdLink.click();
+
+        await this.page.waitForURL(/\/jobs\/\d+/, { timeout: 30000 });
+        await this.page.waitForTimeout(1500);
+        Logger.success(`[UnitInterior] Opened job "${jobName}" (ID: ${jobIdText?.trim()})`);
+
+        await this.navigateToContractsTab();
+        await this.navigateToUnitsSubTab();
+    }
+
     // ── Grid helpers ──────────────────────────────────────────────────────
 
     /** Returns text of all visible column headers in the Units grid. */
