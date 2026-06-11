@@ -683,7 +683,7 @@ test.describe('Verify Change order tab', () => {
      * One navigation chain: 15+ screenshot baselines (distinct list, search, create, grid, documents, tabs, details, invoice).
      * First run: `npx playwright test tests/TC09_changeOrder.spec.js --grep TC110 --update-snapshots --workers=1`
      */
-    test.only('TC152 @regression @visualCO @changeOrderAndinvoice : Visual suite — ≥15 screens (list, search, create, grid, details, invoice)', async () => {
+    test('TC152 @regression @visualCO @changeOrderAndinvoice : Visual suite — ≥15 screens (list, search, create, grid, details, invoice)', async () => {
         test.setTimeout(720_000);
         const loc = invoicePage.tc08Loc();
         await settleChangeOrderWorkspace(page, 5000);
