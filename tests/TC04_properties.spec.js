@@ -9,6 +9,7 @@ import { getPropertyName } from '../utils/propertyUtils';
 import testData from '../fixture/property.json';
 const uiMessages = require('../fixture/tailorbirdUiMessages.json');
 const loc = require('../locators/locationLocator');
+const { verifyColumnContentDoesNotWrap } = require('../utils/columnResizeHelper');
 import { propertyLocators } from '../locators/propertyLocator.js';
 
 test.use({
@@ -833,6 +834,23 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
     await dialog.getByRole('button', { name: 'Cancel' }).click().catch(() => {});
     await page.keyboard.press('Escape').catch(() => {});
     await expect(dialog.first()).toBeHidden({ timeout: 10000 }).catch(() => {});
+  });
+
+  test('@regression @property TC279 — Budget Variance currency column: values must stay on a single line after column is resized narrower', async () => {
+    await prop.changeView('Table View');
+    await page.waitForTimeout(1500);
+
+    const result = await verifyColumnContentDoesNotWrap({
+      page,
+      columnName:      'Budget Variance',
+      dragByPx:        50,
+      minCellsToCheck: 1,
+    });
+
+    console.log(
+      `[TC279] ${result.cellsChecked}/${result.cellCount} cells verified single-line  |  ` +
+      `width: ${result.widthStart}px → narrowed ${result.widthAfter}px → restored ${result.widthRestored}px ✓`
+    );
   });
 
 });

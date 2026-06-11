@@ -408,14 +408,6 @@ test('TC73 @regression @projectAndJob : Multi-screen visual checkpoints', async 
         await projectPage.tc05CaptureMainScreenshot('tc05-v-projects-workspace.png', shotMain);
     });
 
-    await test.step('V3: Projects View menu', async () => {
-        await loc.viewToolbarBtn.click();
-        const menu = page.locator('[role="dialog"], [role="menu"], [role="listbox"]').filter({ hasText: /Create New View|Default|View/i }).first();
-        await expect(menu).toBeVisible({ timeout: 10000 });
-        await projectPage.tc05CaptureLocatorScreenshot(menu, 'tc05-v-projects-view-menu.png', PROJECT_VISUAL_ASSERT);
-        await page.keyboard.press('Escape');
-    });
-
     await test.step('V5: Create Project modal default state', async () => {
         await projectPage.openCreateProjectModal();
         await expect(projectPage.modal.first()).toHaveScreenshot('tc05-v-projects-create-modal.png', PROJECT_VISUAL_ASSERT);

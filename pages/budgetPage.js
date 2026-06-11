@@ -614,23 +614,27 @@ exports.BudgetJob = class BudgetJob {
         await this.page.waitForTimeout(500);
         await this.clickReviseBudgets();
         await this.page.waitForTimeout(7000);
-        // The revision editor may open via URL navigation (/budget-revision/) or as an in-place
-        // dialog/drawer (no URL change). Soft-wait for URL, then confirm via verifyRevisionEditorOpen().
+        // The revision editor may open via URL navigation (/budget-revision/) or as an in-page
+        // dialog/drawer (no URL change). Soft-wait for URL, then check for a "Create budget
+        // revision" CTA that appears for brand-new properties before the full editor loads.
         await this.page.waitForURL(/budget-revision/, { timeout: 15000 }).catch(() => {});
         await this.page.waitForTimeout(7000);
-        await this.verifyRevisionEditorOpen();
 
+        // For a brand-new property, clicking "Revise Budgets" shows a "Create budget revision"
+        // CTA rather than opening the editor directly. Click it before verifying the editor.
         const createRev = budget.createBudgetRevisionBtn;
         if (await createRev.first().isVisible({ timeout: 5000 }).catch(() => false)) {
             Logger.step('Create budget revision CTA visible (e.g. first budget) — confirming');
             await createRev.first().click({ force: true });
             await this.page.waitForTimeout(7000);
         }
+
+        await this.verifyRevisionEditorOpen();
     }
 
     async verifyRevisionEditorOpen() {
         const url = this.page.url();
-        const hasRevisionUrl = url.includes('budget-revision',{timeout: 30000});
+        const hasRevisionUrl = url.includes('budget-revision');
         const hasTreegridRows = await budget.treegridDataRows.first().isVisible({ timeout: 25000 }).catch(() => false);
         const hasTreegrid = await budget.treegrid.first().isVisible({ timeout: 13000 }).catch(() => false);
         const hasSubmitBtn = await budget.submitForApprovalBtn.isVisible({ timeout: 13000 }).catch(() => false);
