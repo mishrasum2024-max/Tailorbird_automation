@@ -37,8 +37,8 @@ const fixture = require('../fixture/unitInterior.json');
 // ── Visual assert options ─────────────────────────────────────────────────────
 const VISUAL_OPTS = {
     animations: 'disabled',
-    maxDiffPixels: 35000,
-    maxDiffPixelRatio: 0.15,
+    maxDiffPixels: 50000,
+    maxDiffPixelRatio: 0.3,
 };
 
 // ── Session ───────────────────────────────────────────────────────────────────

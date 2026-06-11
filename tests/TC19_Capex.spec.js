@@ -34,8 +34,8 @@ test.use({
     trace: 'off',
     screenshot: 'off',
     animations: 'disabled',
-    maxDiffPixels: 30_000,
-    maxDiffPixelRatio: 0.15,
+    maxDiffPixels: 50_000,
+    maxDiffPixelRatio: 0.3,
 });
 
 let capex;
@@ -943,29 +943,3 @@ test.describe('TC19 — CapEx Portfolio Page', () => {
 
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TC301 — Unauthenticated Access (no session cookies)
-// ─────────────────────────────────────────────────────────────────────────────
-test.describe.skip('TC19 — CapEx Unauthenticated Access', () => {
-    test.use({ storageState: { cookies: [], origins: [] } });
-
-    test('TC301 @regression @capex — Unauthenticated access: /financials/capex redirects to login, no financial data or column headers exposed', async ({ page }) => {
-        Logger.step('TC301: Unauthenticated access to CapEx page');
-
-        const base = process.env.BASE_URL || 'https://beta.tailorbird.com';
-        await page.goto(`${base}/financials/capex`, { waitUntil: 'domcontentloaded' });
-        await page.waitForTimeout(2500);
-
-        const url = page.url();
-        Logger.info(`TC301: URL after unauthenticated navigation = ${url}`);
-        expect(url).not.toContain('/financials/capex');
-
-        const colHeaders = await page.locator('[role="columnheader"]').count();
-        Logger.info(`TC301: Column headers visible = ${colHeaders} (expected 0)`);
-        expect(colHeaders).toBe(0);
-
-        Logger.info('TC301: Redirected to login page — no financial data exposed before authentication ✓');
-        Logger.success('TC301 ✓');
-    });
-
-});

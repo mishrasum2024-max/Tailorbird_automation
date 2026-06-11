@@ -2225,8 +2225,7 @@ exports.BudgetJob = class BudgetJob {
                     // Prefer future years (less likely to have budget data)
                     if (parseInt(trimmed, 10) >= 2028) {
                         await opts.nth(i).click();
-                        await page.waitForLoadState('networkidle').catch(() => {});
-                        await page.waitForTimeout(1500);
+                        await page.waitForTimeout(10000);
                         Logger.info(`Selected year ${trimmed} for empty-year state test`);
                         return true;
                     }

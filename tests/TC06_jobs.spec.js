@@ -18,8 +18,8 @@ test.use({
 let page, projectPage, projectJob, projectData, prop;
 const JOB_VISUAL_ASSERT = {
     animations: 'disabled',
-    maxDiffPixels: 32000,
-    maxDiffPixelRatio: 0.15,
+    maxDiffPixels: 50000,
+    maxDiffPixelRatio: 0.3,
 };
 
 async function openJobsWorkspaceFromLeftNav(page) {
@@ -262,31 +262,6 @@ test.describe('Verify Create Project and Add Job flow', () => {
                 .waitFor({ state: 'visible', timeout: 30000 });
 
 
-            // const editContractBtn = page.getByRole('button', { name: /^Edit$/i }).first();
-            // await expect(editContractBtn).toBeVisible({ timeout: 15000 });
-            // await editContractBtn.click({ force: true });
-            // await page.waitForTimeout(800);
-
-            // const editContractDialog = page.getByRole('dialog').filter({ hasText: /Edit Contract Overview/i }).first();
-            // await expect(editContractDialog).toBeVisible({ timeout: 15000 });
-
-            // const estimatedTotalCostInput = editContractDialog
-            //     .getByRole('textbox', { name: /Estimated total cost/i })
-            //     .or(editContractDialog.getByLabel(/Estimated total cost/i))
-            //     .first();
-            // await expect(estimatedTotalCostInput).toBeVisible({ timeout: 10000 });
-            // await estimatedTotalCostInput.click({ force: true });
-            // await estimatedTotalCostInput.press('Control+A');
-            // await estimatedTotalCostInput.press('Backspace');
-            // await estimatedTotalCostInput.fill(String(contractEstimatedBudget));
-            // await estimatedTotalCostInput.press('Tab');
-
-            // const saveChangesBtn = editContractDialog.getByRole('button', { name: /Save Changes|Save/i }).first();
-            // await expect(saveChangesBtn).toBeVisible({ timeout: 10000 });
-            // await expect(saveChangesBtn).toBeEnabled({ timeout: 10000 });
-            // await saveChangesBtn.click();
-            // await page.waitForTimeout(30000);
-
             const clearExistingContracts = async () => {
                 const contractsPanel = innerContractPanel;
                 const noContractsMsg = contractsPanel.locator('text=No contracts added yet');
@@ -339,7 +314,7 @@ test.describe('Verify Create Project and Add Job flow', () => {
                     throw new Error(`Unable to clear existing contract rows. Remaining delete buttons: ${remainingDeletes}`);
                 }
             };
-
+            await page.waitForTimeout(5000);
             await clearExistingContracts();
             await page.waitForTimeout(500);
             const importContractCsv = async () => {

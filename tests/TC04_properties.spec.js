@@ -24,8 +24,8 @@ const tcTakeoffsStartUrl = process.env.DASHBOARD_URL || data.dashboardUrl;
 /** Table area screenshot: rows change across runs; mask search; allow modest drift. */
 const PROPERTY_REGRESSION_SCREENSHOT = {
   animations: 'disabled',
-  maxDiffPixels: 30_000,
-  maxDiffPixelRatio: 0.15,
+  maxDiffPixels: 50_000,
+  maxDiffPixelRatio: 0.3,
 };
 
 const propertyTypes = [

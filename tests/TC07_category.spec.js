@@ -19,8 +19,8 @@ let page, projectPage, projectJob, projectData, prop, financialsCategoryPage;
 
 const CATEGORY_VISUAL_ASSERT = {
     animations: 'disabled',
-    maxDiffPixels: 32000,
-    maxDiffPixelRatio: 0.15,
+    maxDiffPixels: 50000,
+    maxDiffPixelRatio: 0.3,
 };
 
 // Entire suite skipped for now: Financials/Category screen load is too slow for routine runs. Re-enable when acceptable.

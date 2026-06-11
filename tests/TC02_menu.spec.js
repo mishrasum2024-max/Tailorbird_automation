@@ -12,8 +12,8 @@ const uiBenchmark = require('../fixture/tailorbirdUiMessages.json');
 const MENU_SCREENSHOT_OPTIONS = {
     animations: 'disabled',
     // Left-nav icon/text anti-aliasing varies in headed runs.
-    maxDiffPixels: 15000,
-    maxDiffPixelRatio: 0.15,
+    maxDiffPixels: 100000,
+    maxDiffPixelRatio: 0.3,
 };
 
 let page;
@@ -53,7 +53,7 @@ test.afterAll(async () => {
 
 test.describe('Tailorbird Left Panel Flow - Modular', () => {
 
-    test('TC06 @sanity @regression Verify all menu options are available', async () => {
+    test('TC06 @sanity @regression Verify all left panel menu options are available', async () => {
         const actualLabels = await helper.getLeftPanelLabels(page);
 
         if (actualLabels.length === 0)

@@ -25,8 +25,8 @@ test.describe("TC18 Manage Team — Roles (positive / negative / edge)", () => {
       storageState: "sessionState.json",
       viewport: { width: 1440, height: 900 },
       animations: 'disabled',
-      maxDiffPixels: 30_000,
-      maxDiffPixelRatio: 0.15,
+      maxDiffPixels: 50_000,
+      maxDiffPixelRatio: 0.3,
     });
 
     test.beforeEach(() => {

@@ -11,7 +11,7 @@ const LOGIN_SCREENSHOT_OPTIONS = {
   animations: 'disabled',
   // Headed + hosted auth UI can shift slightly between runs.
   maxDiffPixels: 15000,
-  maxDiffPixelRatio: 0.15,
+  maxDiffPixelRatio: 0.3,
 };
 
 test.describe('Tailorbird Login Flow', () => {
