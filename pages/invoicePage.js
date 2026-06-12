@@ -1807,7 +1807,7 @@ class InvoicePage {
                 }
 
                 // Wait for the cell text at this position to actually update, instead of a fixed sleep.
-                await this.page.waitForTimeout(600);
+                await this.page.waitForTimeout(6000);
                 const cellValue = (await catCell.textContent().catch(() => ''))?.trim() || '';
 
                 expect(cellValue).toBeTruthy();

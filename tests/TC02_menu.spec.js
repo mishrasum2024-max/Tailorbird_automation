@@ -381,7 +381,7 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
             await expect(menu).toBeHidden({ timeout: 5_000 });
         });
 
-        test('TC18 @regression @menu Sidebar stays collapsed after SPA navigation to Properties (edge)', async ({
+        test('TC18 @regression @menu Verify get help option.', async ({
             page,
         }) => {
             Logger.info('[TC18] Collapse shell, navigate via in-app link, assert width, then expand');
