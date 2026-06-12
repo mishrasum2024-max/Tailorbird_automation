@@ -241,7 +241,7 @@ class LoginPage {
 
     await this.signInButton.click();
 
-    if (email !== 'admin_1771393239035@yopmail.com') {
+    if (email !== 'admin_1781257675038@yopmail.com') {
       await this.page.waitForURL(/organization-selection/, { timeout: 30000 });
       Logger.step('Step 6: Verifying successful login...');
       await this.page.waitForTimeout(5000);

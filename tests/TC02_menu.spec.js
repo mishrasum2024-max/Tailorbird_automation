@@ -314,7 +314,7 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
             await expect(openMenu).toBeHidden({ timeout: 8000 });
         });
 
-        test('TC16 @regression @menu Dashboard exposes navigation landmark with Properties entry', async ({
+        test('TC16 @regression @menu Verify get help option is visible.', async ({
             page,
         }) => {
             const nav = page.getByRole('navigation');
@@ -485,6 +485,56 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
 
 });
 
+test.describe('TC02 Menu — Single-org user assertions', () => {
+    test.use({ storageState: 'OneOrganizationUserSessionState.json' });
+    test.setTimeout(60_000);
+
+    test('TC23 @regression @menu Single-org user: Switch Organization is NOT in user menu', async ({ page }) => {
+        test.skip(!process.env.DASHBOARD_URL, 'DASHBOARD_URL required');
+        Logger.info('[TC23] Starting: single-org user — open profile menu, assert expected items present, assert Switch Organization absent');
+
+        await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'load', timeout: 60_000 });
+
+        // Click the profile section at the bottom of the navbar (avatar + name row)
+        const navbar = page.locator('.mantine-AppShell-navbar');
+        const profileTrigger = navbar.locator('[cursor=pointer]').filter({ hasText: /summit\.harsha@tailorbird\.us/i })
+            .or(navbar.locator('.mantine-Avatar-root').last());
+        await expect(navbar.locator('.mantine-Avatar-root').last()).toBeVisible({ timeout: 15_000 });
+        Logger.info('[TC23] Clicking profile trigger in navbar');
+        await navbar.locator('.mantine-Avatar-root').last().click();
+
+        const menu = page
+            .locator('[role="menu"]')
+            .filter({ has: page.getByRole('menuitem', { name: /^Logout$/i }) })
+            .first();
+        await expect(menu, 'FAIL: No user menu with Logout found (wrong trigger or portal timing).').toBeVisible({
+            timeout: 12_000,
+        });
+
+        const items = (await menu.getByRole('menuitem').allInnerTexts()).map((t) => t.trim());
+        Logger.info(`[TC23] User menu items (single-org session): ${JSON.stringify(items)}`);
+
+        // Assert expected items ARE present (MCP-verified: these appear for single-org user)
+        const expectedPresent = ['Manage User Roles', 'Manage Organization', 'Profile', 'Logout'];
+        for (const label of expectedPresent) {
+            await expect(
+                menu.getByRole('menuitem', { name: new RegExp(`^${label}$`, 'i') }),
+                `FAIL: Expected "${label}" to be visible in single-org user menu. Got: ${JSON.stringify(items)}`,
+            ).toBeVisible({ timeout: 5_000 });
+            Logger.info(`[TC23] ✅ Present: "${label}"`);
+        }
+
+        // Assert Switch Organization is NOT present
+        await expect(
+            menu.getByRole('menuitem', { name: /^Switch Organization$/i }),
+            `FAIL: "Switch Organization" must NOT appear for a single-org user. Got: ${JSON.stringify(items)}`,
+        ).not.toBeVisible();
+        Logger.success('[TC23] ✅ "Switch Organization" correctly absent for single-org user');
+
+        await page.keyboard.press('Escape');
+        await expect(menu).toBeHidden({ timeout: 5_000 });
+    });
+});
 
 test.describe('TC02 Menu — Text assertions', () => {
     test.setTimeout(120_000);
