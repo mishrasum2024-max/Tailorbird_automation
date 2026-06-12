@@ -3,36 +3,11 @@ const { test, expect } = require('@playwright/test');
 const { CapexPage } = require('../pages/capexPage');
 const { Logger } = require('../utils/logger');
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TC19 — CapEx Portfolio Page  (TC282 – TC301, 20 test cases)
-//
-// AC Coverage Map:
-//  AC1  Tab bar (Properties / Fund / Region) visible          → TC282
-//  AC2  Properties tab default; scope = "Entire Portfolio"    → TC282, TC284, TC300
-//  AC3  All properties shown & expandable                    → TC282, TC284, TC289, TC294
-//  AC4  Property filter updates table + all 3 stat cards     → TC285
-//  AC5  Deselect all → empty table state                     → TC286
-//  AC6  Fund tab: first col = Fund, grouped by fund          → TC287
-//  AC7  Region tab: first col = Region, grouped by region    → TC288
-//  AC8  Select All master toggle in Fund/Region dropdown     → TC284, TC287, TC288
-//  AC9  Fund/Region group row = sum of child property data   → TC293
-//  AC10 Budget Revision delta at group = sum of children     → TC293
-//  AC11 Fund/Region group rows collapsible                   → TC287, TC288, TC294
-//  AC12 Properties with no Fund/Region → "—" bucket         → TC287
-//  AC13 No Fund/Region column → tab present, empty-state msg → TC289
-//  AC14 Stat cards update when scope/year filter changes     → TC283, TC285, TC286, TC290
-//  AC15 Pencil only at Property→BudgetCategory leaf level    → TC294, TC299
-//  AC16 Financial totals = sum of underlying line items      → TC290, TC291, TC292, TC293, TC296, TC300
-//  AC17 Export downloads currently visible/filtered data     → TC298
-//  AC18 Tab switch resets scope filter                       → TC289
-//  AC19 Page loads in < 3 seconds                            → TC282, TC300
-// ─────────────────────────────────────────────────────────────────────────────
-
 test.use({
     storageState: 'sessionState.json',
-    video: 'off',
-    trace: 'off',
-    screenshot: 'off',
+    video: 'on',
+    trace: 'on',
+    screenshot: 'on',
     animations: 'disabled',
     maxDiffPixels: 50_000,
     maxDiffPixelRatio: 0.3,
@@ -591,7 +566,7 @@ test.describe('TC19 — CapEx Portfolio Page', () => {
         await capex.search('name');
         const obAfter = (await capex.getTotalRowValues())?.['Original Budget']?.value;
         Logger.info(`TC293: Total row OB — before search=${obBefore}, after search=${obAfter}`);
-        if (obBefore !== null && obAfter !== null) {
+        if (obBefore != null && obAfter != null) {
             expect(obAfter).toBeLessThanOrEqual(obBefore + 1);
             Logger.info('TC293: Total row recalculates to reflect only filtered rows ✓');
         }

@@ -5,10 +5,10 @@ function capexLocators(page) {
         breadcrumbHome:         page.locator('a:has-text("Home")').first(),
         yearSelect:             page.locator('.mantine-Select-input').first(),
 
-        // ── Tabs ─────────────────────────────────────────────────────────────────
-        tabProperties:          page.getByRole('tab', { name: 'Properties' }),
-        tabFund:                page.getByRole('tab', { name: 'Fund' }),
-        tabRegion:              page.getByRole('tab', { name: 'Region' }),
+        // ── Tabs (Mantine SegmentedControl — radiogroup with label elements) ────────
+        tabProperties:          page.locator('.mantine-SegmentedControl-label').filter({ hasText: 'Properties' }),
+        tabFund:                page.locator('.mantine-SegmentedControl-label').filter({ hasText: 'Fund' }),
+        tabRegion:              page.locator('.mantine-SegmentedControl-label').filter({ hasText: 'Region' }),
 
         // ── Portfolio / scope filter ──────────────────────────────────────────────
         portfolioFilterBtn:     page.locator('button[aria-haspopup="listbox"]').first(),

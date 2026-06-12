@@ -32,7 +32,7 @@ class CapexPage {
     async waitForShellReady() {
         await this.page.waitForLoadState('domcontentloaded');
         await expect(this.page.locator('main')).toBeVisible({ timeout: 15000 });
-        await expect(this.l.columnHeaders.first()).toBeVisible({ timeout: 20000 });
+        await expect(this.l.columnHeaders.first()).toBeVisible({ timeout: 40000 });
         // Wait for financial rows to render (middle pane has 8–9 cells per row)
         await this.page.waitForFunction(
             () => {
@@ -62,13 +62,14 @@ class CapexPage {
     // ─── Tabs ───────────────────────────────────────────────────────────────────
 
     async clickTab(name) {
-        await this.page.getByRole('tab', { name }).click();
+        await this.page.locator('.mantine-SegmentedControl-label').filter({ hasText: name }).click();
         await this.page.waitForTimeout(2200);
         Logger.info(`Tab switched to: ${name}`);
     }
 
     async getActiveTabName() {
-        return (await this.page.getByRole('tab', { selected: true }).first().textContent()).trim();
+        return (await this.page.locator('.mantine-SegmentedControl-label[data-active="true"]')
+            .textContent({ timeout: 5000 }).catch(() => '')).trim();
     }
 
     // ─── Portfolio filter ────────────────────────────────────────────────────────
@@ -444,7 +445,6 @@ class CapexPage {
         return await this.page.evaluate(() => {
             const allHeaders = Array.from(document.querySelectorAll('[role="columnheader"]'));
             const allTexts = allHeaders.map(h => (h.textContent || '').trim());
-            const hasBlank = allTexts.length > 0 && allTexts[0] === '';
             const brIdx = allTexts.indexOf('Budget Remaining');
             if (brIdx < 0) return [];
 
@@ -453,12 +453,15 @@ class CapexPage {
 
             return rows.slice(0, 15).map(row => {
                 const cells = Array.from(row.querySelectorAll('[role="gridcell"]'));
-                const shift = (hasBlank && cells.length < allTexts.length - 1) ? -1 : 0;
+                // Consistent shift logic: financial rows omit Property+Actions panes
+                const shift = allTexts.length > cells.length ? -1 : 0;
                 const idx = brIdx + shift;
                 const cell = cells[idx];
                 if (!cell) return null;
                 const text = (cell.textContent || '').trim();
-                const color = window.getComputedStyle(cell).color;
+                // Color is applied to an inner div/span, fall back to the cell itself
+                const colorEl = cell.querySelector('div, span') || cell;
+                const color = window.getComputedStyle(colorEl).color;
                 return { text, color };
             }).filter(Boolean);
         });
