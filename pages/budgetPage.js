@@ -2240,4 +2240,114 @@ exports.BudgetJob = class BudgetJob {
         }
         return false;
     }
+
+    // ===================== TC244: Revision Adjustment Entry (Bounding Box) =====================
+
+    /**
+     * Enters an adjustment amount for a budget item row in the Revision Editor
+     * by combining the row's Y position (from the budget item text) with the
+     * Adjustment Amount column's X position (from the column header bounding box).
+     * @param {string} budgetItemName - Exact text of the Budget Item (e.g. 'Bathroom fixtures install')
+     * @param {number} amount - Numeric adjustment (negative for decrease, positive for increase)
+     */
+    async enterRevisionAdjustmentByItemName(budgetItemName, amount) {
+        Logger.step(`Entering revision adjustment ${amount} for "${budgetItemName}"`);
+        await this.page.waitForTimeout(2000);
+
+        // Find the Adjustment Amount column header to get its horizontal centre
+        const adjHeader = this.page.locator('[role="columnheader"]').filter({ hasText: 'Adjustment' }).first();
+        await expect(adjHeader).toBeVisible({ timeout: 20000 });
+        const adjHeaderBox = await adjHeader.boundingBox();
+        if (!adjHeaderBox) throw new Error('Adjustment Amount column header bounding box not available');
+        const adjCenterX = adjHeaderBox.x + adjHeaderBox.width / 2;
+
+        // Find the budget item text in the treegrid to get the row's vertical centre
+        const itemText = this.page.locator('[role="treegrid"]').getByText(budgetItemName).first();
+        await expect(itemText).toBeVisible({ timeout: 20000 });
+        const itemBox = await itemText.boundingBox();
+        if (!itemBox) throw new Error(`Bounding box not available for budget item: "${budgetItemName}"`);
+        const rowCenterY = itemBox.y + itemBox.height / 2;
+
+        // Click the cell at the intersection of Adjustment Amount column + this row
+        await this.page.mouse.click(adjCenterX, rowCenterY);
+        await this.page.waitForTimeout(600);
+        await this.page.keyboard.press('Enter');
+        await this.page.waitForTimeout(1000);
+
+        // Type the amount in the currency input that opens
+        const currencyInput = this.page.locator('[data-testid="bird-table-currency-input"]');
+        await currencyInput.waitFor({ state: 'visible', timeout: 10000 });
+        await currencyInput.fill(String(amount));
+        await this.page.keyboard.press('Enter');
+        await this.page.waitForTimeout(3000);
+
+        Logger.success(`Adjustment ${amount} entered for "${budgetItemName}"`);
+    }
+
+    /**
+     * TC244 v2 — fixes RevoGrid pinned-vs-scrollable Y misalignment.
+     * When a budget item name wraps to multiple lines the text element's centre
+     * falls into the NEXT row. Using itemBox.y + min(height/2, 15) keeps the
+     * click in the top portion of the element, always within the correct row.
+     */
+    async enterRevisionAdjustmentByItemNameV2(budgetItemName, amount) {
+        Logger.step(`Entering revision adjustment ${amount} for "${budgetItemName}" (v2)`);
+        await this.page.waitForTimeout(2000);
+
+        const adjHeader = this.page.locator('[role="columnheader"]').filter({ hasText: 'Adjustment' }).first();
+        await expect(adjHeader).toBeVisible({ timeout: 20000 });
+        const adjHeaderBox = await adjHeader.boundingBox();
+        if (!adjHeaderBox) throw new Error('Adjustment Amount column header bounding box not available');
+        const adjCenterX = adjHeaderBox.x + adjHeaderBox.width / 2;
+
+        const itemText = this.page.locator('[role="treegrid"]').getByText(budgetItemName).first();
+        await expect(itemText).toBeVisible({ timeout: 20000 });
+        const itemBox = await itemText.boundingBox();
+        if (!itemBox) throw new Error(`Bounding box not available for budget item: "${budgetItemName}"`);
+
+        // Use at most 15px below the top of the text element so that multi-line
+        // items (e.g. "Bathroom fixtures install") don't push rowCenterY into
+        // the next row's Y range in the scrollable grid section.
+        const rowCenterY = itemBox.y + Math.min(itemBox.height / 2, 15);
+
+        await this.page.mouse.click(adjCenterX, rowCenterY);
+        await this.page.waitForTimeout(600);
+        await this.page.keyboard.press('Enter');
+        await this.page.waitForTimeout(1000);
+
+        const currencyInput = this.page.locator('[data-testid="bird-table-currency-input"]');
+        await currencyInput.waitFor({ state: 'visible', timeout: 10000 });
+        await currencyInput.fill(String(amount));
+        await this.page.keyboard.press('Enter');
+        await this.page.waitForTimeout(3000);
+
+        Logger.success(`Adjustment ${amount} entered for "${budgetItemName}" (v2)`);
+    }
+
+    // ===================== TC244: Notes Column Scroll + Assertion =====================
+
+    async scrollRevisionEditorToNotesColumn() {
+        const dialog = this.page.locator('[role="dialog"]').first();
+        await dialog.waitFor({ state: 'visible', timeout: 10000 });
+        // Scroll the RevoGrid viewport scroll container to the far right to render Notes cells
+        await this.page.evaluate(() => {
+            const dlg = document.querySelector('[role="dialog"]');
+            if (!dlg) return;
+            const viewportScroll = dlg.querySelector('revogr-viewport-scroll');
+            if (viewportScroll) {
+                viewportScroll.scrollLeft = viewportScroll.scrollWidth;
+                viewportScroll.dispatchEvent(new Event('scroll', { bubbles: true }));
+            }
+            const scrollVirtual = dlg.querySelector('revogr-scroll-virtual.horizontal');
+            if (scrollVirtual) {
+                scrollVirtual.scrollLeft = scrollVirtual.scrollWidth;
+                scrollVirtual.dispatchEvent(new Event('scroll', { bubbles: true }));
+            }
+        });
+        await this.page.waitForTimeout(1000);
+    }
+
+    async assertRevisionAINoteVisible(expectedText) {
+        await expect(this.page.getByText(expectedText)).toBeVisible({ timeout: 15000 });
+    }
 };
