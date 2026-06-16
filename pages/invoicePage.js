@@ -1717,6 +1717,14 @@ class InvoicePage {
 
             let categoriesSet = 0;
 
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                if (attempt > 1) {
+                    Logger.info(`Budget category retry ${attempt}/3 — waiting for grid to stabilise`);
+                    await this.page.keyboard.press('Escape').catch(() => {});
+                    await this.page.waitForTimeout(3000);
+                    categoriesSet = 0;
+                }
+
             for (let rowIdx = 0; rowIdx < rowCount; rowIdx++) {
                 const row = dataRows.nth(rowIdx);
                 const rowBox = await row.boundingBox();
@@ -1815,9 +1823,15 @@ class InvoicePage {
                 expect(cellValue).not.toBe('—');
                 Logger.success(`Row ${rowIdx}: Budget category set to "${cellValue}"`);
                 categoriesSet++;
-            }
+            } // end for rowIdx
 
-            expect(categoriesSet).toBeGreaterThan(0);
+                if (categoriesSet > 0) break;
+                if (attempt < 3) Logger.info(`Attempt ${attempt}/3: no budget categories set, retrying...`);
+            } // end for attempt
+
+            if (categoriesSet === 0) {
+                throw new Error(`Budget category not set for any row after 3 attempts — "${categoryText}"`);
+            }
             Logger.success(`Budget category set for ${categoriesSet}/${rowCount} rows`);
             return categoriesSet;
         } catch (error) {
