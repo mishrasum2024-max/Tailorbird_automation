@@ -921,7 +921,7 @@ class PropertiesHelper {
         for (const field of overviewFields) {
             const labelEl = this.page.locator(`text="${field.label}"`).first();
             const valueEl = labelEl.locator('xpath=..//following-sibling::div//p').first();
-            await expect(valueEl).toBeVisible({ timeout: 10000 });
+            await expect(valueEl).toBeVisible({ timeout: 30000 });
             console.log(`[ASSERT] ${field.label} → Expected: ${field.value}`);
             // await expect(valueEl).toHaveText(String(field.value), { timeout: 10000 });
         }

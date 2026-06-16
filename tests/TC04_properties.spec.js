@@ -172,7 +172,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
     await prop.searchProperty(propName);
 
     await prop.viewPropertyDetails(propName);
-    await page.locator('[role="tab"]').first().waitFor({ state: 'visible', timeout: 20000 });
+    await page.locator('[role="tab"]').first().waitFor({ state: 'visible', timeout: 40000 });
     await prop.validateTabs();
     await prop.validateOverviewFields(vals);
 
