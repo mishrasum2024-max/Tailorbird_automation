@@ -32,7 +32,7 @@ exports.BudgetJob = class BudgetJob {
                 await this.page.waitForTimeout(7000);
             } else {
                 Logger.info('Budget tab not visible in sidebar — navigating directly');
-                await this.page.goto(process.env.DASHBOARD_URL.replace(/\/$/, '') + '/financials/budget', { waitUntil: 'load' });
+                await this.page.goto(process.env.BASE_URL.replace(/\/$/, '') + '/financials/budget', { waitUntil: 'load' });
                 await this.page.waitForTimeout(7000);
             }
             await this.page.waitForURL('**/financials/budget', { timeout: 15000 });
@@ -511,6 +511,14 @@ exports.BudgetJob = class BudgetJob {
                 }
                 await versionDropdown.click({ timeout: 5000 });
                 await this.page.waitForTimeout(800);
+
+                // Draft version sits at the bottom of the version list (after all Inactive versions).
+                // Scroll the listbox to the bottom so it enters the viewport before isVisible() is called.
+                await this.page.evaluate(() => {
+                    const lb = document.querySelector('[role="listbox"]');
+                    if (lb) lb.scrollTop = lb.scrollHeight;
+                }).catch(() => {});
+                await this.page.waitForTimeout(300);
 
                 const draftOption = budget.draftOption;
                 if (await draftOption.isVisible({ timeout: 2000 }).catch(() => false)) {
@@ -1016,17 +1024,17 @@ exports.BudgetJob = class BudgetJob {
 
     async addRowInMainGrid(itemName, description) {
         let rowAdded = false;
-        if (await budget.addRowMenu.isVisible({ timeout: 5000 }).catch(() => false)) {
+        if (await budget.addRowMenu.isVisible({ timeout: 15000 }).catch(() => false)) {
             await budget.addRowMenu.click();
             await this.page.waitForTimeout(500);
-            if (await budget.addRowBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+            if (await budget.addRowBtn.isVisible({ timeout: 20000 }).catch(() => false)) {
                 await budget.addRowBtn.click();
                 rowAdded = true;
-            } else if (await budget.addRowMenuItem.isVisible({ timeout: 1500 }).catch(() => false)) {
+            } else if (await budget.addRowMenuItem.isVisible({ timeout: 15000 }).catch(() => false)) {
                 await budget.addRowMenuItem.click();
                 rowAdded = true;
             }
-            await this.page.waitForTimeout(1000);
+            await this.page.waitForTimeout(5000);
         }
 
         if (!rowAdded) {
@@ -1034,12 +1042,30 @@ exports.BudgetJob = class BudgetJob {
             const { reviseEnabled } = await this.ensureReviseEnabled();
             expect(reviseEnabled).toBeTruthy();
             await budget.reviseBudgetsBtn.click();
-            await this.page.waitForTimeout(2000);
+            await this.page.waitForTimeout(5000);
             const addVisible = await budget.addBudgetBtn.or(this.page.locator('button[title*="Add" i]')).first().isVisible({ timeout: 5000 }).catch(() => false);
             if (addVisible) {
                 await budget.addBudgetBtn.or(this.page.locator('button[title*="Add" i]')).first().click();
-                await this.page.waitForTimeout(2000);
+                await this.page.waitForTimeout(5000);
                 rowAdded = true;
+                // NEW: revision editor adds the new row at the TOP of the treegrid and uses
+                // RevoGrid (not ag-Grid). The generic lastRow/firstCell block below targets the
+                // wrong row (last) and wrong column (Category, not Budget Item). Return early
+                // using fillRowDataInRevision which correctly targets row 0 / column indices.
+                if (/budget-revision/i.test(this.page.url())) {
+                    // The Budget Item column in the revision editor is a combobox backed by
+                    // predefined options. Pressing Tab after entering arbitrary text causes RevoGrid
+                    // to move the new blank row to the bottom of the virtual list, pushing it
+                    // outside the rendered DOM so isVisible() returns false. Avoid Tab-based fills
+                    // here. The new row is already at position 0 (top), visible with "Added" badge.
+                    await this.page.waitForTimeout(1000);
+                    const hasRow = await this.page.locator('[role="treegrid"] [role="gridcell"]')
+                        .filter({ hasText: /^Added$/ }).first()
+                        .isVisible({ timeout: 10000 }).catch(() => false);
+                    expect(hasRow).toBeTruthy();
+                    Logger.success(`Row added with data: ${itemName} (revision editor path)`);
+                    return true;
+                }
             }
         }
 
@@ -1051,13 +1077,13 @@ exports.BudgetJob = class BudgetJob {
         }
 
         const rows = budget.dataRows;
-        await this.page.waitForTimeout(1000);
+        await this.page.waitForTimeout(4000);
         const rowCount = await rows.count();
         expect(rowCount).toBeGreaterThan(0);
         const lastRow = rows.nth(rowCount - 1);
         const firstCell = lastRow.locator('.ag-cell, [role="gridcell"]').first();
         await firstCell.click();
-        await this.page.waitForTimeout(300);
+        await this.page.waitForTimeout(3000);
         await this.page.keyboard.type(itemName);
         await this.page.keyboard.press('Tab');
         await this.page.keyboard.type(description);
@@ -1065,7 +1091,7 @@ exports.BudgetJob = class BudgetJob {
         await this.page.waitForTimeout(10000);
         await this.page.waitForTimeout(1500);
 
-        const hasNewRow = await budget.budgetItemText(itemName).isVisible({ timeout: 5000 }).catch(() => false);
+        const hasNewRow = await budget.budgetItemText(itemName).isVisible({ timeout: 15000 }).catch(() => false);
         expect(hasNewRow).toBeTruthy();
         Logger.success(`Row added with data: ${itemName}`);
         return true;

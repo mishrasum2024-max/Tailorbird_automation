@@ -15,7 +15,7 @@ class SimpleApprovalPage {
     }
 
     async waitForPageLoad() {
-        await this.page.waitForTimeout(20000);
+        await this.page.waitForTimeout(30000);
         await this.page.waitForTimeout(1500);
     }
 
