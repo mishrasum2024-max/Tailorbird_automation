@@ -105,7 +105,7 @@ class OrganizationHelper {
     await expect(this.page).toHaveURL(/\/(organization|manage-team)(\/.+)?([?#]|$)/i);
   }
 
-  /** User menu → Manage User Roles (property × role matrix; replaces legacy /manage-team for roles UI). */
+  /** User menu → Manage Approvers (property × role matrix; replaces legacy /manage-team for roles UI). */
   async goToUserRoleManagement() {
     const navbar = this.page.locator('.mantine-AppShell-navbar');
     await navbar.locator('.mantine-Avatar-root').last().waitFor({ state: 'visible', timeout: 20_000 });
@@ -117,8 +117,8 @@ class OrganizationHelper {
       .first();
     await menu.waitFor({ state: 'visible', timeout: 15_000 });
 
-    await this.page.getByRole('menuitem', { name: /Manage User Roles/i }).first().waitFor({ state: 'visible', timeout: 20_000 });
-    await this.page.getByRole('menuitem', { name: /Manage User Roles/i }).first().click();
+    await this.page.getByRole('menuitem', { name: /Manage Approvers/i }).first().waitFor({ state: 'visible', timeout: 20_000 });
+    await this.page.getByRole('menuitem', { name: /Manage Approvers/i }).first().click();
 
     await expect(this.page).toHaveURL(/\/user-role-management(\/|$|\?)/i, { timeout: 35_000 });
   }

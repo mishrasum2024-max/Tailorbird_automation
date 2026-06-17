@@ -346,7 +346,7 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
             const items = (await menu.getByRole('menuitem').allInnerTexts()).map((t) => t.trim());
             Logger.info(`[TC17] User menu items (live): ${JSON.stringify(items)}`);
             Logger.info(
-                `[TC17] Fixture benchmark (${uiBenchmark._source?.slice(0, 80)}…): expect Profile="${uiBenchmark.userMenuProfile}", Logout="${uiBenchmark.userMenuLogout}", org copy one of: "${uiBenchmark.userMenuManageTeam}" | "${uiBenchmark.userMenuManageOrganizationLegacy}" | Manage User Roles`,
+                `[TC17] Fixture benchmark (${uiBenchmark._source?.slice(0, 80)}…): expect Profile="${uiBenchmark.userMenuProfile}", Logout="${uiBenchmark.userMenuLogout}", org copy one of: "${uiBenchmark.userMenuManageTeam}" | "${uiBenchmark.userMenuManageOrganizationLegacy}" | Manage Approvers`,
             );
 
             await expect(
@@ -359,7 +359,7 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
                 `FAIL: Missing "${uiBenchmark.userMenuLogout}" — got ${JSON.stringify(items)}.`,
             ).toBeVisible({ timeout: 5_000 });
 
-            const orgPattern = /^(Manage Team|Manage Organization|Manage User Roles)$/i;
+            const orgPattern = /^(Manage Team|Manage Organization|Manage Approvers)$/i;
             const hasOrgItem = items.some((t) => orgPattern.test(t));
             if (items.length <= 2) {
                 Logger.info(
@@ -368,7 +368,7 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
             } else {
                 expect(
                     hasOrgItem,
-                    `FAIL: Non-vendor menu should include one of Manage Team | Manage Organization | Manage User Roles. Got ${JSON.stringify(items)}.`,
+                    `FAIL: Non-vendor menu should include one of Manage Team | Manage Organization | Manage Approvers. Got ${JSON.stringify(items)}.`,
                 ).toBeTruthy();
                 const orgLocator = menu.getByRole('menuitem', { name: orgPattern }).first();
                 await expect(
@@ -515,7 +515,7 @@ test.describe('TC02 Menu — Single-org user assertions', () => {
         Logger.info(`[TC23] User menu items (single-org session): ${JSON.stringify(items)}`);
 
         // Assert expected items ARE present (MCP-verified: these appear for single-org user)
-        const expectedPresent = ['Manage User Roles', 'Manage Organization', 'Profile', 'Logout'];
+        const expectedPresent = ['Manage Approvers', 'Manage Organization', 'Profile', 'Logout'];
         for (const label of expectedPresent) {
             await expect(
                 menu.getByRole('menuitem', { name: new RegExp(`^${label}$`, 'i') }),
@@ -619,7 +619,7 @@ test.describe('TC02 Menu — Text assertions', () => {
             const profileMenu = page.locator('[role="menu"]');
             await profileMenu.waitFor({ state: 'visible', timeout: 10_000 });
 
-            for (const label of ['Manage User Roles', 'Manage Organization', 'Profile', 'Switch Organization', 'Logout']) {
+            for (const label of ['Manage Approvers', 'Manage Organization', 'Profile', 'Switch Organization', 'Logout']) {
                 InteractionLogger.logVisibility(label, true);
                 await expect(profileMenu.getByText(label, { exact: true }).first()).toBeVisible({ timeout: 5_000 });
             }

@@ -853,4 +853,56 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
     );
   });
 
+  test('@regression @property — Cover Picture: upload image to property and verify it shows on property card', async () => {
+    test.setTimeout(300000);
+
+    const downloadPath = path.join(process.cwd(), 'downloads', 'property.json');
+    const propertyData = JSON.parse(fs.readFileSync(downloadPath, 'utf-8'));
+    const propertyName = propertyData.propertyName;
+    const imagePath = path.resolve('./files/Property_image.png');
+
+    // Step 1: Navigate to properties list (Table View) and open the target property's details page
+    await prop.goToProperties();
+    await prop.changeView('Table View');
+    await prop.searchProperty(propertyName);
+    await prop.viewDetailsButton();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForURL(/\/properties\/details/, { timeout: 20000 });
+    await page.waitForTimeout(1500);
+
+    // Step 2: Open Edit Property dialog
+    await page.getByRole('button', { name: 'Edit' }).first().click();
+    const dialog = page.getByRole('dialog', { name: 'Edit Property' });
+    await expect(dialog).toBeVisible({ timeout: 10000 });
+
+    // Step 3: Scroll to Cover Picture section, then upload image via device file chooser
+    await dialog.getByText('Cover Picture').scrollIntoViewIfNeeded();
+    await page.waitForTimeout(600);
+    const [fileChooser] = await Promise.all([
+      page.waitForEvent('filechooser'),
+      dialog.getByRole('button', { name: 'From device' }).click(),
+    ]);
+    await fileChooser.setFiles(imagePath);
+
+    // Wait for Uploadcare CDN upload to finish — Save Changes button transitions from disabled to enabled
+    await expect(dialog.getByRole('button', { name: 'Save Changes' })).toBeEnabled({ timeout: 20000 });
+    await page.waitForTimeout(1000);
+
+    // Step 4: Save changes and assert the success notification
+    await dialog.getByRole('button', { name: 'Save Changes' }).click();
+    await expect(
+      page.locator('.mantine-Notification-root').filter({ hasText: 'property updated successfully' })
+    ).toBeVisible({ timeout: 15000 });
+
+    // Step 5: Navigate directly to the properties list (Grid/Card View by default),
+    // search for the property, and assert its card shows the uploaded cover image.
+    // Using page.goto() avoids the slow 60s API watcher inside prop.goToProperties().
+    const propertiesUrl = new URL(page.url()).origin + '/properties';
+    await page.goto(propertiesUrl, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(2000);
+    await page.locator('[placeholder="Search..."]').first().fill(propertyName);
+    await page.waitForTimeout(3000);
+    await expect(page.locator('[style*="files.tailorbird.com"]')).toBeVisible({ timeout: 15000 });
+  });
+
 });
