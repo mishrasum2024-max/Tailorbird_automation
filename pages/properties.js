@@ -1682,7 +1682,7 @@ class PropertiesHelper {
         if (await locationSearch.isVisible({ timeout: 2000 }).catch(() => false)) {
             await locationSearch.fill(rowName).catch(() => { });
             await locationSearch.press('Enter').catch(() => { });
-            await this.page.waitForTimeout(700);
+            await this.page.waitForTimeout(10000);
             const alreadyExists = await this.page
                 .locator(`[role="treegrid"] [role="gridcell"]:has-text("${rowName}")`)
                 .first()

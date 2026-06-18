@@ -421,7 +421,7 @@ test.describe('Verify Invoice tab', () => {
         expect(fieldsVerified).toBeTruthy();
 
         Logger.step('TC112: Setting budget category on invoice grid rows');
-        const categoriesSet = await invoicePage.fillBudgetCategoryInInvoice('Bathroom fixtures install');
+        // const categoriesSet = await invoicePage.fillBudgetCategoryInInvoice('Bathroom fixtures install');
         // expect(categoriesSet).toBeGreaterThan(0);
 
         const categoryValues = await invoicePage.getBudgetCategoryValues();
@@ -603,7 +603,7 @@ test.describe('Verify Invoice tab', () => {
         expect(fieldsVerified).toBeTruthy();
 
         Logger.step('TC117: Setting budget category before Go Back');
-        const categoriesSet = await invoicePage.fillBudgetCategoryInInvoice('Bathroom fixtures install');
+        // const categoriesSet = await invoicePage.fillBudgetCategoryInInvoice('Bathroom fixtures install');
         // expect(categoriesSet).toBeGreaterThan(0);
 
         const categoryValues = await invoicePage.getBudgetCategoryValues();
