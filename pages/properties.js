@@ -1755,7 +1755,21 @@ class PropertiesHelper {
             const editable = await editor.isEditable().catch(() => false);
             if (!editable) continue;
             await editor.click({ force: true }).catch(() => { });
-            await editor.fill(rowName, { timeout: 3000 });
+            let fillSuccess = false;
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                try {
+                    await editor.fill(rowName, { timeout: 3000 });
+                    fillSuccess = true;
+                    break;
+                } catch (fillErr) {
+                    if (attempt < 3) {
+                        console.log(`⚠ fill attempt ${attempt} failed, retrying in 5s…`);
+                        await this.page.waitForTimeout(5000);
+                        await editor.click({ force: true }).catch(() => { });
+                    }
+                }
+            }
+            if (!fillSuccess) continue;
             filled = true;
             break;
         }

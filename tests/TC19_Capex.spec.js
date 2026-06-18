@@ -1,6 +1,7 @@
 require('dotenv').config();
 const { test, expect } = require('@playwright/test');
 const { CapexPage } = require('../pages/capexPage');
+const { CapexColumnPersistencePage } = require('../pages/capexColumnPersistencePage');
 const { Logger } = require('../utils/logger');
 
 test.use({
@@ -914,6 +915,178 @@ test.describe('TC19 — CapEx Portfolio Page', () => {
         }
 
         Logger.success('TC300 ✓');
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // TC301 — Column Settings Persistence after Page Refresh
+    // Investigation (MCP browser + API, 2026-06-18):
+    //   All column settings are saved server-side via PUT /api/table-view-config.
+    //   The __defaultConfig payload carries: columnVisibility, sorting.columns,
+    //   columnSizes, columnOrder, columnPins, grouping.
+    //   Verified: visibility persists, sort persists, width persists (columnSizes).
+    //   Grouping: field exists in API (always []) but no grouping UI is exposed.
+    //   Column order via drag-in-drawer: no drag handles present in Manage Columns;
+    //   order changes only through direct column-header drag in the grid.
+    // ─────────────────────────────────────────────────────────────────────────
+    test('TC301 @regression @capex — Column settings persist after page refresh: visibility, sort and width saved server-side via table-view-config', async ({ page }) => {
+        test.setTimeout(240000);
+        Logger.step('TC301: Column settings persistence after page refresh');
+
+        const colPersist = new CapexColumnPersistencePage(page);
+        // Grid already loaded by beforeEach goto(). Confirm it is stable.
+        await colPersist.waitForGridReady();
+
+        // ── Scenario 1: Column visibility persistence ─────────────────────
+        await test.step('Scenario 1 — Column visibility persistence', async () => {
+            const COL = 'Invoiced Amount';
+            Logger.info(`TC301 S1: Hiding "${COL}"`);
+
+            // Ensure a clean start — show the column if a previous run left it hidden
+            await colPersist.showColumn(COL);
+            expect(await colPersist.isColumnVisibleInGrid(COL)).toBeTruthy();
+            await colPersist.hideColumn(COL);
+            expect(await colPersist.isColumnVisibleInGrid(COL)).toBeFalsy();
+            Logger.info('TC301 S1: Column hidden in grid ✓');
+
+            await colPersist.reloadAndWaitForGrid();
+
+            expect(
+                await colPersist.isColumnVisibleInGrid(COL),
+                `"${COL}" should still be hidden after page refresh`
+            ).toBeFalsy();
+            Logger.info('TC301 S1: Column still hidden after page refresh ✓');
+
+            // Cleanup — restore to original visible state
+            await colPersist.showColumn(COL);
+            expect(await colPersist.isColumnVisibleInGrid(COL)).toBeTruthy();
+            Logger.info('TC301 S1: Column restored ✓');
+        });
+
+        // ── Scenario 2: Sort state persistence ───────────────────────────
+        await test.step('Scenario 2 — Sort state persistence', async () => {
+            const COL = 'Budget Revision';
+            Logger.info(`TC301 S2: Applying sort on "${COL}"`);
+
+            // Ensure clean start — remove any sort left from a previous run
+            await colPersist.clearColumnSort(COL);
+            await colPersist.clickColumnSortButton(COL);
+            const sortedState = await colPersist.getColumnSortState(COL);
+            expect(sortedState, `Sort should be active on "${COL}"`).toMatch(/sort-asc|sort-desc/);
+            Logger.info(`TC301 S2: Sort applied — state="${sortedState}" ✓`);
+
+            const rowCountBefore = await page.evaluate(() =>
+                Array.from(document.querySelectorAll('[role="row"]'))
+                    .filter(r => r.querySelectorAll('[role="gridcell"]').length >= 7).length
+            );
+
+            await colPersist.reloadAndWaitForGrid();
+
+            const sortAfterReload = await colPersist.getColumnSortState(COL);
+            expect(
+                sortAfterReload,
+                `Sort on "${COL}" should persist after page refresh`
+            ).toMatch(/sort-asc|sort-desc/);
+            expect(sortAfterReload).toBe(sortedState);
+            Logger.info(`TC301 S2: Sort direction "${sortAfterReload}" persisted after reload ✓`);
+
+            const rowCountAfter = await page.evaluate(() =>
+                Array.from(document.querySelectorAll('[role="row"]'))
+                    .filter(r => r.querySelectorAll('[role="gridcell"]').length >= 7).length
+            );
+            // Allow ±2 rendered-row tolerance (virtual scroll varies by scroll position)
+            expect(Math.abs(rowCountAfter - rowCountBefore)).toBeLessThanOrEqual(2);
+            Logger.info('TC301 S2: Grid row count unchanged after reload with sort active ✓');
+
+            // Cleanup — cycle sort back to off
+            await colPersist.clearColumnSort(COL);
+            Logger.info('TC301 S2: Sort cleared ✓');
+        });
+
+        // ── Scenario 3: Column width persistence ─────────────────────────
+        await test.step('Scenario 3 — Column width persistence', async () => {
+            const COL = 'Approved Change Orders';
+            const DELTA = 80;
+            Logger.info(`TC301 S3: Resizing "${COL}" by +${DELTA}px`);
+
+            const initialWidth = await colPersist.getColumnWidthPx(COL);
+            Logger.info(`TC301 S3: Initial width = ${initialWidth}px`);
+            expect(initialWidth).toBeGreaterThan(0);
+
+            const newWidth = await colPersist.resizeColumn(COL, DELTA);
+            Logger.info(`TC301 S3: Width after resize = ${newWidth}px`);
+            expect(
+                newWidth,
+                `Column width should increase after drag-resize`
+            ).toBeGreaterThan(initialWidth + 20);
+
+            await colPersist.reloadAndWaitForGrid();
+
+            const widthAfterReload = await colPersist.getColumnWidthPx(COL);
+            Logger.info(`TC301 S3: Width after reload = ${widthAfterReload}px`);
+            expect(
+                Math.abs(widthAfterReload - newWidth),
+                `Width after reload (${widthAfterReload}px) should match width before reload (${newWidth}px)`
+            ).toBeLessThanOrEqual(5);
+            Logger.info(`TC301 S3: Width ${widthAfterReload}px persisted after reload ✓`);
+
+            // Cleanup — resize back to initial
+            await colPersist.resizeColumn(COL, initialWidth - widthAfterReload);
+            Logger.info('TC301 S3: Width restored to initial ✓');
+        });
+
+        // ── Scenario 4: Combined settings persistence ─────────────────────
+        await test.step('Scenario 4 — Combined: hidden column + active sort persist together', async () => {
+            const HIDE_COL = 'Remaining Contract Amount';
+            const SORT_COL = 'Original Contract Amount';
+            Logger.info(`TC301 S4: Hiding "${HIDE_COL}" and sorting "${SORT_COL}" simultaneously`);
+
+            // Ensure clean start for both settings
+            await colPersist.showColumn(HIDE_COL);
+            await colPersist.clearColumnSort(SORT_COL);
+            await colPersist.hideColumn(HIDE_COL);
+            await colPersist.clickColumnSortButton(SORT_COL);
+
+            expect(await colPersist.isColumnVisibleInGrid(HIDE_COL)).toBeFalsy();
+            const sortState = await colPersist.getColumnSortState(SORT_COL);
+            expect(sortState).toMatch(/sort-asc|sort-desc/);
+            Logger.info(`TC301 S4: Both settings applied — col hidden, sort="${sortState}" ✓`);
+
+            await colPersist.reloadAndWaitForGrid();
+
+            expect(
+                await colPersist.isColumnVisibleInGrid(HIDE_COL),
+                `"${HIDE_COL}" should remain hidden after reload`
+            ).toBeFalsy();
+            Logger.info(`TC301 S4: "${HIDE_COL}" still hidden after reload ✓`);
+
+            const sortAfterReload = await colPersist.getColumnSortState(SORT_COL);
+            expect(
+                sortAfterReload,
+                `Sort on "${SORT_COL}" should remain after reload`
+            ).toMatch(/sort-asc|sort-desc/);
+            Logger.info(`TC301 S4: "${SORT_COL}" sort "${sortAfterReload}" still active after reload ✓`);
+
+            // Cleanup
+            await colPersist.showColumn(HIDE_COL);
+            await colPersist.clearColumnSort(SORT_COL);
+            Logger.info('TC301 S4: Settings restored ✓');
+        });
+
+        // ── Scenario 5: Grouping UI observation (non-failing) ─────────────
+        await test.step('Scenario 5 — Grouping UI observation', async () => {
+            const hasGrouping = await colPersist.hasGroupingUI();
+            Logger.info(`TC301 S5: Grouping UI present = ${hasGrouping}`);
+            if (!hasGrouping) {
+                Logger.info(
+                    'TC301 S5: No grouping UI detected on CapEx page. ' +
+                    'The API stores a "grouping" field (observed as [] in table-view-config) ' +
+                    'but no grouping control is exposed in the current UI — observation logged, not a failure.'
+                );
+            }
+            // No assertion — observation only per investigation findings
+        });
+
+        Logger.success('TC301 ✓');
     });
 
 });
