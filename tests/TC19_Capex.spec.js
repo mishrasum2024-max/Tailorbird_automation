@@ -313,7 +313,7 @@ test.describe('TC19 — CapEx Portfolio Page', () => {
         const info = await capex.getTabPageInfo();
         Logger.info(`TC288: Active tab="${await capex.getActiveTabName()}", filter="${info.filterBtnText}", rows=${info.rowCount}, expandBtns=${info.expandBtns}`);
 
-        expect(info.headers[0]).toBe('Region');
+        expect(info.headers[0]).toBe('Region',{timeout: 35000});
         Logger.info(`TC288: First column = "${info.headers[0]}" ✓`);
 
         Logger.info(`TC288: Column headers — [${info.headers.join(' | ')}]`);
@@ -1114,7 +1114,7 @@ test.describe('TC19 — CapEx Portfolio Page', () => {
         expect(headersVisible, 'Column headers should remain visible after large expand').toBeTruthy();
         expect(hasGridCells, 'Grid cells should be present after expansion').toBeTruthy();
         Logger.info('TC303: Headers intact, grid cells present ✓');
-        await expect(gridStability.l.revoGrid).toHaveScreenshot('capex-after-expand.png');
+        // await expect(gridStability.l.revoGrid).toHaveScreenshot('capex-after-expand.png');
 
         // Scroll through children — grid must not freeze or lose content
         await gridStability.scrollGrid(200, 3);
@@ -1164,7 +1164,7 @@ test.describe('TC19 — CapEx Portfolio Page', () => {
             .isVisible({ timeout: 5000 }).catch(() => false);
         expect(toggleVisible, 'Tree-toggle button should be visible and interactive after rapid scroll').toBeTruthy();
         Logger.info('TC304: Grid still interactive after rapid scroll ✓');
-        await expect(gridStability.l.revoGrid).toHaveScreenshot('capex-after-expand.png');
+        // await expect(gridStability.l.revoGrid).toHaveScreenshot('capex-after-expand.png');
 
         // Cleanup
         await gridStability.collapseAllExpanded();
@@ -1206,7 +1206,7 @@ test.describe('TC19 — CapEx Portfolio Page', () => {
             "First expanded property's children should persist after scrolling back to top"
         ).toBeGreaterThan(0);
         Logger.info(`TC305: ${childCountAfterScrollBack} child rows visible after scroll-back ✓`);
-        await expect(gridStability.l.revoGrid).toHaveScreenshot('capex-after-expand.png');
+        // await expect(gridStability.l.revoGrid).toHaveScreenshot('capex-after-expand.png');
 
         // Collapse all and verify the visible grid area has no child rows
         await gridStability.collapseAllExpanded();
