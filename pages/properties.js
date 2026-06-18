@@ -929,7 +929,7 @@ class PropertiesHelper {
 
     async uploadPropertyDocument(filePath) {
         await this.page.locator(propertyLocators.uploadFilesBtn).first().click();
-        await this.page.locator(propertyLocators.uploadDialog).waitFor();
+        await this.page.locator(propertyLocators.uploadDialog).waitFor({timeout: 35000});
 
         // Intercept and cancel native dialog (THIS IS THE FIX)
         this.page.once("filechooser", async (chooser) => {
@@ -1674,7 +1674,9 @@ class PropertiesHelper {
         else console.log("ℹ Add-row trigger not visible; continuing with inline row edit flow");
     }
     async addRowDetail() {
-        return await this.addLocationRowByName('My Test Name');
+        const uniqueName = `Site_${Date.now()}`;
+        this._lastLocationRowName = uniqueName;
+        return await this.addLocationRowByName(uniqueName);
     }
     async addLocationRowByName(rowName = 'My Test Name') {
         const tabpanel = this.page.getByRole('tabpanel', { name: /Locations/i });
@@ -1703,10 +1705,17 @@ class PropertiesHelper {
             await editBtn.click({ force: true }).catch(() => { });
             await this.page.waitForTimeout(600);
         }
+        // MCP-verified: "Add Row" button directly adds a blank row at the top — no dropdown.
+        // addButton() already clicks it before addLocationRowByName() is called, so only
+        // click again if no blank "—" row is present yet (avoids leaving orphan rows).
+        const blankRowAlreadyPresent = await this.page
+            .getByRole('treegrid').first()
+            .getByRole('row', { name: /^— — —$|^—$/ }).first()
+            .isVisible({ timeout: 1000 }).catch(() => false);
         const addSite = this.page
             .getByRole('menuitem', { name: /Add site|Add row|Add unit/i })
             .or(this.page.getByRole('button', { name: /Add site|Add row|Add unit/i }));
-        const hasAddSite = await addSite.first().isVisible({ timeout: 2000 }).catch(() => false);
+        const hasAddSite = !blankRowAlreadyPresent && await addSite.first().isVisible({ timeout: 2000 }).catch(() => false);
         if (hasAddSite) {
             await addSite.first().click();
         } else {
@@ -1740,17 +1749,21 @@ class PropertiesHelper {
         await expect(firstCell).toBeVisible({ timeout: 10000 });
         await firstCell.click({ force: true });
         await firstCell.dblclick({ force: true }).catch(() => { });
-        await this.page.keyboard.press('Enter').catch(() => { });
+        // MCP-verified: dblclick opens the floating revogr-edit textbox directly — do NOT press
+        // Enter here. Pressing Enter would commit an empty value and close the editor before fill.
+        await this.page.waitForTimeout(400);
         const nameEditorCandidates = [
             this.page.locator('revogr-edit input:visible:not([readonly]):not([disabled])').first(),
-            this.page.locator('input[type="text"]:visible:not([readonly]):not([disabled])').first(),
+            this.page.locator('input[type="text"]:visible:not([placeholder="Search..."]):not([readonly]):not([disabled])').first(),
             this.page.locator('textarea:visible:not([readonly]):not([disabled])').first(),
             this.page.getByRole('textbox', { name: /name/i }).first(),
             this.page.locator(prop.nameInput).first(),
         ];
         let filled = false;
-        for (const editor of nameEditorCandidates) {
-            const visible = await editor.isVisible({ timeout: 800 }).catch(() => false);
+        for (const [idx, editor] of nameEditorCandidates.entries()) {
+            // Give the primary revogr-edit candidate more time; fallbacks are faster.
+            const visibilityTimeout = idx === 0 ? 3000 : 800;
+            const visible = await editor.isVisible({ timeout: visibilityTimeout }).catch(() => false);
             if (!visible) continue;
             const editable = await editor.isEditable().catch(() => false);
             if (!editable) continue;
@@ -1787,27 +1800,51 @@ class PropertiesHelper {
                 await this.page.keyboard.type(rowName, { delay: 20 });
             }
         }
-        await this.page.keyboard.press("Enter");
-
-        if (await locationSearch.isVisible({ timeout: 1200 }).catch(() => false)) {
-            await locationSearch.fill(rowName).catch(() => { });
-            await locationSearch.press('Enter').catch(() => { });
-            await this.page.waitForTimeout(700);
-        }
-        const rowAdded = await this.page
+        // Commit the value and assert it appears in the grid. Retry up to 3 times.
+        const cellLocator = this.page
             .locator(`[role="treegrid"] [role="gridcell"]:has-text("${rowName}")`)
-            .first()
-            .isVisible({ timeout: 4000 })
-            .catch(() => false);
-        if (!rowAdded) {
-            // Second attempt: click first editable textbox if editor surfaced late.
-            const lateEditor = this.page.locator('input[type="text"]:visible, textarea:visible').first();
-            if (await lateEditor.isVisible({ timeout: 1200 }).catch(() => false)) {
+            .first();
+        let committed = false;
+        for (let commitAttempt = 1; commitAttempt <= 3; commitAttempt++) {
+            await this.page.keyboard.press('Enter');
+            await this.page.waitForTimeout(1200);
+
+            // Narrow grid via search to confirm the committed value is persisted.
+            if (await locationSearch.isVisible({ timeout: 800 }).catch(() => false)) {
+                await locationSearch.fill(rowName).catch(() => { });
+                await locationSearch.press('Enter').catch(() => { });
+                await this.page.waitForTimeout(700);
+            }
+
+            committed = await cellLocator.isVisible({ timeout: 4000 }).catch(() => false);
+            if (committed) break;
+
+            console.log(`⚠ Commit attempt ${commitAttempt}/3 — "${rowName}" not found in grid, retrying…`);
+
+            // Clear search before retrying so the full grid is visible.
+            if (await locationSearch.isVisible({ timeout: 800 }).catch(() => false)) {
+                await locationSearch.fill('').catch(() => { });
+                await locationSearch.press('Enter').catch(() => { });
+                await this.page.waitForTimeout(500);
+            }
+
+            // If an editor is still open, re-fill and press Tab to force commit.
+            // Exclude the search bar so we don't accidentally fill it instead of a cell editor.
+            const lateEditor = this.page
+                .locator('revogr-edit input:visible, input[type="text"]:visible:not([placeholder="Search..."]), textarea:visible')
+                .first();
+            if (await lateEditor.isVisible({ timeout: 1000 }).catch(() => false)) {
                 await lateEditor.fill(rowName).catch(() => { });
-                await this.page.keyboard.press('Enter').catch(() => { });
+                await this.page.keyboard.press('Tab').catch(() => { });
+                await this.page.waitForTimeout(600);
             }
         }
-        await expect(this.page.locator(`[role="treegrid"] [role="gridcell"]:has-text("${rowName}")`).first()).toBeVisible({ timeout: 8000 });
+
+        if (!committed) {
+            throw new Error(`Failed to commit row name "${rowName}" to the grid after 3 attempts`);
+        }
+
+        // Clear search filter so the grid shows all rows after commit.
         if (await locationSearch.isVisible({ timeout: 1200 }).catch(() => false)) {
             await locationSearch.fill('').catch(() => { });
             await locationSearch.press('Enter').catch(() => { });
@@ -1815,7 +1852,8 @@ class PropertiesHelper {
         console.log(`✔ New site/unit name added: ${rowName}`);
     }
     async deleteRow() {
-        return await this.deleteLocationRowByName('My Test Name');
+        const rowName = this._lastLocationRowName || 'My Test Name';
+        return await this.deleteLocationRowByName(rowName);
     }
     async deleteLocationRowByName(rowName = 'My Test Name') {
         const tabpanel = this.page.getByRole('tabpanel', { name: /Locations/i });
