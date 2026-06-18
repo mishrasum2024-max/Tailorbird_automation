@@ -11,6 +11,9 @@ const uiMessages = require('../fixture/tailorbirdUiMessages.json');
 const loc = require('../locators/locationLocator');
 const { verifyColumnContentDoesNotWrap } = require('../utils/columnResizeHelper');
 import { propertyLocators } from '../locators/propertyLocator.js';
+const { ProjectPage } = require('../pages/projectPage');
+const { AddColumnPage } = require('../pages/addColumnPage');
+const { Logger } = require('../utils/logger');
 
 test.use({
   storageState: 'sessionState.json',
@@ -668,9 +671,9 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
 
         // Toolbar: the row of action buttons (Filter, View, Table, Export, Create Property)
         const toolbar = page.locator('main').getByRole('button', { name: /Filter|Export|View|Table|Create Property/i }).first()
-            .locator('xpath=ancestor::*[contains(@class,"mantine-Group") or contains(@class,"toolbar") or @role="toolbar"][1]')
-            .or(page.locator('main [class*="toolbar"], main [class*="Toolbar"]').first())
-            .or(page.locator('main').locator('button:has-text("Create Property")').locator('../..'));
+          .locator('xpath=ancestor::*[contains(@class,"mantine-Group") or contains(@class,"toolbar") or @role="toolbar"][1]')
+          .or(page.locator('main [class*="toolbar"], main [class*="Toolbar"]').first())
+          .or(page.locator('main').locator('button:has-text("Create Property")').locator('../..'));
         try {
           await toolbar.first().waitFor({ state: 'visible', timeout: 8_000 });
           await expect(toolbar.first()).toHaveScreenshot('properties-toolbar.png', shotStable);
@@ -768,10 +771,10 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
         // MCP-verified behavior: Cancel may close asynchronously; add resilient close sequence.
         const dialog = prop.addPropertyDialog();
         await dialog.getByRole('button', { name: 'Cancel' }).click();
-        await page.keyboard.press('Escape').catch(() => {});
+        await page.keyboard.press('Escape').catch(() => { });
         const closeX = dialog.locator('button[aria-label="Close"], .mantine-CloseButton-root').first();
         if (await closeX.isVisible().catch(() => false)) {
-          await closeX.click().catch(() => {});
+          await closeX.click().catch(() => { });
         }
         await expect(dialog.first()).toBeHidden({ timeout: 15_000 });
       });
@@ -831,9 +834,9 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
     ).toBeVisible({ timeout: 3000 });
 
     // Clean up
-    await dialog.getByRole('button', { name: 'Cancel' }).click().catch(() => {});
-    await page.keyboard.press('Escape').catch(() => {});
-    await expect(dialog.first()).toBeHidden({ timeout: 10000 }).catch(() => {});
+    await dialog.getByRole('button', { name: 'Cancel' }).click().catch(() => { });
+    await page.keyboard.press('Escape').catch(() => { });
+    await expect(dialog.first()).toBeHidden({ timeout: 10000 }).catch(() => { });
   });
 
   test('@regression @property TC279 — Budget Variance currency column: values must stay on a single line after column is resized narrower', async () => {
@@ -842,8 +845,8 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
 
     const result = await verifyColumnContentDoesNotWrap({
       page,
-      columnName:      'Budget Variance',
-      dragByPx:        50,
+      columnName: 'Budget Variance',
+      dragByPx: 50,
       minCellsToCheck: 1,
     });
 
@@ -903,6 +906,29 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
     await page.locator('[placeholder="Search..."]').first().fill(propertyName);
     await page.waitForTimeout(3000);
     await expect(page.locator('[style*="files.tailorbird.com"]')).toBeVisible({ timeout: 15000 });
+  });
+
+  test('TC306 @property @regression : Verify reusable add column function for all column types', async ({ page }) => {
+    test.setTimeout(600000);
+    const projectPage = new ProjectPage(page);
+    const addColumnPage = new AddColumnPage(page, { scope: page.locator('main') });
+
+    try {
+      await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'load' });
+      await expect(page).toHaveURL(process.env.DASHBOARD_URL);
+
+      await projectPage.navigateToProjects();
+      await projectPage.setProjectsTableView();
+      await expect(page.getByTestId('bt-table-action').first()).toBeVisible({ timeout: 15000 });
+
+      const createdColumns = await addColumnPage.addAndVerifyAllColumnTypes();
+      expect(createdColumns.length).toBe(13);
+
+      Logger.success('TC250: addAndVerifyAllColumnTypes — PASSED');
+    } catch (error) {
+      Logger.error(`TC250: Test failed — ${error.message}`);
+      throw error;
+    }
   });
 
 });

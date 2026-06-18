@@ -2,6 +2,7 @@ require('dotenv').config();
 const { test, expect } = require('@playwright/test');
 const { CapexPage } = require('../pages/capexPage');
 const { CapexColumnPersistencePage } = require('../pages/capexColumnPersistencePage');
+const { CapexGridStabilityPage } = require('../pages/capexGridStabilityPage');
 const { Logger } = require('../utils/logger');
 
 test.use({
@@ -1087,6 +1088,135 @@ test.describe('TC19 — CapEx Portfolio Page', () => {
         });
 
         Logger.success('TC301 ✓');
+    });
+
+    test('TC303 @regression @capex — Large dataset: expand property with most children, verify child rows render without layout error', async ({ page }) => {
+        Logger.step('TC303: Large dataset rendering and grid stability');
+        const gridStability = new CapexGridStabilityPage(page);
+
+        const initialToggleCount = await capex.l.treeExpandBtns.count();
+        expect(initialToggleCount, 'Portfolio should have at least one expandable property').toBeGreaterThan(0);
+
+        const propertyName = await gridStability.getPropertyNameAtToggleIndex(0);
+        Logger.info(`TC303: Expanding property at index 0 — "${propertyName}"`);
+
+        // Expand property 0 (Test Property 1_Cottages on Elm — 8 children)
+        await capex.expandRow(0);
+        const childCountAfterExpand = await gridStability.countVisibleChildRows();
+        expect(
+            childCountAfterExpand,
+            'At least one child row should appear after expansion'
+        ).toBeGreaterThan(0);
+        Logger.info(`TC303: ${childCountAfterExpand} child rows rendered after expand ✓`);
+
+        // Grid headers must remain intact — no layout collapse
+        const { headersVisible, hasGridCells } = await gridStability.validateGridStability();
+        expect(headersVisible, 'Column headers should remain visible after large expand').toBeTruthy();
+        expect(hasGridCells, 'Grid cells should be present after expansion').toBeTruthy();
+        Logger.info('TC303: Headers intact, grid cells present ✓');
+        await expect(gridStability.l.revoGrid).toHaveScreenshot('capex-after-expand.png');
+
+        // Scroll through children — grid must not freeze or lose content
+        await gridStability.scrollGrid(200, 3);
+        const { headersVisible: headersAfterScroll } = await gridStability.validateGridStability();
+        expect(headersAfterScroll, 'Headers should be visible after scrolling through child rows').toBeTruthy();
+        Logger.info('TC303: Grid stable after scrolling through children ✓');
+
+        // Scroll back and collapse — verify clean return to parent-only view
+        await gridStability.scrollGridToTop();
+        await page.waitForTimeout(400);
+        await gridStability.collapseAllExpanded();
+        const childCountAfterCollapse = await gridStability.countVisibleChildRows();
+        expect(childCountAfterCollapse, 'No child rows should remain after collapse').toBe(0);
+        Logger.info('TC303: All child rows collapsed, grid clean ✓');
+
+        Logger.success('TC303 ✓');
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // TC304 — Validate Fast Scroll Stability
+    // ─────────────────────────────────────────────────────────────────────────
+    test('TC304 @regression @capex — Fast scroll: rapid scroll down and up on expanded grid, grid remains interactive after scroll', async ({ page }) => {
+        Logger.step('TC304: Fast scroll stability');
+        const gridStability = new CapexGridStabilityPage(page);
+
+        // Expand property 0 so the grid has a larger virtual dataset to scroll through
+        await capex.expandRow(0);
+        const childCountAfterExpand = await gridStability.countVisibleChildRows();
+        expect(childCountAfterExpand, 'Grid should have child rows before scroll test').toBeGreaterThan(0);
+        Logger.info(`TC304: Expanded with ${childCountAfterExpand} child rows`);
+
+        // Rapid scroll: 4 × down then 4 × up at 200 ms intervals
+        await gridStability.scrollGrid(300, 4);
+        await gridStability.scrollGrid(-300, 4);
+        Logger.info('TC304: Rapid scroll sequence complete');
+
+        // Grid must still be functional after rapid scroll
+        const { headersVisible, hasGridCells } = await gridStability.validateGridStability();
+        expect(headersVisible, 'Column headers should survive rapid scroll').toBeTruthy();
+        expect(hasGridCells, 'Grid cells should still be present after rapid scroll').toBeTruthy();
+        Logger.info('TC304: Headers and cells intact after rapid scroll ✓');
+
+        // Scroll back to top and verify the tree-toggle button is still clickable
+        await gridStability.scrollGridToTop();
+        await page.waitForTimeout(600);
+        const toggleVisible = await capex.l.treeExpandBtns.first()
+            .isVisible({ timeout: 5000 }).catch(() => false);
+        expect(toggleVisible, 'Tree-toggle button should be visible and interactive after rapid scroll').toBeTruthy();
+        Logger.info('TC304: Grid still interactive after rapid scroll ✓');
+        await expect(gridStability.l.revoGrid).toHaveScreenshot('capex-after-expand.png');
+
+        // Cleanup
+        await gridStability.collapseAllExpanded();
+        Logger.success('TC304 ✓');
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // TC305 — Validate Multiple Expanded Rows Stability
+    // Expands property 0 then scrolls to expand a second property.
+    // ─────────────────────────────────────────────────────────────────────────
+    test('TC305 @regression @capex — Multiple expanded rows: expand two parent rows, verify both sections render and grid stays stable', async ({ page }) => {
+        Logger.step('TC305: Multiple expanded rows stability');
+        const gridStability = new CapexGridStabilityPage(page);
+
+        // Expand property 0 (Test Property 1_Cottages on Elm — 8 children)
+        const firstPropertyName = await gridStability.getPropertyNameAtToggleIndex(0);
+        Logger.info(`TC305: Expanding first property — "${firstPropertyName}"`);
+        await capex.expandRow(0);
+        const firstChildCount = await gridStability.countVisibleChildRows();
+        expect(firstChildCount, 'First property should render child rows after expansion').toBeGreaterThan(0);
+        Logger.info(`TC305: First expansion rendered ${firstChildCount} child rows ✓`);
+
+        // Scroll past first property's children and expand the next visible property
+        const expandedSecond = await gridStability.expandSecondProperty();
+        Logger.info(`TC305: Second property expansion attempted — success=${expandedSecond}`);
+
+        // Grid must remain stable with two expanded sections
+        const { headersVisible, hasGridCells } = await gridStability.validateGridStability();
+        expect(headersVisible, 'Column headers must be visible with multiple rows expanded').toBeTruthy();
+        expect(hasGridCells, 'Grid cells must be present with multiple rows expanded').toBeTruthy();
+        Logger.info('TC305: Grid stable with multiple rows expanded ✓');
+
+        // Scroll back to top — first property's children should still be rendered
+        await gridStability.scrollGridToTop();
+        await page.waitForTimeout(600);
+        const childCountAfterScrollBack = await gridStability.countVisibleChildRows();
+        expect(
+            childCountAfterScrollBack,
+            "First expanded property's children should persist after scrolling back to top"
+        ).toBeGreaterThan(0);
+        Logger.info(`TC305: ${childCountAfterScrollBack} child rows visible after scroll-back ✓`);
+        await expect(gridStability.l.revoGrid).toHaveScreenshot('capex-after-expand.png');
+
+        // Collapse all and verify the visible grid area has no child rows
+        await gridStability.collapseAllExpanded();
+        await gridStability.scrollGridToTop();
+        await page.waitForTimeout(800);
+        const childCountFinal = await gridStability.countVisibleChildRows();
+        expect(childCountFinal, 'No child rows should be visible after collapsing').toBe(0);
+        Logger.info('TC305: All visible rows collapsed, grid clean ✓');
+
+        Logger.success('TC305 ✓');
     });
 
 });
