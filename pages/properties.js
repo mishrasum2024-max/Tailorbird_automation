@@ -289,7 +289,7 @@ class PropertiesHelper {
             await this.goToProperties();
         }
         await this.page.waitForLoadState("domcontentloaded");
-        await this.page.waitForTimeout(800);
+        await this.page.waitForTimeout(1500);
         // CI-safe: in some runs only "Layout"/"View" is clickable (other table-action buttons are Filter/Export).
         const switchers = this.page
             .getByRole('button', { name: /^(layout|view|table)$/i })
@@ -309,6 +309,8 @@ class PropertiesHelper {
                     break;
                 }
             }
+            const tableBtn = this.page.getByTestId('bt-table-action');
+            await tableBtn.waitFor({ state: 'visible',timeout:20000 });
             if (!menuOpened) await this.page.waitForTimeout(300);
         }
         if (!menuOpened) this.log(`changeView: menu item "${view}" not visible; proceeding with current view.`);
@@ -329,52 +331,13 @@ class PropertiesHelper {
         if (!ready) this.log(`changeView: readiness poll timed out for "${view}", continuing with available UI.`);
         await this.page.waitForLoadState("domcontentloaded");
         await apiWait;
-        await this.page.waitForTimeout(800);
+        await this.page.waitForTimeout(1500);
     }
 
     /** Open BirdTable filter drawer (panel that contains "Filter Options"). */
     filterPopup() {
         return this.page.locator('.mantine-Paper-root').filter({ hasText: 'Filter Options' });
     }
-
-    /**
-     * Apply one property-type filter in the open Filter popup, assert UI feedback, then reset.
-     * BirdTable uses "Applied Filters" + button "Reset Filters" (not treegrid badges / "Clear All Filters" link).
-     */
-    // async filterProperty(type) {
-    //     const popup = this.filterPopup();
-    //     await popup.waitFor({ state: 'visible', timeout: 15000 });
-
-    //     const checkbox = popup.getByRole('checkbox', { name: type });
-    //     await checkbox.waitFor({ state: 'visible', timeout: 20000 });
-    //     await checkbox.click();
-
-    //     await this.page.waitForLoadState('networkidle').catch(() => {});
-    //     await this.page.waitForTimeout(400);
-
-    //     const resetBtn = popup.getByRole('button', { name: 'Reset Filters' });
-    //     await expect(resetBtn).toBeVisible({ timeout: 15000 });
-    //     await expect(popup.getByText(/Applied Filters/i)).toBeVisible({ timeout: 10000 });
-
-    //     const grid = this.page.locator(propertyLocators.gridRootWrapper).first();
-    //     const dataRows = grid.locator('[role="row"]').filter({ has: this.page.locator('[role="gridcell"]') });
-    //     const nRows = await dataRows.count();
-    //     console.log(
-    //         `[ASSERT] Filter "${type}": visible data rows in current treegrid viewport = ${nRows} (expected ≥1 when data exists; 0 can mean virtualized empty slice or no matches).`,
-    //     );
-    //     if (nRows === 0) {
-    //       console.log(
-    //         "ℹ️ filterProperty: no visible data rows after filter (empty result or virtualized grid); UI still shows Applied Filters + Reset.",
-    //       );
-    //     } else {
-    //       await dataRows.first().scrollIntoViewIfNeeded().catch(() => {});
-    //       await expect(dataRows.first()).toBeVisible({ timeout: 15_000 });
-    //     }
-
-    //     await resetBtn.click();
-    //     await expect(resetBtn).toBeHidden({ timeout: 15000 });
-    //     await this.page.waitForTimeout(300);
-    // }
 
     async filterProperty(type) {
         const popup = this.filterPopup();
@@ -929,7 +892,7 @@ class PropertiesHelper {
 
     async uploadPropertyDocument(filePath) {
         await this.page.locator(propertyLocators.uploadFilesBtn).first().click();
-        await this.page.locator(propertyLocators.uploadDialog).waitFor({timeout: 35000});
+        await this.page.locator(propertyLocators.uploadDialog).waitFor({ timeout: 35000 });
 
         // Intercept and cancel native dialog (THIS IS THE FIX)
         this.page.once("filechooser", async (chooser) => {
