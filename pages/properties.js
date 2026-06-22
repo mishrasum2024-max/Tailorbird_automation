@@ -892,7 +892,15 @@ class PropertiesHelper {
 
     async uploadPropertyDocument(filePath) {
         await this.page.locator(propertyLocators.uploadFilesBtn).first().click();
-        await this.page.locator(propertyLocators.uploadDialog).waitFor({ timeout: 35000 });
+        // In CI the Uploadcare widget may not have initialized yet on first click; retry once if dialog doesn't appear.
+        const dialogAppeared = await this.page.locator(propertyLocators.uploadDialog)
+            .waitFor({ timeout: 15000 })
+            .then(() => true)
+            .catch(() => false);
+        if (!dialogAppeared) {
+            await this.page.locator(propertyLocators.uploadFilesBtn).first().click();
+            await this.page.locator(propertyLocators.uploadDialog).waitFor({ timeout: 40000 });
+        }
 
         // Intercept and cancel native dialog (THIS IS THE FIX)
         this.page.once("filechooser", async (chooser) => {

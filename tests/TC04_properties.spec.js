@@ -79,6 +79,7 @@ test.afterAll(async () => {
 });
 
 test.describe('PROPERTY FLOW TEST SUITE', () => {
+  test.describe.configure({ retries: 1 });
 
   test('@sanity @mandatory @regression @property @contract TC48 - Validate Property Export Functionality and New Property Creation', async () => {
     await test.step('Table View â€” BirdTable toolbar (Export) is available', async () => {

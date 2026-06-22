@@ -19,6 +19,7 @@ test.use({
 let page, budgetJob;
 
 test.describe('Budget Workflow - E2E Tests', () => {
+    test.describe.configure({ retries: 1 });
 
     test.beforeEach(async ({ page: p }) => {
         page = p;

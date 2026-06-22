@@ -564,7 +564,14 @@ class CapexPage {
             await dd.locator('.mantine-Combobox-option').first().click();
         }
         await this.closePortfolioFilter();
-        await this.page.waitForTimeout(1800);
+        // Wait until the grid has re-populated with multiple rows before returning.
+        // Threshold > 10 distinguishes a fully-restored portfolio from an empty or partial state.
+        await this.page.waitForFunction(
+            () => Array.from(document.querySelectorAll('[role="row"]'))
+                .filter(r => r.querySelectorAll('[role="gridcell"]').length >= 7).length > 10,
+            { timeout: 12000 }
+        ).catch(() => {});
+        await this.page.waitForTimeout(600);
     }
 
     /** Unchecks the first individual property (index 1, skipping master). */
@@ -786,6 +793,315 @@ class CapexPage {
         const topRowPencils = await this.getTopRowPencilCount();
         return { headers, filterBtnText, kpi, rowCount, expandBtns, topRowPencils };
     }
+        async unselectAllDefaultFinancialColumns() {
+        await this.openManageColumnsDrawer();
+        await expect(this._manageColumnsDialog()).toBeVisible({ timeout: 8000 });
+
+        const checkedColumns = await this.getCheckedManageColumnNames();
+        for (const col of checkedColumns) {
+            await this.toggleColumn(col);
+        }
+
+        await this.closeManageColumnsDrawer();
+        await this.page.waitForTimeout(800);
+        return checkedColumns;
+    }
+
+    async selectAllDefaultFinancialColumns() {
+        await this.openManageColumnsDrawer();
+        await expect(this._manageColumnsDialog()).toBeVisible({ timeout: 8000 });
+
+        const checkedColumns = await this.getCheckedManageColumnNames();
+        const checkedSet = new Set(checkedColumns);
+
+        const dialog = this._manageColumnsDialog();
+        for (const col of FINANCIAL_COLS) {
+            if (checkedSet.has(col)) continue;
+            // Only toggle when the column toggle row exists to avoid hard failures on UI changes.
+            const exists = await dialog.locator('p').filter({ hasText: col }).first()
+                .isVisible({ timeout: 2000 }).catch(() => false);
+            if (exists) {
+                await this.toggleColumn(col);
+            }
+        }
+
+        await this.closeManageColumnsDrawer();
+        await this.page.waitForTimeout(800);
+    }
+
+      async getPropertyColumnValues() {
+        const waitTimeoutMs = 20000;
+
+        await this.page.waitForFunction(
+            () => {
+                if (document.querySelectorAll('button.tree-toggle').length > 0) return true;
+
+                const viewport = document.querySelector('revogr-viewport-scroll.colPinStart');
+                if (viewport) {
+                    const dataPane = viewport.querySelector('revogr-data[col-type="colPinStart"][type="rgRow"]');
+                    const row = dataPane?.querySelector('[role="row"][data-rgrow] button.tree-toggle');
+                    if (row) return true;
+                }
+
+                const rows = Array.from(document.querySelectorAll('[role="row"]'));
+                return rows.some((row) => {
+                    const rect = row.getBoundingClientRect();
+                    if (!rect || rect.width === 0 || rect.height === 0) return false;
+                    const cells = row.querySelectorAll('[role="gridcell"]');
+                    return cells.length === 1 && cells[0].textContent.trim();
+                });
+            },
+            { timeout: waitTimeoutMs }
+        ).catch(() => {});
+
+        await this._resetPinnedPropertyPaneScroll();
+
+        const allValues = [];
+        const seen = new Set();
+        let stableRounds = 0;
+
+        for (let round = 0; round < 40 && stableRounds < 3; round++) {
+            const batch = await this._readPropertyColumnFromDom();
+            let added = 0;
+
+            for (const value of batch) {
+                if (seen.has(value)) continue;
+                seen.add(value);
+                allValues.push(value);
+                added++;
+            }
+
+            stableRounds = added === 0 ? stableRounds + 1 : 0;
+            const scrolled = await this._scrollPinnedPropertyPane();
+            if (!scrolled) stableRounds++;
+            await this.page.waitForTimeout(250);
+        }
+
+        await this._resetPinnedPropertyPaneScroll();
+
+        if (allValues.length) return allValues;
+        return this._readPropertyColumnFromDom();
+    }
+
+        async _resetPinnedPropertyPaneScroll() {
+        await this.page.evaluate(() => {
+            const viewport = document.querySelector('revogr-viewport-scroll.colPinStart');
+            const scrollEl = viewport?.querySelector('.vertical-inner') || viewport;
+            if (scrollEl) scrollEl.scrollTop = 0;
+        });
+    }
+
+        _readPropertyColumnFromDom() {
+        return this.page.evaluate(() => {
+            const normalize = (value) => String(value || '').trim().replace(/^›\s*/, '').trim();
+            const isPropertyName = (value) => {
+                const name = normalize(value);
+                return name && name !== '—' && !/^Total$/i.test(name) && !/^-?\$/.test(name);
+            };
+            const readCellPropertyLabel = (cell) => {
+                const wrapper = cell.querySelector('.cell-wrapper');
+                if (wrapper) {
+                    const clone = wrapper.cloneNode(true);
+                    clone.querySelectorAll('button.tree-toggle').forEach((btn) => btn.remove());
+                    return normalize(clone.textContent);
+                }
+                return normalize(cell.textContent);
+            };
+
+            const readPinnedPropertyPane = () => {
+                const viewport = document.querySelector('revogr-viewport-scroll.colPinStart');
+                if (!viewport) return [];
+
+                const dataPane = viewport.querySelector('revogr-data[col-type="colPinStart"][type="rgRow"]');
+                if (!dataPane) return [];
+
+                const rows = Array.from(dataPane.querySelectorAll('[role="row"][data-rgrow]'))
+                    .filter((row) => row.querySelector('button.tree-toggle'))
+                    .sort((a, b) => Number(a.getAttribute('data-rgrow')) - Number(b.getAttribute('data-rgrow')));
+
+                const values = [];
+                for (const row of rows) {
+                    const cell = row.querySelector('[role="gridcell"][data-rgcol="0"], [role="gridcell"]');
+                    if (!cell) continue;
+                    const label = readCellPropertyLabel(cell);
+                    if (isPropertyName(label)) values.push(label);
+                }
+                return values;
+            };
+
+            const readTreegridPropertyRows = () => {
+                const values = [];
+                const rows = document.querySelectorAll('[role="treegrid"] [role="row"]');
+                for (const row of rows) {
+                    if (!row.querySelector('button.tree-toggle')) continue;
+                    const cell = row.querySelector('[role="gridcell"]');
+                    if (!cell) continue;
+                    const label = readCellPropertyLabel(cell);
+                    if (isPropertyName(label)) values.push(label);
+                }
+                return values;
+            };
+
+            const pinnedValues = readPinnedPropertyPane();
+            if (pinnedValues.length) return pinnedValues;
+
+            const treegridValues = readTreegridPropertyRows();
+            if (treegridValues.length) return treegridValues;
+
+            const values = [];
+            const seenValues = new Set();
+            const addValue = (raw) => {
+                const name = normalize(raw);
+                if (!isPropertyName(name) || seenValues.has(name)) return;
+                seenValues.add(name);
+                values.push(name);
+            };
+
+            const visibleRows = Array.from(document.querySelectorAll('[role="row"]')).filter((row) => {
+                const rect = row.getBoundingClientRect();
+                return rect && rect.width > 0 && rect.height > 0;
+            });
+
+            for (const row of visibleRows) {
+                const cells = Array.from(row.querySelectorAll('[role="gridcell"]'));
+                if (cells.length === 1) addValue(cells[0].textContent);
+            }
+
+            if (values.length) return values;
+
+            const seenIdxCounts = new Map();
+            for (const row of visibleRows) {
+                const cells = Array.from(row.querySelectorAll('[role="gridcell"]'))
+                    .map((cell) => normalize(cell.textContent));
+                const idx = cells.findIndex(isPropertyName);
+                if (idx < 0) continue;
+                seenIdxCounts.set(idx, (seenIdxCounts.get(idx) || 0) + 1);
+            }
+
+            let dominantIdx = -1;
+            let max = -1;
+            for (const [idx, count] of seenIdxCounts.entries()) {
+                if (count > max) {
+                    dominantIdx = idx;
+                    max = count;
+                }
+            }
+
+            if (dominantIdx < 0) return [];
+
+            for (const row of visibleRows) {
+                const cells = Array.from(row.querySelectorAll('[role="gridcell"]'))
+                    .map((cell) => normalize(cell.textContent));
+                addValue(cells[dominantIdx] || '');
+            }
+
+            return values;
+        });
+    }
+
+        async _scrollPinnedPropertyPane(stepPx = 180) {
+        return this.page.evaluate((px) => {
+            const viewport = document.querySelector('revogr-viewport-scroll.colPinStart');
+            const scrollEl = viewport?.querySelector('.vertical-inner') || viewport;
+            if (!scrollEl) return false;
+            const prev = scrollEl.scrollTop;
+            scrollEl.scrollTop = Math.min(scrollEl.scrollTop + px, scrollEl.scrollHeight);
+            return scrollEl.scrollTop > prev;
+        }, stepPx);
+    }
+
+    async _resetPinnedPropertyPaneScroll() {
+        await this.page.evaluate(() => {
+            const viewport = document.querySelector('revogr-viewport-scroll.colPinStart');
+            const scrollEl = viewport?.querySelector('.vertical-inner') || viewport;
+            if (scrollEl) scrollEl.scrollTop = 0;
+        });
+    }
+
+    
+    /**
+     * Clicks the column name paragraph inside the open Manage Columns dialog.
+     * The paragraph is the click target for its parent toggle row.
+     */
+    async toggleColumn(columnName) {
+        const dialog = this.page.locator('[role="dialog"]').filter({ hasText: 'Manage Columns' }).first();
+        // Click the <p> whose trimmed text exactly matches the column name
+        await dialog.locator('p').filter({ hasText: columnName }).first().click();
+        await this.page.waitForTimeout(700);
+    }
+
+    _manageColumnsDialog() {
+        return this.page.locator('[role="dialog"]').filter({ hasText: 'Manage Columns' }).first();
+    }
+
+    async getCheckedManageColumnNames() {
+        const dialog = this._manageColumnsDialog();
+        return await dialog.evaluate((el, cols) => {
+            const checked = [];
+            for (const col of cols) {
+                const label = Array.from(el.querySelectorAll('p')).find((p) => p.textContent.trim() === col);
+                if (!label) continue;
+                let row = label.parentElement;
+                while (row && row !== el) {
+                    const checkbox = row.querySelector('input[type="checkbox"]');
+                    if (checkbox) {
+                        if (checkbox.checked) checked.push(col);
+                        break;
+                    }
+                    row = row.parentElement;
+                }
+            }
+            return checked;
+        }, FINANCIAL_COLS);
+    }
+
+    
+    /**
+     * Returns the number of pencil action buttons on the topmost visible grid row.
+     * Used to assert no pencil on group-level / top-level rows.
+     */
+    async getTopRowPencilCount() {
+        return await this.page.evaluate(() => {
+            const rows = Array.from(document.querySelectorAll('[role="row"]'))
+                .filter(r => r.querySelectorAll('[role="gridcell"]').length > 0);
+            if (!rows.length) return 0;
+            return rows[0].querySelectorAll('button.mantine-ActionIcon-root:not(.bird-table-search-btn)').length;
+        });
+    }
+
+    /**
+     * Returns a snapshot of the current tab's page state:
+     * column headers, filter button text, KPI card values, row count, expand button count,
+     * top-row pencil count.  Used by Fund / Region tab tests.
+     */
+    async getTabPageInfo() {
+        const headers = await this.getColumnHeaders();
+        const filterBtnText = await this.getPortfolioFilterBtnText();
+        const kpi = await this.getKpiValues();
+        const rowCount = await this.getDataRowCount();
+        const expandBtns = await this.l.treeExpandBtns.count();
+        const topRowPencils = await this.getTopRowPencilCount();
+        return { headers, filterBtnText, kpi, rowCount, expandBtns, topRowPencils };
+    }
+
+    async getUiPropertyCount() {
+        const kpi = await this.getKpiValues();
+        return parseInt(String(kpi.properties || '0').replace(/,/g, ''), 10);
+    }
+
+    async getExportRowCount() {
+        const download = await this.clickExport();
+        const downloadPath = await download.path();
+        const content = downloadPath ? fs.readFileSync(downloadPath, 'utf-8') : '';
+        const lines = content.split(/\r?\n/).filter((line) => line.trim());
+        return Math.max(0, lines.length - 1);
+    }
+
+    async refreshCapexPage() {
+        await this.page.reload({ waitUntil: 'domcontentloaded' });
+        await this.waitForShellReady();
+    }
+
 }
 
 module.exports = { CapexPage };

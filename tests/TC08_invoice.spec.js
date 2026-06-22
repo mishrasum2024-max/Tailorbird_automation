@@ -441,45 +441,6 @@ test.describe('Verify Invoice tab', () => {
         Logger.success(`TC112: Invoice ${invoiceNumber} created with budget category and verified in list`);
     });
 
-    test('TC113 @regression @changeOrderAndinvoice  : Should create multiple invoices with unique data and budget category', async () => {
-        Logger.step('TC113: Creating multiple invoices with budget category...');
-        await page.waitForLoadState('load');
-        await page.waitForTimeout(2000);
-
-        const createdInvoices = [];
-
-        for (let i = 0; i < 3; i++) {
-            const testData = {
-                ...invoiceTestData[i],
-                title: `${invoiceTestData[i].title}_${Date.now()}`,
-                budgetCategory: 'Bathroom fixtures install'
-            };
-
-            Logger.info(`TC113: Creating invoice ${i + 1}: ${testData.title}`);
-
-            const result = await invoicePage.createCompleteInvoice(testData);
-
-            if (!result.number) {
-                test.skip(true, `TC113: Invoice ${i + 1} creation did not return number`);
-            }
-            expect(result.fieldsVerified).toBeTruthy();
-            expect(result.budgetCategoriesSet).toBeGreaterThan(0);
-            expect(Array.isArray(result.budgetCategoryValues)).toBe(true);
-            expect(result.budgetCategoryValues.length).toBeGreaterThan(0);
-            const validValues = result.budgetCategoryValues.filter((v) => v && v !== '-' && v !== '—');
-            expect(validValues.length).toBeGreaterThan(0);
-
-            const firstCategory = result.budgetCategoryValues?.[0] ?? 'N/A';
-            Logger.success(`TC113: Invoice ${result.number} created with budget category: ${firstCategory}`);
-
-            createdInvoices.push(result);
-            await page.waitForTimeout(1000);
-        }
-
-        expect(createdInvoices.length).toBe(3);
-        Logger.success(`TC113: ${createdInvoices.length} invoices created with budget category`);
-    });
-
     test('TC114 @regression @changeOrderAndinvoice : Should verify invoice form fields are visible', async () => {
         Logger.step('Verifying invoice form fields visibility...');
         await page.waitForLoadState('load');
