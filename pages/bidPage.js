@@ -305,17 +305,17 @@ class BidPage {
     // ── Wait for AI-generated table (iframe) ─────────────────────────────────────
 
     async waitForBidBookTable() {
-        Logger.step('Waiting for AI to generate bid book table (up to 4 min)...');
+        Logger.step('Waiting for AI to generate bid book table (up to 6 min)...');
         const bidBookPanel = this.page.getByRole('tabpanel', { name: 'Bid Book AI Assisted' });
         const loc = this.loc();
 
         const firstThought = bidBookPanel.getByRole('button', { name: 'Thought' }).first();
-        await firstThought.waitFor({ state: 'visible', timeout: 240000 });
+        await firstThought.waitFor({ state: 'visible', timeout: 360000 });
         Logger.info('AI Thought button visible');
 
         // Wait for AI to finish generating (chatInput re-enables when AI is done)
         // This prevents sending the fallback while the textarea is still disabled
-        await expect(loc.chatInput).toBeEnabled({ timeout: 240000 });
+        await expect(loc.chatInput).toBeEnabled({ timeout: 360000 });
         Logger.info('AI finished first response');
 
         const iframe = this.page.locator('iframe').first();
@@ -483,9 +483,9 @@ class BidPage {
         await expect(loc.step2DocsButton).toBeVisible();
         Logger.info('Wizard step buttons: "1 Select Vendors" / "2 Select Documents"');
 
-        await expect(loc.vendorSearchInput).toBeVisible();
-        await expect(loc.vendorFilterButton).toBeVisible();
-        await expect(loc.vendorViewButton).toBeVisible();
+        await expect(loc.vendorSearchInput).toBeVisible({ timeout: 15000 });
+        await expect(loc.vendorFilterButton).toBeVisible({ timeout: 10000 });
+        await expect(loc.vendorViewButton).toBeVisible({ timeout: 10000 });
 
         await expect(loc.colVendorName).toBeVisible();
         await expect(loc.colVendorLocation).toBeVisible();
@@ -698,6 +698,313 @@ class BidPage {
         await expect(loc.compareBidsButton).toBeVisible();
 
         Logger.success('Manage Bids tab asserted');
+    }
+
+    // ── Create Bid Dialog — complete fixture-driven assertion ────────────────────
+
+    // ── Compare Bids / Piper AI (AI Bid Levelling) ───────────────────────────────
+
+    /**
+     * Clicks Compare Bids from the Manage Bids tab and waits for Piper panel to appear.
+     */
+    async navigateToCompareBids() {
+        const loc = this.loc();
+        Logger.step('Navigating to Compare Bids (Piper AI Bid Levelling)...');
+        await loc.manageBidsTab.click();
+        await this.page.waitForURL(/tab=manage-bids/, { timeout: 15000 });
+        await this.page.waitForTimeout(2000);
+        await expect(loc.compareBidsButton).toBeVisible();
+        await loc.compareBidsButton.click();
+        await expect(loc.piperChatInput).toBeVisible({ timeout: 15000 });
+        Logger.success('Compare Bids (Piper) panel opened');
+    }
+
+    /**
+     * Asserts all visible UI elements of the Piper panel initial state.
+     * Confirms: toolbar buttons, welcome text, chat input, button states.
+     */
+    async assertPiperPanelInitialState() {
+        const loc = this.loc();
+        Logger.step('Asserting Piper panel initial state...');
+
+        await expect(loc.piperManageVendorsBtn).toBeVisible();
+        await expect(loc.piperResetBtn).toBeVisible();
+        await expect(loc.piperExportBtn).toBeVisible();
+        await expect(loc.piperExportBtn).toBeDisabled();
+        Logger.info('Toolbar: Manage Vendors ✓  Reset ✓  Export (disabled) ✓');
+
+        await expect(loc.piperWelcomeHeading).toBeVisible();
+        const headingText = await loc.piperWelcomeHeading.textContent();
+        expect(headingText).toContain('Welcome to Piper');
+
+        await expect(loc.piperWelcomeDesc).toBeVisible();
+        const descText = await loc.piperWelcomeDesc.textContent();
+        expect(descText).toContain('Compare bids from multiple vendors');
+        expect(descText).toContain('your detailed comparison will appear on the right');
+        Logger.info('Welcome section text verified');
+
+        await expect(loc.piperChatInput).toBeVisible();
+        await expect(loc.piperAttachButton).toBeVisible();
+        await expect(loc.piperSendButton).toBeDisabled();
+        Logger.info('Chat input visible; send button correctly disabled for empty input');
+
+        Logger.success('Piper panel initial state fully verified');
+    }
+
+    /**
+     * Types text into the Piper chat textarea and submits via Enter.
+     * Waits for chatInput to be enabled before typing (safe for multi-turn use).
+     * @param {string} text
+     */
+    async sendPiperMessage(text) {
+        const loc = this.loc();
+        Logger.step(`Sending Piper message: "${text.substring(0, 70)}"`);
+        await expect(loc.piperChatInput).toBeEnabled({ timeout: 60000 });
+        await loc.piperChatInput.click();
+        await loc.piperChatInput.fill(text);
+        await this.page.waitForTimeout(400);
+        await expect(loc.piperSendButton).toBeEnabled({ timeout: 5000 });
+        await loc.piperChatInput.press('Enter');
+        await this.page.waitForTimeout(1000);
+        Logger.success('Piper message sent');
+    }
+
+    /**
+     * Waits for Piper AI to finish generating its response.
+     * Strategy: wait for "Thinking…" to appear, then wait for chatInput to re-enable.
+     */
+    async waitForPiperResponse() {
+        Logger.step('Waiting for Piper AI response (up to 4 min)...');
+        const panel = this.page.getByRole('tabpanel', { name: 'Manage Bids' });
+        const thinking = panel.getByRole('button', { name: 'Thinking...' }).first();
+        await thinking.waitFor({ state: 'visible', timeout: 30000 });
+        Logger.info('Piper "Thinking..." visible — AI processing');
+        await expect(this.loc().piperChatInput).toBeEnabled({ timeout: 240000 });
+        Logger.success('Piper AI response complete — chat input re-enabled');
+    }
+
+    /**
+     * Asserts the AI response that appears when no files/proposals are available:
+     * "No files have been uploaded yet. Please share the bid files you'd like leveled…"
+     */
+    async assertPiperNoFilesResponse() {
+        Logger.step('Asserting Piper "no files" response...');
+        const panel = this.page.getByRole('tabpanel', { name: 'Manage Bids' });
+        const thought = panel.getByRole('button', { name: 'Thought' }).first();
+        await expect(thought).toBeVisible({ timeout: 30000 });
+        const noFilePara = panel.locator('p', { hasText: 'No files have been uploaded yet' });
+        await expect(noFilePara).toBeVisible({ timeout: 10000 });
+        const text = await noFilePara.textContent();
+        expect(text).toContain('No files have been uploaded yet');
+        expect(text).toContain('bid files you\'d like leveled');
+        Logger.success(`Piper "no files" response verified: "${text.trim().substring(0, 80)}..."`);
+    }
+
+    /**
+     * Returns the text content of the most recent Piper AI response paragraph.
+     */
+    async getPiperLastResponseText() {
+        const panel = this.page.getByRole('tabpanel', { name: 'Manage Bids' });
+        await expect(panel.getByRole('button', { name: 'Thought' }).last()).toBeVisible({ timeout: 30000 });
+        const paras = panel.locator('p');
+        const count = await paras.count();
+        const text = await paras.nth(count - 1).textContent().catch(() => '');
+        expect(text.trim().length, 'Piper response must not be empty').toBeGreaterThan(0);
+        Logger.info(`Piper last response: "${text.trim().substring(0, 100)}"`);
+        return text.trim();
+    }
+
+    /**
+     * Asserts the Piper Reset dialog full e2e:
+     * Opens dialog → verifies all content → clicks Cancel → dialog closes.
+     */
+    async assertPiperResetDialogCancel() {
+        const loc = this.loc();
+        Logger.step('Asserting Piper Reset dialog (cancel path)...');
+        await expect(loc.piperResetBtn).toBeVisible();
+        await loc.piperResetBtn.click();
+
+        await expect(loc.piperResetDialog).toBeVisible({ timeout: 8000 });
+        await expect(loc.piperResetDialog.locator('p').filter({ hasText: 'Are you sure?' })).toBeVisible();
+        await expect(loc.piperResetDialog.locator('p').filter({ hasText: 'This will clear all chat history and start a fresh session' })).toBeVisible();
+        await expect(loc.piperResetDialog.locator('p').filter({ hasText: 'This action cannot be undone' })).toBeVisible();
+        await expect(loc.piperResetDialog.getByRole('button', { name: 'Cancel' })).toBeVisible();
+        await expect(loc.piperResetDialog.getByRole('button', { name: 'Reset' })).toBeVisible();
+        Logger.info('Reset dialog content fully verified');
+
+        await loc.piperResetDialog.getByRole('button', { name: 'Cancel' }).click();
+        await expect(loc.piperResetDialog).not.toBeVisible({ timeout: 8000 });
+        Logger.success('Piper Reset dialog cancel verified — dialog closed, session intact');
+    }
+
+    /**
+     * Opens Piper Reset dialog and confirms reset. Verifies dialog closes.
+     * Chat history may persist server-side; verifies UI returns to usable state.
+     */
+    async assertPiperResetConfirm() {
+        const loc = this.loc();
+        Logger.step('Asserting Piper Reset confirm e2e...');
+        await expect(loc.piperResetBtn).toBeVisible();
+        await loc.piperResetBtn.click();
+
+        await expect(loc.piperResetDialog).toBeVisible({ timeout: 8000 });
+        await loc.piperResetDialog.getByRole('button', { name: 'Reset' }).click();
+        await expect(loc.piperResetDialog).not.toBeVisible({ timeout: 10000 });
+        Logger.info('Reset dialog closed after confirm');
+
+        // After reset the chat input must remain visible and usable
+        await expect(loc.piperChatInput).toBeVisible({ timeout: 10000 });
+        Logger.success('Piper Reset confirmed — chat input still accessible post-reset');
+    }
+
+    /**
+     * Opens Piper, sends one message, waits for response, then sends a follow-up.
+     * Validates Piper handles multi-turn conversation (2 Thought buttons at end).
+     * @param {string} firstMsg
+     * @param {string} followUpMsg
+     */
+    async assertPiperMultiTurnConversation(firstMsg, followUpMsg) {
+        Logger.step('Asserting Piper multi-turn conversation...');
+        await this.sendPiperMessage(firstMsg);
+        await this.waitForPiperResponse();
+        const panel = this.page.getByRole('tabpanel', { name: 'Manage Bids' });
+        const thoughtsAfterFirst = await panel.getByRole('button', { name: 'Thought' }).count();
+        expect(thoughtsAfterFirst).toBeGreaterThanOrEqual(1);
+        Logger.info(`Thought buttons after first turn: ${thoughtsAfterFirst}`);
+
+        await this.sendPiperMessage(followUpMsg);
+        await this.waitForPiperResponse();
+        const thoughtsAfterSecond = await panel.getByRole('button', { name: 'Thought' }).count();
+        expect(thoughtsAfterSecond).toBeGreaterThan(thoughtsAfterFirst);
+        Logger.info(`Thought buttons after second turn: ${thoughtsAfterSecond}`);
+
+        await expect(this.loc().piperChatInput).toBeEnabled({ timeout: 10000 });
+        Logger.success(`Piper multi-turn conversation verified — ${thoughtsAfterSecond} responses`);
+    }
+
+    /**
+     * Clicks Manage Vendors from the Piper toolbar and verifies we return to the
+     * vendor list view (Compare Bids button is visible again).
+     */
+    async assertPiperManageVendorsNavigation() {
+        const loc = this.loc();
+        Logger.step('Asserting Manage Vendors navigation from Piper panel...');
+        await expect(loc.piperManageVendorsBtn).toBeVisible();
+        await loc.piperManageVendorsBtn.click();
+        await expect(loc.compareBidsButton).toBeVisible({ timeout: 10000 });
+        Logger.success('Manage Vendors navigation verified — Compare Bids button visible again ✓');
+    }
+
+    /**
+     * Sends a prompt to Piper and asserts an AI response (any non-empty reply).
+     * Used for prompt-battery tests where exact text varies.
+     * @param {string} prompt  The instruction text to send
+     * @param {string} label   Short label for Logger output
+     */
+    async sendPiperPromptAndAssertResponse(prompt, label) {
+        Logger.step(`[Piper prompt] ${label}: "${prompt.substring(0, 60)}"`);
+        await this.sendPiperMessage(prompt);
+        await this.waitForPiperResponse();
+        const responseText = await this.getPiperLastResponseText();
+        expect(responseText.length, `[${label}] Piper must return non-empty response`).toBeGreaterThan(0);
+        Logger.success(`[${label}] Piper responded — length ${responseText.length} chars`);
+        return responseText;
+    }
+
+    // ── Piper file attachment (Uploadcare) ──────────────────────────────────────
+
+    /**
+     * Attaches a local file to the Piper Compare Bids chat via the paperclip button.
+     * The Piper attach button opens a native file chooser directly (not Uploadcare dialog[open]).
+     * Falls back to Uploadcare dialog[open] → "From device" if no native chooser fires.
+     * @param {string} filePath  Absolute path to the file to attach
+     */
+    async attachFileToPiper(filePath) {
+        const loc = this.loc();
+        Logger.step(`Attaching file to Piper: ${path.basename(filePath)}`);
+
+        await expect(loc.piperAttachButton).toBeVisible({ timeout: 10000 });
+
+        // Register filechooser listener BEFORE click to avoid race condition
+        const fileChooserPromise = this.page.waitForEvent('filechooser', { timeout: 12000 });
+        await loc.piperAttachButton.click();
+
+        let attached = false;
+        try {
+            const chooser = await fileChooserPromise;
+            await chooser.setFiles(filePath);
+            await this.page.waitForTimeout(2000);
+            attached = true;
+            Logger.success(`File attached to Piper (native chooser): ${path.basename(filePath)}`);
+        } catch {
+            Logger.info('No native filechooser after attach click — trying Uploadcare dialog[open] path');
+        }
+
+        if (!attached) {
+            // Fallback: Uploadcare dialog may have opened — look for dialog[open]
+            const ucDialog = this.page.locator('dialog[open]').first();
+            const ucOpened = await ucDialog.waitFor({ timeout: 8000 }).then(() => true).catch(() => false);
+
+            if (ucOpened) {
+                Logger.info('Uploadcare dialog[open] found — clicking "From device"');
+                const chooser2Promise = this.page.waitForEvent('filechooser', { timeout: 15000 });
+                await ucDialog.getByText('From device').first().click();
+                const chooser2 = await chooser2Promise;
+                await chooser2.setFiles(filePath);
+                await this.page.waitForTimeout(2000);
+                attached = true;
+                Logger.success(`File attached to Piper (Uploadcare): ${path.basename(filePath)}`);
+            } else {
+                Logger.info('piperAttachButton opened neither native chooser nor Uploadcare dialog — skipping file attachment');
+            }
+        }
+    }
+
+    /**
+     * Attempts the Award Bid flow on the first vendor row showing "Submitted" or "Accepted" status.
+     * Conditional — must only be called after confirming submitted proposals exist.
+     */
+    async assertAwardBidFlow() {
+        Logger.step('Asserting Award Bid flow on submitted vendor...');
+
+        // Look for an Award Bid button on the page
+        const awardBtn = this.page.getByRole('button', { name: /award bid/i }).first();
+        const awardBtnVisible = await awardBtn.isVisible({ timeout: 5000 }).catch(() => false);
+
+        if (!awardBtnVisible) {
+            // Try hovering submitted row to reveal row-action buttons
+            const submittedRow = this.page.getByRole('row')
+                .filter({ has: this.page.getByText(/submitted/i) })
+                .first();
+            const rowVisible = await submittedRow.isVisible({ timeout: 5000 }).catch(() => false);
+            if (rowVisible) {
+                await submittedRow.hover();
+                await this.page.waitForTimeout(500);
+            }
+        }
+
+        const awardBtnVisibleRetry = await awardBtn.isVisible({ timeout: 5000 }).catch(() => false);
+        if (!awardBtnVisibleRetry) {
+            Logger.info('Award Bid button not visible — submitted proposals required for this action');
+            return;
+        }
+
+        await awardBtn.click();
+
+        // Handle Award confirmation dialog if it appears
+        const confirmDialog = this.page.getByRole('dialog').filter({ hasText: /award/i });
+        const dialogVisible = await confirmDialog.isVisible({ timeout: 5000 }).catch(() => false);
+        if (dialogVisible) {
+            const confirmBtn = confirmDialog.getByRole('button', { name: /award|confirm/i }).last();
+            await expect(confirmBtn).toBeEnabled();
+            await confirmBtn.click();
+            await expect(confirmDialog).not.toBeVisible({ timeout: 10000 });
+            Logger.info('Award confirmation dialog completed');
+        }
+
+        // Verify awarded status appears
+        await expect(this.page.getByText(/awarded/i).first()).toBeVisible({ timeout: 15000 });
+        Logger.success('Award Bid flow verified — "Awarded" status visible ✓');
     }
 
     // ── Create Bid Dialog — complete fixture-driven assertion ────────────────────

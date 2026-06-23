@@ -157,6 +157,34 @@ function bidLocators(page) {
         colInvitedAt:         page.getByRole('columnheader', { name: 'Invited At' }),
         colBidDueDateMgmt:    page.getByRole('columnheader', { name: 'Bid Due Date' }),
         colSubmittedAt:       page.getByRole('columnheader', { name: 'Submitted At' }),
+
+        // ── Compare Bids / Piper AI (AI Bid Levelling panel) ─────────────────────
+        piperManageVendorsBtn:  page.getByRole('button', { name: 'Manage Vendors' }),
+        piperResetBtn:          page.getByRole('button', { name: 'Reset' }).first(),
+        piperExportBtn:         page.getByRole('tabpanel', { name: 'Manage Bids' })
+                                    .getByRole('button', { name: 'Export' }),
+        piperWelcomeHeading:    page.locator('p', { hasText: '👋 Welcome to Piper!' }),
+        piperWelcomeDesc:       page.locator('p', { hasText: 'Compare bids from multiple vendors' }),
+        piperChatInput:         page.getByRole('textbox', { name: 'Ask your question' }),
+        // attach button = first icon button in the chat toolbar; send = last
+        piperAttachButton:      page.getByRole('textbox', { name: 'Ask your question' })
+                                    .locator('xpath=ancestor::*[.//button][1]//button[1]'),
+        piperSendButton:        page.getByRole('textbox', { name: 'Ask your question' })
+                                    .locator('xpath=ancestor::*[.//button][1]//button[last()]'),
+        piperThinkingButton:    page.getByRole('button', { name: 'Thinking...' }).first(),
+        piperThoughtButton:     page.getByRole('button', { name: 'Thought' }).first(),
+        piperAllThoughtButtons: page.getByRole('button', { name: 'Thought' }),
+        piperResetDialog:       page.getByRole('dialog', { name: 'Reset' }),
+        piperIframe:            page.getByRole('tabpanel', { name: 'Manage Bids' })
+                                    .locator('iframe').first(),
+        // Uploadcare dialog that appears when piperAttachButton is clicked
+        piperUploadDialog:      page.locator('dialog[open]').first(),
+        piperFromDeviceBtn:     page.locator('dialog[open]').getByText('From device').first(),
+        // Manage Bids vendor grid — rows with vendor data
+        manageBidsVendorGrid:   page.getByRole('tabpanel', { name: 'Manage Bids' })
+                                    .getByRole('treegrid').first(),
+        // Award Bid button (appears on submitted vendor rows)
+        awardBidButton:         page.getByRole('button', { name: /award bid/i }).first(),
     };
 }
 
