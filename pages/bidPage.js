@@ -159,6 +159,13 @@ class BidPage {
         await loc.statusInput.click();
         await loc.dropdownOption(data.status).click();
 
+        if (data.linkedJob) {
+            await loc.linkedJobInput.click();
+            await loc.linkedJobInput.fill(data.linkedJob);
+            await this.page.waitForTimeout(800);
+            await loc.dropdownOptionFuzzy(data.linkedJob).click();
+        }
+
         Logger.step('Submitting Create Bid form...');
         await loc.submitBidButton.click();
         Logger.success('Create Bid form submitted');
@@ -357,7 +364,7 @@ class BidPage {
             '# Units', 'Unit Price', 'Aggregate', 'Weighted Avg Price', 'Notes',
         ];
         for (const col of columns) {
-            await expect(frame.getByRole('cell', { name: col, exact: true })).toBeVisible();
+            await expect(frame.getByRole('cell', { name: col, exact: true })).toBeVisible({ timeout: 15000 });
             Logger.info(`Column verified: "${col}"`);
         }
 

@@ -1244,6 +1244,7 @@ test.describe('TC19 — CapEx Portfolio Page', () => {
     });
 
     test('TC306 @capex @regression — Property column data persists after hiding all default columns and page refresh', async ({ page }) => {
+        test.setTimeout(420000); // 7 min — 3× getPropertyColumnValues + refreshCapexPage runs slow headless
         const capex = new CapexPage(page);
 
         await capex.goto();

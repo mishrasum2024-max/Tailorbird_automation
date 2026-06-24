@@ -1706,7 +1706,26 @@ class InvoicePage {
             const budgetColIndexRaw = await budgetCategoryHeader
                 .evaluate((el) => el.getAttribute('data-rgcol') || el.getAttribute('aria-colindex') || '')
                 .catch(() => '');
-            const budgetColIndex = String(budgetColIndexRaw || '5');
+
+            // When the attribute is unavailable on CI, determine column position by counting headers
+            let budgetColIndex = budgetColIndexRaw;
+            let budgetHeaderPos = -1;
+            if (!budgetColIndex) {
+                const allGridHeaders = grid.locator('[role="columnheader"]');
+                const headerCount = await allGridHeaders.count();
+                for (let hi = 0; hi < headerCount; hi++) {
+                    const headerText = (await allGridHeaders.nth(hi).textContent().catch(() => '')).trim();
+                    if (/Budget Category/i.test(headerText)) {
+                        budgetHeaderPos = hi;
+                        const attrVal = await allGridHeaders.nth(hi).evaluate(
+                            el => el.getAttribute('data-rgcol') || el.getAttribute('aria-colindex') || ''
+                        ).catch(() => '');
+                        if (attrVal) budgetColIndex = attrVal;
+                        break;
+                    }
+                }
+            }
+            Logger.info(`Budget Category column — attr index: "${budgetColIndex}", header position: ${budgetHeaderPos}`);
 
             const dataRows = grid.locator('[role="row"][data-rgrow]');
             // Wait for at least the first row to render its cells before counting (CI can be slow)
@@ -1736,9 +1755,17 @@ class InvoicePage {
                     continue;
                 }
 
-                const catCell = row
-                    .locator(`[role="gridcell"][data-rgcol="${budgetColIndex}"], [role="gridcell"][aria-colindex="${budgetColIndex}"]`)
-                    .first();
+                let catCell;
+                if (budgetColIndex) {
+                    catCell = row
+                        .locator(`[role="gridcell"][data-rgcol="${budgetColIndex}"], [role="gridcell"][aria-colindex="${budgetColIndex}"]`)
+                        .first();
+                } else if (budgetHeaderPos >= 0) {
+                    catCell = row.locator('[role="gridcell"]').nth(budgetHeaderPos);
+                } else {
+                    Logger.info(`Row ${rowIdx}: Cannot determine budget category cell, skipping`);
+                    continue;
+                }
                 const cellVisible = await catCell.isVisible({ timeout: 5000 }).catch(() => false);
                 if (!cellVisible) {
                     Logger.info(`Row ${rowIdx}: Budget category cell not visible, skipping`);

@@ -104,6 +104,23 @@ test.describe('Verify Invoice tab', () => {
 
         await projectPage.openProject(projectData.projectName);
         await projectJob.navigateToJobsTab();
+
+        // If the project from projectData.json has no jobs (standalone run without TC75),
+        // fall back to lastCreatedJob.json's project which has a job with a contract.
+        const noJobs = await page.getByText('No jobs added yet').isVisible().catch(() => false);
+        if (noJobs) {
+            const ljPath = path.join(__dirname, '../data/lastCreatedJob.json');
+            if (fs.existsSync(ljPath)) {
+                const lj = JSON.parse(fs.readFileSync(ljPath, 'utf8'));
+                if (lj?.projectName) {
+                    Logger.step(`beforeEach: "${projectData.projectName}" has no jobs — falling back to "${lj.projectName}"`);
+                    await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'load' });
+                    await projectPage.openProject(lj.projectName);
+                    await projectJob.navigateToJobsTab();
+                }
+            }
+        }
+
         await projectJob.openJobSummary();
         await invoicePage.navigateToInvoiceTab();
         await page.waitForLoadState('load');

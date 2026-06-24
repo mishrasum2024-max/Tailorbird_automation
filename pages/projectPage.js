@@ -1162,6 +1162,7 @@ exports.ProjectPage = class ProjectPage {
     }
 
     async openScopeMixModal() {
+        await expect(this.scopeMixBtn.first()).toBeEnabled({ timeout: 30000 });
         await this.scopeMixBtn.first().click();
         await expect(this.scopeModal).toBeVisible();
     }

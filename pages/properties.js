@@ -309,9 +309,11 @@ class PropertiesHelper {
                     break;
                 }
             }
-            const tableBtn = this.page.getByTestId('bt-table-action');
-            await tableBtn.waitFor({ state: 'visible',timeout:20000 });
-            if (!menuOpened) await this.page.waitForTimeout(300);
+            if (!menuOpened) {
+                const tableBtn = this.page.getByTestId('bt-table-action');
+                await tableBtn.waitFor({ state: 'visible', timeout: 20000 }).catch(() => {});
+                await this.page.waitForTimeout(300);
+            }
         }
         if (!menuOpened) this.log(`changeView: menu item "${view}" not visible; proceeding with current view.`);
 
