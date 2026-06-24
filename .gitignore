@@ -8,3 +8,8 @@ node_modules/
 /playwright/.auth/
 
 sessionState.json
+
+# Environment — never commit credentials
+.env
+*.json.local
+*SessionState.json

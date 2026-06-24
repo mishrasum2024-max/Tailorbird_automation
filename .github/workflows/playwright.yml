@@ -12,6 +12,23 @@ jobs:
 
     timeout-minutes: 150
 
+    # Credentials are stored in GitHub Secrets — never commit .env to the repo.
+    # Required secrets: TEST_EMAIL, TEST_PASSWORD, VENDOR_EMAIL, VENDOR_PASSWORD,
+    # NEW_TEST_EMAIL, NEW_TEST_PASSWORD, ONE_ORG_TEST_EMAIL,
+    # LOGIN_URL, DASHBOARD_URL, BASE_URL
+    env:
+      TEST_EMAIL: ${{ secrets.TEST_EMAIL }}
+      TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+      VENDOR_EMAIL: ${{ secrets.VENDOR_EMAIL }}
+      VENDOR_PASSWORD: ${{ secrets.VENDOR_PASSWORD }}
+      NEW_TEST_EMAIL: ${{ secrets.NEW_TEST_EMAIL }}
+      NEW_TEST_PASSWORD: ${{ secrets.NEW_TEST_PASSWORD }}
+      ONE_ORG_TEST_EMAIL: ${{ secrets.ONE_ORG_TEST_EMAIL }}
+      LOGIN_URL: ${{ secrets.LOGIN_URL }}
+      DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
+      BASE_URL: ${{ secrets.BASE_URL }}
+      LOG_LEVEL: debug
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
