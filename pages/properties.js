@@ -1723,6 +1723,11 @@ class PropertiesHelper {
         // MCP-verified: dblclick opens the floating revogr-edit textbox directly — do NOT press
         // Enter here. Pressing Enter would commit an empty value and close the editor before fill.
         await this.page.waitForTimeout(400);
+        // Wait for the primary revogr-edit editor to appear and stabilize before interacting.
+        // On CI (slower machines) the 400ms blind wait is not enough — waitFor() retries until
+        // the element is actually in the DOM and visible.
+        await this.page.locator('revogr-edit input:not([readonly]):not([disabled])').first()
+            .waitFor({ state: 'visible', timeout: 6000 }).catch(() => {});
         const nameEditorCandidates = [
             this.page.locator('revogr-edit input:visible:not([readonly]):not([disabled])').first(),
             this.page.locator('input[type="text"]:visible:not([placeholder="Search..."]):not([readonly]):not([disabled])').first(),
@@ -1739,17 +1744,33 @@ class PropertiesHelper {
             const editable = await editor.isEditable().catch(() => false);
             if (!editable) continue;
             await editor.click({ force: true }).catch(() => { });
+            await this.page.waitForTimeout(150);
             let fillSuccess = false;
-            for (let attempt = 1; attempt <= 3; attempt++) {
+            if (idx === 0) {
+                // revogr-edit input: keyboard.type() is more resilient than fill() because it
+                // sends keystrokes to the focused element without re-querying the locator.
+                // fill() re-queries the locator internally and can time out if the grid
+                // re-renders the input between the visibility check and the fill action.
                 try {
-                    await editor.fill(rowName, { timeout: 3000 });
+                    await this.page.keyboard.press('Control+A');
+                    await this.page.keyboard.type(rowName, { delay: 30 });
                     fillSuccess = true;
-                    break;
-                } catch (fillErr) {
-                    if (attempt < 3) {
-                        console.log(`⚠ fill attempt ${attempt} failed, retrying in 5s…`);
-                        await this.page.waitForTimeout(5000);
-                        await editor.click({ force: true }).catch(() => { });
+                } catch {
+                    // keyboard approach failed, fall through to fill below
+                }
+            }
+            if (!fillSuccess) {
+                for (let attempt = 1; attempt <= 3; attempt++) {
+                    try {
+                        await editor.fill(rowName, { timeout: 5000 });
+                        fillSuccess = true;
+                        break;
+                    } catch (fillErr) {
+                        if (attempt < 3) {
+                            console.log(`⚠ fill attempt ${attempt} failed, retrying in 3s…`);
+                            await this.page.waitForTimeout(3000);
+                            await editor.click({ force: true }).catch(() => { });
+                        }
                     }
                 }
             }

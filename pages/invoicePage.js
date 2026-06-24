@@ -1745,13 +1745,20 @@ class InvoicePage {
                     continue;
                 }
                 await catCell.scrollIntoViewIfNeeded().catch(() => null);
-                await catCell.dblclick({ timeout: 5000, force: true });
 
                 const searchInput = this.invoiceLocators.budgetCategorySearchInput;
-                // Wait for the editor to actually appear instead of a blind timeout.
-                const inputVisible = await searchInput
-                    .isVisible({ timeout: 5000 })
-                    .catch(() => false);
+                let inputVisible = false;
+                for (let clickRetry = 0; clickRetry < 3 && !inputVisible; clickRetry++) {
+                    if (clickRetry > 0) {
+                        await this.page.keyboard.press('Escape').catch(() => {});
+                        await this.page.waitForTimeout(2000);
+                    }
+                    let dblclickOk = true;
+                    await catCell.dblclick({ timeout: 3000, force: true }).catch(() => { dblclickOk = false; });
+                    inputVisible = await searchInput.isVisible({ timeout: 3000 }).catch(() => false);
+                    // If dblclick succeeded but editor still didn't open, this row can't be edited — stop retrying
+                    if (dblclickOk && !inputVisible) break;
+                }
 
                 if (!inputVisible) {
                     Logger.info(`Row ${rowIdx}: Budget category editor did not open, skipping`);
@@ -1793,6 +1800,12 @@ class InvoicePage {
                 await this.page.waitForTimeout(500);
                 expect(selectedOption).toBeTruthy();
 
+                // Set up API listener before selecting the option so we capture the cell-save response
+                const cellUpdatePromise = this.page.waitForResponse(
+                    (resp) => resp.url().includes('/api/bird-table/cells') && resp.status() >= 200 && resp.status() < 300,
+                    { timeout: 12000 }
+                ).catch(() => null);
+
                 try {
                     await selectedOption.click({ timeout: 3000 });
                 } catch {
@@ -1814,8 +1827,16 @@ class InvoicePage {
                     await this.page.keyboard.press('Enter');
                 }
 
-                // Wait for the cell text at this position to actually update, instead of a fixed sleep.
-                await this.page.waitForTimeout(6000);
+                // Wait for API confirmation that the cell was saved, or fall back to a shorter DOM wait
+                const cellUpdateResp = await cellUpdatePromise;
+                if (cellUpdateResp) {
+                    Logger.success(`Row ${rowIdx}: Cell update API confirmed (${cellUpdateResp.status()})`);
+                    // Brief pause so the grid re-renders after the save before we touch the next row
+                    await this.page.waitForTimeout(1500);
+                } else {
+                    Logger.info(`Row ${rowIdx}: Cell update API not captured — waiting for DOM update`);
+                    await this.page.waitForTimeout(3000);
+                }
                 const cellValue = (await catCell.textContent().catch(() => ''))?.trim() || '';
 
                 expect(cellValue).toBeTruthy();
@@ -2213,8 +2234,35 @@ class InvoicePage {
         try {
             Logger.step('Creating complete invoice...');
 
+            // Set up API interception before navigation so it captures the invoice detail page load
+            const invoiceDetailApiPromise = this.page.waitForResponse(
+                (resp) => {
+                    const url = resp.url();
+                    const ok = resp.status() >= 200 && resp.status() < 300;
+                    return ok && (
+                        (url.includes('bird-table') && url.includes('invoice')) ||
+                        (url.includes('/api/') && url.includes('invoice') && !url.includes('/invoices/'))
+                    );
+                },
+                { timeout: 20000 }
+            ).catch(() => null);
+
             await this.clickAddInvoice();
-            await this.page.waitForTimeout(2000);
+
+            // Wait for invoice details page header — confirms the page is fully open before proceeding
+            await this.page.locator('text=Overview').first().waitFor({ state: 'visible', timeout: 20000 });
+            Logger.info('Invoice details page header (Overview) visible — page confirmed open');
+
+            // Log API validation result
+            const invoiceDetailApiResp = await invoiceDetailApiPromise;
+            if (invoiceDetailApiResp) {
+                Logger.success(`Invoice detail API: ${invoiceDetailApiResp.status()} ${invoiceDetailApiResp.url()}`);
+            } else {
+                Logger.info('Invoice detail API response not captured — may load from cache or different endpoint');
+            }
+
+            // Wait for the invoice details grid to settle so cells are interactive before any edits
+            await this.page.locator('[role="treegrid"]').first().waitFor({ state: 'visible', timeout: 20000 }).catch(() => {});
 
             // Handle the "Group by Unit" / "Group by Scope" segmented control added in the new UI.
             await this.selectInvoiceGroupByTab(invoiceData.groupBy || 'scope');
