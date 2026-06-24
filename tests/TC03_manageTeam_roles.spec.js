@@ -17,7 +17,7 @@ const {
 } = require("../pages/manageTeamRolesHelper");
 
 const dashboardLandingUrl = process.env.DASHBOARD_URL || orgUrls.dashboardUrl;
-const tailorbirdOrigin = process.env.BASE_URL || new URL(dashboardLandingUrl).origin;
+const tailorbirdOrigin = process.env.BASE_URL
 
 test.describe("TC18 Manage Team — Roles (positive / negative / edge)", () => {
   test.describe("Authenticated (sessionState)", () => {
