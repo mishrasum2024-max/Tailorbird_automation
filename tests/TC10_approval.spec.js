@@ -527,7 +527,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
             const expectedHeaders = ['Name', 'Template Type', 'Properties', 'Approval Rules', 'Created By'];
             for (const expectedHeader of expectedHeaders) {
                 await expect(
-                    page.getByRole('columnheader', { name: new RegExp(expectedHeader.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }).first()
+                    page.getByRole('columnheader', { name: expectedHeader }).first()
                 ).toBeVisible({ timeout: 15000 });
                 Logger.info('Header verified: ' + expectedHeader);
             }

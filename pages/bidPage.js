@@ -520,7 +520,7 @@ class BidPage {
         // Searching by row name finds the data row, but the checkbox lives in a gridcell
         // in the checkbox-column panel — not inside the named data row.
         const vendorRow = loc.sendToVendorsDialog
-            .getByRole('row', { name: new RegExp(vendorData.vendorName, 'i') });
+            .getByRole('row', { name: vendorData.vendorName });
         await expect(vendorRow).toBeVisible({ timeout: 10000 });
         Logger.info(`Vendor row "${vendorData.vendorName}" found`);
 
@@ -1092,7 +1092,7 @@ class BidPage {
 
         for (const btnName of dialogFixture.buttons) {
             await expect(
-                this.page.getByRole('button', { name: new RegExp(`^${btnName}$`, 'i') })
+                this.page.getByRole('button', { name: btnName, exact: true })
             ).toBeVisible();
             Logger.info(`Button visible: "${btnName}"`);
         }

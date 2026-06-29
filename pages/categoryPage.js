@@ -352,7 +352,7 @@ class FinancialsCategoryPage {
                 .getByRole('treegrid')
                 .first()
                 .getByRole('gridcell', { name: rowName })
-                .or(main.getByRole('treegrid').first().locator('[role="gridcell"]').filter({ hasText: new RegExp(esc, 'i') }))
+                .or(main.getByRole('treegrid').first().locator('[role="gridcell"]').filter({ hasText: rowName }))
                 .first();
         };
 

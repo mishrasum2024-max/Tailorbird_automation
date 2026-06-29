@@ -501,10 +501,9 @@ class PropertiesHelper {
         const matchingCell = this.page.locator(propertyLocators.propertyNameCell(name)).first();
         const exactFound = await matchingCell.isVisible({ timeout: 12_000 }).catch(() => false);
         if (!exactFound) {
-            const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
             const cardName = this.page
                 .locator("main p")
-                .filter({ hasText: new RegExp(`^\\s*${escapedName}\\s*$`, "i") })
+                .filter({ has: this.page.getByText(name, { exact: true }) })
                 .first();
             await expect(cardName).toBeVisible({ timeout: 10_000 });
         } else {
@@ -863,7 +862,7 @@ class PropertiesHelper {
 
     async validateTabs(tabs = ["Overview", "Asset Viewer", "Takeoffs", "Locations"]) {
         for (const tab of tabs) {
-            const tabEl = this.page.getByRole("tab", { name: new RegExp(`^${tab}$`, "i") }).first();
+            const tabEl = this.page.getByRole("tab", { name: tab, exact: true }).first();
             await expect(tabEl).toBeVisible({ timeout: 15000 });
             console.log(`[ASSERT] Tab visible → ${tab}`);
         }
@@ -1530,10 +1529,9 @@ class PropertiesHelper {
         // Card layout fallback: clicking the property title/card opens details drawer/page.
         const searchValue = await this.page.locator(propertyLocators.searchInput).first().inputValue().catch(() => "");
         if (searchValue.trim()) {
-            const escaped = searchValue.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
             const matchingCardTitle = this.page
                 .locator("main p")
-                .filter({ hasText: new RegExp(`^\\s*${escaped}\\s*$`, "i") })
+                .filter({ has: this.page.getByText(searchValue.trim(), { exact: true }) })
                 .first();
             if (await matchingCardTitle.isVisible({ timeout: 5000 }).catch(() => false)) {
                 await matchingCardTitle.click({ force: true });
@@ -2053,7 +2051,7 @@ class PropertiesHelper {
 
         const optionLabel =
             type === 'unit' ? 'Units' : type === 'building' ? 'Buildings' : type;
-        const option = this.page.getByRole('option', { name: new RegExp(optionLabel, 'i') }).or(this.page.locator(prop.locationDropdownOption(type)));
+        const option = this.page.getByRole('option', { name: optionLabel }).or(this.page.locator(prop.locationDropdownOption(type)));
         await option.first().waitFor({ state: 'visible', timeout: 8000 });
         await option.first().click();
         await this.page.waitForLoadState('domcontentloaded').catch(() => { });
@@ -2083,7 +2081,7 @@ class PropertiesHelper {
         const tabpanel = this.page.getByRole('tabpanel', { name: 'Locations' });
         const requiredHeaders = ['Name', 'Building', 'Site'];
         for (const header of requiredHeaders) {
-            await expect(tabpanel.getByRole('columnheader', { name: new RegExp(header, 'i') })).toBeVisible({ timeout: 10000 });
+            await expect(tabpanel.getByRole('columnheader', { name: header })).toBeVisible({ timeout: 10000 });
         }
         // "Actions" column is optional in current UI depending on visible columns config.
         const actionsHeader = tabpanel.getByRole('columnheader', { name: /Actions/i });

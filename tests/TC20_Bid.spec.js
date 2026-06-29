@@ -110,7 +110,7 @@ test.describe('Verify Bids', () => {
 
         saveBidData({ ...bidData, bidName: uniqueBidName, bidId, bidUrl });
 
-        await expect(page).toHaveTitle(new RegExp(uniqueBidName, 'i'));
+        await expect.poll(() => page.title(), { timeout: 10_000 }).toContain(uniqueBidName);
 
         await expect(page.getByRole('tab', { name: 'Overview' })).toBeVisible();
         await expect(page.getByRole('tab', { name: 'Bid Book AI Assisted' })).toBeVisible();
@@ -148,7 +148,7 @@ test.describe('Verify Bids', () => {
         Logger.step(`TC_BID_03: Navigating to bid: ${bidData.bidUrl}`);
         await page.goto(bidData.bidUrl, { waitUntil: 'load' });
         await page.waitForTimeout(3000);
-        await expect(page).toHaveURL(new RegExp(`/bids/${bidData.bidId}`));
+        await expect(page).toHaveURL(url => url.href.includes(`/bids/${bidData.bidId}`));
 
         await expect(page.getByRole('tab', { name: 'Overview' })).toBeVisible();
         await expect(page.getByRole('tab', { name: 'Bid Book AI Assisted' })).toBeVisible();
@@ -207,7 +207,7 @@ test.describe('Verify Bids', () => {
         Logger.step(`TC_BID_04: Navigating to bid: ${bidData.bidUrl}`);
         await page.goto(bidData.bidUrl, { waitUntil: 'load' });
         await page.waitForTimeout(3000);
-        await expect(page).toHaveURL(new RegExp(`/bids/${bidData.bidId}`));
+        await expect(page).toHaveURL(url => url.href.includes(`/bids/${bidData.bidId}`));
 
         await bidPage.assertManageBidsTab();
 
@@ -241,7 +241,7 @@ test.describe('Verify Bids', () => {
         Logger.step(`TC_BID_07: Navigating to bid: ${bidData.bidUrl}`);
         await page.goto(bidData.bidUrl, { waitUntil: 'load' });
         await page.waitForTimeout(3000);
-        await expect(page).toHaveURL(new RegExp(`/bids/${bidData.bidId}`));
+        await expect(page).toHaveURL(url => url.href.includes(`/bids/${bidData.bidId}`));
 
         // Open Manage Bids → Compare Bids
         await bidPage.navigateToCompareBids();

@@ -421,7 +421,7 @@ test('@regression @projectAndJob TC271 - Reject project creation with "      " n
     await page.waitForTimeout(500);
     await projectPage.propertyDropdown.fill(propertyName.slice(0, 20));
     await page.waitForTimeout(800);
-    const propOption = page.getByRole('option', { name: new RegExp(propertyName.slice(0, 20).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }).first();
+    const propOption = page.getByRole('option', { name: propertyName.slice(0, 20) }).first();
     if (await propOption.isVisible({ timeout: 3000 }).catch(() => false)) {
         await propOption.click();
     }

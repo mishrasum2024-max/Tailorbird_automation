@@ -69,8 +69,7 @@ exports.BudgetJob = class BudgetJob {
         await budget.propertyDropdownButton.click();
         await this.page.waitForTimeout(1000);
 
-        const esc = propertyName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const option = this.page.getByRole('option', { name: new RegExp(`^${esc}`) }).first();
+        const option = this.page.getByRole('option', { name: propertyName }).first();
         if (await option.isVisible({ timeout: 3000 }).catch(() => false)) {
             await option.click();
             await this.page.waitForTimeout(8000);
@@ -421,9 +420,9 @@ exports.BudgetJob = class BudgetJob {
             .first();
 
         const viewItem = menuContainer
-            .getByRole('menuitem', { name: new RegExp(viewName) })
-            .or(menuContainer.getByRole('option', { name: new RegExp(viewName) }))
-            .or(this.page.getByRole('menuitem', { name: new RegExp(viewName) }))
+            .getByRole('menuitem', { name: viewName })
+            .or(menuContainer.getByRole('option', { name: viewName }))
+            .or(this.page.getByRole('menuitem', { name: viewName }))
             // Fallback: plain text match anywhere (in case roles differ)
             .or(this.page.locator(`text=${viewName}`))
             .first();
@@ -475,12 +474,36 @@ exports.BudgetJob = class BudgetJob {
 
     async deleteColumnInManageColumns(columnName) {
         const dialog = budget.manageColumnsDialog;
-        const colRow = dialog.locator('div').filter({ hasText: new RegExp(`^${columnName}`) });
-        const deleteBtn = colRow.locator('button').nth(1);
-        await deleteBtn.click();
-        await this.page.waitForTimeout(500);
+        // .first() anchors to one element — without it the multi-element locator makes
+        // button indices unpredictable when nested divs all match the same text.
+        const colRow = dialog.locator('div').filter({ hasText: columnName }).first();
+
+        // GHA: the trash button in Manage Columns has CSS pointer-events:none at rest
+        // and only becomes interactive on :hover. Without hovering, Playwright's
+        // synthesised click dispatches at the element's coordinates but the event falls
+        // through to the background — the confirmation dialog never appears.
+        await colRow.hover().catch(() => {});
+        await this.page.waitForTimeout(300);
+
+        // Target the trash icon by SVG class instead of positional nth(1) — positional
+        // selectors break if button count or order changes. Falls back to nth(1) if the
+        // icon class doesn't match (future-proofing for icon library changes).
+        const trashBtn = colRow.locator(
+            'button:has(svg.lucide-trash-2), button:has(svg[class*="lucide-trash"])'
+        ).first();
+        if (await trashBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+            await trashBtn.click();
+        } else {
+            await colRow.locator('button').nth(1).click();
+        }
+
+        // Explicit wait for the confirmation dialog — gives a meaningful assertion
+        // failure rather than the 55s default actionTimeout if dialog never appears.
+        await expect(budget.deleteBtn).toBeVisible({ timeout: 10000 });
         await budget.deleteBtn.click();
-        await this.page.waitForTimeout(1000);
+        // Wait for the Manage Columns dialog to remove the row — the backend delete
+        // is async and the 1s fixed wait is too short on both local and GHA.
+        await expect(dialog.getByText(columnName)).not.toBeVisible({ timeout: 10000 });
         Logger.success(`Deleted column "${columnName}" from Manage Columns`);
     }
 
@@ -1216,7 +1239,7 @@ exports.BudgetJob = class BudgetJob {
 
             if (roleCount > 0) {
                 // Prefer an option whose text matches the requested category
-                const exactMatch = roleOptions.filter({ hasText: new RegExp(`^${category}$`, 'i') }).first();
+                const exactMatch = roleOptions.filter({ has: this.page.getByText(category, { exact: true }) }).first();
                 const partialMatch = roleOptions.filter({ hasText: category }).first();
                 const nonEmpty = roleOptions.filter({ hasNotText: /^\s*$/ }).first();
                 const hasExact = await exactMatch.isVisible({ timeout: 500 }).catch(() => false);
@@ -1232,7 +1255,7 @@ exports.BudgetJob = class BudgetJob {
                 const comboboxOptions = this.page.locator('[data-combobox-option]:visible');
                 const optCount = await comboboxOptions.count().catch(() => 0);
                 if (optCount > 0) {
-                    const exactMatch = comboboxOptions.filter({ hasText: new RegExp(`^${category}$`, 'i') }).first();
+                    const exactMatch = comboboxOptions.filter({ has: this.page.getByText(category, { exact: true }) }).first();
                     const partialMatch = comboboxOptions.filter({ hasText: category }).first();
                     const nonEmpty = comboboxOptions.filter({ hasNotText: /^\s*$/ }).first();
                     const hasExact = await exactMatch.isVisible({ timeout: 500 }).catch(() => false);
@@ -1484,10 +1507,10 @@ exports.BudgetJob = class BudgetJob {
      * @param {RegExp|string} pattern
      */
     async selectBudgetVersionMatching(pattern) {
-        const re = pattern instanceof RegExp ? pattern : new RegExp(String(pattern).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+        const nameOption = pattern instanceof RegExp ? pattern : String(pattern);
         await budget.versionDropdown.click({ timeout: 15000 });
         await this.page.waitForTimeout(600);
-        const opt = this.page.getByRole('option', { name: re });
+        const opt = this.page.getByRole('option', { name: nameOption });
         const n = await opt.count();
         if (n === 0) {
             await this.page.keyboard.press('Escape').catch(() => {});
@@ -1720,7 +1743,7 @@ exports.BudgetJob = class BudgetJob {
         if (await submitBtn.isEnabled().catch(() => false)) Logger.success('Submit enabled when both fields filled');
 
         for (const typeName of ['Text', 'Number', 'Select', 'Date']) {
-            const btn = this.page.locator('button').filter({ hasText: new RegExp(`^${typeName}$`) }).first();
+            const btn = this.page.locator('button').filter({ has: this.page.getByText(typeName, { exact: true }) }).first();
             if (await btn.isVisible({ timeout: 2000 }).catch(() => false)) Logger.success(`Column type "${typeName}" visible`);
         }
         await this.takeScreenshot('tc-new-02-column-types');
