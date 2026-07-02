@@ -6,6 +6,7 @@ const PropertiesHelper = require('../pages/properties');
 const { CapexPage } = require('../pages/capexPage');
 const { CapexColumnPersistencePage } = require('../pages/capexColumnPersistencePage');
 const { CapexGridStabilityPage } = require('../pages/capexGridStabilityPage');
+import { getPropertyName } from '../utils/propertyUtils';
 
 test.use({
     storageState: 'sessionState.json',
@@ -106,6 +107,27 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         await approvalJob.waitForPageLoad();
     });
 
+      test('@approval @Mandatory @sanity Creating approval for mandatory property', async () => {
+        currentPropertyName = getPropertyName();
+       
+        try {
+            Logger.step('TC161: Starting create template positive flow');
+
+            const templateName = 'ApprovalTemplate_' + Date.now();
+            await approvalJob.createTemplateWorkflow(templateName, 'Invoice', currentPropertyName, 1000, true);
+
+            await expect(approvalJob.createTemplateDialog()).toBeHidden({ timeout: 20000 });
+            await approvalJob.searchTemplate(templateName);
+            await expect(page.getByRole('row').filter({ hasText: templateName })).toBeVisible({ timeout: 15000 });
+            await approvalJob.clearSearch();
+
+            Logger.success('TC161 passed: Template created successfully with all elements verified');
+        } catch (error) {
+            Logger.error('TC161 failed: ' + error.message);
+            throw error;
+        }
+    });
+
     test('@approval @regression @sanity TC161 Approval Templates – Verify user can successfully create an approval template with all required elements including property, approver, amount, and mandatory flags', async () => {
         currentPropertyName = await createNewProperty(page);
         Logger.info('Property for template: ' + currentPropertyName);
@@ -118,7 +140,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
             Logger.step('TC161: Starting create template positive flow');
 
             const templateName = 'ApprovalTemplate_' + Date.now();
-            await approvalJob.createTemplateWorkflow(templateName, 'Change Order', currentPropertyName, 1000, true);
+            await approvalJob.createTemplateWorkflow(templateName, 'Invoice', currentPropertyName, 1000, true);
 
             await expect(approvalJob.createTemplateDialog()).toBeHidden({ timeout: 20000 });
             await approvalJob.searchTemplate(templateName);
