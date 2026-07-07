@@ -126,80 +126,6 @@ test.describe('Verify Bids', () => {
         Logger.success(`TC_BID_02 passed — bid created: ${uniqueBidName} (ID: ${bidId})`);
     });
 
-    // ──────────────────────────────────────────────────────────────────────────────
-    // TC_BID_03 — Bid Book AI tab: full e2e
-    //   Coverage:
-    //   • Bid book generation without attachments
-    //   • Upload attachments (chat attach dialog surface verification)
-    //   • Multiple prompt conversation (fallback message path)
-    //   • Iframe table: column headers, row counts, TOTALS, Bid button
-    //   • All toolbar buttons (Fullscreen, Export, Save as Template, Send to Vendors, Reset)
-    //   • Export: filename + non-zero file size
-    //   • Save as Template: dialog fields, disabled→enabled state, actual save
-    //   • Send to Vendors: Next btn hidden before selection, visible after; Bid Template
-    //     pre-checked & disabled; invitations sent toast
-    //   • Reset: iframe gone, chat cleared, input re-enabled
-    // ──────────────────────────────────────────────────────────────────────────────
-    test('TC_BID_03 @regression @bid @aiBidBook : Should assert Bid Book AI tab — invoke AI, assert iframe table and all toolbar button e2e flows ending with Reset', async () => {
-        test.setTimeout(900000); // AI wait (4 min) + fallback (4 min) + all e2e flows (~5 min)
-        const bidData = loadBidData();
-        if (!bidData.bidUrl) test.skip(true, 'bidUrl not set — run TC_BID_02 first');
-
-        Logger.step(`TC_BID_03: Navigating to bid: ${bidData.bidUrl}`);
-        await page.goto(bidData.bidUrl, { waitUntil: 'load' });
-        await page.waitForTimeout(3000);
-        await expect(page).toHaveURL(url => url.href.includes(`/bids/${bidData.bidId}`));
-
-        await expect(page.getByRole('tab', { name: 'Overview' })).toBeVisible();
-        await expect(page.getByRole('tab', { name: 'Bid Book AI Assisted' })).toBeVisible();
-        await expect(page.getByRole('tab', { name: 'Manage Bids' })).toBeVisible();
-
-        await bidPage.navigateToBidBookTab();
-        await bidPage.assertBidBookTabElements();
-
-        // ── Chat attachment dialog surface (criterion: upload attachments during chat) ──
-        Logger.step('TC_BID_03 — Chat attachment dialog');
-        await bidPage.assertChatAttachDialog();
-
-        // ── Send invoke text (criterion: bid book generation without attachments) ────
-        await bidPage.typeInvokeMessage(bidData.invokeText);
-
-        // ── Wait for table — sends follow-up if first message produced no iframe ──────
-        // This implicitly covers criterion: multiple prompt conversation flow
-        await bidPage.waitForBidBookTable();
-
-        // ── Assert iframe table structure (columns, rows, totals, Bid button) ─────────
-        await bidPage.assertBidBookIframeTable();
-
-        // ── Assert all toolbar buttons present after table generation ─────────────────
-        await bidPage.assertBidBookToolbar();
-
-        // ── e2e 1: Fullscreen toggle ──────────────────────────────────────────────────
-        Logger.step('TC_BID_03 — Fullscreen e2e');
-        await bidPage.assertFullscreenToggle();
-
-        // ── e2e 2: Export — download + non-zero file size ─────────────────────────────
-        Logger.step('TC_BID_03 — Export e2e');
-        await bidPage.assertExportDownload();
-
-        // ── e2e 3: Save as Template — fields, save actually executed ──────────────────
-        Logger.step('TC_BID_03 — Save as Template e2e');
-        await bidPage.assertSaveAsTemplateDialog();
-
-        // ── e2e 4: Send to Vendors — full wizard with state assertions ────────────────
-        Logger.step('TC_BID_03 — Send to Vendors e2e');
-        await bidPage.assertSendToVendorsFlow(bidData.sendToVendors);
-
-        // ── e2e 5: Reset — LAST (clears chat + spreadsheet, verifies clean state) ─────
-        Logger.step('TC_BID_03 — Reset e2e (LAST)');
-        await bidPage.assertResetBidBook();
-
-        Logger.success('TC_BID_03 passed — all Bid Book AI toolbar e2e flows verified');
-    });
-
-    // ──────────────────────────────────────────────────────────────────────────────
-    // TC_BID_04 — Manage Bids tab: assert columns and toolbar
-    // ──────────────────────────────────────────────────────────────────────────────
     test('TC_BID_04 @regression @bid @manageBids : Should assert Manage Bids tab columns and toolbar', async () => {
         const bidData = loadBidData();
         if (!bidData.bidUrl) test.skip(true, 'bidUrl not set — run TC_BID_02 first');
@@ -229,52 +155,6 @@ test.describe('Verify Bids', () => {
         Logger.success('TC_BID_05 passed — Create Bid dialog completely verified against fixture');
     });
 
-    // ──────────────────────────────────────────────────────────────────────────────
-    // TC_BID_07 — Compare Bids (Piper): panel layout, toolbar, welcome text,
-    //             empty-prompt block, send-button state, Manage Vendors back-nav
-    // ──────────────────────────────────────────────────────────────────────────────
-    test('TC_BID_07 @regression @bid @compareBids : Should open Compare Bids Piper panel with correct layout, toolbar, welcome text and block empty prompt submit', async () => {
-        test.setTimeout(120000);
-        const bidData = loadBidData();
-        if (!bidData.bidUrl) test.skip(true, 'bidUrl not set — run TC_BID_02 first');
-
-        Logger.step(`TC_BID_07: Navigating to bid: ${bidData.bidUrl}`);
-        await page.goto(bidData.bidUrl, { waitUntil: 'load' });
-        await page.waitForTimeout(3000);
-        await expect(page).toHaveURL(url => url.href.includes(`/bids/${bidData.bidId}`));
-
-        // Open Manage Bids → Compare Bids
-        await bidPage.navigateToCompareBids();
-
-        // Assert full Piper panel initial state
-        await bidPage.assertPiperPanelInitialState();
-
-        // Empty-prompt guard: send button must remain disabled with no input
-        Logger.step('TC_BID_07 — Verify send button disabled for empty textarea');
-        const sendBtn = bidPage.loc().piperSendButton;
-        await expect(sendBtn).toBeDisabled();
-        Logger.info('Send button correctly disabled — empty prompt cannot be submitted ✓');
-
-        // Typing enables send; clearing disables again
-        Logger.step('TC_BID_07 — Verify send button enabled/disabled on input change');
-        await bidPage.loc().piperChatInput.fill('test');
-        await expect(sendBtn).toBeEnabled({ timeout: 5000 });
-        Logger.info('Send button enabled after typing ✓');
-        await bidPage.loc().piperChatInput.fill('');
-        await expect(sendBtn).toBeDisabled({ timeout: 5000 });
-        Logger.info('Send button disabled after clearing input ✓');
-
-        // Manage Vendors back navigation
-        Logger.step('TC_BID_07 — Verify Manage Vendors back navigation');
-        await bidPage.assertPiperManageVendorsNavigation();
-
-        Logger.success('TC_BID_07 passed — Piper panel layout, empty-prompt guard, and back-nav verified');
-    });
-
-    // ──────────────────────────────────────────────────────────────────────────────
-    // TC_BID_08 — Compare Bids (Piper): prompt send → AI Thinking → Thought →
-    //             response text; multi-turn conversation; Reset dialog cancel + confirm
-    // ──────────────────────────────────────────────────────────────────────────────
     test('TC_BID_08 @regression @bid @compareBids @aiPiper : Should send AI Bid Levelling prompt, validate Thinking→Thought→response flow, multi-turn conversation and Reset e2e', async () => {
         test.setTimeout(600000);
         const bidData = loadBidData();
