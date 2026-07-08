@@ -1,0 +1,205 @@
+[
+  {
+    "email": "testmember_1783508561184_9DE0VP@yopmail.com",
+    "role": "Member",
+    "testCase": "TC_FGA_01",
+    "purpose": "invite + property assignment",
+    "createdAt": "2026-07-08T11:03:11.924Z"
+  },
+  {
+    "email": "fga_count_1783508607260_FKL4O9@yopmail.com",
+    "role": "Member",
+    "testCase": "TC_FGA_03",
+    "purpose": "count-delta validation",
+    "createdAt": "2026-07-08T11:03:55.185Z"
+  },
+  {
+    "email": "fga_badge_1783508640816_TQ1ZN0@yopmail.com",
+    "role": "Member",
+    "testCase": "TC_FGA_04",
+    "purpose": "badge/status validation",
+    "createdAt": "2026-07-08T11:04:28.904Z"
+  },
+  {
+    "email": "fga_dup_1783508677230_ZSQLSA@yopmail.com",
+    "role": "Member",
+    "testCase": "TC_FGA_05",
+    "purpose": "duplicate-invite negative check",
+    "createdAt": "2026-07-08T11:05:04.738Z"
+  },
+  {
+    "email": "testmember_1783508772278_DPOU47@yopmail.com",
+    "role": "Member",
+    "testCase": "TC_FGA_01",
+    "purpose": "invite + property assignment",
+    "createdAt": "2026-07-08T11:06:43.033Z"
+  },
+  {
+    "email": "testmember_1783508896375_jmpnnv@yopmail.com",
+    "role": "Member",
+    "testCase": "TC_FGA_01",
+    "purpose": "invite + property assignment",
+    "createdAt": "2026-07-08T11:08:44.132Z"
+  },
+  {
+    "email": "fga_count_1783508970054_xltfe4@yopmail.com",
+    "role": "Member",
+    "testCase": "TC_FGA_03",
+    "purpose": "count-delta validation",
+    "createdAt": "2026-07-08T11:09:58.231Z"
+  },
+  {
+    "email": "fga_badge_1783509018334_zd13j1@yopmail.com",
+    "role": "Member",
+    "testCase": "TC_FGA_04",
+    "purpose": "badge/status validation",
+    "createdAt": "2026-07-08T11:10:45.758Z"
+  },
+  {
+    "email": "fga_dup_1783509070427_6rk0n8@yopmail.com",
+    "role": "Member",
+    "testCase": "TC_FGA_05",
+    "purpose": "duplicate-invite negative check",
+    "createdAt": "2026-07-08T11:11:39.112Z"
+  },
+  {
+    "email": "testmember_1783509195277_n4z1f2@yopmail.com",
+    "role": "Member",
+    "testCase": "TC_FGA_01",
+    "purpose": "invite + property assignment",
+    "createdAt": "2026-07-08T11:13:43.074Z"
+  },
+  {
+    "email": "fga_count_1783509236426_g93ftq@yopmail.com",
+    "role": "Member",
+    "testCase": "TC_FGA_03",
+    "purpose": "count-delta validation",
+    "createdAt": "2026-07-08T11:14:25.043Z"
+  },
+  {
+    "email": "fga_badge_1783509267865_p5l5kn@yopmail.com",
+    "role": "Member",
+    "testCase": "TC_FGA_04",
+    "purpose": "badge/status validation",
+    "createdAt": "2026-07-08T11:14:57.611Z"
+  },
+  {
+    "email": "fga_dup_1783509299086_117rcq@yopmail.com",
+    "role": "Member",
+    "testCase": "TC_FGA_05",
+    "purpose": "duplicate-invite negative check",
+    "createdAt": "2026-07-08T11:15:28.599Z"
+  },
+  {
+    "email": "testmember_1783509403581_srzk3x@yopmail.com",
+    "role": "Member",
+    "testCase": "TC_FGA_01",
+    "purpose": "invite + property assignment",
+    "createdAt": "2026-07-08T11:17:11.066Z"
+  },
+  {
+    "email": "fga_count_1783509445508_7bgmwt@yopmail.com",
+    "role": "Member",
+    "testCase": "TC_FGA_03",
+    "purpose": "count-delta validation",
+    "createdAt": "2026-07-08T11:17:52.993Z"
+  },
+  {
+    "email": "fga_badge_1783509476534_mp5do9@yopmail.com",
+    "role": "Member",
+    "testCase": "TC_FGA_04",
+    "purpose": "badge/status validation",
+    "createdAt": "2026-07-08T11:18:23.874Z"
+  },
+  {
+    "email": "fga_dup_1783509506013_rveydw@yopmail.com",
+    "role": "Member",
+    "testCase": "TC_FGA_05",
+    "purpose": "duplicate-invite negative check",
+    "createdAt": "2026-07-08T11:18:53.447Z"
+  },
+  {
+    "email": "fga_activate_1783514832494_ngcxb9@yopmail.com",
+    "role": "Member",
+    "testCase": "TC355",
+    "purpose": "full activation via yopmail",
+    "createdAt": "2026-07-08T12:47:43.999Z"
+  },
+  {
+    "email": "fga_activate_1783514946465_bowtfq@yopmail.com",
+    "role": "Member",
+    "testCase": "TC355",
+    "purpose": "full activation via yopmail",
+    "createdAt": "2026-07-08T12:49:40.580Z"
+  },
+  {
+    "email": "fga_activate_1783515109986_mhqtwo@yopmail.com",
+    "role": "Member",
+    "testCase": "TC355",
+    "purpose": "full activation via yopmail",
+    "createdAt": "2026-07-08T12:52:16.611Z"
+  },
+  {
+    "email": "fga_activate_1783515451770_4zvnw7@yopmail.com",
+    "role": "Member",
+    "testCase": "TC355",
+    "purpose": "full activation via yopmail",
+    "createdAt": "2026-07-08T12:58:00.572Z"
+  },
+  {
+    "email": "fga_activate_1783515587958_mtdi58@yopmail.com",
+    "role": "Member",
+    "testCase": "TC355",
+    "purpose": "full activation via yopmail",
+    "createdAt": "2026-07-08T13:00:16.191Z"
+  },
+  {
+    "email": "testmember_1783515686456_4z66h6@yopmail.com",
+    "role": "Member",
+    "testCase": "TC350",
+    "purpose": "invite + property assignment",
+    "createdAt": "2026-07-08T13:01:54.058Z"
+  },
+  {
+    "email": "fga_count_1783515728629_wxae2o@yopmail.com",
+    "role": "Member",
+    "testCase": "TC352",
+    "purpose": "count-delta validation",
+    "createdAt": "2026-07-08T13:02:35.704Z"
+  },
+  {
+    "email": "fga_badge_1783515759588_2f8ck9@yopmail.com",
+    "role": "Member",
+    "testCase": "TC353",
+    "purpose": "badge/status validation",
+    "createdAt": "2026-07-08T13:03:06.499Z"
+  },
+  {
+    "email": "fga_dup_1783515788677_yo46f0@yopmail.com",
+    "role": "Member",
+    "testCase": "TC354",
+    "purpose": "duplicate-invite negative check",
+    "createdAt": "2026-07-08T13:03:35.704Z"
+  },
+  {
+    "email": "fga_activate_1783515818218_pgvgoo@yopmail.com",
+    "role": "Member",
+    "testCase": "TC355",
+    "purpose": "full activation via yopmail",
+    "createdAt": "2026-07-08T13:04:04.969Z"
+  },
+  {
+    "email": "fga_activate_1783516086979_yi8vok@yopmail.com",
+    "role": "Member",
+    "testCase": "TC355",
+    "purpose": "full activation via yopmail",
+    "createdAt": "2026-07-08T13:08:41.637Z"
+  },
+  {
+    "email": "fga_activate_1783516248175_s2ybj0@yopmail.com",
+    "role": "Member",
+    "testCase": "TC355",
+    "purpose": "full activation via yopmail",
+    "createdAt": "2026-07-08T13:11:31.999Z"
+  }
+]
