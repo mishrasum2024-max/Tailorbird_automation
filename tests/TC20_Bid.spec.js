@@ -65,7 +65,7 @@ test.describe('Verify Bids', () => {
     // ──────────────────────────────────────────────────────────────────────────────
     // TC_BID_01 — Bid list page layout
     // ──────────────────────────────────────────────────────────────────────────────
-    test('TC_BID_01 @regression @bid : Should display Bid list page with correct layout, columns and toolbar', async () => {
+    test('TC311 TC_BID_01 @regression @bid : Should display Bid list page with correct layout, columns and toolbar', async () => {
         Logger.step('TC_BID_01: Asserting Bid list page');
 
         await bidPage.assertBidsListPage();
@@ -81,7 +81,7 @@ test.describe('Verify Bids', () => {
     // ──────────────────────────────────────────────────────────────────────────────
     // TC_BID_02 — Create AI Bid + Overview tab + Edit due date
     // ──────────────────────────────────────────────────────────────────────────────
-    test('TC_BID_02 @regression @bid @createBid : Should open Create Bid modal, assert all fields and dropdown options, create bid, verify Overview tab and edit due date', async () => {
+    test('TC312 TC_BID_02 @regression @bid @createBid : Should open Create Bid modal, assert all fields and dropdown options, create bid, verify Overview tab and edit due date', async () => {
         const bidData = loadBidData();
         const uniqueBidName = `Auto_Bid_${Date.now()}`;
 
@@ -126,7 +126,7 @@ test.describe('Verify Bids', () => {
         Logger.success(`TC_BID_02 passed — bid created: ${uniqueBidName} (ID: ${bidId})`);
     });
 
-    test('TC_BID_04 @regression @bid @manageBids : Should assert Manage Bids tab columns and toolbar', async () => {
+    test('TC313 TC_BID_04 @regression @bid @manageBids : Should assert Manage Bids tab columns and toolbar', async () => {
         const bidData = loadBidData();
         if (!bidData.bidUrl) test.skip(true, 'bidUrl not set — run TC_BID_02 first');
 
@@ -144,7 +144,7 @@ test.describe('Verify Bids', () => {
     // TC_BID_05 — Create Bid dialog: full fixture-driven assertion of every
     //             field label, placeholder, and each dropdown option
     // ──────────────────────────────────────────────────────────────────────────────
-    test('TC_BID_05 @regression @bid @dialogAssert : Should assert every field label, placeholder and dropdown option in Create Bid dialog using fixture data from bidData.json', async () => {
+    test('TC314 TC_BID_05 @regression @bid @dialogAssert : Should assert every field label, placeholder and dropdown option in Create Bid dialog using fixture data from bidData.json', async () => {
         const bidData = loadBidData();
 
         Logger.step('TC_BID_05: Opening Create Bid dialog for complete fixture assertion');
@@ -155,7 +155,7 @@ test.describe('Verify Bids', () => {
         Logger.success('TC_BID_05 passed — Create Bid dialog completely verified against fixture');
     });
 
-    test('TC_BID_08 @regression @bid @compareBids @aiPiper : Should send AI Bid Levelling prompt, validate Thinking→Thought→response flow, multi-turn conversation and Reset e2e', async () => {
+    test('TC315 TC_BID_08 @regression @bid @compareBids @aiPiper : Should send AI Bid Levelling prompt, validate Thinking→Thought→response flow, multi-turn conversation and Reset e2e', async () => {
         test.setTimeout(600000);
         const bidData = loadBidData();
         if (!bidData.bidUrl) test.skip(true, 'bidUrl not set — run TC_BID_02 first');
@@ -226,7 +226,7 @@ test.describe('Verify Bids', () => {
     //             Uploads files\Misora_Bid_Leveling_Reference_with data(Aggregate Summary).csv
     //             via the paperclip attach button, then runs AI Bid Levelling.
     // ──────────────────────────────────────────────────────────────────────────────
-    test('TC_BID_09 @regression @bid @compareBids @fileUpload : Should attach external proposal file via Piper paperclip button and run AI Bid Levelling', async () => {
+    test('TC316 TC_BID_09 @regression @bid @compareBids @fileUpload : Should attach external proposal file via Piper paperclip button and run AI Bid Levelling', async () => {
         test.setTimeout(600000);
         const bidData = loadBidData();
         if (!bidData.bidUrl) test.skip(true, 'bidUrl not set — run TC_BID_02 first');
@@ -284,7 +284,7 @@ test.describe('Verify Bids', () => {
         Logger.success('TC_BID_09 passed — file attach and AI Bid Levelling prompt verified');
     });
 
-    test.skip('TC_BID_10 @regression @bid @compareBids @aiPrompts : Should execute all AI Bid Levelling prompts and validate Piper response for each', async () => {
+    test.skip('TC317 TC_BID_10 @regression @bid @compareBids @aiPrompts : Should execute all AI Bid Levelling prompts and validate Piper response for each', async () => {
         test.setTimeout(1800000); // 30 min — 8 prompts × up to 4 min each
         const bidData = loadBidData();
         if (!bidData.bidUrl) test.skip(true, 'bidUrl not set — run TC_BID_02 first');
@@ -384,7 +384,7 @@ test.describe('Verify Bids', () => {
         Logger.success(`TC_BID_10 passed — all ${PROMPTS.length} AI Bid Levelling prompts executed and validated`);
     });
 
-    test('TC_BID_11 @regression @bid @compareBids @negative : Should handle negative and edge cases — empty prompt blocked, long/special-char prompts accepted, Reset cancel preserves history', async () => {
+    test('TC318 TC_BID_11 @regression @bid @compareBids @negative : Should handle negative and edge cases — empty prompt blocked, long/special-char prompts accepted, Reset cancel preserves history', async () => {
         test.setTimeout(600000);
         const bidData = loadBidData();
         if (!bidData.bidUrl) test.skip(true, 'bidUrl not set — run TC_BID_02 first');
@@ -459,7 +459,7 @@ test.describe('Verify Bids', () => {
         Logger.success('TC_BID_11 passed — all negative and edge cases verified');
     });
 
-    test.skip('TC_BID_12 @regression @bid @e2eAiBidLevelling : Complete E2E — create bid, generate bid book, invite vendors, upload vendor CSV and run AI Bid Levelling Aggregate Summary', async () => {
+    test.skip('TC319 TC_BID_12 @regression @bid @e2eAiBidLevelling : Complete E2E — create bid, generate bid book, invite vendors, upload vendor CSV and run AI Bid Levelling Aggregate Summary', async () => {
         test.setTimeout(3600000); // 60 min — full E2E including AI bid book generation
         const bidData = loadBidData();
 
