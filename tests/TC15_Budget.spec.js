@@ -131,7 +131,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
         Logger.success('TC253: View created and loaded');
     });
 
-    test('TC254 @budget @regression : Verify user can add a custom Budget column, validate the column inside Manage Columns, delete the column successfully, and confirm column removal from configuration controls', async () => {
+    test('TC254 @budget @regression : Verify Add Column, Manage Columns and Delete Column functionality', async () => {
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();
         const colName = `TestCol-${Date.now()}`;
@@ -232,7 +232,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
         Logger.success(`TC260: Reset Table - ${count} rows restored`);
     });
 
-    test('TC261 @budget @regression : Revise Budget - Verify user can delete an existing revision row, add a new budget row with category mapping from dropdown selection, submit the budget approval workflow successfully, and validate category persistence before and after submission across revision and main grids', async () => {
+    test('TC261 @budget @regression : Revise Budget - Verify Category selection persists before and after Budget approval submission', async () => {
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();
         await budgetJob.openRevisionEditor();
@@ -272,7 +272,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
         Logger.success('TC261: Row added with category from dropdown, submitted, category verified in both views');
     });
 
-    test('TC262 @budget @regression : Revise Budget - Verify user can select another property with no existing budget data, upload Budget CSV records successfully, submit the revision workflow, and validate uploaded budget items appear correctly in the main Budget grid after submission', async () => {
+    test('TC262 @budget @regression : Revise Budget - Verify Budget CSV upload, submission and Main Grid data population for new property', async () => {
         // await page.pause();
         await budgetJob.navigateToBudget();
         await budgetJob.selectNonBrookProperty();
@@ -293,7 +293,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
 
     }); // end serial
 
-    test('TC263 @budget @regression @ui : Verify all Budget toolbar CTA labels, button states, View inline save flow, year selector options, and empty-year blank state', async () => {
+    test('TC263 @budget @regression @ui : Verify Toolbar CTAs, View actions and Year Selector states and behavior', async () => {
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();
         await budgetJob.verifyToolbarCTALabels();
@@ -304,7 +304,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
         Logger.success('TC263: Toolbar CTAs, View inline save, Year selector – PASSED');
     });
 
-    test('TC264 @budget @regression @ui : Verify Table button menu items, Add column panel with all type buttons and submit validation, and Manage Columns drawer with default columns and visibility toggle', async () => {
+    test('TC264 @budget @regression @ui : Verify Table Menu, Add Column panel and Manage Columns drawer functionality', async () => {
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();
         await budgetJob.verifyTableMenuItems();
@@ -348,7 +348,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
         Logger.success('TC268: Documents tab and Uploadcare widget – PASSED');
     });
 
-    test('TC269 @budget @regression @ui @visual : Verify disabled button styling, dollar amount formatting, Total row distinction, dash for unmapped categories, special-char column validation, long search no-crash, and drawer-open layout stability', async () => {
+    test('TC269 @budget @regression @ui @visual : Verify Disabled States, Currency Formatting and Budget UI edge cases', async () => {
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();
         await budgetJob.verifyDisabledButtonStylingAndAmounts();
@@ -358,7 +358,7 @@ test.describe('Budget Workflow - E2E Tests', () => {
 
     // ===== TC244: Budget Revision E2E — Revisions, AI Notes, Approval =====
 
-    test('TC270 @budget @e2e @revision : Budget Revision Workflow E2E — create property, create Budget Approval template with 2 approvers, import budget CSV, approve initial budget, create Revision #1 (Bathroom -$2000 / Concrete +$1000) with AI notes and summary card validation, create Revision #2 (Bathroom +$4000 / Concrete -$500) with AI notes and summary card validation, navigate to All Approvals, assert both revisions show Pending Approval, approve both via Approve on Behalf, assert both show Approved status', async () => {
+    test('TC270 @budget @e2e @revision : Budget Revision Workflow E2E — Verify Budget Import, Revisions, AI Notes, Approval Flow and Status Updates', async () => {
         test.setTimeout(600000); // 8 minutes — full E2E lifecycle
 
         const timestamp = Date.now();

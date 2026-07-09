@@ -1498,8 +1498,22 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
             throw new Error(`TC198 FAILED: Fewer than 2 roles available in ${rolesUsersFile}.`);
         }
 
-        // Replace whatever is currently selected in an approver cell with a fresh set of values
-        async function setApproverCell(cell, input, values) {
+        // Many discovered users (yopmail test accounts, etc.) don't have access to a freshly-created
+        // property, which was making the retry loop below burn through most/all attempts on invalid
+        // candidates. Users containing "sumit" are known-good property-access accounts, so approver
+        // ROW selection (not roles — roles are untouched) is restricted to that subset only. Search
+        // term used against the combobox is "sumit" itself, so only these accounts are ever suggested.
+        const sumitUsers = persisted.users.filter(u => u.toLowerCase().includes('sumit'));
+        if (sumitUsers.length < 3) {
+            Logger.error(`TC207: Need at least 3 users containing "sumit" (2 for approver row 1, 1 for approver row 3) — only ${sumitUsers.length} available: ${sumitUsers.join(', ')}`);
+            throw new Error(`TC198 FAILED: Fewer than 3 "sumit" users available in ${rolesUsersFile} (found: ${sumitUsers.join(', ')}).`);
+        }
+        Logger.info(`TC207: Restricting user-approver candidates to "sumit" accounts only: ${sumitUsers.join(', ')}`);
+
+        // Replace whatever is currently selected in an approver cell with a fresh set of values.
+        // searchTerm lets user cells filter the combobox by "sumit" while still selecting the exact
+        // suggested option for `value` — role cells are unaffected (no searchTerm, same as before).
+        async function setApproverCell(cell, input, values, { searchTerm } = {}) {
             const clearBtn = cell.locator('.mantine-InputClearButton-root');
             if (await clearBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
                 await clearBtn.click();
@@ -1507,10 +1521,10 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
             }
             for (const value of values) {
                 await input.click();
-                await input.fill(value);
+                await input.fill(searchTerm || value);
                 await page.waitForTimeout(1800);
                 const dd = page.locator('.mantine-MultiSelect-dropdown:visible').first();
-                await expect(dd, `FAIL: combobox should reopen while filtering for "${value}"`).toBeVisible({ timeout: 15000 });
+                await expect(dd, `FAIL: combobox should reopen while filtering for "${searchTerm || value}"`).toBeVisible({ timeout: 15000 });
                 await dd.getByRole('option', { name: value, exact: true }).click();
             }
             await page.keyboard.press('Escape');
@@ -1534,12 +1548,12 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
         await approvalJob.checkAlwaysRequiredInTemplateDialog(3);
 
         for (let attempt = 1; attempt <= maxAttempts && !created; attempt++) {
-            const usersPool = persisted.users.filter(u => !excluded.has(u));
+            const usersPool = sumitUsers.filter(u => !excluded.has(u));
             const rolesPool = persisted.roles.filter(r => !excluded.has(r));
 
             if (usersPool.length < 3) {
-                Logger.error(`TC207: Ran out of valid candidate users after ${attempt - 1} attempt(s). Excluded so far: ${[...excluded].join(', ')}`);
-                throw new Error(`TC198 FAILED: Could not find 3 users with property access among the discovered users (excluded: ${[...excluded].join(', ')}).`);
+                Logger.error(`TC207: Ran out of valid "sumit" candidate users after ${attempt - 1} attempt(s). Excluded so far: ${[...excluded].join(', ')}`);
+                throw new Error(`TC198 FAILED: Could not find 3 "sumit" users with property access (excluded: ${[...excluded].join(', ')}).`);
             }
             if (rolesPool.length < 2) {
                 Logger.error(`TC207: Ran out of valid candidate roles after ${attempt - 1} attempt(s). Excluded so far: ${[...excluded].join(', ')}`);
@@ -1553,7 +1567,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
             Logger.info(`TC207: Attempt ${attempt}/${maxAttempts} — approver1=["${u1}", "${u2}"], approver2=["${r1}", "${r2}"], approver3="${u3}"`);
 
             // ── Scenario 1: approver row 1 — more than one approver in the SAME input ──
-            await setApproverCell(approver1Cell, approver1, [u1, u2]);
+            await setApproverCell(approver1Cell, approver1, [u1, u2], { searchTerm: 'sumit' });
             await expect(approver1Cell.getByText(u1, { exact: true }), `FAIL: approver row 1 should show "${u1}" as a pill`).toBeVisible({ timeout: 10000 });
             await expect(approver1Cell.getByText(u2, { exact: true }), `FAIL: approver row 1 should show "${u2}" as a pill in the SAME input`).toBeVisible({ timeout: 10000 });
 
@@ -1563,7 +1577,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
             await expect(approver2Cell.getByText(r2, { exact: true }), `FAIL: approver row 2 should show "${r2}" as a pill in the SAME input`).toBeVisible({ timeout: 10000 });
 
             // Complete approver row 3 so the template can be submitted
-            await setApproverCell(approver3Cell, approver3, [u3]);
+            await setApproverCell(approver3Cell, approver3, [u3], { searchTerm: 'sumit' });
 
             await approvalJob.submitCreateTemplate();
 
