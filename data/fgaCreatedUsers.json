@@ -201,5 +201,145 @@
     "testCase": "TC355",
     "purpose": "full activation via yopmail",
     "createdAt": "2026-07-08T13:11:31.999Z"
+  },
+  {
+    "email": "testmember_1783596180871_4zb26z@yopmail.com",
+    "role": "Member",
+    "testCase": "TC350",
+    "purpose": "invite + property assignment",
+    "createdAt": "2026-07-09T11:23:27.677Z"
+  },
+  {
+    "email": "fga_count_1783596221143_ho8938@yopmail.com",
+    "role": "Member",
+    "testCase": "TC352",
+    "purpose": "count-delta validation",
+    "createdAt": "2026-07-09T11:24:07.766Z"
+  },
+  {
+    "email": "fga_badge_1783596251418_288kij@yopmail.com",
+    "role": "Member",
+    "testCase": "TC353",
+    "purpose": "badge/status validation",
+    "createdAt": "2026-07-09T11:24:37.556Z"
+  },
+  {
+    "email": "fga_dup_1783596279657_gc40gp@yopmail.com",
+    "role": "Member",
+    "testCase": "TC354",
+    "purpose": "duplicate-invite negative check",
+    "createdAt": "2026-07-09T11:25:06.210Z"
+  },
+  {
+    "email": "fga_activate_1783596308653_pl7vqd@yopmail.com",
+    "role": "Member",
+    "testCase": "TC355",
+    "purpose": "full activation via yopmail",
+    "createdAt": "2026-07-09T11:25:34.812Z"
+  },
+  {
+    "email": "fga_activate_1783597458758_4nk2ep@yopmail.com",
+    "role": "Member",
+    "testCase": "TC355",
+    "purpose": "full activation via yopmail",
+    "createdAt": "2026-07-09T11:44:50.023Z"
+  },
+  {
+    "email": "fga_activate_1783597725554_qfgzqe@yopmail.com",
+    "role": "Member",
+    "testCase": "TC355",
+    "purpose": "full activation via yopmail",
+    "createdAt": "2026-07-09T11:49:13.677Z"
+  },
+  {
+    "email": "fga_activate_1783597835468_tzbrly@yopmail.com",
+    "role": "Member",
+    "testCase": "TC355",
+    "purpose": "full activation via yopmail",
+    "createdAt": "2026-07-09T11:51:02.413Z"
+  },
+  {
+    "email": "fga_activate_1783597969230_cgg8i2@yopmail.com",
+    "role": "Member",
+    "testCase": "TC355",
+    "purpose": "full activation via yopmail",
+    "createdAt": "2026-07-09T11:53:17.335Z"
+  },
+  {
+    "email": "testmember_1783598106059_yaa3el@yopmail.com",
+    "role": "Member",
+    "testCase": "TC350",
+    "purpose": "invite + property assignment",
+    "createdAt": "2026-07-09T11:55:34.165Z"
+  },
+  {
+    "email": "testmember_1783598672463_n45kqt@yopmail.com",
+    "role": "Member",
+    "testCase": "TC350",
+    "purpose": "invite + property assignment",
+    "createdAt": "2026-07-09T12:05:03.247Z"
+  },
+  {
+    "email": "fga_count_1783598717617_aqjkzn@yopmail.com",
+    "role": "Member",
+    "testCase": "TC352",
+    "purpose": "count-delta validation",
+    "createdAt": "2026-07-09T12:05:45.453Z"
+  },
+  {
+    "email": "fga_badge_1783598749995_9ys93l@yopmail.com",
+    "role": "Member",
+    "testCase": "TC353",
+    "purpose": "badge/status validation",
+    "createdAt": "2026-07-09T12:06:16.869Z"
+  },
+  {
+    "email": "fga_dup_1783598779163_aoro2y@yopmail.com",
+    "role": "Member",
+    "testCase": "TC354",
+    "purpose": "duplicate-invite negative check",
+    "createdAt": "2026-07-09T12:06:46.251Z"
+  },
+  {
+    "email": "fga_activate_1783598809137_k5zki2@yopmail.com",
+    "role": "Member",
+    "testCase": "TC355",
+    "purpose": "full activation via yopmail",
+    "createdAt": "2026-07-09T12:07:16.365Z"
+  },
+  {
+    "email": "testmember_1783600295762_34538w@yopmail.com",
+    "role": "Member",
+    "testCase": "TC350",
+    "purpose": "invite + property assignment",
+    "createdAt": "2026-07-09T12:32:03.458Z"
+  },
+  {
+    "email": "fga_count_1783600338580_cbhr16@yopmail.com",
+    "role": "Member",
+    "testCase": "TC352",
+    "purpose": "count-delta validation",
+    "createdAt": "2026-07-09T12:32:45.958Z"
+  },
+  {
+    "email": "fga_badge_1783600369814_j4h01u@yopmail.com",
+    "role": "Member",
+    "testCase": "TC353",
+    "purpose": "badge/status validation",
+    "createdAt": "2026-07-09T12:33:16.737Z"
+  },
+  {
+    "email": "fga_dup_1783600399271_5qnp9t@yopmail.com",
+    "role": "Member",
+    "testCase": "TC354",
+    "purpose": "duplicate-invite negative check",
+    "createdAt": "2026-07-09T12:33:48.769Z"
+  },
+  {
+    "email": "fga_activate_1783600431544_86et2d@yopmail.com",
+    "role": "Member",
+    "testCase": "TC355",
+    "purpose": "full activation via yopmail",
+    "createdAt": "2026-07-09T12:34:18.853Z"
   }
 ]

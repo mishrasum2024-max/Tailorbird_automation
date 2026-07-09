@@ -243,6 +243,158 @@ class UserActivationPage {
         return names;
     }
 
+    // ---------------------------------------------------------------------
+    // Profile menu — FGA scope validation (Member role must not see org-admin actions)
+    // ---------------------------------------------------------------------
+
+    /**
+     * Opens the profile menu from the left sidebar (identified by the activated user's own
+     * email — the sidebar trigger has no stable role/testid, MCP-verified live) and returns
+     * the visible menu item labels. Closes the menu again before returning.
+     */
+    async getProfileMenuOptions(userEmail) {
+        Logger.step('[Activation] Opening profile menu from the left sidebar');
+        await this.activationPage.getByText(userEmail, { exact: true }).click();
+        const menu = this.activationPage.getByRole('menu').first();
+        await expect(menu, 'FAIL: profile menu should open').toBeVisible({ timeout: 10000 });
+        const items = (await menu.getByRole('menuitem').allTextContents()).map((t) => t.trim()).filter(Boolean);
+        await this.activationPage.keyboard.press('Escape');
+        Logger.info(`[Activation] Profile menu options: ${JSON.stringify(items)}`);
+        return items;
+    }
+
+    // ---------------------------------------------------------------------
+    // Construction Management / Financials list pages — Property column scope check
+    // ---------------------------------------------------------------------
+
+    /**
+     * Navigates by URL rather than clicking a sidebar nav item: the app renders the nav
+     * three times in the DOM (one per responsive breakpoint, toggled via CSS, MCP/live-run
+     * verified) so a text-based nav-link locator's first DOM match can be the hidden copy,
+     * making .click() hang until timeout. Direct navigation is what this same framework's
+     * PropertiesHelper.goToProperties() already falls back to for the identical reason.
+     */
+    async gotoPath(path) {
+        const origin = new URL(this.activationPage.url()).origin;
+        await this.activationPage.goto(`${origin}${path}`, { waitUntil: 'load' });
+    }
+
+    /** The treegrid container renders before its rows finish fetching — wait for an actual data cell, not just the empty shell. */
+    async waitForGridRows() {
+        await expect(this.activationPage.locator('[role="treegrid"]').first()).toBeVisible({ timeout: 20000 });
+        await expect(this.activationPage.locator('[role="treegrid"] [role="gridcell"]').first()).toBeVisible({ timeout: 20000 });
+    }
+
+    async gotoProjectsPage() {
+        Logger.step('[Activation] Navigating to Projects page');
+        await this.gotoPath('/projects');
+        await this.waitForGridRows();
+    }
+
+    async gotoJobsPage() {
+        Logger.step('[Activation] Navigating to Jobs page');
+        await this.gotoPath('/jobs');
+        await this.waitForGridRows();
+    }
+
+    async gotoBidsPage() {
+        Logger.step('[Activation] Navigating to Bids page');
+        await this.gotoPath('/bids');
+        await this.waitForGridRows();
+    }
+
+    async gotoChangeOrdersPage() {
+        Logger.step('[Activation] Navigating to Change Orders page');
+        await this.gotoPath('/change-orders');
+        await this.waitForGridRows();
+    }
+
+    async gotoInvoicesPage() {
+        Logger.step('[Activation] Navigating to Invoices page');
+        await this.gotoPath('/invoices');
+        await this.waitForGridRows();
+    }
+
+    async gotoCapexPage() {
+        Logger.step('[Activation] Navigating to CapEx page');
+        await this.gotoPath('/financials/capex');
+        await this.waitForGridRows();
+    }
+
+    async gotoBudgetPage() {
+        Logger.step('[Activation] Navigating to Budget page');
+        await this.gotoPath('/financials/budget');
+    }
+
+    /**
+     * Reads every value in a treegrid's named column, in DOM order, for every visible data
+     * row — skipping footer/aggregate rows (identified by a blank or "Total" cell in that
+     * column, e.g. CapEx's Total row or Invoices' totals footer, MCP-verified live) and
+     * stripping any expand/collapse toggle button text (CapEx renders "›" inside the cell)
+     * so only the real cell text remains. Runs as a single evaluate() — the grid used by
+     * these pages groups its header/body into separate column-group containers, so a
+     * columnheader's index must be resolved within its own group, not the whole treegrid.
+     */
+    async getGridColumnValues(columnHeaderText) {
+        return this.activationPage.evaluate((headerText) => {
+            const treegrid = document.querySelector('[role="treegrid"]');
+            if (!treegrid) return [];
+
+            const headers = Array.from(treegrid.querySelectorAll('[role="columnheader"]'));
+            const targetHeader = headers.find((h) => h.textContent.trim() === headerText);
+            if (!targetHeader) return [];
+
+            const headerGroup = targetHeader.parentElement;
+            const siblingHeaders = Array.from(headerGroup.querySelectorAll('[role="columnheader"]'));
+            const colIndex = siblingHeaders.indexOf(targetHeader);
+
+            let container = headerGroup;
+            let rows = [];
+            for (let depth = 0; depth < 5 && rows.length === 0; depth++) {
+                container = container.parentElement;
+                if (!container) break;
+                rows = Array.from(container.querySelectorAll('[role="row"]')).filter((r) => r.querySelector('[role="gridcell"]'));
+            }
+
+            const cleanCellText = (cell) => {
+                const clone = cell.cloneNode(true);
+                clone.querySelectorAll('button').forEach((b) => b.remove());
+                return clone.textContent.trim();
+            };
+
+            return rows
+                .map((r) => {
+                    const cells = Array.from(r.querySelectorAll('[role="gridcell"]'));
+                    return cells[colIndex] ? cleanCellText(cells[colIndex]) : '';
+                })
+                .filter((value) => value !== '' && value !== 'Total');
+        }, columnHeaderText);
+    }
+
+    // ---------------------------------------------------------------------
+    // Budget page — Property dropdown scope check
+    // ---------------------------------------------------------------------
+
+    /** Opens the Budget page's "Select a Property" dropdown and returns every option's property name. */
+    async getBudgetPropertyDropdownOptions() {
+        Logger.step('[Activation] Opening Budget page Property dropdown');
+        await this.activationPage.getByRole('button', { name: 'Select a Property' }).click();
+        const menu = this.activationPage.getByRole('menu', { name: 'Select a Property' });
+        await expect(menu, 'FAIL: Budget Property dropdown should open').toBeVisible({ timeout: 10000 });
+
+        const items = menu.getByRole('menuitem');
+        const count = await items.count();
+        const names = [];
+        for (let i = 0; i < count; i++) {
+            const name = ((await items.nth(i).locator('p').first().innerText()) || '').trim();
+            names.push(name);
+        }
+
+        await this.activationPage.keyboard.press('Escape');
+        Logger.info(`[Activation] Budget Property dropdown options: ${JSON.stringify(names)}`);
+        return names;
+    }
+
     async close() {
         await this.context.close().catch(() => {});
     }

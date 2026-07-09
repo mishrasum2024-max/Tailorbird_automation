@@ -182,17 +182,6 @@ test.describe('Verify Create Project and Add Job flow', () => {
         Logger.success(`Created job details saved to: ${lastCreatedJobPath}`);
     });
 
-    test.skip('TC82 @regression @projectAndJob @bids : Validate scope mix modal fields', async () => {
-        // SKIPPED: The Bid Book "Add Row" mechanism (bt-add-row-menu / bt-add-row) was
-        // removed in the current app version. Scope Mix requires ≥1 row in the Bid Book,
-        // but no UI or API mechanism exists to create rows in the current build.
-        // Re-enable when the app exposes a working row-creation entry point.
-        await projectPage.openScopeMixModal();
-        await projectPage.validateScopeMixModalFields();
-        await projectPage.addScopeEntry();
-        await projectPage.closeScopeMixModal();
-    });
-
     test('TC83 @regression @mandatory @projectAndJob @contract : Add contract from left Jobs menu and finalize contract with new flow', async () => {
         const captureDebugScreenshot = async (label) => {
         };

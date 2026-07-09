@@ -312,6 +312,72 @@ test.describe("FEAT-972 FGA User Management", () => {
             expect(orgUser, `Activated user "${email}" must exist in /api/organization/users`).not.toBeNull();
             expect(orgUser.status, "Activated user must no longer be in pending status").not.toBe("pending");
 
+            // ── Strict FGA scope validation: profile menu options for a Member with single-property access ──
+            Logger.step("[TC355] Validating profile menu options for the activated Member user");
+            const profileMenuOptions = await activation.getProfileMenuOptions(email);
+            Logger.info(`[TC355] Profile menu options visible: ${JSON.stringify(profileMenuOptions)}`);
+            expect(profileMenuOptions, "Profile menu must contain exactly Profile and Logout, in that order").toEqual(["Profile", "Logout"]);
+            for (const forbiddenOption of ["Manage Approvers", "Manage Organization", "Switch Organization"]) {
+                expect(profileMenuOptions, `Profile menu must NOT contain "${forbiddenOption}" for this Member user`).not.toContain(forbiddenOption);
+            }
+            Logger.success("[TC355] ✅ Profile menu correctly limited to Profile and Logout only");
+
+            // ── Strict FGA scope validation: every row's Property column, on every list page, must be
+            // exactly TARGET_PROPERTY — logs and asserts each row individually, never just the first ──
+            async function assertGridPropertyColumn(pageLabel) {
+                // The grid shell (and its checkbox column) can render before the "Property"
+                // column's own data finishes fetching — poll instead of reading once immediately.
+                await expect
+                    .poll(async () => (await activation.getGridColumnValues("Property")).length, {
+                        timeout: 20000,
+                        message: `${pageLabel}: waiting for Property column rows to load`,
+                    })
+                    .toBeGreaterThan(0);
+
+                const values = await activation.getGridColumnValues("Property");
+                Logger.info(`[TC355] ${pageLabel} table contains ${values.length} row(s)`);
+                values.forEach((value, idx) => {
+                    Logger.info(`[TC355] ${pageLabel} Row ${idx + 1} Property = ${value}`);
+                });
+                expect(values.length, `${pageLabel} must contain at least one row scoped to "${TARGET_PROPERTY}"`).toBeGreaterThan(0);
+                values.forEach((value, idx) => {
+                    expect(value, `${pageLabel} Row ${idx + 1} Property must equal exactly "${TARGET_PROPERTY}" — no other property allowed`).toBe(TARGET_PROPERTY);
+                });
+                Logger.success(`[TC355] ✅ ${pageLabel}: all ${values.length} row(s) scoped to "${TARGET_PROPERTY}"`);
+            }
+
+            Logger.step("[TC355] Navigating to Projects page to validate Property column scope");
+            await activation.gotoProjectsPage();
+            await assertGridPropertyColumn("Projects");
+
+            Logger.step("[TC355] Navigating to Jobs page to validate Property column scope");
+            await activation.gotoJobsPage();
+            await assertGridPropertyColumn("Jobs");
+
+            Logger.step("[TC355] Navigating to Bids page to validate Property column scope");
+            await activation.gotoBidsPage();
+            await assertGridPropertyColumn("Bids");
+
+            Logger.step("[TC355] Navigating to Change Orders page to validate Property column scope");
+            await activation.gotoChangeOrdersPage();
+            await assertGridPropertyColumn("Change Orders");
+
+            Logger.step("[TC355] Navigating to Invoices page to validate Property column scope");
+            await activation.gotoInvoicesPage();
+            await assertGridPropertyColumn("Invoices");
+
+            Logger.step("[TC355] Navigating to CapEx page to validate Property column scope");
+            await activation.gotoCapexPage();
+            await assertGridPropertyColumn("CapEx");
+
+            Logger.step("[TC355] Navigating to Budget page to validate the Property dropdown scope");
+            await activation.gotoBudgetPage();
+            const budgetPropertyOptions = await activation.getBudgetPropertyDropdownOptions();
+            Logger.info(`[TC355] Budget Property dropdown options: ${JSON.stringify(budgetPropertyOptions)}`);
+            expect(budgetPropertyOptions, "Budget Property dropdown must contain exactly one option").toHaveLength(1);
+            expect(budgetPropertyOptions, `Budget Property dropdown must contain only "${TARGET_PROPERTY}"`).toEqual([TARGET_PROPERTY]);
+            Logger.success(`[TC355] ✅ Budget Property dropdown scoped to exactly one property — "${TARGET_PROPERTY}"`);
+
             Logger.success(`[TC355] ✅ Full activation completed for ${email} (${firstName} ${lastName})`);
         } finally {
             await activation.close();
