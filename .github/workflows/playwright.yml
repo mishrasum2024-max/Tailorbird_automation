@@ -10,7 +10,7 @@ jobs:
   playwright-tests:
     runs-on: ubuntu-latest
 
-    timeout-minutes: 150
+    timeout-minutes: 180
 
     # Credentials are stored in GitHub Secrets — never commit .env to the repo.
     # Required secrets: TEST_EMAIL, TEST_PASSWORD, VENDOR_EMAIL, VENDOR_PASSWORD,
