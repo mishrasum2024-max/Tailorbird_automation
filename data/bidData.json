@@ -2,7 +2,15 @@
   "bidName": "Auto_Bid_1783319571320",
   "bidId": "203",
   "bidUrl": "https://beta.tailorbird.com/bids/203",
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
   "property": "bid_prop_1783319512622",
+=======
+  "property": "bid_prop_1785091858551",
+>>>>>>> Stashed changes
+=======
+  "property": "bid_prop_1785091858551",
+>>>>>>> Stashed changes
   "bidType": "Unit Interior",
   "detailLevel": "Short & Summarized",
   "priceBy": "Lump Sum: by Scope",

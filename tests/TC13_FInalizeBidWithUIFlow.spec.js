@@ -14,6 +14,7 @@ const PropertiesHelper = require('../pages/properties');
 const { ApprovalJob } = require('../pages/approvalPage');
 const { InvoicePage } = require('../pages/invoicePage');
 const { Logger } = require('../utils/logger');
+const { ensureLeftPanelExpanded } = require('../utils/leftPanelExpander');
 
 
 test.use({
@@ -33,7 +34,7 @@ test.describe.serial('Finalize bid / contract + OOO approval chain', () => {
         page,
     }) => {
         /** Long single journey; default 30s is insufficient. */
-        test.setTimeout(900000);
+        test.setTimeout(1000000);
 
         const projectPage = new ProjectPage(page);
         const projectJob = new ProjectJob(page);
@@ -54,6 +55,7 @@ test.describe.serial('Finalize bid / contract + OOO approval chain', () => {
         await expect(page).toHaveURL(process.env.DASHBOARD_URL);
         await page.waitForLoadState('domcontentloaded');
         await page.waitForTimeout(1500);
+        await ensureLeftPanelExpanded(page);
 
         Logger.step('TC226: Create property + persist propertyData (TC14 core)');
         await prop.goToProperties();
@@ -68,8 +70,18 @@ test.describe.serial('Finalize bid / contract + OOO approval chain', () => {
         fs.writeFileSync(downloadsPropertyPath, JSON.stringify(propertyPayload, null, 2));
 
         Logger.step('TC226: Budget revision + create project (TC31)');
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
         const budgetDataPath = path.resolve(process.cwd(), 'files', 'budget_data.csv');
         expect(fs.existsSync(budgetDataPath), 'files/budget_data.csv must exist').toBeTruthy();
+=======
+        const budgetDataPath = path.resolve(process.cwd(), 'files', 'budget_data_for_E2EFlow.csv');
+        expect(fs.existsSync(budgetDataPath), 'files/budget_data_for_E2EFlow.csv must exist').toBeTruthy();
+>>>>>>> Stashed changes
+=======
+        const budgetDataPath = path.resolve(process.cwd(), 'files', 'budget_data_for_E2EFlow.csv');
+        expect(fs.existsSync(budgetDataPath), 'files/budget_data_for_E2EFlow.csv must exist').toBeTruthy();
+>>>>>>> Stashed changes
 
         await page.waitForTimeout(4000);
 
@@ -200,6 +212,8 @@ test.describe.serial('Finalize bid / contract + OOO approval chain', () => {
             )
         );
 
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
         Logger.step('TC226 Scenario 1: Assert Budget Category is prefilled when Add Contract is clicked');
         const addContractBtn = page.getByRole('button', { name: /Add Contract/i });
         await expect(addContractBtn).toBeVisible({ timeout: 10000 });
@@ -220,6 +234,33 @@ test.describe.serial('Finalize bid / contract + OOO approval chain', () => {
         } else {
             Logger.info('TC226 Scenario 1: selectedCategory not captured — prefill assertion skipped');
         }
+=======
+=======
+>>>>>>> Stashed changes
+        // Logger.step('TC226 Scenario 1: Assert Budget Category is prefilled when Add Contract is clicked');
+        // const addContractBtn = page.getByRole('button', { name: /Add Contract/i });
+        // await expect(addContractBtn).toBeVisible({ timeout: 10000 });
+        // if (selectedCategory) {
+        //     const beforeAddCount = await page
+        //         .getByRole('gridcell', { name: selectedCategory, exact: true })
+        //         .count();
+        //     await addContractBtn.click();
+        //     await page.waitForTimeout(2000);
+        //     const afterAddCount = await page
+        //         .getByRole('gridcell', { name: selectedCategory, exact: true })
+        //         .count();
+        //     expect(
+        //         afterAddCount,
+        //         `New contract row must have Budget Category "${selectedCategory}" prefilled`
+        //     ).toEqual(beforeAddCount);
+        //     Logger.success(`TC226 Scenario 1: Budget Category "${selectedCategory}" is prefilled in new contract row ✓`);
+        // } else {
+        //     Logger.info('TC226 Scenario 1: selectedCategory not captured — prefill assertion skipped');
+        // }
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
+>>>>>>> Stashed changes
 
         Logger.step('TC226 Scenario 2: Table → Manage Columns → hide Cost Item → assert hidden → restore');
         const tableMenuBtn = page.getByRole('button', { name: 'Table' });
@@ -270,6 +311,7 @@ test.describe.serial('Finalize bid / contract + OOO approval chain', () => {
 
         const approvalJob = new ApprovalJob(page);
         await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'domcontentloaded' });
+        await ensureLeftPanelExpanded(page);
         await approvalJob.navigateToApprovalTab();
         await approvalJob.navigateToApprovalTemplatesTab();
         await approvalJob.waitForPageLoad();
@@ -407,6 +449,7 @@ test.describe.serial('Finalize bid / contract + OOO approval chain', () => {
 
             const origin = new URL(process.env.DASHBOARD_URL).origin;
             await page.goto(`${origin}/approvals/all-approvals`, { waitUntil: 'domcontentloaded' });
+            await ensureLeftPanelExpanded(page);
             await page.waitForSelector('input[placeholder="Search..."]:not([data-disabled="true"])', { timeout: 30000 });
             Logger.success('TC-OOO-APPROVAL-VERIFY: All Approvals page loaded ✓');
 

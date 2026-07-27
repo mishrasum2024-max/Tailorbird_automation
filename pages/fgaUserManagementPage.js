@@ -178,6 +178,27 @@ class FgaUserManagementPage {
     /**
      * Full assign flow: open Settings for propertyName, check the target user's
      * checkbox, and capture the POST /api/user-property-access request/response.
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
+=======
+=======
+>>>>>>> Stashed changes
+     *
+     * KNOWN ISSUE (2026-07-26): when `email` was invited with this exact `propertyName`
+     * already selected in the invite wizard's Property access step (i.e. inviteUser was
+     * called with `options.propertyName` matching this call), the automated checkbox click
+     * here reliably fails to trigger the POST within the timeout — confirmed reproducible
+     * across repeated automated runs, with and without an added scroll+settle wait. The
+     * identical manual click (same user, same property, via MCP browser) fires the POST
+     * successfully both times tried. This is the same class of MCP-vs-test-runner
+     * discrepancy already flagged elsewhere this session (TC106/TC14) rather than a fixable
+     * locator/timing bug — do not keep hardening this without new evidence pointing at a
+     * different root cause. Only known workaround is passing a *different* propertyName to
+     * inviteUser than the one assigned here (see TC350/TC352, which don't hit this).
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
+>>>>>>> Stashed changes
      * @returns {Promise<{dialog: import('@playwright/test').Locator, propertyId: number|null, status: number, ok: boolean, requestBody: any, responseBody: any}>}
      */
     async assignUserToProperty(propertyName, email) {
@@ -186,7 +207,23 @@ class FgaUserManagementPage {
 
         const row = this.dialogUserRow(dialog, email);
         await expect(row).toBeVisible({ timeout: 15000 });
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
         const checkbox = row.getByRole('checkbox');
+=======
+=======
+>>>>>>> Stashed changes
+        // The filtered list can still re-render (debounced search settling) right after the
+        // row first appears, which can drop a click aimed at the pre-settle position — scroll
+        // + a settle wait before reading the checkbox avoids clicking a soon-to-be-replaced node.
+        await row.scrollIntoViewIfNeeded();
+        await this.page.waitForTimeout(500);
+        const checkbox = row.getByRole('checkbox');
+        await expect(checkbox).toBeVisible({ timeout: 5000 });
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
+>>>>>>> Stashed changes
 
         const assignResponsePromise = this.page.waitForResponse(
             (res) => res.url().endsWith('/api/user-property-access') && res.request().method() === 'POST',
@@ -229,6 +266,8 @@ class FgaUserManagementPage {
 
     /**
      * Wraps OrganizationHelper.inviteUser() (reused, unmodified) with capture of the
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
      * underlying WorkOS "invite-user" widget API call. Note: that third-party API's
      * response body is just `{ success: true }` — no invitation id or email is echoed
      * back (MCP-verified live). For an id-bearing record use getOrganizationUserByEmail().
@@ -240,6 +279,25 @@ class FgaUserManagementPage {
         );
 
         await this.organizationHelper.inviteUser(email, 'Member');
+=======
+=======
+>>>>>>> Stashed changes
+     * underlying first-party invite call. Response body is
+     * `{ success: true, results: [{ ok, email, userId, pendingAcceptance, syncedToDb }] }`
+     * (MCP-verified live 2026-07-26 — this app-owned endpoint replaced the old WorkOS
+     * "invite-user" widget call this used to wait on).
+     */
+    async inviteMemberAndCaptureApi(email, options = {}) {
+        const inviteResponsePromise = this.page.waitForResponse(
+            (res) => res.url().endsWith('/api/organization/users') && res.request().method() === 'POST',
+            { timeout: 20000 },
+        );
+
+        await this.organizationHelper.inviteUser(email, 'Member', options);
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
+>>>>>>> Stashed changes
 
         const response = await inviteResponsePromise;
         const requestBody = response.request().postDataJSON();
@@ -280,6 +338,8 @@ class FgaUserManagementPage {
     /**
      * Negative flow: reuses OrganizationHelper.openInvite() (unmodified) to open the
      * dialog, then submits an email expected to already be invited and captures the
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
      * resulting 400 response + inline validation error. The dialog is left open on
      * failure (matches live app behavior, MCP-verified) — caller is responsible for
      * closing it via inviteUserPanel.dialogRoot's Cancel button.
@@ -290,11 +350,57 @@ class FgaUserManagementPage {
 
         const inviteResponsePromise = this.page.waitForResponse(
             (res) => res.url().includes('/_widgets/UserManagement/invite-user') && res.request().method() === 'POST',
+=======
+=======
+>>>>>>> Stashed changes
+     * resulting invite API response. NOTE (MCP-verified live 2026-07-26): the app no
+     * longer rejects a duplicate invite — it responds 200 with
+     * `results: [{ ok: true, alreadyMember: true, ... }]` and the dialog closes as if
+     * it succeeded, rather than staying open with a 400 + inline validation error. This
+     * is a product-behavior change, not an automation bug — callers asserting a 400
+     * rejection will need that expectation revisited with product/QA.
+     */
+    async attemptDuplicateInvite(email) {
+        const inviteUserPanel = await this.organizationHelper.openInvite();
+        await inviteUserPanel.dialogRoot.getByText('Loading roles', { timeout: 10000 }).waitFor({ state: 'hidden', timeout: 60_000 }).catch(() => {});
+        await inviteUserPanel.emailAddressInput.fill(email);
+        await this.organizationHelper.selectRole(inviteUserPanel.roleSelectTrigger, 'Member', inviteUserPanel.dialogRoot);
+
+        const inviteResponsePromise = this.page.waitForResponse(
+            (res) => res.url().endsWith('/api/organization/users') && res.request().method() === 'POST',
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
+>>>>>>> Stashed changes
             { timeout: 20000 },
         );
 
         await inviteUserPanel.nextOrInvitePrimaryButton.click();
 
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
+=======
+=======
+>>>>>>> Stashed changes
+        // Member invites land on a mandatory "Property access" step before Invite submits
+        // (see OrganizationHelper.inviteUser) — pick one here too so the duplicate-invite
+        // API call actually fires.
+        const propertyAccessTrigger = inviteUserPanel.dialogRoot.getByRole('button', { name: /search and add properties/i });
+        if (await propertyAccessTrigger.isVisible({ timeout: 8000 }).catch(() => false)) {
+            await propertyAccessTrigger.click();
+            const propertyPopover = this.page
+                .locator('.mantine-Popover-dropdown')
+                .filter({ has: this.page.getByPlaceholder('Search properties') });
+            await expect(propertyPopover, 'Property picker popover must open').toBeVisible({ timeout: 10_000 });
+            await propertyPopover.getByRole('checkbox').first().click();
+            await propertyPopover.getByRole('button', { name: 'Close' }).click();
+            await inviteUserPanel.dialogRoot.getByRole('button', { name: 'Invite', exact: true }).click();
+        }
+
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
+>>>>>>> Stashed changes
         const response = await inviteResponsePromise;
         const responseBody = await response.json().catch(() => null);
 

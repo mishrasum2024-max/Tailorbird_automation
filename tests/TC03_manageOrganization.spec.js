@@ -9,6 +9,7 @@ const { LoginPage } = require('../pages/loginPage');
 const { InteractionLogger } = require('../utils/InteractionLogger');
 const OrganizationHelper = require('../pages/organizationHelper');
 const organizationFixture = require('../fixture/organization.json');
+const { ensureLeftPanelExpanded } = require('../utils/leftPanelExpander');
 
 let sharedBrowserContext;
 let sharedPage;
@@ -35,7 +36,7 @@ test.beforeAll(async ({ browser }) => {
 
   await organizationHelper.goto(process.env.DASHBOARD_URL || organizationFixture.dashboardUrl);
   await applyWorkspaceZoom(sharedPage);
-
+  await ensureLeftPanelExpanded(sharedPage);
   await organizationHelper.goToOrganization();
   await applyWorkspaceZoom(sharedPage);
 
@@ -143,6 +144,13 @@ async function expectInviteBlockingFeedback(organizationHelperInstance, sharedTe
   await inviteUserPanel.dialogRoot.getByText('Loading roles').waitFor({ state: 'hidden', timeout: 60_000 }).catch(() => {});
   if (options.malformedEmail) {
     await inviteUserPanel.emailAddressInput.fill(options.malformedEmail);
+  }
+  // MCP-verified live 2026-07-26: for an empty/malformed email the wizard's Next button stays
+  // permanently disabled (client-side format validation gates it) — it never becomes clickable,
+  // so that IS the blocking behavior here. Only attempt the click when Next is actually enabled;
+  // otherwise a plain .click() would hang waiting for an element that's never going to enable.
+  if (await inviteUserPanel.nextOrInvitePrimaryButton.isDisabled().catch(() => false)) {
+    return;
   }
   await inviteUserPanel.nextOrInvitePrimaryButton.click();
   await expect(async () => {
@@ -269,7 +277,9 @@ test.describe('TC03 Manage Organization — Text Agent (live MCP browser scan)',
       await test.step('STATE 1 | Organization page — full scan of all text elements', async () => {
         await page.goto(orgUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
         await page.locator('[role="tablist"]').waitFor({ state: 'visible', timeout: 20_000 });
-        await page.locator('[aria-label="User search"]').waitFor({ state: 'visible', timeout: 20_000 });
+        // aria-label copy changed to "Search users by name or email" (MCP-verified);
+        // match on the unchanged placeholder instead of the old exact aria-label.
+        await page.locator('input[placeholder="Search by name or email"], input[placeholder="Search by name or e-mail"]').waitFor({ state: 'visible', timeout: 20_000 });
 
         const snapshot = await LoginPage.scanAllTextElements(page);
         const failures = LoginPage.logAndAssertSnapshot(snapshot, 'org-workspace');
@@ -303,9 +313,13 @@ test.describe('TC03 Manage Organization — Text Agent (live MCP browser scan)',
         await expect(page.getByRole('button', { name: /invite user/i })).toBeVisible({ timeout: 8_000 });
 
         InteractionLogger.logVisibility('Search by name or e-mail input', true);
-        await expect(page.getByPlaceholder('Search by name or e-mail')).toBeVisible({ timeout: 8_000 });
+        // MCP-verified current placeholder is "Search by name or email" (no hyphen);
+        // accept both spellings so the exact hyphenation doesn't break this again.
+        await expect(page.getByPlaceholder(/search by name or e-?mail/i)).toBeVisible({ timeout: 8_000 });
 
-        for (const col of ['User', 'Roles', 'Last active']) {
+        // MCP-verified live 2026-07-26 — current columns are Name, Email, Status, Role,
+        // Property access, Actions (replaced the older User / Roles / Last active columns).
+        for (const col of ['Email', 'Status', 'Role']) {
           InteractionLogger.logVisibility(`Column: ${col}`, true);
           await expect(page.getByRole('columnheader', { name: col })).toBeVisible({ timeout: 8_000 });
         }

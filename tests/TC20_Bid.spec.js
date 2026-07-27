@@ -5,6 +5,7 @@ const { Logger } = require('../utils/logger');
 const PropertiesHelper = require('../pages/properties');
 const fs = require('fs');
 const path = require('path');
+const { ensureLeftPanelExpanded } = require('../utils/leftPanelExpander');
 
 const BID_DATA_PATH = path.join(__dirname, '../data/bidData.json');
 const BID_SNAPSHOT_DIR = path.join(process.cwd(), 'committed_ui_snapshots', 'Bid.spec.js');
@@ -26,6 +27,25 @@ function saveBidData(updated) {
     fs.writeFileSync(BID_DATA_PATH, JSON.stringify(updated, null, 2), 'utf8');
 }
 
+/**
+ * Parses an Overview "Bid Due Date" display value (e.g. "Mar 15, 2027") and returns the
+ * next day, both as an input-field value ("MM/DD/YYYY") and the expected Overview display
+ * text (e.g. "Mar 16, 2027"). Falls back to tomorrow (relative to now) if the current value
+ * is blank/unparsable (e.g. "-" when no due date has been set yet).
+ * @param {string} currentOverviewText
+ * @returns {{ inputValue: string, overviewValue: string }}
+ */
+function addOneDayToOverviewDate(currentOverviewText) {
+    const parsed = new Date(currentOverviewText);
+    const base = isNaN(parsed.getTime()) ? new Date() : parsed;
+    const next = new Date(base.getTime());
+    next.setDate(next.getDate() + 1);
+
+    const inputValue = `${String(next.getMonth() + 1).padStart(2, '0')}/${String(next.getDate()).padStart(2, '0')}/${next.getFullYear()}`;
+    const overviewValue = next.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return { inputValue, overviewValue };
+}
+
 test.describe('Verify Bids', () => {
     test.describe.configure({ retries: 1 });
 
@@ -38,6 +58,7 @@ test.describe('Verify Bids', () => {
         const propertyName = `bid_prop_${Date.now()}`;
         await setupPage.goto(process.env.BASE_URL, { waitUntil: 'load' });
         await setupPage.waitForTimeout(1500);
+        await ensureLeftPanelExpanded(setupPage);
         await prop.goToProperties();
         await prop.createProperty(
             propertyName,
@@ -197,8 +218,13 @@ test.describe('Verify Bids', () => {
         await bidPage.waitForPiperResponse();
 
         const panel = page.getByRole('tabpanel', { name: 'Manage Bids' });
+        // Turn 1's Thought button had an explicit visibility wait; turn 2's needs the
+        // same allowance — it can render a beat after waitForPiperResponse() resolves.
+        await expect.poll(
+            () => panel.getByRole('button', { name: 'Thought' }).count(),
+            { timeout: 15000 },
+        ).toBeGreaterThanOrEqual(2);
         const thoughtCountAfterTurn2 = await panel.getByRole('button', { name: 'Thought' }).count();
-        expect(thoughtCountAfterTurn2).toBeGreaterThanOrEqual(2);
         Logger.info(`Thought buttons after turn 2: ${thoughtCountAfterTurn2} ✓`);
 
         const turn2Response = await bidPage.getPiperLastResponseText();
@@ -345,6 +371,12 @@ test.describe('Verify Bids', () => {
         // ── Edge 6: Reset Cancel — history must survive ────────────────────────────
         Logger.step('TC_BID_11 — E6: Reset Cancel preserves chat history');
         const panel = page.getByRole('tabpanel', { name: 'Manage Bids' });
+        // Each Thought button can render a beat after waitForPiperResponse() resolves —
+        // poll instead of asserting on a single read right after the last turn.
+        await expect.poll(
+            () => panel.getByRole('button', { name: 'Thought' }).count(),
+            { timeout: 15000 },
+        ).toBeGreaterThanOrEqual(3);
         const countBefore = await panel.getByRole('button', { name: 'Thought' }).count();
         expect(countBefore).toBeGreaterThanOrEqual(3); // at least E3, E4, E5 responses
         await bidPage.assertPiperResetDialogCancel();
@@ -359,4 +391,51 @@ test.describe('Verify Bids', () => {
         Logger.success('TC_BID_11 passed — all negative and edge cases verified');
     });
 
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
+=======
+=======
+>>>>>>> Stashed changes
+    // ──────────────────────────────────────────────────────────────────────────────
+    // TC365 — Left nav → any bid → Overview → Edit due date → success toast
+    // ──────────────────────────────────────────────────────────────────────────────
+    test('TC365 @regression @bid @editBidDate : Should navigate to Bids via left panel, open any bid, edit due date from Overview tab, and verify the date and success toast', async () => {
+        Logger.step('TC365: Navigating to Bids via left panel');
+        await page.goto(process.env.BASE_URL, { waitUntil: 'load' });
+        await page.waitForTimeout(2000);
+
+        await bidPage.navigateToBidsPageViaLeftNav();
+
+        Logger.step('TC365: Selecting any bid from the list and viewing its details');
+        const bidName = await bidPage.openFirstBidFromList();
+
+        const loc = bidPage.loc();
+        await expect(loc.overviewTab).toHaveAttribute('aria-selected', 'true');
+        await loc.overviewPanel.waitFor({ state: 'visible', timeout: 15000 });
+
+        const dueDateBefore = (await loc.overviewFieldValue('Bid Due Date').textContent().catch(() => '')).trim();
+        Logger.info(`TC365: "${bidName}" due date before edit: "${dueDateBefore}"`);
+
+        // Always advance whatever date is currently set by exactly 1 day — guarantees a real
+        // change every run (a fixed hardcoded date would collide once a prior run already set it).
+        const { inputValue: newDueDateInput, overviewValue: expectedOverviewText } =
+            addOneDayToOverviewDate(dueDateBefore);
+        const expectedToastTitle = 'Updated';
+        const expectedToastMessage = 'Bid updated successfully.';
+        Logger.info(`TC365: New due date (current + 1 day) = "${newDueDateInput}" → expected Overview text "${expectedOverviewText}"`);
+
+        const toastText = await bidPage.editDueDateFromOverviewAndAssertToast(newDueDateInput, expectedOverviewText);
+
+        // Explicit comparison of invoked toast text against the expected text
+        expect(toastText).toContain(expectedToastTitle);
+        expect(toastText).toContain(expectedToastMessage);
+        Logger.info(`TC365: Toast text compared — expected to contain "${expectedToastTitle}" and "${expectedToastMessage}", got "${toastText}"`);
+
+        const dueDateAfter = (await loc.overviewFieldValue('Bid Due Date').textContent()).trim();
+        expect(dueDateAfter).toBe(expectedOverviewText);
+        expect(dueDateAfter).not.toBe(dueDateBefore);
+        Logger.success(`TC365 passed — "${bidName}" due date changed from "${dueDateBefore}" to "${dueDateAfter}", success toast verified`);
+    });
+
+>>>>>>> Stashed changes
 });
