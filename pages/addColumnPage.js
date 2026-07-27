@@ -234,13 +234,19 @@ class AddColumnPage {
     async _assertCellShows(cell, pattern, columnName, typeName, insertedValue) {
         await this._dismissEditor();
         let cellText = '';
+        // CI (headless Linux runner) commits a cell edit noticeably slower than local — the
+        // grid's persist round-trip (PATCH to the backend, then re-render) that finishes well
+        // inside 10s locally can still be in flight there. This is a brand-new column too (the
+        // rightmost, just-created one), so it's already paying the cost of the scroll-right +
+        // re-render from _waitForColumnHeader before this poll even starts. Give it more room
+        // rather than a fixed budget tuned to local timing.
         await expect
             .poll(
                 async () => {
                     cellText = await this._readCellText(cell);
                     return cellText || '';
                 },
-                { timeout: 10000 },
+                { timeout: 20000 },
             )
             .toMatch(pattern);
         this._logCellResult(columnName, typeName, insertedValue, cellText);

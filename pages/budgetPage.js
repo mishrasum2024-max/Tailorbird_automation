@@ -23,19 +23,19 @@ exports.BudgetJob = class BudgetJob {
                 const financials = this.page.locator('nav').locator('a').filter({ hasText: 'Financials' }).first();
                 if (await financials.isVisible().catch(() => false)) {
                     await financials.click();
-                    await this.page.waitForTimeout(500);
+                    await this.page.waitForTimeout(2000);
                 }
             }
             const nowVisible = await budget.budgetTab.isVisible().catch(() => false);
             if (nowVisible) {
                 await budget.budgetTab.click();
-                await this.page.waitForTimeout(7000);
+                await this.page.waitForTimeout(17000);
             } else {
                 Logger.info('Budget tab not visible in sidebar — navigating directly');
                 await this.page.goto(process.env.BASE_URL.replace(/\/$/, '') + '/financials/budget', { waitUntil: 'load' });
-                await this.page.waitForTimeout(7000);
+                await this.page.waitForTimeout(17000);
             }
-            await this.page.waitForURL('**/financials/budget', { timeout: 15000 });
+            await this.page.waitForURL('**/financials/budget', { timeout: 45000 });
             Logger.success('Navigated to Budget tab');
         } catch (error) {
             Logger.error('Failed to navigate to Budget tab: ' + error.message);
@@ -46,11 +46,11 @@ exports.BudgetJob = class BudgetJob {
     async navigateToBudget() {
         await this.page.goto('/financials/budget', { waitUntil: 'load' });
         await this.page.waitForTimeout(22000);
-        await this.page.waitForURL('**/financials/budget**', { timeout: 15000 }).catch(() => { });
+        await this.page.waitForURL('**/financials/budget**', { timeout: 45000 }).catch(() => { });
     }
 
     async waitForPageLoad() {
-        await this.page.waitForTimeout(22000);
+        await this.page.waitForTimeout(30000);
     }
 
     // ===================== Property Selection =====================

@@ -73,6 +73,14 @@ async function verifyColumnContentDoesNotWrap({ page, columnName, dragByPx = 50,
         await page.waitForTimeout(80);
         await page.mouse.up();
         await page.waitForTimeout(500);
+        // Widening a column can push total column width past the grid's own visible width —
+        // confirmed live via MCP browser this grid allows real horizontal overflow (unlike the
+        // CapEx/Retainage grids, which drop columns instead), so the column/handle just dragged
+        // can end up scrolled out of the currently-visible viewport. Re-scroll it back into view
+        // before measuring again instead of assuming its position is unchanged — CI (headless
+        // Linux) renders this column noticeably narrower to start with than local (different OS
+        // font metrics), so it hits this pre-widen branch there when it doesn't locally.
+        await header.scrollIntoViewIfNeeded().catch(() => {});
         handleBox = await resizeHandle.boundingBox();
         const widthExpanded = await header.evaluate(el => Math.round(el.getBoundingClientRect().width));
         Logger.info(`[ColumnResize] "${columnName}" pre-widen complete: ${widthStart}px → ${widthExpanded}px`);
@@ -82,6 +90,7 @@ async function verifyColumnContentDoesNotWrap({ page, columnName, dragByPx = 50,
     Logger.info(`[ColumnResize] "${columnName}" width before narrowing: ${widthBefore}px`);
 
     // ── 4. Drag resize handle leftward to narrow ──────────────────────────────
+    await header.scrollIntoViewIfNeeded().catch(() => {});
     handleBox = await resizeHandle.boundingBox();
     expect(handleBox, `Resize handle for "${columnName}" must have a bounding box`).toBeTruthy();
 
@@ -211,6 +220,7 @@ async function verifyColumnContentDoesNotWrap({ page, columnName, dragByPx = 50,
         `(drag ${restoreDelta >= 0 ? 'right' : 'left'} ${Math.abs(restoreDelta)}px)`
     );
 
+    await header.scrollIntoViewIfNeeded().catch(() => {});
     handleBox = await resizeHandle.boundingBox();
     await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
     await page.mouse.down();

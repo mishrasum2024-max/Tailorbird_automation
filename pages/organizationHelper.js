@@ -233,15 +233,34 @@ class OrganizationHelper {
       }
       await this.page.waitForTimeout(2000);
       const confirmInvite = invitePanel.dialogRoot.getByRole("button", { name: data.inviteButtonText, exact: true });
+
+      // The app re-fetches the members list itself once an invite is accepted — confirmed live
+      // via MCP browser: GET /api/organization/users fires again right after the invite POST
+      // completes, with no manual reload needed. Wait for that instead of a hard page reload
+      // with networkidle (this repo's documented rule: never use networkidle — org/financial
+      // pages keep background network activity alive, so it hangs instead of resolving in CI).
+      // Registered before the submitting click below so a fast-firing refetch can't be missed.
+      const usersRefetchPromise = this.page.waitForResponse(
+        (res) => res.url().includes('/api/organization/users') && res.request().method() === 'GET' && res.status() === 200,
+        { timeout: 25_000 },
+      ).then(() => true).catch(() => false);
+
       if (await confirmInvite.isVisible({ timeout: 10_000 }).catch(() => false)) {
         await confirmInvite.evaluate((el) => el.click());
         // Wait for the invite dialog to close — signals the backend accepted the invite
         await invitePanel.dialogRoot.waitFor({ state: "hidden", timeout: 40_000 }).catch(() => {});
       }
-      // Reload to ensure the member table reflects the backend's latest state.
-      // Without this, a slow CI server may not push the new member row before the 120s wait expires.
-      await this.page.reload({ waitUntil: 'networkidle' }).catch(() => {});
-      await this.page.waitForTimeout(7500);
+
+      const refetched = await usersRefetchPromise;
+      if (!refetched) {
+        // Fallback safety net for a slow CI backend that doesn't auto-refresh in time — a real
+        // reload, but domcontentloaded + an explicit element wait, never networkidle.
+        this.log("Members list did not auto-refresh after invite — falling back to a reload.");
+        await this.page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {});
+        const appShell = this.page.locator('.mantine-AppShell-main, .mantine-AppShell-navbar, main').first();
+        await appShell.waitFor({ state: 'visible', timeout: 20_000 }).catch(() => {});
+      }
+      await this.page.waitForTimeout(refetched ? 1500 : 7500);
       const inviteDialog = invitePanel.dialogRoot;
       if (
         await inviteDialog

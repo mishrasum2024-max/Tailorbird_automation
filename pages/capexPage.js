@@ -52,6 +52,39 @@ class CapexPage {
         await this.page.waitForTimeout(300);
     }
 
+    /**
+     * Polls the ">=7 gridcells" row heuristic until two consecutive reads 400ms apart agree,
+     * instead of returning the instant a wait condition first becomes true once. Confirmed via
+     * a headed run + live MCP browser cross-check: after a property filter change (deselect,
+     * restore, or search clear), a single successful check can still be followed by the count
+     * dropping back to 0 for a beat before the grid's real re-render settles — a transient
+     * flicker the existing per-action waits (which only confirm the condition became true once)
+     * don't fully guard against, especially right after a fresh page load with no prior settle
+     * time. Purely a defensive extra settle-check appended after each caller's own existing
+     * waits — never throws, and never replaces any existing assertion.
+     */
+    async waitForRowCountToSettle(timeout = 15000) {
+        const readCount = () => this.page.evaluate(
+            () => Array.from(document.querySelectorAll('[role="row"]'))
+                .filter(r => r.querySelectorAll('[role="gridcell"]').length >= 7).length
+        ).catch(() => -1);
+        const deadline = Date.now() + timeout;
+        let previous = await readCount();
+        while (Date.now() < deadline) {
+            await this.page.waitForTimeout(400);
+            const current = await readCount();
+            // Confirmed live via MCP browser: a property-filter change (deselect/restore/search
+            // clear) fully REMOUNTS the <revo-grid> element (a custom inline-style marker set on
+            // it disappears afterward), not just an in-place re-render. If the new grid instance
+            // takes a while to mount any qualifying rows, two consecutive reads can both be 0 —
+            // that's the grid still being empty, not "settled". Only accept agreement on a
+            // non-zero count as genuinely settled; a sustained zero keeps polling until timeout.
+            if (current === previous && current > 0) return current;
+            previous = current;
+        }
+        return previous;
+    }
+
     async waitForShellReady() {
         await this.page.waitForLoadState('domcontentloaded');
         await expect(this.page.locator('main')).toBeVisible({ timeout: 15000 });
@@ -345,6 +378,8 @@ class CapexPage {
             { timeout: 15000 }
         ).catch(() => { });
         await this.page.waitForTimeout(300);
+        await this.forceGridFullWidth();
+        await this.waitForRowCountToSettle();
     }
 
     // ─── Sort ────────────────────────────────────────────────────────────────────
@@ -647,6 +682,8 @@ class CapexPage {
             { timeout: 25000 }
         ).catch(() => { });
         await this.page.waitForTimeout(600);
+        await this.forceGridFullWidth();
+        await this.waitForRowCountToSettle();
     }
 
     /** Unchecks the first individual property (index 1, skipping master). */
@@ -696,6 +733,8 @@ class CapexPage {
 
         Logger.success(`Property data loaded successfully. Found ${propertyRows.length} properties.`);
         await expect(this.l.searchInput).toBeVisible({ timeout: 10000 });
+        await this.forceGridFullWidth();
+        await this.waitForRowCountToSettle();
     }
 
     /** Re-checks the first individual property if it was unchecked. */
@@ -736,6 +775,8 @@ class CapexPage {
             { timeout: 10000 }
         ).catch(() => { });
         await this.page.waitForTimeout(600);
+        await this.forceGridFullWidth();
+        await this.waitForRowCountToSettle();
     }
 
     /**
