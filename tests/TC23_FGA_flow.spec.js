@@ -10,15 +10,7 @@ const { FgaUserManagementPage } = require("../pages/fgaUserManagementPage");
 const { orgUrls } = require("../pages/manageTeamRolesHelper");
 const { UserActivationPage } = require("../pages/userActivationPage");
 const fgaTexts = require("../fixture/fga_cta_texts.json");
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-
-=======
 const { ensureLeftPanelExpanded } = require('../utils/leftPanelExpander');
->>>>>>> Stashed changes
-=======
-const { ensureLeftPanelExpanded } = require('../utils/leftPanelExpander');
->>>>>>> Stashed changes
 const dashboardLandingUrl = process.env.DASHBOARD_URL || orgUrls.dashboardUrl;
 const TARGET_PROPERTY = "Test Property 1_Cottages on Elm";
 const CREATED_USERS_FILE = path.join(__dirname, "../data/fgaCreatedUsers.json");
@@ -68,39 +60,18 @@ test.describe("FEAT-972 FGA User Management", () => {
 
         InteractionLogger.logNavigation(dashboardLandingUrl, "Dashboard — profile menu → Manage Organization");
         await fga.gotoOrganization(dashboardLandingUrl);
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-=======
         await ensureLeftPanelExpanded(page);
->>>>>>> Stashed changes
-=======
-        await ensureLeftPanelExpanded(page);
->>>>>>> Stashed changes
         Logger.info("[TC350] Asserting: URL is /organization");
         await expect(page).toHaveURL(/\/organization/);
 
         Logger.step(`[TC350] Inviting new member: ${email}`);
         const inviteResult = await fga.inviteMemberAndCaptureApi(email);
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-        Logger.info("[TC350] Asserting: invite API responded 201 with success:true");
-        expect(inviteResult.status).toBe(201);
-        expect(inviteResult.ok).toBeTruthy();
-        expect(inviteResult.responseBody).toEqual({ success: true });
-        expect(inviteResult.requestBody.email, "Invite request body must carry the exact invited email").toBe(email);
-=======
-=======
->>>>>>> Stashed changes
         Logger.info("[TC350] Asserting: invite API responded 200 with success:true");
         expect(inviteResult.status).toBe(200);
         expect(inviteResult.ok).toBeTruthy();
         expect(inviteResult.responseBody?.success).toBe(true);
         expect(inviteResult.responseBody?.results?.[0]?.ok, "Invite response must confirm the invited user was created").toBe(true);
         expect(inviteResult.requestBody.emails, "Invite request body must carry the exact invited email").toContain(email);
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
 
         saveCreatedUser({ email, role: "Member", testCase: "TC350", purpose: "invite + property assignment", createdAt: new Date().toISOString() });
 
@@ -137,14 +108,7 @@ test.describe("FEAT-972 FGA User Management", () => {
     test("TC351 @regression @FGA : Validate property access page functionality — headers, search, sort, empty state, actions", async ({ page }) => {
         const fga = new FgaUserManagementPage(page);
         await fga.gotoOrganization(dashboardLandingUrl);
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-=======
         await ensureLeftPanelExpanded(page);
->>>>>>> Stashed changes
-=======
-        await ensureLeftPanelExpanded(page);
->>>>>>> Stashed changes
         await fga.openPropertyAccessTab();
 
         Logger.step("[TC351] Validating column headers against fga_cta_texts.json");
@@ -199,14 +163,7 @@ test.describe("FEAT-972 FGA User Management", () => {
         const { email } = generateFgaTestUser("fga_count");
 
         await fga.gotoOrganization(dashboardLandingUrl);
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-=======
         await ensureLeftPanelExpanded(page);
->>>>>>> Stashed changes
-=======
-        await ensureLeftPanelExpanded(page);
->>>>>>> Stashed changes
         Logger.step(`[TC352] Inviting new member: ${email}`);
         await fga.inviteMemberAndCaptureApi(email);
         saveCreatedUser({ email, role: "Member", testCase: "TC352", purpose: "count-delta validation", createdAt: new Date().toISOString() });
@@ -234,14 +191,7 @@ test.describe("FEAT-972 FGA User Management", () => {
         const { email } = generateFgaTestUser("fga_badge");
 
         await fga.gotoOrganization(dashboardLandingUrl);
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-=======
         await ensureLeftPanelExpanded(page);
->>>>>>> Stashed changes
-=======
-        await ensureLeftPanelExpanded(page);
->>>>>>> Stashed changes
         Logger.step(`[TC353] Inviting new member: ${email}`);
         await fga.inviteMemberAndCaptureApi(email);
         saveCreatedUser({ email, role: "Member", testCase: "TC353", purpose: "badge/status validation", createdAt: new Date().toISOString() });
@@ -268,14 +218,7 @@ test.describe("FEAT-972 FGA User Management", () => {
         const { email } = generateFgaTestUser("fga_dup");
 
         await fga.gotoOrganization(dashboardLandingUrl);
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-=======
         await ensureLeftPanelExpanded(page);
->>>>>>> Stashed changes
-=======
-        await ensureLeftPanelExpanded(page);
->>>>>>> Stashed changes
         Logger.step(`[TC354] First invite: ${email}`);
         await fga.inviteMemberAndCaptureApi(email);
         saveCreatedUser({ email, role: "Member", testCase: "TC354", purpose: "duplicate-invite negative check", createdAt: new Date().toISOString() });
@@ -309,22 +252,10 @@ test.describe("FEAT-972 FGA User Management", () => {
 
         InteractionLogger.logNavigation(dashboardLandingUrl, "Dashboard — profile menu → Manage Organization");
         await fga.gotoOrganization(dashboardLandingUrl);
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-        Logger.step(`[TC355] Inviting new member for activation: ${email}`);
-        const inviteResult = await fga.inviteMemberAndCaptureApi(email);
-        expect(inviteResult.status).toBe(201);
-=======
-=======
->>>>>>> Stashed changes
         await ensureLeftPanelExpanded(page);
         Logger.step(`[TC355] Inviting new member for activation: ${email}`);
         const inviteResult = await fga.inviteMemberAndCaptureApi(email, { propertyName: TARGET_PROPERTY });
         expect(inviteResult.status).toBe(200);
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
         expect(inviteResult.ok).toBeTruthy();
 
         saveCreatedUser({ email, role: "Member", testCase: "TC355", purpose: "full activation via yopmail", createdAt: new Date().toISOString() });
@@ -388,89 +319,12 @@ test.describe("FEAT-972 FGA User Management", () => {
             expect(orgUser, `Activated user "${email}" must exist in /api/organization/users`).not.toBeNull();
             expect(orgUser.status, "Activated user must no longer be in pending status").not.toBe("pending");
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-            // ── Strict FGA scope validation: profile menu options for a Member with single-property access ──
-            Logger.step("[TC355] Validating profile menu options for the activated Member user");
-            const profileMenuOptions = await activation.getProfileMenuOptions(email);
-            Logger.info(`[TC355] Profile menu options visible: ${JSON.stringify(profileMenuOptions)}`);
-            expect(profileMenuOptions, "Profile menu must contain exactly Profile and Logout, in that order").toEqual(["Profile", "Logout"]);
-            for (const forbiddenOption of ["Manage Approvers", "Manage Organization", "Switch Organization"]) {
-                expect(profileMenuOptions, `Profile menu must NOT contain "${forbiddenOption}" for this Member user`).not.toContain(forbiddenOption);
-            }
-            Logger.success("[TC355] ✅ Profile menu correctly limited to Profile and Logout only");
-
-            // ── Strict FGA scope validation: every row's Property column, on every list page, must be
-            // exactly TARGET_PROPERTY — logs and asserts each row individually, never just the first ──
-            async function assertGridPropertyColumn(pageLabel) {
-                // The grid shell (and its checkbox column) can render before the "Property"
-                // column's own data finishes fetching — poll instead of reading once immediately.
-                await expect
-                    .poll(async () => (await activation.getGridColumnValues("Property")).length, {
-                        timeout: 20000,
-                        message: `${pageLabel}: waiting for Property column rows to load`,
-                    })
-                    .toBeGreaterThan(0);
-
-                const values = await activation.getGridColumnValues("Property");
-                Logger.info(`[TC355] ${pageLabel} table contains ${values.length} row(s)`);
-                values.forEach((value, idx) => {
-                    Logger.info(`[TC355] ${pageLabel} Row ${idx + 1} Property = ${value}`);
-                });
-                expect(values.length, `${pageLabel} must contain at least one row scoped to "${TARGET_PROPERTY}"`).toBeGreaterThan(0);
-                values.forEach((value, idx) => {
-                    expect(value, `${pageLabel} Row ${idx + 1} Property must equal exactly "${TARGET_PROPERTY}" — no other property allowed`).toBe(TARGET_PROPERTY);
-                });
-                Logger.success(`[TC355] ✅ ${pageLabel}: all ${values.length} row(s) scoped to "${TARGET_PROPERTY}"`);
-            }
-
-            Logger.step("[TC355] Navigating to Projects page to validate Property column scope");
-            await activation.gotoProjectsPage();
-            await assertGridPropertyColumn("Projects");
-
-            Logger.step("[TC355] Navigating to Jobs page to validate Property column scope");
-            await activation.gotoJobsPage();
-            await assertGridPropertyColumn("Jobs");
-
-            Logger.step("[TC355] Navigating to Bids page to validate Property column scope");
-            await activation.gotoBidsPage();
-            await assertGridPropertyColumn("Bids");
-
-            Logger.step("[TC355] Navigating to Change Orders page to validate Property column scope");
-            await activation.gotoChangeOrdersPage();
-            await assertGridPropertyColumn("Change Orders");
-
-            Logger.step("[TC355] Navigating to Invoices page to validate Property column scope");
-            await activation.gotoInvoicesPage();
-            await assertGridPropertyColumn("Invoices");
-
-            Logger.step("[TC355] Navigating to CapEx page to validate Property column scope");
-            await activation.gotoCapexPage();
-            await assertGridPropertyColumn("CapEx");
-
-            Logger.step("[TC355] Navigating to Budget page to validate the Property dropdown scope");
-            await activation.gotoBudgetPage();
-            const budgetPropertyOptions = await activation.getBudgetPropertyDropdownOptions();
-            Logger.info(`[TC355] Budget Property dropdown options: ${JSON.stringify(budgetPropertyOptions)}`);
-            expect(budgetPropertyOptions, "Budget Property dropdown must contain exactly one option").toHaveLength(1);
-            expect(budgetPropertyOptions, `Budget Property dropdown must contain only "${TARGET_PROPERTY}"`).toEqual([TARGET_PROPERTY]);
-            Logger.success(`[TC355] ✅ Budget Property dropdown scoped to exactly one property — "${TARGET_PROPERTY}"`);
-
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
             Logger.success(`[TC355] ✅ Full activation completed for ${email} (${firstName} ${lastName})`);
         } finally {
             await activation.close();
         }
     });
 });
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-=======
-=======
->>>>>>> Stashed changes
 
 
 test.describe("FEAT-972 FGA scope validation — activated Member user (single-property access)", () => {
@@ -718,7 +572,3 @@ test.describe("FEAT-972 FGA scope validation — activated Member user (single-p
         }
     });
 });
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes

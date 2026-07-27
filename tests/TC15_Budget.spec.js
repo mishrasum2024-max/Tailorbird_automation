@@ -484,11 +484,6 @@ test.describe('Budget Workflow - E2E Tests', () => {
         await expect(page.getByText('Change in current budget from 18000.03 to 22000.03 due to an approved revision')).toBeVisible({ timeout: 15000 });
         await expect(page.getByText('Change in current budget from 18000.01 to 17500.01 due to an approved revision')).toBeVisible({ timeout: 15000 });
         Logger.success('TC270 Step 10: Revision #1 Notes confirmed changed after approval — TC270 PASSED');
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-=======
-=======
->>>>>>> Stashed changes
     });
 
     // ===== TC271: Budget Revision Reallocation E2E — Multiple reallocations, AI notes, no Conflict =====
@@ -640,10 +635,6 @@ test.describe('Budget Workflow - E2E Tests', () => {
 
         await budgetJob.clickSubmitForApproval();
         Logger.success('TC271: Budget Reallocation revision submitted for approval — TC271 PASSED');
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
     });
 
 });

@@ -51,18 +51,8 @@ test.describe('TC19 — CapEx Portfolio Page', () => {
 
         const rowCount = await capex.getDataRowCount();
         const expandBtns = await capex.l.treeExpandBtns.count();
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-        expect(rowCount).toBeGreaterThan(0);
-        expect(expandBtns).toBeGreaterThan(0);
-=======
         expect.soft(rowCount).toBeGreaterThan(0);
         expect.soft(expandBtns).toBeGreaterThan(0);
->>>>>>> Stashed changes
-=======
-        expect.soft(rowCount).toBeGreaterThan(0);
-        expect.soft(expandBtns).toBeGreaterThan(0);
->>>>>>> Stashed changes
         Logger.info(`TC290: Grid has ${rowCount} rows and ${expandBtns} expand buttons ✓`);
 
         await expect(capex.l.breadcrumbCapex).toBeVisible({ timeout: 5000 });
@@ -120,19 +110,9 @@ test.describe('TC19 — CapEx Portfolio Page', () => {
 
         await capex.selectYear('2026');
         const kpi26 = await capex.getKpiValues();
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-        expect(capex.parseMoney(kpi26.remainingBudget)).toBeGreaterThan(0);
-=======
         // Remaining Budget can legitimately be negative (portfolio over budget) — the invariant
         // that matters here is "not the $0 seen for a year with no budget data at all", not sign.
         expect(capex.parseMoney(kpi26.remainingBudget)).not.toBe(0);
->>>>>>> Stashed changes
-=======
-        // Remaining Budget can legitimately be negative (portfolio over budget) — the invariant
-        // that matters here is "not the $0 seen for a year with no budget data at all", not sign.
-        expect(capex.parseMoney(kpi26.remainingBudget)).not.toBe(0);
->>>>>>> Stashed changes
         Logger.info('TC291: Stat cards restored to non-zero values for 2026 ✓');
 
         // Year 2028 (future) — graceful, no error alerts
@@ -176,15 +156,7 @@ test.describe('TC19 — CapEx Portfolio Page', () => {
         await capex.l.portfolioSearchInput.fill('name');
         await page.waitForTimeout(800);
         const filteredCbs = await dd.locator('input[type="checkbox"]').count();
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-        expect(filteredCbs).toBeGreaterThan(0);
-=======
         expect.soft(filteredCbs).toBeGreaterThan(0);
->>>>>>> Stashed changes
-=======
-        expect.soft(filteredCbs).toBeGreaterThan(0);
->>>>>>> Stashed changes
         Logger.info(`TC292: Dropdown search "name" narrowed list to ${filteredCbs} entries ✓`);
 
         await capex.l.portfolioSearchInput.fill('');
@@ -296,15 +268,7 @@ test.describe('TC19 — CapEx Portfolio Page', () => {
         const ddInfo = await capex.getDropdownInfo();
         Logger.info(`TC295: Fund dropdown — masterChecked=${ddInfo.masterChecked}, optionCount=${ddInfo.optionCount}, content="${ddInfo.dropdownText.slice(0, 100)}"`);
         expect(ddInfo.masterChecked).toBeTruthy();
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-        expect(ddInfo.optionCount).toBeGreaterThan(0);
-=======
         expect.soft(ddInfo.optionCount).toBeGreaterThan(0);
->>>>>>> Stashed changes
-=======
-        expect.soft(ddInfo.optionCount).toBeGreaterThan(0);
->>>>>>> Stashed changes
         Logger.info('TC295: Select All master toggle present in Fund scope dropdown ✓');
 
         Logger.info(`TC295: KPI cards — Properties="${info.kpi.properties}" | Remaining Budget="${info.kpi.remainingBudget}" | Current Committed="${info.kpi.currentCommitted}"`);
@@ -324,15 +288,7 @@ test.describe('TC19 — CapEx Portfolio Page', () => {
         expect(info.topRowPencils).toBe(0);
         Logger.info('TC295: No pencil on Fund group-level rows — pencil is at leaf level only ✓');
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-        expect(info.expandBtns).toBeGreaterThan(0);
-=======
         expect.soft(info.expandBtns).toBeGreaterThan(0);
->>>>>>> Stashed changes
-=======
-        expect.soft(info.expandBtns).toBeGreaterThan(0);
->>>>>>> Stashed changes
         Logger.info(`TC295: ${info.expandBtns} expand button(s) on Fund group rows`);
 
         const modal = await capex.verifyRevisionModal();
@@ -404,15 +360,7 @@ test.describe('TC19 — CapEx Portfolio Page', () => {
         const ddInfo = await capex.getDropdownInfo();
         Logger.info(`TC296: Region dropdown — masterChecked=${ddInfo.masterChecked}, optionCount=${ddInfo.optionCount}, content="${ddInfo.dropdownText.slice(0, 100)}"`);
         expect(ddInfo.masterChecked).toBeTruthy();
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-        expect(ddInfo.optionCount).toBeGreaterThan(0);
-=======
         expect.soft(ddInfo.optionCount).toBeGreaterThan(0);
->>>>>>> Stashed changes
-=======
-        expect.soft(ddInfo.optionCount).toBeGreaterThan(0);
->>>>>>> Stashed changes
         Logger.info('TC296: Select All master toggle present in Region scope dropdown ✓');
 
         Logger.info(`TC296: KPI cards — Properties="${info.kpi.properties}" | Remaining Budget="${info.kpi.remainingBudget}" | Current Committed="${info.kpi.currentCommitted}"`);
@@ -424,15 +372,7 @@ test.describe('TC19 — CapEx Portfolio Page', () => {
         expect(info.topRowPencils).toBe(0);
         Logger.info('TC296: No pencil on Region group-level rows — pencil is at leaf level only ✓');
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-        expect(info.expandBtns).toBeGreaterThan(0);
-=======
         expect.soft(info.expandBtns).toBeGreaterThan(0);
->>>>>>> Stashed changes
-=======
-        expect.soft(info.expandBtns).toBeGreaterThan(0);
->>>>>>> Stashed changes
         Logger.info(`TC296: ${info.expandBtns} expand button(s) on Region group rows`);
 
         const modal = await capex.verifyRevisionModal();
@@ -587,15 +527,7 @@ test.describe('TC19 — CapEx Portfolio Page', () => {
         const moneyCells = allCells.filter(v => v.startsWith('$') || v.startsWith('-$'));
         const badCells = moneyCells.filter(v => /NaN|undefined|null|Infinity/.test(v));
         Logger.info(`TC299: Monetary cells — total=${moneyCells.length}, malformed=${badCells.length}`);
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-        expect(moneyCells.length).toBeGreaterThan(0);
-=======
         expect.soft(moneyCells.length).toBeGreaterThan(0);
->>>>>>> Stashed changes
-=======
-        expect.soft(moneyCells.length).toBeGreaterThan(0);
->>>>>>> Stashed changes
         expect(badCells.length).toBe(0);
         for (const v of moneyCells.slice(0, 50)) expect(v).toMatch(/^-?\$[\d,]+(\.\d+)?$/);
         Logger.info('TC299: All monetary cells are valid USD format with no NaN or corrupt values ✓');
@@ -738,15 +670,7 @@ test.describe('TC19 — CapEx Portfolio Page', () => {
             await capex.clickColumnHeader(hdr);
             expect.soft(await capex.getDataRowCount()).toBeGreaterThan(0);
             await capex.clickColumnHeader(hdr);
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-            expect(await capex.getDataRowCount()).toBeGreaterThan(0);
-=======
             expect.soft(await capex.getDataRowCount()).toBeGreaterThan(0);
->>>>>>> Stashed changes
-=======
-            expect.soft(await capex.getDataRowCount()).toBeGreaterThan(0);
->>>>>>> Stashed changes
             Logger.info(`TC303: "${name}" asc + desc sort — rows intact ✓`);
         }
 
@@ -844,18 +768,8 @@ test.describe('TC19 — CapEx Portfolio Page', () => {
         Logger.info(`TC305: Full portfolio export — filename="${full.filename}", size=${full.sizeBytes}B, dataRows=${full.dataRowCount}`);
         expect(full.filename).toMatch(/capex/i);
         expect(full.filename).toMatch(/\.csv$/i);
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-        expect(full.sizeBytes).toBeGreaterThan(0);
-        expect(full.dataRowCount).toBeGreaterThan(0);
-=======
         expect.soft(full.sizeBytes).toBeGreaterThan(0);
         expect.soft(full.dataRowCount).toBeGreaterThan(0);
->>>>>>> Stashed changes
-=======
-        expect.soft(full.sizeBytes).toBeGreaterThan(0);
-        expect.soft(full.dataRowCount).toBeGreaterThan(0);
->>>>>>> Stashed changes
         Logger.info('TC305: Capex CSV downloaded immediately, non-empty ✓');
 
         for (const col of ['Original Budget', 'Current Budget']) {
@@ -866,15 +780,7 @@ test.describe('TC19 — CapEx Portfolio Page', () => {
         await capex.search('name');
         Logger.info(`TC305: Filtered to ${await capex.getDataRowCount()} rows before export`);
         const filtered = await capex.validateAndDownloadExport();
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-        expect(filtered.sizeBytes).toBeGreaterThan(0);
-=======
         expect.soft(filtered.sizeBytes).toBeGreaterThan(0);
->>>>>>> Stashed changes
-=======
-        expect.soft(filtered.sizeBytes).toBeGreaterThan(0);
->>>>>>> Stashed changes
         Logger.info(`TC305: Filtered export — ${filtered.sizeBytes}B, ${filtered.dataRowCount} rows ✓`);
         await capex.clearSearch();
 
@@ -1042,15 +948,7 @@ test.describe('TC19 — CapEx Portfolio Page', () => {
         // Expand property 0 so the grid has a larger virtual dataset to scroll through
         await capex.expandRow(0);
         const childCountAfterExpand = await gridStability.countVisibleChildRows();
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-        expect(childCountAfterExpand, 'Grid should have child rows before scroll test').toBeGreaterThan(0);
-=======
         expect.soft(childCountAfterExpand, 'Grid should have child rows before scroll test').toBeGreaterThan(0);
->>>>>>> Stashed changes
-=======
-        expect.soft(childCountAfterExpand, 'Grid should have child rows before scroll test').toBeGreaterThan(0);
->>>>>>> Stashed changes
         Logger.info(`TC309: Expanded with ${childCountAfterExpand} child rows`);
 
         // Rapid scroll: 4 × down then 4 × up at 200 ms intervals
@@ -1098,15 +996,7 @@ test.describe('TC19 — CapEx Portfolio Page', () => {
         Logger.info(`TC310: Expanding first property — "${firstPropertyName}"`);
         await capex.expandRow(0);
         const firstChildCount = await gridStability.countVisibleChildRows();
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-        expect(firstChildCount, 'First property should render child rows after expansion').toBeGreaterThan(0);
-=======
         expect.soft(firstChildCount, 'First property should render child rows after expansion').toBeGreaterThan(0);
->>>>>>> Stashed changes
-=======
-        expect.soft(firstChildCount, 'First property should render child rows after expansion').toBeGreaterThan(0);
->>>>>>> Stashed changes
         Logger.info(`TC310: First expansion rendered ${firstChildCount} child rows ✓`);
 
         // Scroll past first property's children and expand the next visible property
@@ -1114,15 +1004,7 @@ test.describe('TC19 — CapEx Portfolio Page', () => {
         Logger.info(`TC310: Second property expansion attempted — success=${expandedSecond}`);
         expect(expandedSecond, 'Second property expansion must succeed — portfolio has multiple expandable properties').toBeTruthy();
         const childCountAfterSecondExpand = await gridStability.countVisibleChildRows();
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-        expect(childCountAfterSecondExpand, 'Second expanded property should render child rows').toBeGreaterThan(0);
-=======
         expect.soft(childCountAfterSecondExpand, 'Second expanded property should render child rows').toBeGreaterThan(0);
->>>>>>> Stashed changes
-=======
-        expect.soft(childCountAfterSecondExpand, 'Second expanded property should render child rows').toBeGreaterThan(0);
->>>>>>> Stashed changes
         Logger.info(`TC310: Second expansion rendered ${childCountAfterSecondExpand} child rows ✓`);
 
         // Grid must remain stable with two expanded sections
@@ -1151,11 +1033,6 @@ test.describe('TC19 — CapEx Portfolio Page', () => {
         Logger.info('TC310: All visible rows collapsed, grid clean ✓');
 
         Logger.success('TC310 ✓');
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-=======
-=======
->>>>>>> Stashed changes
     });
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -1186,10 +1063,6 @@ test.describe('TC19 — CapEx Portfolio Page', () => {
         expect(negativeRows, `Every Budget Remaining value should be non-negative — found ${negativeRows.length} negative row(s): ${JSON.stringify(negativeRows)}`).toHaveLength(0);
 
         Logger.success('TC311 passed: no negative Budget Remaining values found');
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
     });
 
 });

@@ -70,18 +70,8 @@ test.describe.serial('Finalize bid / contract + OOO approval chain', () => {
         fs.writeFileSync(downloadsPropertyPath, JSON.stringify(propertyPayload, null, 2));
 
         Logger.step('TC226: Budget revision + create project (TC31)');
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-        const budgetDataPath = path.resolve(process.cwd(), 'files', 'budget_data.csv');
-        expect(fs.existsSync(budgetDataPath), 'files/budget_data.csv must exist').toBeTruthy();
-=======
         const budgetDataPath = path.resolve(process.cwd(), 'files', 'budget_data_for_E2EFlow.csv');
         expect(fs.existsSync(budgetDataPath), 'files/budget_data_for_E2EFlow.csv must exist').toBeTruthy();
->>>>>>> Stashed changes
-=======
-        const budgetDataPath = path.resolve(process.cwd(), 'files', 'budget_data_for_E2EFlow.csv');
-        expect(fs.existsSync(budgetDataPath), 'files/budget_data_for_E2EFlow.csv must exist').toBeTruthy();
->>>>>>> Stashed changes
 
         await page.waitForTimeout(4000);
 
@@ -212,31 +202,6 @@ test.describe.serial('Finalize bid / contract + OOO approval chain', () => {
             )
         );
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-        Logger.step('TC226 Scenario 1: Assert Budget Category is prefilled when Add Contract is clicked');
-        const addContractBtn = page.getByRole('button', { name: /Add Contract/i });
-        await expect(addContractBtn).toBeVisible({ timeout: 10000 });
-        if (selectedCategory) {
-            const beforeAddCount = await page
-                .getByRole('gridcell', { name: selectedCategory, exact: true })
-                .count();
-            await addContractBtn.click();
-            await page.waitForTimeout(2000);
-            const afterAddCount = await page
-                .getByRole('gridcell', { name: selectedCategory, exact: true })
-                .count();
-            expect(
-                afterAddCount,
-                `New contract row must have Budget Category "${selectedCategory}" prefilled`
-            ).toBeGreaterThan(beforeAddCount);
-            Logger.success(`TC226 Scenario 1: Budget Category "${selectedCategory}" is prefilled in new contract row ✓`);
-        } else {
-            Logger.info('TC226 Scenario 1: selectedCategory not captured — prefill assertion skipped');
-        }
-=======
-=======
->>>>>>> Stashed changes
         // Logger.step('TC226 Scenario 1: Assert Budget Category is prefilled when Add Contract is clicked');
         // const addContractBtn = page.getByRole('button', { name: /Add Contract/i });
         // await expect(addContractBtn).toBeVisible({ timeout: 10000 });
@@ -257,10 +222,6 @@ test.describe.serial('Finalize bid / contract + OOO approval chain', () => {
         // } else {
         //     Logger.info('TC226 Scenario 1: selectedCategory not captured — prefill assertion skipped');
         // }
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
 
         Logger.step('TC226 Scenario 2: Table → Manage Columns → hide Cost Item → assert hidden → restore');
         const tableMenuBtn = page.getByRole('button', { name: 'Table' });

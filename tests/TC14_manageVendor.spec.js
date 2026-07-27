@@ -199,15 +199,7 @@ test.describe('Vendors Directory - E2E', () => {
                 // Row count updates before the "Trades" column's cell content finishes
                 // rendering — poll instead of asserting on a single read.
                 const tradeCells = page.locator('[role="gridcell"]').filter({ hasText: 'Carpentry' });
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-                expect(await tradeCells.count()).toBeGreaterThan(0);
-=======
                 await expect.poll(() => tradeCells.count(), { timeout: 8000 }).toBeGreaterThan(0);
->>>>>>> Stashed changes
-=======
-                await expect.poll(() => tradeCells.count(), { timeout: 8000 }).toBeGreaterThan(0);
->>>>>>> Stashed changes
                 Logger.info('TC240 step2: Filtered rows contain Carpentry trade ✓');
             }
 
@@ -411,11 +403,6 @@ test.describe('Vendors Directory - E2E', () => {
         }
 
         Logger.success('TC242 passed: visual baselines saved to committed_ui_snapshots/TC14_manageVendor.spec.js/');
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-=======
-=======
->>>>>>> Stashed changes
     });
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -559,10 +546,6 @@ test.describe('Vendors Directory - E2E', () => {
         Logger.info('TC243 step8: Edit Vendor dialog cancelled and closed cleanly ✓');
 
         Logger.success(`TC243 passed: vendor Website "${randomWebsite}" saved successfully and persists in the Edit Vendor modal`);
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
     });
 
 });

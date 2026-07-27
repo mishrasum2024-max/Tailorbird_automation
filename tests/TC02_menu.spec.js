@@ -63,14 +63,7 @@ test.afterAll(async () => {
 test.describe('Tailorbird Left Panel Flow - Modular', () => {
 
     test('TC07 @sanity @regression Verify all left panel menu options are available', async () => {
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-=======
        
->>>>>>> Stashed changes
-=======
-       
->>>>>>> Stashed changes
         const actualLabels = await helper.getLeftPanelLabels(page);
 
         if (actualLabels.length === 0)

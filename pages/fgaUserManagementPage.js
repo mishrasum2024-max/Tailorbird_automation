@@ -178,11 +178,6 @@ class FgaUserManagementPage {
     /**
      * Full assign flow: open Settings for propertyName, check the target user's
      * checkbox, and capture the POST /api/user-property-access request/response.
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-=======
-=======
->>>>>>> Stashed changes
      *
      * KNOWN ISSUE (2026-07-26): when `email` was invited with this exact `propertyName`
      * already selected in the invite wizard's Property access step (i.e. inviteUser was
@@ -195,10 +190,6 @@ class FgaUserManagementPage {
      * locator/timing bug — do not keep hardening this without new evidence pointing at a
      * different root cause. Only known workaround is passing a *different* propertyName to
      * inviteUser than the one assigned here (see TC350/TC352, which don't hit this).
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
      * @returns {Promise<{dialog: import('@playwright/test').Locator, propertyId: number|null, status: number, ok: boolean, requestBody: any, responseBody: any}>}
      */
     async assignUserToProperty(propertyName, email) {
@@ -207,12 +198,6 @@ class FgaUserManagementPage {
 
         const row = this.dialogUserRow(dialog, email);
         await expect(row).toBeVisible({ timeout: 15000 });
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-        const checkbox = row.getByRole('checkbox');
-=======
-=======
->>>>>>> Stashed changes
         // The filtered list can still re-render (debounced search settling) right after the
         // row first appears, which can drop a click aimed at the pre-settle position — scroll
         // + a settle wait before reading the checkbox avoids clicking a soon-to-be-replaced node.
@@ -220,10 +205,6 @@ class FgaUserManagementPage {
         await this.page.waitForTimeout(500);
         const checkbox = row.getByRole('checkbox');
         await expect(checkbox).toBeVisible({ timeout: 5000 });
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
 
         const assignResponsePromise = this.page.waitForResponse(
             (res) => res.url().endsWith('/api/user-property-access') && res.request().method() === 'POST',
@@ -266,22 +247,6 @@ class FgaUserManagementPage {
 
     /**
      * Wraps OrganizationHelper.inviteUser() (reused, unmodified) with capture of the
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-     * underlying WorkOS "invite-user" widget API call. Note: that third-party API's
-     * response body is just `{ success: true }` — no invitation id or email is echoed
-     * back (MCP-verified live). For an id-bearing record use getOrganizationUserByEmail().
-     */
-    async inviteMemberAndCaptureApi(email) {
-        const inviteResponsePromise = this.page.waitForResponse(
-            (res) => res.url().includes('/_widgets/UserManagement/invite-user') && res.request().method() === 'POST',
-            { timeout: 20000 },
-        );
-
-        await this.organizationHelper.inviteUser(email, 'Member');
-=======
-=======
->>>>>>> Stashed changes
      * underlying first-party invite call. Response body is
      * `{ success: true, results: [{ ok, email, userId, pendingAcceptance, syncedToDb }] }`
      * (MCP-verified live 2026-07-26 — this app-owned endpoint replaced the old WorkOS
@@ -294,10 +259,6 @@ class FgaUserManagementPage {
         );
 
         await this.organizationHelper.inviteUser(email, 'Member', options);
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
 
         const response = await inviteResponsePromise;
         const requestBody = response.request().postDataJSON();
@@ -338,21 +299,6 @@ class FgaUserManagementPage {
     /**
      * Negative flow: reuses OrganizationHelper.openInvite() (unmodified) to open the
      * dialog, then submits an email expected to already be invited and captures the
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-     * resulting 400 response + inline validation error. The dialog is left open on
-     * failure (matches live app behavior, MCP-verified) — caller is responsible for
-     * closing it via inviteUserPanel.dialogRoot's Cancel button.
-     */
-    async attemptDuplicateInvite(email) {
-        const inviteUserPanel = await this.organizationHelper.openInvite();
-        await inviteUserPanel.emailAddressInput.fill(email);
-
-        const inviteResponsePromise = this.page.waitForResponse(
-            (res) => res.url().includes('/_widgets/UserManagement/invite-user') && res.request().method() === 'POST',
-=======
-=======
->>>>>>> Stashed changes
      * resulting invite API response. NOTE (MCP-verified live 2026-07-26): the app no
      * longer rejects a duplicate invite — it responds 200 with
      * `results: [{ ok: true, alreadyMember: true, ... }]` and the dialog closes as if
@@ -368,20 +314,11 @@ class FgaUserManagementPage {
 
         const inviteResponsePromise = this.page.waitForResponse(
             (res) => res.url().endsWith('/api/organization/users') && res.request().method() === 'POST',
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
             { timeout: 20000 },
         );
 
         await inviteUserPanel.nextOrInvitePrimaryButton.click();
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-=======
-=======
->>>>>>> Stashed changes
         // Member invites land on a mandatory "Property access" step before Invite submits
         // (see OrganizationHelper.inviteUser) — pick one here too so the duplicate-invite
         // API call actually fires.
@@ -397,10 +334,6 @@ class FgaUserManagementPage {
             await inviteUserPanel.dialogRoot.getByRole('button', { name: 'Invite', exact: true }).click();
         }
 
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
         const response = await inviteResponsePromise;
         const responseBody = await response.json().catch(() => null);
 

@@ -32,11 +32,6 @@ class UserActivationPage {
         return new UserActivationPage(context, yopmailPage);
     }
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-=======
-=======
->>>>>>> Stashed changes
     /**
      * Wraps an already-authenticated page/context (typically created from a storageState
      * captured after a prior run of the full activation flow) so callers can reuse the
@@ -51,10 +46,6 @@ class UserActivationPage {
         return instance;
     }
 
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
     inboxFrame() {
         return this.yopmailPage.frameLocator('iframe[name="ifinbox"]');
     }
@@ -198,15 +189,7 @@ class UserActivationPage {
             Logger.step(`[Activation] Organization-selection screen shown — choosing org containing "${orgNameFragment}"`);
             await this.activationPage
                 .locator('.ak-OrgSelection')
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-                .getByRole('button', { name: new RegExp(orgNameFragment) })
-=======
                 .getByRole('button', { name: orgNameFragment })
->>>>>>> Stashed changes
-=======
-                .getByRole('button', { name: orgNameFragment })
->>>>>>> Stashed changes
                 .click();
         } else {
             Logger.info('[Activation] No organization-selection screen — user redirected directly (single-org invite)');

@@ -391,11 +391,6 @@ test.describe('Verify Bids', () => {
         Logger.success('TC_BID_11 passed — all negative and edge cases verified');
     });
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-=======
-=======
->>>>>>> Stashed changes
     // ──────────────────────────────────────────────────────────────────────────────
     // TC365 — Left nav → any bid → Overview → Edit due date → success toast
     // ──────────────────────────────────────────────────────────────────────────────
@@ -437,5 +432,4 @@ test.describe('Verify Bids', () => {
         Logger.success(`TC365 passed — "${bidName}" due date changed from "${dueDateBefore}" to "${dueDateAfter}", success toast verified`);
     });
 
->>>>>>> Stashed changes
 });

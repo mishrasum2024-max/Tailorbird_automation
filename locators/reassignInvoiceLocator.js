@@ -22,11 +22,14 @@ function reassignInvoiceLocators(page) {
         // the rendered columns stop at "Start Date", 8 columns in, well before "Property" at
         // position 9) — so that filter always failed to match anything, even correct rows.
         // Now that callers search the Jobs page by propertyName first (which does the actual
-        // scoping via the grid's own dataset), every currently-rendered row already belongs to
-        // that property, so no further text filter is needed here.
+        // scoping via the grid's own dataset), every currently-rendered *data* row already
+        // belongs to that property, so no further text filter is needed here. Filtering on the
+        // job-ID link (rather than just "has a gridcell") is still required though: the grid
+        // splits into separate checkbox/data/actions panes that each render their own
+        // role="row" elements with gridcells, and only the data pane's rows have this link.
         jobRowsForProperty: () =>
             page.locator('[role="treegrid"] [role="row"]')
-                .filter({ has: page.locator('[role="gridcell"]') }),
+                .filter({ has: page.locator('a[href*="/jobs/"]') }),
         jobIdLinkInRow: (row) => row.locator('a[href*="/jobs/"]').first(),
 
         // ── Invoice list grid — Actions column ───────────────────────────────────
