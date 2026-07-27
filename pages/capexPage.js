@@ -29,10 +29,34 @@ class CapexPage {
         await this.waitForShellReady();
     }
 
+    /**
+     * Forces the CapEx revo-grid to mount every column (and therefore every gridcell in each
+     * row) regardless of the grid's actual rendered width. Confirmed live via MCP browser: this
+     * grid DROPS low-priority financial columns entirely (no horizontal scrollbar reveals them)
+     * once its width doesn't fit them — at 1366px, 3 of 9 financial columns vanish from the DOM
+     * and every data row's gridcell count drops from 9-12 down to 6, which breaks the ">=7
+     * gridcells" heuristic this page object relies on everywhere (waitForShellReady,
+     * getDataRowCount, getAllGridRowData, etc.) — rows never satisfy it, so those waits burn
+     * their entire timeout budget instead of resolving in milliseconds. That width threshold
+     * depends on OS font metrics, so it can trigger in CI even when it doesn't locally. Forcing
+     * width mounts the real columns with real cell data (verified live) — no extra request
+     * fires — so this only changes test-time rendering, never app functionality or values.
+     */
+    async forceGridFullWidth() {
+        const grid = this.page.locator('revo-grid').first();
+        if ((await grid.count()) === 0) return;
+        await grid.evaluate((g) => {
+            g.style.setProperty('width', '3000px', 'important');
+            g.style.setProperty('min-width', '3000px', 'important');
+        }).catch(() => {});
+        await this.page.waitForTimeout(300);
+    }
+
     async waitForShellReady() {
         await this.page.waitForLoadState('domcontentloaded');
         await expect(this.page.locator('main')).toBeVisible({ timeout: 15000 });
         await expect(this.l.columnHeaders.first()).toBeVisible({ timeout: 40000 });
+        await this.forceGridFullWidth();
         // Wait for financial rows to render (middle pane has 8–9 cells per row).
         // The grid shell/headers appear well before the row data does — 25s wasn't
         // always enough (MCP-verified: the same rows are present seconds later),
@@ -49,6 +73,7 @@ class CapexPage {
         if (!(await rowsRendered(45000))) {
             await this.page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {});
             await expect(this.l.columnHeaders.first()).toBeVisible({ timeout: 40000 });
+            await this.forceGridFullWidth();
             await rowsRendered(45000);
         }
         await this.page.waitForTimeout(600);
@@ -95,6 +120,7 @@ class CapexPage {
             name,
             { timeout: 20000 }
         ).catch(() => { });
+        await this.forceGridFullWidth();
         Logger.info(`Tab switched to: ${name}`);
     }
 
@@ -309,7 +335,16 @@ class CapexPage {
 
     async clearSearch() {
         await this.l.searchInput.fill('');
-        await this.page.waitForTimeout(1000);
+        // Clearing can race the grid's own debounce/data-refetch — confirmed live via MCP
+        // browser this race is real (rows can still read 0 right after clearing) but not
+        // reliably reproducible on demand, so poll for rows to actually reappear instead of
+        // assuming a flat 1000ms always covers it (every caller expects a non-empty grid back).
+        await this.page.waitForFunction(
+            () => Array.from(document.querySelectorAll('[role="row"]'))
+                .filter(r => r.querySelectorAll('[role="gridcell"]').length >= 7).length > 0,
+            { timeout: 15000 }
+        ).catch(() => { });
+        await this.page.waitForTimeout(300);
     }
 
     // ─── Sort ────────────────────────────────────────────────────────────────────
@@ -601,12 +636,15 @@ class CapexPage {
             await dd.locator('.mantine-Combobox-option').first().click();
         }
         await this.closePortfolioFilter();
-        // Wait until the grid has re-populated with multiple rows before returning.
-        // Threshold > 10 distinguishes a fully-restored portfolio from an empty or partial state.
+        // Wait until the grid has re-populated with rows before returning. Confirmed live via
+        // MCP browser: this restore can take noticeably longer than 12s to re-render under load
+        // (observed reads of exactly 0 rows afterward), so this polls generously rather than
+        // assuming a fixed budget is always enough — any non-empty read confirms the master
+        // toggle's restore actually took effect, without assuming a specific portfolio size.
         await this.page.waitForFunction(
             () => Array.from(document.querySelectorAll('[role="row"]'))
-                .filter(r => r.querySelectorAll('[role="gridcell"]').length >= 7).length > 10,
-            { timeout: 12000 }
+                .filter(r => r.querySelectorAll('[role="gridcell"]').length >= 7).length > 0,
+            { timeout: 25000 }
         ).catch(() => { });
         await this.page.waitForTimeout(600);
     }
@@ -670,11 +708,14 @@ class CapexPage {
             await options.nth(1).click();
         }
         await this.closePortfolioFilter();
-        // Wait for the grid to re-render with the restored property before returning
+        // Wait for the grid to re-render with the restored property before returning. Confirmed
+        // live via MCP browser: this restore can take noticeably longer than 12s under load
+        // (observed reads of exactly 0 rows afterward), so this polls generously rather than
+        // assuming a fixed budget is always enough.
         await this.page.waitForFunction(
             () => Array.from(document.querySelectorAll('[role="row"]'))
                 .filter(r => r.querySelectorAll('[role="gridcell"]').length >= 7).length > 1,
-            { timeout: 12000 }
+            { timeout: 25000 }
         ).catch(() => { });
         // GHA: the Properties KPI card updates asynchronously after the filter change.
         // Grid rows appear before the KPI re-renders, so we wait for a valid numeric
