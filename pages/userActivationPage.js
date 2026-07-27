@@ -240,8 +240,12 @@ class UserActivationPage {
 
     async gotoPropertiesPage() {
         Logger.step('[Activation] Navigating to Properties page');
-        await this.activationPage.locator(propertyLocators.propertiesNavLink).first().click();
-        await this.activationPage.waitForURL(/\/properties/, { timeout: 20000 });
+        // MCP-verified live: this activation page's sidebar starts collapsed (icon-only,
+        // width=68px), so every .mantine-NavLink-root's textContent is empty in that state —
+        // propertiesNavLink's :has-text('Properties') matches zero elements and .click() hangs
+        // until timeout. Every sibling goto*Page method already avoids this via gotoPath();
+        // Properties was the one method still on the old click-based approach.
+        await this.gotoPath('/properties');
         await expect(this.propertiesGrid().first()).toBeVisible({ timeout: 20000 });
     }
 
@@ -349,7 +353,26 @@ class UserActivationPage {
      * these pages groups its header/body into separate column-group containers, so a
      * columnheader's index must be resolved within its own group, not the whole treegrid.
      */
+    /**
+     * Forces the page's treegrid to a large width so revo-grid mounts every column instead of
+     * virtualizing rightmost ones out of the DOM. MCP-verified live on /jobs: the grid renders
+     * only 7 columns by default (Title..Project, Actions) — "Property" (and everything after)
+     * is dropped entirely, so getGridColumnValues('Property') finds no matching header and
+     * returns [] even though matching rows exist.
+     */
+    async forceTreegridFullWidth() {
+        await this.activationPage.evaluate(() => {
+            const grid = document.querySelector('revo-grid');
+            if (grid) {
+                grid.style.setProperty('width', '3000px', 'important');
+                grid.style.setProperty('min-width', '3000px', 'important');
+            }
+        }).catch(() => {});
+        await this.activationPage.waitForTimeout(400);
+    }
+
     async getGridColumnValues(columnHeaderText) {
+        await this.forceTreegridFullWidth();
         return this.activationPage.evaluate((headerText) => {
             const treegrid = document.querySelector('[role="treegrid"]');
             if (!treegrid) return [];

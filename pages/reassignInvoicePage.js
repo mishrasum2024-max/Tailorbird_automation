@@ -134,8 +134,27 @@ class ReassignInvoicePage {
 
     // ── Invoice list helpers ─────────────────────────────────────────────────────
 
+    /**
+     * Forces the invoice list grid to a large width so revo-grid mounts every column
+     * (including "Status") instead of virtualizing the rightmost ones out of the DOM.
+     * MCP-verified live on https://beta.tailorbird.com/jobs/*?tab=invoices: without this,
+     * the grid renders only 8 columns (through "Gross Amount") — "Status" is dropped
+     * entirely, so extractStatusFromRowText() returns null even though the row is present.
+     */
+    async forceInvoiceGridFullWidth() {
+        const grid = this.loc.invoiceGridScope;
+        if (await grid.count().catch(() => 0)) {
+            await grid.first().evaluate((g) => {
+                g.style.setProperty('width', '3000px', 'important');
+                g.style.setProperty('min-width', '3000px', 'important');
+            }).catch(() => {});
+            await this.page.waitForTimeout(400);
+        }
+    }
+
     /** Returns the full text of the invoice's row (contains amount + status columns), or null if not found. */
     async getInvoiceRowText(invoiceNumber) {
+        await this.forceInvoiceGridFullWidth();
         const rows = this.loc.invoiceDataRows;
         const count = await rows.count().catch(() => 0);
         for (let i = 0; i < count; i++) {
