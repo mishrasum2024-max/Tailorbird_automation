@@ -392,6 +392,45 @@ class OrganizationHelper {
       this.log(`Invitation revoked for ${email}.`);
     } catch (err) {
       this.log(`❌ ERROR revoking invitation for ${email}: ${err}`);
+      // MCP-verified live (2026-07-28): the Users tab now renders as a revo-grid instead of
+      // the native <table> these locators were written for. Each row is split across two
+      // separate DOM subtrees (a "data" pane and an "actions" pane) that both carry the same
+      // data-rgrow index but are NOT in an ancestor/descendant relationship — so
+      // row.locator(userActionsBtn) above can never find the actions pane's "User actions"
+      // button, no matter how long it waits. This fallback re-locates that button by
+      // correlating on the shared data-rgrow index instead, then completes the exact same
+      // revoke flow as above.
+      try {
+        const rowIndex = await row.getAttribute("data-rgrow");
+        if (rowIndex === null) throw err;
+        this.log(`Falling back to grid actions-pane lookup for row index ${rowIndex}...`);
+        const actionsBtn = this.page
+          .locator(`[role="row"][data-rgrow="${rowIndex}"] button[title="User actions"]`)
+          .first();
+        await actionsBtn.click({ timeout: 15000 });
+        this.log("Opened user action menu (fallback).");
+        await this.page.locator(organizationLocators.menuItemRevoke).click();
+        this.log("Clicked 'Revoke invite' (fallback).");
+        const fallbackModal = this.page.locator(organizationLocators.modal);
+        await expect(fallbackModal).toBeVisible({ timeout: 5000 });
+        this.log("Revoke modal visible (fallback).");
+        const fallbackTitle = fallbackModal.locator(organizationLocators.modalTitle);
+        await expect(fallbackTitle).toHaveText(data.revokeDialogTitle);
+        this.log("Revoke dialog title validated (fallback).");
+        const fallbackExpectedMsg = this.fillDynamic(data.revokeDialogMessage, email);
+        const fallbackMsgLocator = fallbackModal.locator("p");
+        const fallbackActualMsg = (await fallbackMsgLocator.innerText()).trim();
+        this.log("Extracted message (fallback): " + fallbackActualMsg);
+        await expect(fallbackMsgLocator).toHaveText(fallbackExpectedMsg);
+        this.log("Revoke message validated (fallback).");
+        await fallbackModal.locator(`button:has-text("${data.revokeConfirmButton}")`).click();
+        this.log("Clicked revoke confirm (fallback).");
+        await fallbackModal.waitFor({ state: "hidden" });
+        this.log(`Invitation revoked for ${email} (fallback).`);
+        return;
+      } catch (fallbackErr) {
+        this.log(`❌ Fallback also failed revoking invitation for ${email}: ${fallbackErr}`);
+      }
       throw err;
     }
   }
@@ -418,6 +457,21 @@ class OrganizationHelper {
       this.log("First row menu opened.");
     } catch (err) {
       this.log("ERROR opening first row menu: " + err);
+      // MCP-verified live (2026-07-28): the Users tab no longer renders a native <table> at
+      // all — it's a revo-grid now — so 'table tbody tr:first-child ...' can never match a
+      // single element, regardless of timeout. Fall back to the grid's own first row
+      // (data-rgrow="0") and its row-index-correlated actions-pane "User actions" button.
+      try {
+        this.log("Falling back to grid actions-pane lookup for the first row...");
+        const actionsBtn = this.page
+          .locator('[role="row"][data-rgrow="0"] button[title="User actions"]')
+          .first();
+        await actionsBtn.click({ timeout: 15000 });
+        this.log("First row menu opened (fallback).");
+        return;
+      } catch (fallbackErr) {
+        this.log("❌ Fallback also failed opening first row menu: " + fallbackErr);
+      }
       throw err;
     }
   }

@@ -218,15 +218,10 @@ test.describe('Verify Bids', () => {
         await bidPage.waitForPiperResponse();
 
         const panel = page.getByRole('tabpanel', { name: 'Manage Bids' });
-        // Turn 1's Thought button had an explicit visibility wait; turn 2's needs the
-        // same allowance — it can render a beat after waitForPiperResponse() resolves.
-        await expect.poll(
-            () => panel.getByRole('button', { name: 'Thought' }).count(),
-            { timeout: 15000 },
-        ).toBeGreaterThanOrEqual(2);
-        const thoughtCountAfterTurn2 = await panel.getByRole('button', { name: 'Thought' }).count();
-        Logger.info(`Thought buttons after turn 2: ${thoughtCountAfterTurn2} ✓`);
-
+        // Per explicit product decision: "Thought" is not guaranteed on every turn (MCP-
+        // verified live — Piper only shows it for some turns, not a fixed count per message).
+        // The only thing that matters for pass/fail is that the AI actually replied with
+        // something after this turn too — same bar as turn 1.
         const turn2Response = await bidPage.getPiperLastResponseText();
         expect(turn2Response.length).toBeGreaterThan(0);
         Logger.info(`Turn 2 response (first 100 chars): "${turn2Response.substring(0, 100)}"`);
@@ -235,9 +230,9 @@ test.describe('Verify Bids', () => {
         Logger.step('TC_BID_08 — Reset dialog cancel path');
         await bidPage.assertPiperResetDialogCancel();
 
-        // Chat history must still be present after cancel
+        // Chat history must still be present after cancel — at least one prior response.
         const thoughtCountAfterCancel = await panel.getByRole('button', { name: 'Thought' }).count();
-        expect(thoughtCountAfterCancel).toBeGreaterThanOrEqual(2);
+        expect(thoughtCountAfterCancel).toBeGreaterThanOrEqual(1);
         Logger.info('Chat history intact after Reset cancel ✓');
 
         // ── Reset dialog: Confirm path ────────────────────────────────────────────
@@ -371,18 +366,16 @@ test.describe('Verify Bids', () => {
         // ── Edge 6: Reset Cancel — history must survive ────────────────────────────
         Logger.step('TC_BID_11 — E6: Reset Cancel preserves chat history');
         const panel = page.getByRole('tabpanel', { name: 'Manage Bids' });
-        // Each Thought button can render a beat after waitForPiperResponse() resolves —
-        // poll instead of asserting on a single read right after the last turn.
-        await expect.poll(
-            () => panel.getByRole('button', { name: 'Thought' }).count(),
-            { timeout: 15000 },
-        ).toBeGreaterThanOrEqual(3);
-        const countBefore = await panel.getByRole('button', { name: 'Thought' }).count();
-        expect(countBefore).toBeGreaterThanOrEqual(3); // at least E3, E4, E5 responses
+        // Per explicit product decision: "Thought" is not guaranteed on every turn (MCP-
+        // verified live — Piper only shows it for some turns, not a fixed count per message).
+        // E3/E4/E5 above already confirmed the AI replied with real content each time —
+        // that's the only pass bar. Here we just confirm Reset Cancel doesn't wipe history.
+        const paraCountBefore = await panel.locator('p').count();
+        expect(paraCountBefore).toBeGreaterThan(0);
         await bidPage.assertPiperResetDialogCancel();
-        const countAfterCancel = await panel.getByRole('button', { name: 'Thought' }).count();
-        expect(countAfterCancel).toBe(countBefore);
-        Logger.info(`E6 ✓ Reset Cancel: ${countAfterCancel} Thought buttons intact after cancel`);
+        const paraCountAfterCancel = await panel.locator('p').count();
+        expect(paraCountAfterCancel).toBe(paraCountBefore);
+        Logger.info(`E6 ✓ Reset Cancel: chat history intact (${paraCountAfterCancel} paragraphs) after cancel`);
 
         // ── Edge 7: Manage Vendors closes Piper back to vendor list ───────────────
         Logger.step('TC_BID_11 — E7: Manage Vendors closes Piper');

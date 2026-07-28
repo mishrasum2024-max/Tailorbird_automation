@@ -113,10 +113,20 @@ class LoginPage {
       this.page.getByRole('link', { name: 'Forgot your password?' }),
       'FAIL: AuthKit password step — link "Forgot your password?" missing or renamed (verify LIVE UI / MCP).',
     ).toBeVisible({ timeout: 10_000 });
-    await expect(
-      this.page.getByRole('link', { name: 'Go back' }),
-      'FAIL: AuthKit password step — link "Go back" missing or renamed (verify LIVE UI / MCP).',
-    ).toBeVisible();
+    // MCP-verified live (2026-07-28): AuthKit renamed this secondary link from "Go back" to
+    // "Change email" (same position/purpose — returns to the email step). Check the current
+    // copy first; only fall back to the original "Go back" check (which will then correctly
+    // fail loud, per this method's intent) if that's missing too, so a further future rename
+    // still gets caught instead of silently passing forever.
+    const changeEmailLink = this.page.getByRole('link', { name: 'Change email' });
+    if (await changeEmailLink.isVisible({ timeout: 5000 }).catch(() => false)) {
+      await expect(changeEmailLink).toBeVisible();
+    } else {
+      await expect(
+        this.page.getByRole('link', { name: 'Go back' }),
+        'FAIL: AuthKit password step — link "Go back" missing or renamed (verify LIVE UI / MCP).',
+      ).toBeVisible();
+    }
     await expect(
       this.page.getByRole('button', { name: 'Email sign-in code' }),
       'FAIL: AuthKit password step — button "Email sign-in code" missing or renamed (verify LIVE UI / MCP).',

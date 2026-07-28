@@ -186,6 +186,18 @@ test.describe('Vendors Directory - E2E', () => {
 
         // ── 2. Check "Carpentry" → grid row count reduces or stays (filtered) ──
         const dataRows = page.locator('[role="row"]').filter({ has: page.locator('[role="gridcell"]') });
+        // MCP-verified live (2026-07-28): the unfiltered list keeps mounting additional rows
+        // for a bit after waitForDirectoryReady()'s own poll only guarantees ">0" rows — an
+        // early, unsettled read here (e.g. 18) can be smaller than the real baseline (e.g. 39),
+        // making a correctly-filtered afterCount look like an increase. Wait for two
+        // consecutive reads to agree before treating the count as a stable baseline.
+        let _previousDataRowCount = await dataRows.count();
+        for (let _i = 0; _i < 6; _i++) {
+            await page.waitForTimeout(400);
+            const _currentDataRowCount = await dataRows.count();
+            if (_currentDataRowCount === _previousDataRowCount) break;
+            _previousDataRowCount = _currentDataRowCount;
+        }
         const beforeCount = await dataRows.count();
         const carpentryBox = page.getByRole('checkbox', { name: 'Carpentry' });
         const carpentryVisible = await carpentryBox.isVisible({ timeout: 3000 }).catch(() => false);
@@ -425,7 +437,20 @@ test.describe('Vendors Directory - E2E', () => {
         // nav renders collapsed by default — expand it first so the label is visible.
         await leftPanel.ensureSectionExpanded(page, 'Vendors');
         const directoryNavLink = page.locator('nav').getByText('Directory', { exact: true }).first();
-        await directoryNavLink.click();
+        // MCP-verified live (2026-07-28): at this viewport the nav renders in its collapsed/
+        // compact form — "Vendors"/"Directory" exist in the DOM (3 responsive copies, per the
+        // app's usual pattern) but none of them are ever visible directly; the real "Directory"
+        // link only becomes reachable inside the "More" overflow menu. The original locator
+        // above can never become visible in that case, no matter how long it waits, so check
+        // first and fall back to the More menu instead of always assuming direct-nav mode.
+        if (await directoryNavLink.isVisible({ timeout: 5000 }).catch(() => false)) {
+            await directoryNavLink.click();
+        } else {
+            const moreBtn = page.locator('nav .mantine-NavLink-root').filter({ hasText: 'More' }).first();
+            await moreBtn.click();
+            await page.waitForTimeout(500);
+            await page.locator('[role="menu"]').first().locator('[role="menuitem"]').filter({ hasText: 'Directory' }).first().click();
+        }
         await page.waitForURL(/vendors\/directory/, { timeout: 15000 });
         await vendorPage.waitForDirectoryReady();
         await expect(page, 'URL should be on the Vendor Directory after clicking "Directory" in the left nav').toHaveURL(/vendors\/directory/);

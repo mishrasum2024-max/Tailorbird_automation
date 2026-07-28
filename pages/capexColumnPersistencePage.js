@@ -137,13 +137,62 @@ class CapexColumnPersistencePage {
 
     // ─── Column visibility in grid ────────────────────────────────────────────
 
+    /**
+     * Forces the CapEx grid to a large width so revo-grid mounts every column marked
+     * visible in the saved preference, instead of virtualizing rightmost ones out of the
+     * DOM to fit the default (narrow) viewport. MCP-verified live (2026-07-28): toggling
+     * "Invoiced Amount" to visible correctly saves server-side (GET /api/table-view-config
+     * confirms columnVisibility.invoiced_amount: true) and toggles the drawer checkbox, but
+     * the column header still never mounts at default width — isColumnVisibleInGrid() reads
+     * DOM presence, which is a rendering/virtualization concern separate from the saved
+     * preference itself.
+     */
+    async forceGridFullWidth() {
+        const grid = this.page.locator('revo-grid').first();
+        if (await grid.count().catch(() => 0)) {
+            await grid.evaluate((g) => {
+                g.style.setProperty('width', '3000px', 'important');
+                g.style.setProperty('min-width', '3000px', 'important');
+            }).catch(() => {});
+            await this.page.waitForTimeout(400);
+        }
+    }
+
+    /**
+     * Undoes forceGridFullWidth()'s inline override. MCP/test-run-verified (2026-07-28): the
+     * forced 3000px width otherwise persists across test.step()s that share the same page
+     * (it's only cleared by a real reload), which silently changed how many rows render and
+     * broke an unrelated later assertion (TC206 Scenario 2's before/after-reload row-count
+     * comparison) that has nothing to do with column visibility. Restoring immediately after
+     * each visibility read keeps the width-forcing effect scoped to just that read.
+     */
+    async restoreGridWidth() {
+        const grid = this.page.locator('revo-grid').first();
+        if (await grid.count().catch(() => 0)) {
+            await grid.evaluate((g) => {
+                g.style.removeProperty('width');
+                g.style.removeProperty('min-width');
+            }).catch(() => {});
+            await this.page.waitForTimeout(400);
+        }
+    }
+
     // Instant DOM query — safe to call right after showColumn/hideColumn which
     // already waited for the grid to update before returning.
     async isColumnVisibleInGrid(columnName) {
-        return this.page.evaluate((name) => {
+        const checkHeaderPresent = () => this.page.evaluate((name) => {
             return Array.from(document.querySelectorAll('[role="columnheader"]'))
                 .some(h => h.textContent.trim() === name);
         }, columnName);
+        // Fast path first — most columns (e.g. "Budget Revision", "Approved Change Orders")
+        // already fit at default width, so most callers never need the force/restore below.
+        // Only pay that cost (and its ~800ms of waiting) for columns that are actually
+        // virtualized out at default width (e.g. "Invoiced Amount", MCP-verified 2026-07-28).
+        if (await checkHeaderPresent()) return true;
+        await this.forceGridFullWidth();
+        const isVisible = await checkHeaderPresent();
+        await this.restoreGridWidth();
+        return isVisible;
     }
 
     // ─── Sorting ──────────────────────────────────────────────────────────────
