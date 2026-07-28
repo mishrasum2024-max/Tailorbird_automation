@@ -586,6 +586,12 @@ test.describe('TC02 Menu — Text assertions', () => {
 
         await test.step('STATE 1b | Known nav labels — primary items visible (MCP-verified 2026-05-18)', async () => {
             const nav = page.getByRole('navigation');
+            // Defensive no-op when already expanded: "Construction Management" is a
+            // collapsible section, and its expand state can persist across tests sharing
+            // the same page/session (another test in this file deliberately collapses it
+            // as its own starting state) — a suite-order run can inherit that collapsed
+            // state even though an isolated run of just this test never sees it.
+            await helper.ensureSectionExpanded(page, 'Construction Management').catch(() => {});
             for (const label of [
                 'Properties', 'Approvals', 'Construction Management',
                 'Projects', 'Jobs (Contracts & POs)', 'Bids', 'Change Orders', 'Invoices',

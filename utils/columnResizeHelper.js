@@ -42,10 +42,31 @@ const { Logger }  = require('./logger');
  * @param {number}  [opts.minCellsToCheck=1]  Minimum cells that must be present
  * @returns {Promise<{columnName, widthStart, widthBefore, widthAfter, widthRestored, cellCount, cellsChecked}>}
  */
+/**
+ * Forces a revo-grid to a large width so it mounts every column instead of virtualizing
+ * rightmost ones out of the DOM at narrower effective render widths. MCP-verified live
+ * (2026-07-28): at a 1280px viewport the Properties table grid renders only 9 of its 14
+ * columns — "Budget Variance" and everything after "Fund" is dropped entirely — while at
+ * 1920px all 14 render, so this threshold shifts with viewport/font metrics exactly like
+ * every other revo-grid in this app. Purely visual — does not change any data, selection,
+ * or interaction behavior.
+ */
+async function forceGridFullWidth(page) {
+    const grid = page.locator('revo-grid').first();
+    if (await grid.count().catch(() => 0)) {
+        await grid.evaluate((g) => {
+            g.style.setProperty('width', '3000px', 'important');
+            g.style.setProperty('min-width', '3000px', 'important');
+        }).catch(() => {});
+        await page.waitForTimeout(400);
+    }
+}
+
 async function verifyColumnContentDoesNotWrap({ page, columnName, dragByPx = 50, minCellsToCheck = 1 }) {
     Logger.step(`[ColumnResize] "${columnName}" — verifying values stay single-line after narrowing`);
 
     // ── 1. Locate header ──────────────────────────────────────────────────────
+    await forceGridFullWidth(page);
     const header = page.locator('[role="columnheader"]').filter({ hasText: columnName }).first();
     await header.waitFor({ state: 'visible', timeout: 15000 });
     await header.scrollIntoViewIfNeeded();
@@ -230,8 +251,26 @@ async function verifyColumnContentDoesNotWrap({ page, columnName, dragByPx = 50,
     await page.mouse.up();
     await page.waitForTimeout(500);
 
-    const widthRestored = await header.evaluate(el => Math.round(el.getBoundingClientRect().width));
+    let widthRestored = await header.evaluate(el => Math.round(el.getBoundingClientRect().width));
     Logger.info(`[ColumnResize] "${columnName}" restored to ${widthRestored}px (target ${widthStart}px, delta ${Math.abs(widthRestored - widthStart)}px)`);
+    // MCP/test-run-verified (2026-07-28): a single mouse-drag can leave the width a few px off
+    // target (sub-pixel rounding/snapping in the drag-to-width mapping) — observed live as an
+    // 11px miss on one run, just outside the ±5px tolerance below. Nudge with the remaining
+    // delta, up to 3 attempts, before the unchanged assertion — pure precision improvement,
+    // never changes what is asserted or its tolerance.
+    for (let correctAttempt = 0; correctAttempt < 3 && Math.abs(widthRestored - widthStart) > 5; correctAttempt++) {
+        const correctiveDelta = widthStart - widthRestored;
+        const correctiveHandleBox = await resizeHandle.boundingBox();
+        await page.mouse.move(correctiveHandleBox.x + correctiveHandleBox.width / 2, correctiveHandleBox.y + correctiveHandleBox.height / 2);
+        await page.mouse.down();
+        await page.waitForTimeout(80);
+        await page.mouse.move(correctiveHandleBox.x + correctiveHandleBox.width / 2 + correctiveDelta, correctiveHandleBox.y + correctiveHandleBox.height / 2, { steps: 15 });
+        await page.waitForTimeout(80);
+        await page.mouse.up();
+        await page.waitForTimeout(500);
+        widthRestored = await header.evaluate(el => Math.round(el.getBoundingClientRect().width));
+        Logger.info(`[ColumnResize] "${columnName}" corrective restore attempt ${correctAttempt + 1}: now ${widthRestored}px (target ${widthStart}px)`);
+    }
     expect(
         Math.abs(widthRestored - widthStart),
         `"${columnName}" must be restored to ~${widthStart}px (±5px). Got ${widthRestored}px.`
@@ -240,4 +279,4 @@ async function verifyColumnContentDoesNotWrap({ page, columnName, dragByPx = 50,
     return { columnName, widthStart, widthBefore, widthAfter, widthRestored, cellCount, cellsChecked: checkedCount };
 }
 
-module.exports = { verifyColumnContentDoesNotWrap };
+module.exports = { verifyColumnContentDoesNotWrap, forceGridFullWidth };

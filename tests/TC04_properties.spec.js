@@ -9,7 +9,7 @@ import { getPropertyName } from '../utils/propertyUtils';
 import testData from '../fixture/property.json';
 const uiMessages = require('../fixture/tailorbirdUiMessages.json');
 const loc = require('../locators/locationLocator');
-const { verifyColumnContentDoesNotWrap } = require('../utils/columnResizeHelper');
+const { verifyColumnContentDoesNotWrap, forceGridFullWidth } = require('../utils/columnResizeHelper');
 import { propertyLocators } from '../locators/propertyLocator.js';
 const { ProjectPage } = require('../pages/projectPage');
 const { AddColumnPage } = require('../pages/addColumnPage');
@@ -154,6 +154,13 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
 
   test('@regression @property TC52 - Validate All Column Headers in Table View', async () => {
     await prop.changeView('Table View');
+    // MCP-verified live (2026-07-28): this grid virtualizes rightmost columns out of the DOM
+    // at narrower effective render widths (1280px renders only 9 of 14 columns; 1920px renders
+    // all 14) — the per-column scroll-by-increment + .nth(index) lookups below assume every
+    // column is already mounted, so force full width once up front instead of relying on
+    // scrollHorizontally() to keep pace with a virtualization boundary that can shift with
+    // viewport/font metrics.
+    await forceGridFullWidth(page);
     for (let i = 0; i < testData.expectedHeaders.length; i++) {
       await prop.scrollHorizontally(i);
       const headerTxt = await prop.getHeaderText(i);

@@ -1824,6 +1824,26 @@ exports.ApprovalJob = class ApprovalJob {
     }
 
     /**
+     * Forces the All Approvals revo-grid to a large width so it mounts every column
+     * instead of virtualizing rightmost ones out of the DOM. MCP-verified live (2026-07-28):
+     * at default width the grid renders only Property Name through Requested By + Actions —
+     * "Status" (and Submitted On/Approved On/Approver/Revision Notes) are dropped entirely,
+     * so any row-text scan for a status keyword like "pending" silently finds nothing even
+     * though the matching row itself is visible and present. Purely visual — does not change
+     * any data, selection, or interaction behavior.
+     */
+    async forceGridFullWidth() {
+        const grid = this.page.locator('revo-grid').first();
+        if (await grid.count().catch(() => 0)) {
+            await grid.evaluate((g) => {
+                g.style.setProperty('width', '3500px', 'important');
+                g.style.setProperty('min-width', '3500px', 'important');
+            }).catch(() => {});
+            await this.page.waitForTimeout(400);
+        }
+    }
+
+    /**
      * Navigates directly to the All Approvals page via URL to avoid property
      * context filter that persists from the Budget page URL params.
      */
@@ -1835,6 +1855,7 @@ exports.ApprovalJob = class ApprovalJob {
             await this.page.locator('[role="treegrid"]').first()
                 .waitFor({ state: 'visible', timeout: 30000 }).catch(() => { });
             await this.page.waitForTimeout(3000);
+            await this.forceGridFullWidth();
             Logger.success('Navigated to All Approvals tab');
         } catch (error) {
             Logger.error('navigateToAllApprovalsTab failed: ' + error.message);
@@ -1859,6 +1880,7 @@ exports.ApprovalJob = class ApprovalJob {
             const dataRows = treegrid.locator('[role="row"]').filter({ has: this.page.locator('[role="gridcell"]') });
 
             const findTargetIndex = async () => {
+                await this.forceGridFullWidth();
                 const count = await dataRows.count();
                 for (let i = 0; i < count; i++) {
                     const rowText = (await dataRows.nth(i).textContent().catch(() => '')).toLowerCase();
@@ -1951,6 +1973,7 @@ exports.ApprovalJob = class ApprovalJob {
                 await this.page.locator('[role="treegrid"]').first()
                     .waitFor({ state: 'visible', timeout: 30000 }).catch(() => { });
                 await this.page.waitForTimeout(3000);
+                await this.forceGridFullWidth();
 
                 // Check if any pending revisions remain for this property
                 const treegrid = this.page.locator('[role="treegrid"]').first();
@@ -1988,6 +2011,7 @@ exports.ApprovalJob = class ApprovalJob {
             // All Approvals grid truncates property names (removes timestamp suffix)
             const searchName = propertyName.replace(/_\d+$/, '');
 
+            await this.forceGridFullWidth();
             const treegrid = this.page.locator('[role="treegrid"]').first();
             const dataRows = treegrid.locator('[role="row"]').filter({ has: this.page.locator('[role="gridcell"]') });
             const count = await dataRows.count();
@@ -2022,6 +2046,7 @@ exports.ApprovalJob = class ApprovalJob {
             Logger.step(`Navigating to budget revision editor #${nthOccurrence + 1} for property: "${propertyName}"`);
             const searchName = propertyName.replace(/_\d+$/, '');
 
+            await this.forceGridFullWidth();
             const treegrid = this.page.locator('[role="treegrid"]').first();
             const dataRows = treegrid.locator('[role="row"]').filter({ has: this.page.locator('[role="gridcell"]') });
             const count = await dataRows.count();

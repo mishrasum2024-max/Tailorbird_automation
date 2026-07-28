@@ -75,11 +75,12 @@ test.describe('Multi Approver Invoice Approval Flow', () => {
         await multiApprover.navigateToAllApprovals();
         await multiApprover.searchApprovals(firstInvoice.invoiceNumber);
 
-        // Step 7: Assert Approver column contains both approver emails
-        Logger.step('Step 7: Verifying Approver column');
-        const approverColumnText = await multiApprover.getApproverColumnText();
-        expect(approverColumnText).toContain(approverEmails.email1);
-        expect(approverColumnText).toContain(approverEmails.email2);
+        // Step 7 (removed 2026-07-28): previously asserted the All Approvals grid's
+        // "Approver" column contained both configured approver emails at once. MCP-verified
+        // live: that grid cell only ever shows the single currently-assigned approver, not
+        // the full eligible-approvers list — this was a redundant/outdated check anyway,
+        // since Step 9 below already validates the full "Eligible approvers: X, Y" text via
+        // the View Details dialog, the actual UI surface for that information.
 
         // Step 8: Click View Details
         Logger.step('Step 8: Opening approval View Details');

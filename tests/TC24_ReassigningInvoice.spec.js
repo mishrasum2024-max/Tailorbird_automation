@@ -42,6 +42,12 @@ const INVOICE_COL = { TITLE: 2, DESCRIPTION: 3, INVOICED_AMOUNT: 4, STATUS: 10 }
 
 /** Reads one gridcell (by column index) from the row matching invoiceNumber, on whatever job's Invoice tab is currently open. */
 async function getInvoiceGridCellText(rip, invoiceNumber, colIndex) {
+    // MCP-verified live (2026-07-28): this grid virtualizes rightmost columns (e.g. Status at
+    // index 10) out of the DOM at narrower effective render widths — reading by raw .nth()
+    // position among currently-rendered gridcells then silently returns '' (caught by the
+    // .catch below) instead of the real value, rather than throwing. Reuses the same proven
+    // fix already applied to ReassignInvoicePage.getInvoiceRowText().
+    await rip.forceInvoiceGridFullWidth();
     const row = rip.loc.invoiceDataRows.filter({ hasText: invoiceNumber }).first();
     await expect(row, `Row for "${invoiceNumber}" not found`).toBeVisible({ timeout: 15000 });
     return (await row.locator('[role="gridcell"]').nth(colIndex).textContent().catch(() => '')).trim();

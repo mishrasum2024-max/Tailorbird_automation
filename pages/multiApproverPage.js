@@ -162,10 +162,31 @@ class MultiApproverPage {
     }
 
     /**
+     * Forces the All Approvals revo-grid to a large width so it mounts every column instead
+     * of virtualizing rightmost ones out of the DOM. MCP-verified live (2026-07-28): at
+     * default width this grid renders only Property Name through Requested By + Actions —
+     * "Approver" (and Status/Submitted On/Approved On/Revision Notes) are dropped entirely.
+     * Scrolling an internal container only reveals columns that are already mounted — it
+     * can't help when the column isn't in the DOM at all, which is the actual failure mode
+     * here. Purely visual — does not change any data, selection, or interaction behavior.
+     */
+    async forceGridFullWidth() {
+        const grid = this.page.locator('revo-grid').first();
+        if (await grid.count().catch(() => 0)) {
+            await grid.evaluate((g) => {
+                g.style.setProperty('width', '3500px', 'important');
+                g.style.setProperty('min-width', '3500px', 'important');
+            }).catch(() => {});
+            await this.page.waitForTimeout(400);
+        }
+    }
+
+    /**
      * Reads the Approver column text for the single row currently shown (grid is
      * horizontally virtualized, so the column must be scrolled into view first).
      */
     async getApproverColumnText() {
+        await this.forceGridFullWidth();
         await this.page.evaluate(() => {
             const el = document.querySelector('.rgCol.scroll-rgCol.hydrated');
             if (el) el.scrollLeft = 900;

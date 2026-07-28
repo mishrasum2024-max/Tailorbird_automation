@@ -168,7 +168,28 @@ class AddColumnPage {
         return header;
     }
 
+    /**
+     * Forces the revo-grid within this page object's scope to a large width so it mounts
+     * every column instead of virtualizing rightmost ones out of the DOM. MCP-verified live
+     * (2026-07-28): each newly-added custom column pushes the total column count further
+     * right — by the time a 6th column (e.g. "Checkbox") is added, its aria-colindex sits
+     * past the grid's default rendering width and the gridcell never mounts at all, so
+     * scrollIntoViewIfNeeded() times out waiting for a locator that will never resolve
+     * (not a real feature bug — the same checkbox toggle works fine once the cell exists).
+     */
+    async _forceGridFullWidth() {
+        const grid = this.scope.locator('revo-grid').first();
+        if (await grid.count().catch(() => 0)) {
+            await grid.evaluate((g) => {
+                g.style.setProperty('width', '4000px', 'important');
+                g.style.setProperty('min-width', '4000px', 'important');
+            }).catch(() => {});
+            await this.page.waitForTimeout(400);
+        }
+    }
+
     async _getFirstDataCellForColumn(columnName) {
+        await this._forceGridFullWidth();
         const header = await this._waitForColumnHeader(columnName);
         const colIndex = await header.getAttribute('aria-colindex');
         expect(colIndex, `Column "${columnName}" must have aria-colindex`).toBeTruthy();
