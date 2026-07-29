@@ -86,7 +86,12 @@ test.describe('Manage Organization Flow ', () => {
   test('@sanity @regression TC25 - Revoke user invitation to organization', async () => {
     const invitedEmail = `revoke_${Date.now()}@yopmail.com`;
     Logger.info(`[TC25] Starting: invite then revoke — ${invitedEmail}`);
-    await organizationHelper.inviteUser(invitedEmail, 'Admin');
+    // MCP-verified live (2026-07-29): an invited Admin's row in the Users grid renders only
+    // an "Edit user" button in its Actions pane — there is no "User actions" (Revoke/Resend)
+    // menu at all for Admin rows, only for non-Admin ("Member" / "View Only") rows. Revoking
+    // is therefore only possible against a Member invite; inviting as Admin here made the
+    // subsequent revoke() call wait on a menu button that structurally never renders.
+    await organizationHelper.inviteUser(invitedEmail, 'Member');
     await applyWorkspaceZoom(sharedPage);
     await organizationHelper.search(invitedEmail);
     const userRow = await organizationHelper.getRow(invitedEmail);
@@ -102,7 +107,12 @@ test.describe('Manage Organization Flow ', () => {
   test('@sanity @regression TC26 - Resend user invitation to organization', async () => {
     const invitedEmail = `resend_${Date.now()}@yopmail.com`;
     Logger.info(`[TC26] Starting: invite then resend — ${invitedEmail}`);
-    await organizationHelper.inviteUser(invitedEmail, 'Admin');
+    // MCP-verified live (2026-07-29): same structural constraint as TC25 — an invited Admin's
+    // row has no "User actions" menu (only "Edit user"), so openFirstMenu()'s
+    // data-rgrow="0" fallback (correct once search narrows the grid to a single matching
+    // row) was clicking a button that doesn't exist for an Admin row. Only Member rows
+    // expose Resend/Revoke.
+    await organizationHelper.inviteUser(invitedEmail, 'Member');
     await applyWorkspaceZoom(sharedPage);
     await organizationHelper.search(invitedEmail);
     const userRow = await organizationHelper.getRow(invitedEmail);

@@ -737,7 +737,12 @@ test.describe('Verify Invoice tab', () => {
         // 5 full invoice creations + 5 pending-approval confirmations routinely exceed the
         // default 280000ms test timeout (playwright.config.js) under normal load — bump it here
         // rather than globally, since this is one of the heavier multi-item flows in this file.
-        test.setTimeout(600000);
+        // MCP-verified live (2026-07-29): the target job's contract budget is healthy (full
+        // $30,000 remaining, not exhausted), so this isn't a business-rule block — it's that
+        // confirmInvoiceAndHandleModal() retries up to 3x per invoice (ensureInvoiceIsPendingApproval),
+        // each retry waiting up to 45s for the Confirm button to enable; worst case across 5
+        // invoices can legitimately exceed even 600000ms. Bumped further for headroom.
+        test.setTimeout(900000);
         Logger.step('TC130: Creating 5 complete invoices with budget category (save via Go Back, no confirm)...');
         await page.waitForLoadState('load');
         await page.waitForTimeout(2000);

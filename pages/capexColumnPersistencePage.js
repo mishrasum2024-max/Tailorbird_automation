@@ -298,21 +298,39 @@ class CapexColumnPersistencePage {
         const header = this.l.columnHeaders
             .filter({ has: this.page.getByText(columnName, { exact: true }) })
             .first();
-        const box = await header.boundingBox();
-        if (!box) {
+
+        const attemptDrag = async () => {
+            await header.scrollIntoViewIfNeeded().catch(() => {});
+            const box = await header.boundingBox();
+            if (!box) return null;
+            // The .resizable-r handle sits at the very right edge of the header (6 px wide).
+            const resizerX = box.x + box.width - 3;
+            const resizerY = box.y + box.height / 2;
+            await this.page.mouse.move(resizerX, resizerY);
+            await this.page.mouse.down();
+            await this.page.mouse.move(resizerX + deltaX, resizerY, { steps: 8 });
+            await this.page.mouse.up();
+            // Wait for revo-grid to commit the resize and the API to save it
+            await this.page.waitForTimeout(1200);
+            return this.getColumnWidthPx(columnName);
+        };
+
+        const widthBefore = await this.getColumnWidthPx(columnName);
+        let widthAfter = await attemptDrag();
+        if (widthAfter === null) {
             Logger.error(`resizeColumn: column "${columnName}" bounding box not found`);
             return null;
         }
-        // The .resizable-r handle sits at the very right edge of the header (6 px wide).
-        const resizerX = box.x + box.width - 3;
-        const resizerY = box.y + box.height / 2;
-        await this.page.mouse.move(resizerX, resizerY);
-        await this.page.mouse.down();
-        await this.page.mouse.move(resizerX + deltaX, resizerY, { steps: 8 });
-        await this.page.mouse.up();
-        // Wait for revo-grid to commit the resize and the API to save it
-        await this.page.waitForTimeout(1200);
-        return this.getColumnWidthPx(columnName);
+        // A real drag should move the width in the direction of deltaX. MCP-verified: the
+        // same drag logic reliably resizes the column in isolation, but an occasional miss
+        // can happen deep into a long test (header position can shift after an earlier
+        // scenario's reload/scroll) — retry once before accepting a no-op result.
+        const movedAsExpected = deltaX > 0 ? widthAfter > widthBefore : widthAfter < widthBefore;
+        if (!movedAsExpected) {
+            Logger.info(`resizeColumn: "${columnName}" width unchanged (${widthBefore}px) after first drag attempt — retrying once`);
+            widthAfter = await attemptDrag();
+        }
+        return widthAfter;
     }
 
     // ─── Grouping observation ─────────────────────────────────────────────────

@@ -16,7 +16,9 @@ module.exports = {
   dialogInviteBtn: 'button:has-text("Invite")',
   dialogCancelBtn: 'button:has-text("Cancel")',
   modal: '[role="alertdialog"], [role="dialog"]',
-  modalTitle: 'h1',
+  // MCP-verified live (2026-07-29): the Revoke/Resend confirmation modals are Mantine
+  // Modals whose title renders as <h2>, not <h1>.
+  modalTitle: 'h2',
   modalConfirmBtn: 'button:has-text("Resend"), button:has-text("Revoke")',
   modalCancelBtn: 'button:has-text("Cancel")',
   userActionsBtn: 'button[title="User actions"]',

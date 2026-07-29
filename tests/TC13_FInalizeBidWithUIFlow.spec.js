@@ -425,13 +425,14 @@ test.describe.serial('Finalize bid / contract + OOO approval chain', () => {
             await expect(invoiceRow.getByText(invoiceAmountFormatted), `Amount "${invoiceAmountFormatted}" must be in the row`).toBeVisible({ timeout: 5000 });
             Logger.success(`TC-OOO-APPROVAL-VERIFY: Row found — ID="${invoiceId}", amount="${invoiceAmountFormatted}" ✓`);
 
-            const statusCell = invoiceRow.getByRole('gridcell').filter({ hasText: /pending/i }).first();
-            await expect(statusCell, 'Status cell must show Pending').toBeVisible({ timeout: 5000 });
-            const rawStatusText = await statusCell.innerText().catch(() => statusCell.textContent());
-            const statusText = (rawStatusText.match(/(Pending Approval|Pending Assignment|Pending|Approved|Rejected)/i)?.[0] || rawStatusText).trim();
-            expect(statusText, 'Status must be a pending variant').toMatch(/pending/i);
-            Logger.success(`TC-OOO-APPROVAL-VERIFY: Status is "${statusText}" ✓`);
-
+            // MCP-verified live (2026-07-29): the All Approvals grid no longer has a Status
+            // column at all — current columns are Property Name, Job, Approval Type, ID,
+            // Financial Type, Amount, Actions. A row-level gridcell search for "pending" text
+            // can never match regardless of the invoice's real approval state; the per-approver
+            // Pending/Skipped status only exists inside the "Approval Details" dialog opened
+            // below (verified live: "Eligible approvers: Sumit Mishra"/"Sumit Test" show
+            // "Pending Approval", "Sumit Harsh" shows "Skipped"). Move the pending-status
+            // assertion there instead of expecting it in the row.
             const viewDetailsBtn = page.getByRole('button', { name: 'View Details' }).first();
             await expect(viewDetailsBtn, '"View Details" must be visible').toBeVisible({ timeout: 10000 });
             await viewDetailsBtn.click();
@@ -447,6 +448,7 @@ test.describe.serial('Finalize bid / contract + OOO approval chain', () => {
             Logger.success(`TC-OOO-APPROVAL-VERIFY: All 3 approvers confirmed — ${expectedApprovers.join(', ')} ✓`);
 
             const STATUS_VALUES = ['Pending Approval', 'Pending Assignment', 'Pending', 'Skipped', 'Rejected', 'Approved'];
+            const approverStatuses = [];
             for (const name of expectedApprovers) {
                 const nameEl = dialog.getByText(name, { exact: true }).first();
                 const approverStatus = await nameEl.evaluate((el, statuses) => {
@@ -463,7 +465,11 @@ test.describe.serial('Finalize bid / contract + OOO approval chain', () => {
                     return 'Unknown';
                 }, STATUS_VALUES);
                 Logger.info(`TC-OOO-APPROVAL-VERIFY: "${name}" → "${approverStatus}"`);
+                approverStatuses.push(approverStatus);
             }
+            const statusText = approverStatuses.find((s) => /pending/i.test(s)) || approverStatuses.join(', ');
+            expect(approverStatuses.some((s) => /pending/i.test(s)), 'At least one eligible approver must be in a pending state').toBe(true);
+            Logger.success(`TC-OOO-APPROVAL-VERIFY: Status is "${statusText}" ✓`);
 
             Logger.success(
                 `TC-OOO-APPROVAL-VERIFY PASSED — Invoice ${invoiceNumber} in All Approvals ` +

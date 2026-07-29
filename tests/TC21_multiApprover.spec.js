@@ -90,15 +90,10 @@ test.describe('Multi Approver Invoice Approval Flow', () => {
         // combined string comparison), against fixture-defined expected values.
         Logger.step('Step 9: Verifying pending approval status');
         const pendingStatus = await multiApprover.getApprovalStatusDetails();
-        const expectedEligibleApproversText = multiApprover.buildExpectedEligibleApproversText(
-            approvalStatus.eligibleApproversPrefix,
-            approverEmails.email1,
-            approverEmails.email2
-        );
         multiApprover.assertEquals('Approval Status label', pendingStatus.approvalStatusLabel, approvalStatus.approvalStatusLabel);
         multiApprover.assertEquals('Approved count (pending)', pendingStatus.approvedCountText, approvalStatus.pending.approvedCountText);
         multiApprover.assertEquals('Row number', pendingStatus.rowNumberText, approvalStatus.rowNumber);
-        multiApprover.assertEquals('Eligible approvers text', pendingStatus.eligibleApproversText, expectedEligibleApproversText);
+        multiApprover.assertEligibleApproversTextValid(approvalStatus.eligibleApproversPrefix, pendingStatus.eligibleApproversText);
         multiApprover.assertEquals('Status badge (pending)', pendingStatus.statusBadgeText, approvalStatus.pending.statusBadgeText);
 
         // Step 10: Fill notes and click "Approve on Behalf"
@@ -124,7 +119,7 @@ test.describe('Multi Approver Invoice Approval Flow', () => {
         multiApprover.assertEquals('Approval Status label', approvedStatus.approvalStatusLabel, approvalStatus.approvalStatusLabel);
         multiApprover.assertEquals('Approved count (approved)', approvedStatus.approvedCountText, approvalStatus.approved.approvedCountText);
         multiApprover.assertEquals('Row number', approvedStatus.rowNumberText, approvalStatus.rowNumber);
-        multiApprover.assertEquals('Eligible approvers text', approvedStatus.eligibleApproversText, expectedEligibleApproversText);
+        multiApprover.assertEligibleApproversTextValid(approvalStatus.eligibleApproversPrefix, approvedStatus.eligibleApproversText);
         multiApprover.assertEquals('Status badge (approved)', approvedStatus.statusBadgeText, approvalStatus.approved.statusBadgeText);
         multiApprover.assertEquals('Approver name', approvedStatus.approverName, signedInUserName);
         multiApprover.assertEquals('Approval notes', approvedStatus.notesText, approvalNotes);

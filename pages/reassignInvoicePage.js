@@ -185,12 +185,27 @@ class ReassignInvoicePage {
         return rowText;
     }
 
-    /** Polls until the invoice's row is confirmed absent from the current (unfiltered) grid. */
+    /**
+     * Polls until the invoice's row is confirmed absent from the current (unfiltered) grid.
+     * Falls back to a reload (same pattern as openReassignModalForInvoice's action-pane
+     * retry) if it's still showing after the polling window — MCP-verified: the grid doesn't
+     * always live-refetch after a reassignment, so a plain re-poll of the same stale DOM can
+     * spin for the full timeout even though the backend already moved the invoice.
+     */
     async waitForInvoiceAbsent(invoiceNumber, { timeout = 20000 } = {}) {
-        await expect(async () => {
-            const present = await this.isInvoiceInList(invoiceNumber);
-            expect(present, `Invoice "${invoiceNumber}" still present — expected it to be gone by now`).toBe(false);
-        }).toPass({ timeout, intervals: [1000, 2000, 3000] });
+        try {
+            await expect(async () => {
+                const present = await this.isInvoiceInList(invoiceNumber);
+                expect(present, `Invoice "${invoiceNumber}" still present — expected it to be gone by now`).toBe(false);
+            }).toPass({ timeout, intervals: [1000, 2000, 3000] });
+        } catch (err) {
+            await this.page.reload({ waitUntil: 'load' }).catch(() => {});
+            await this.page.waitForTimeout(2000);
+            await expect(async () => {
+                const present = await this.isInvoiceInList(invoiceNumber);
+                expect(present, `Invoice "${invoiceNumber}" still present after reload — expected it to be gone`).toBe(false);
+            }).toPass({ timeout: 15000, intervals: [1000, 2000, 3000] });
+        }
     }
 
     /** Extracts the Status column value (Draft/Pending Approval/Approved/Rejected) from a row's full text. */

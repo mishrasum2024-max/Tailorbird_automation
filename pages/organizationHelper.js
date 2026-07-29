@@ -370,7 +370,11 @@ class OrganizationHelper {
     try {
       this.log(`Revoking invitation for: ${email}`);
       const menu = row.locator(organizationLocators.userActionsBtn);
-      await menu.click();
+      // Short timeout: this locator is scoped to the data-pane row and the "User actions"
+      // button lives in a structurally separate actions-pane row (MCP-verified live), so this
+      // can never resolve — waiting the full default timeout here only burns real-world time
+      // that risks the grid/DOM drifting before the (working) fallback below even starts.
+      await menu.click({ timeout: 3000 });
       this.log("Opened user action menu.");
       await this.page.locator(organizationLocators.menuItemRevoke).click();
       this.log("Clicked 'Revoke invite'.");
@@ -453,7 +457,12 @@ class OrganizationHelper {
   async openFirstMenu() {
     try {
       this.log("Opening first row menu...");
-      await this.page.locator(organizationLocators.firstRowMenuBtn,{timeout:40000}).click();
+      // Short timeout: 'table tbody tr:first-child ...' can never match (no <table> renders
+      // anymore, MCP-verified live) — waiting a long timeout here only burns real-world time
+      // that risks the grid/DOM drifting before the (working) fallback below even starts.
+      // (The {timeout:40000} previously here was passed to .locator(), which doesn't accept
+      // that option, so .click() was actually still using the ~55s default action timeout.)
+      await this.page.locator(organizationLocators.firstRowMenuBtn).click({ timeout: 3000 });
       this.log("First row menu opened.");
     } catch (err) {
       this.log("ERROR opening first row menu: " + err);
@@ -481,10 +490,12 @@ class OrganizationHelper {
       this.log(`Initiating resend invite for: ${email}`);
       await this.page.locator(organizationLocators.menuItemResend).click();
       this.log("Clicked Resend.");
-      const firstDialog = this.page.getByRole("alertdialog").filter({ hasText: data.resendDialogTitle });
+      // MCP-verified live (2026-07-29): the resend confirmation is a Mantine Modal —
+      // role="dialog" (not "alertdialog"), with its title in an <h2> (not <h1>).
+      const firstDialog = this.page.getByRole("dialog").filter({ hasText: data.resendDialogTitle });
       await expect(firstDialog).toBeVisible();
       this.log("First Resend dialog visible.");
-      await expect(firstDialog.locator("h1")).toHaveText(data.resendDialogTitle);
+      await expect(firstDialog.locator("h2")).toHaveText(data.resendDialogTitle);
       this.log("First title validated.");
       const expectedMsg = this.fillDynamic(data.resendDialogMessage, email);
       const msgLocator = firstDialog.locator("p");
@@ -502,22 +513,27 @@ class OrganizationHelper {
 
   async verifyResendSuccess(email) {
     try {
-      this.log("Verifying resend success second dialog...");
-      const secondDialog = this.page.getByRole("dialog").filter({ hasText: data.resendSuccessTitle });
-      await expect(secondDialog).toBeVisible();
-      this.log("Second dialog visible.");
-      await expect(secondDialog.locator("h1")).toHaveText(data.resendSuccessTitle);
-      this.log("Second title validated.");
+      this.log("Verifying resend success notification...");
+      // MCP-verified live (2026-07-29): the post-resend confirmation is a Mantine
+      // Notification toast — role="alert" (not "dialog"), no heading tag at all (title is
+      // a plain div), and it auto-dismisses on its own after a few seconds, so this must
+      // grab it immediately after resendInvite() returns rather than assuming it lingers.
+      const secondDialog = this.page.getByRole("alert").filter({ hasText: data.resendSuccessTitle });
+      await expect(secondDialog).toBeVisible({ timeout: 8000 });
+      this.log("Success notification visible.");
+      await expect(secondDialog.getByText(data.resendSuccessTitle, { exact: true })).toBeVisible();
+      this.log("Title validated.");
       const expectedMsg = this.fillDynamic(data.resendSuccessMessage, email);
-      const msgLocator = secondDialog.locator("p");
-      const actualMsg = (await msgLocator.innerText()).trim();
-      this.log("Second message: " + actualMsg);
-      await expect(msgLocator).toHaveText(expectedMsg);
-      this.log("Second message validated.");
-      await secondDialog.locator(`button:has-text("${data.resendSuccessCloseButton}")`).click();
+      const actualMsg = (await secondDialog.innerText()).trim();
+      this.log("Message: " + actualMsg);
+      expect(actualMsg).toContain(expectedMsg);
+      this.log("Message validated.");
+      // The close (X) button has no accessible name here — it's icon-only — so target it
+      // structurally (the notification's own button) instead of by text.
+      await secondDialog.getByRole("button").first().click();
       this.log("Clicked Close.");
       await expect(this.page.getByRole("dialog")).toBeHidden({ timeout: 5000 });
-      await expect(this.page.getByRole("alertdialog")).toBeHidden({ timeout: 5000 });
+      await expect(secondDialog).toBeHidden({ timeout: 5000 });
       this.log("Both dialogs closed.");
     } catch (err) {
       this.log("❌ ERROR verifying resend success: " + err);

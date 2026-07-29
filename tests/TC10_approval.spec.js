@@ -1256,7 +1256,13 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
     });
 
     test('TC206 @regression @capex — Column settings persist after page refresh: visibility, sort and width saved server-side via table-view-config', async ({ page }) => {
-        test.setTimeout(240000);
+        // MCP-verified live (2026-07-29): each individual save/reload step is fast (PUT
+        // /api/table-view-config resolves in under 1s), but this test chains 5 scenarios —
+        // visibility, sort, width, combined, grouping — each with its own reload-and-wait
+        // cycle and up to 4 sort-toggle clicks in clearColumnSort(), so the cumulative
+        // real-world time can exceed 240s under normal (not hung) conditions. The very next
+        // test (TC207, a lighter single-flow test) already budgets 420000ms — matching that.
+        test.setTimeout(420000);
         const capex = new CapexPage(page);
         await capex.goto();
         Logger.step('TC206: Column settings persistence after page refresh');
