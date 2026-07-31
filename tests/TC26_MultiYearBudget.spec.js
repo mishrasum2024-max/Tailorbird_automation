@@ -18,7 +18,14 @@ test.use({
 let page, approvalJob, budgetJob, mybJob;
 
 test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propagation, Cross-Year Reallocation', () => {
-    test.describe.configure({ retries: 1 });
+    // ROOT CAUSE (2026-07-31): MYB03 reads data/multiYearBudgetPropertyData.json, which
+    // MYB01 writes. Under fullyParallel:true + CI's --workers=4, these independent tests can
+    // be scheduled to different workers in any order, so MYB03 could run before MYB01 has
+    // written fresh data — reading the stale, committed JSON (referencing an earlier local
+    // run's property) instead. `mode: 'serial'` (combined with the existing `retries: 1`)
+    // guarantees declaration order within this worker, matching the same pattern already
+    // used in TC17_OOO_OutOfOffice.spec.js for its own shared-state race.
+    test.describe.configure({ mode: 'serial', retries: 1 });
 
     test.beforeEach(async ({ page: p }) => {
         page = p;

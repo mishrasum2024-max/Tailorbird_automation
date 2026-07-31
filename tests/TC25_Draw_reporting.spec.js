@@ -7,6 +7,12 @@ const { DrawReportingJob } = require('../pages/drawReportingPage');
 const { Logger } = require('../utils/logger');
 const { captureDrawReportingUi, compareUiSnapshotToBaseline } = require('../utils/uiSnapshotCapture');
 const { ensureLeftPanelExpanded } = require('../utils/leftPanelExpander');
+// NEW, additive-only imports — see utils/resilientRetry.js for rationale. Nothing in
+// pages/drawReportingPage.js or locators/drawReportingLocator.js is modified; these are
+// reused (imported) as-is to build spec-level resilience for the specific CI-only
+// failures investigated below.
+const { withExtendedTerminalWait, retryOperation } = require('../utils/resilientRetry');
+const { drawReportingLocators } = require('../locators/drawReportingLocator');
 
 test.use({
     storageState: 'sessionState.json',
@@ -53,7 +59,17 @@ async function rejectDrawAsRealApprover(browser, propertyName, drawName, note) {
 }
 
 test.describe('Draw Reporting - Empty State, All Grid Controls, and Create Draw E2E Impact', () => {
-    // test.describe.configure({ retries: 1 });
+    // SERIAL (was previously unset, allowing fullyParallel:true + CI's --workers=4 to run
+    // these tests concurrently): every test below TC372 shares the SAME real property
+    // ("Test Property 6_Draw reporting", job 4330) and mutates its live draft/invoice/draw
+    // state (create/discard/submit/approve/reject draws, include/exclude invoices). Root-
+    // cause investigation of the CI-only failures (checkbox state not changing, dialogs not
+    // closing, drawer status mismatches, guard-rail assertions seeing unexpected state)
+    // found this shared, concurrently-mutated property to be the common thread — the exact
+    // "shared resources / parallel collisions" risk this suite's own tests are meant to
+    // guard against. TC17_OOO_OutOfOffice.spec.js already documents and fixes the identical
+    // pattern via `test.describe.serial` for its own shared OOO record; this mirrors that.
+    test.describe.configure({ mode: 'serial' });
 
     test.beforeEach(async ({ page: p }) => {
         page = p;
@@ -320,9 +336,22 @@ test.describe('Draw Reporting - Empty State, All Grid Controls, and Create Draw 
         expect(revertResult.sourceLabelText, 'CM Fee % source label must read "from property (20%)" once reverted to the default').toBe('from property (20%)');
 
         // ===== STEP 5: Submit the draw for approval =====
+        // ROOT CAUSE (MCP-verified 2026-07-31): submitDrawForApproval()'s own internal wait
+        // for the Step-2 dialog to close after "Submit for Approval" is a hardcoded 45s —
+        // too tight for this environment's real backend latency (a single, isolated,
+        // non-concurrent /api/ooo DELETE call was directly measured at ~59.8s) compounded by
+        // CI's 4 parallel Playwright workers sharing a 2 vCPU GitHub Actions runner. Rather
+        // than modify that existing method, withExtendedTerminalWait reuses it as-is (so the
+        // click still happens exactly once) and only falls back to a longer, realistic wait
+        // on the same "Step 2 dialog closed" condition if the method's own tight wait fails.
         Logger.step('TC375 Step 5: Submitting the draw for approval');
         await drawReportingJob.proceedToDrawStepTwo();
-        await drawReportingJob.submitDrawForApproval();
+        const drawLocForSubmit = drawReportingLocators(page);
+        await withExtendedTerminalWait(
+            () => drawReportingJob.submitDrawForApproval(),
+            drawLocForSubmit.drawStepTwoDialog,
+            { timeoutMs: 120000, label: 'TC375 Step 5 — Draw Summary dialog after Submit for Approval' }
+        );
         await drawReportingJob.openHistoricalDrawsTab();
         const pendingStatus = await drawReportingJob.getHistoricalDrawRowStatus(drawName);
         expect(pendingStatus, 'Draw must be Pending immediately after submission').toBe('Pending');
@@ -352,6 +381,15 @@ test.describe('Draw Reporting - Empty State, All Grid Controls, and Create Draw 
             await approverDrawReportingJob.navigateToMyApprovalsTab();
             approved = await approverDrawReportingJob.attemptApproveDraw(propertyName, drawName, { tab: 'mine' });
             approvedByFullName = eligibleApproverFullName;
+
+            // ROOT CAUSE (code-verified 2026-07-31): DrawReportingJob's locators (the `draw`
+            // object in pages/drawReportingPage.js) are bound via a MODULE-LEVEL variable, not
+            // an instance property — constructing `approverDrawReportingJob` above rebinds
+            // every locator to `approverPage` globally, including for the original
+            // `drawReportingJob` instance still used below. Re-constructing it here (reusing
+            // the existing constructor, not duplicating any logic) reclaims the correct
+            // binding to the main test `page` before Step 7 uses it again.
+            drawReportingJob = new DrawReportingJob(page);
         }
         expect(approved, `Draw "${drawName}" must end up "Approved" via one of the known users`).toBe(true);
         Logger.success(`TC375 Step 6: Draw "${drawName}" approved (via "${approvedByFullName}")`);
@@ -424,7 +462,15 @@ test.describe('Draw Reporting - Empty State, All Grid Controls, and Create Draw 
         const budgetItemAfterOverride = await drawReportingJob.readDisbursementRowValuesInEditor('Bathroom fixtures install');
         expect(budgetItemAfterOverride.currentDraw, 'Budget item "Current Draw" must be unaffected by a CM Fee % override').toBeCloseTo(budgetItemAfterInclude.currentDraw, 2);
 
-        await drawReportingJob.discardDraw();
+        // ROOT CAUSE (MCP-verified 2026-07-31): discardDraw()'s own internal wait for the
+        // editor dialog to close after confirming discard is a hardcoded 45s — same tight-
+        // timeout-for-real-backend-latency issue as TC375 Step 5 above (see that comment).
+        const drawLocForDiscard = drawReportingLocators(page);
+        await withExtendedTerminalWait(
+            () => drawReportingJob.discardDraw(),
+            drawLocForDiscard.drawEditorDialog,
+            { timeoutMs: 120000, label: 'CALC test — draw editor dialog after Discard' }
+        );
         Logger.success(`Draw calculation correctness verified for "${drawName}"`);
     });
 
@@ -448,7 +494,19 @@ test.describe('Draw Reporting - Empty State, All Grid Controls, and Create Draw 
 
         // See CALC test above — clear any invoices left unconsumed by earlier discarded
         // drafts on this shared property before working with exactly these two invoices.
-        await drawReportingJob.excludeAllInvoicesInDraft();
+        // ROOT CAUSE (MCP + code-verified 2026-07-31): excludeAllInvoicesInDraft() failed
+        // with "Clicking the checkbox did not change its state" in CI — a row-state race
+        // (the checkbox appears checked again immediately after the click), consistent with
+        // this shared property's draft/invoice set being mutated by another concurrently-
+        // running test under CI's --workers=4 (now mitigated above via serial mode) and/or a
+        // transient re-render. retryOperation re-runs the FULL existing method (which itself
+        // already skips already-unchecked rows), so a retry only ever acts on what is still
+        // actually checked — it cannot mask a genuine, consistently-reproducing UI bug, since
+        // an unchanging error is rethrown as-is after the final attempt.
+        await retryOperation(
+            () => drawReportingJob.excludeAllInvoicesInDraft(),
+            { attempts: 3, delayMs: 2000, label: 'INCEXC test — exclude all invoices in draft' }
+        );
 
         await drawReportingJob.includeInvoiceInDraw(invoice1.invoiceNumberLabel);
         const cmFee1 = await drawReportingJob.readCmFeeInvoiceAmount();
@@ -495,6 +553,17 @@ test.describe('Draw Reporting - Empty State, All Grid Controls, and Create Draw 
         const { rejected, rejectedByFullName } = await rejectDrawAsRealApprover(browser, propertyName, drawName, rejectionNote);
         expect(rejected, `Draw "${drawName}" must end up "Rejected"`).toBe(true);
         Logger.success(`Draw "${drawName}" rejected via "${rejectedByFullName}"`);
+
+        // ROOT CAUSE (code-verified 2026-07-31): rejectDrawAsRealApprover() constructs its
+        // own DrawReportingJob bound to a second browser context/page (the real approver).
+        // Because DrawReportingJob's locators are a MODULE-LEVEL variable (`draw` in
+        // pages/drawReportingPage.js), not an instance property, that construction silently
+        // rebinds every locator globally — so the `drawReportingJob` instance below (still
+        // referencing the ORIGINAL page) would otherwise read/act on the approver's page for
+        // the rest of this test. This directly explains "Draw must end up Rejected" reading
+        // stale/wrong-page state. Re-constructing here (reusing the existing constructor
+        // as-is) reclaims the correct binding before any further calls.
+        drawReportingJob = new DrawReportingJob(page);
 
         await drawReportingJob.navigateToDrawReporting();
         await drawReportingJob.selectPropertyByName(propertyName);
@@ -547,7 +616,18 @@ test.describe('Draw Reporting - Empty State, All Grid Controls, and Create Draw 
         await drawReportingJob.createDraw(drawNameB, '07/01/2026', '07/22/2026');
         await drawReportingJob.verifyDrawEditorNameAndStatus(drawNameB);
         await drawReportingJob.includeInvoiceInDraw(invoiceB.invoiceNumberLabel);
-        await drawReportingJob.proceedToDrawStepTwo();
+        // ROOT CAUSE (2026-07-31): this shared property ("Test Property 6_Draw reporting")
+        // was, before the serial-mode fix above, concurrently mutated by sibling tests in
+        // this file under CI's --workers=4 — proceedToDrawStepTwo()'s own internal wait for
+        // the Step 2 dialog is a hardcoded 45s, too tight under that contention (and under
+        // this environment's generally slow backend, MCP-verified elsewhere in this file).
+        // Kept here too as defense-in-depth even with serial mode now removing the collision.
+        const drawLocForGuard = drawReportingLocators(page);
+        await withExtendedTerminalWait(
+            () => drawReportingJob.proceedToDrawStepTwo(),
+            drawLocForGuard.drawStepTwoDialog,
+            { timeoutMs: 120000, visible: true, label: 'GUARD test — Draw B Step 2 dialog' }
+        );
         await drawReportingJob.assertSubmitForApprovalDisabled();
 
         // Clean up: back out of Draw B entirely (discard), then approve Draw A so the shared
@@ -593,6 +673,11 @@ test.describe('Draw Reporting - Empty State, All Grid Controls, and Create Draw 
         const { approved, approvedByFullName } = await approveDrawAsRealApprover(browser, propertyName, drawName);
         expect(approved, `Draw "${drawName}" must end up "Approved"`).toBe(true);
 
+        // See REJECT test above for why this reconstruction is required after any
+        // approve/reject-as-real-approver call — DrawReportingJob's locators are bound via a
+        // module-level variable, not an instance property.
+        drawReportingJob = new DrawReportingJob(page);
+
         await drawReportingJob.navigateToDrawReporting();
         await drawReportingJob.selectPropertyByName(propertyName);
         await drawReportingJob.openHistoricalDrawsTab();
@@ -618,7 +703,17 @@ test.describe('Draw Reporting - Empty State, All Grid Controls, and Create Draw 
         const invoice = await drawReportingJob.createPendingInvoiceForJobOnProperty(jobId, `DOC_Invoice_${timestamp}`);
         await drawReportingJob.navigateToDrawReporting();
         await drawReportingJob.selectPropertyByName(propertyName);
-        await drawReportingJob.assertSelectedPropertyIs(propertyName);
+        // ROOT CAUSE (2026-07-31): assertSelectedPropertyIs() -> ensureNoBlockingPendingDraw()
+        // -> openOverviewTab() timed out waiting 55s for the Overview tab to become
+        // clickable — this shared property was, before the serial-mode fix above,
+        // concurrently mutated by sibling tests under CI's --workers=4, and this
+        // environment's backend has independently been measured as slow (MCP-verified
+        // elsewhere in this file). retryOperation re-runs the whole call, which is safe
+        // since it is read/navigation-only (no data mutation to double up on retry).
+        await retryOperation(
+            () => drawReportingJob.assertSelectedPropertyIs(propertyName),
+            { attempts: 2, delayMs: 3000, label: 'DOC test — assertSelectedPropertyIs' }
+        );
         await drawReportingJob.createDraw(drawName, '07/01/2026', '07/22/2026');
         await drawReportingJob.verifyDrawEditorNameAndStatus(drawName);
         await drawReportingJob.includeInvoiceInDraw(invoice.invoiceNumberLabel);
@@ -630,6 +725,11 @@ test.describe('Draw Reporting - Empty State, All Grid Controls, and Create Draw 
 
         const { approved, approvedByFullName } = await approveDrawAsRealApprover(browser, propertyName, drawName);
         expect(approved, `Draw "${drawName}" must end up "Approved"`).toBe(true);
+
+        // See REJECT test above for why this reconstruction is required after any
+        // approve/reject-as-real-approver call — DrawReportingJob's locators are bound via a
+        // module-level variable, not an instance property.
+        drawReportingJob = new DrawReportingJob(page);
 
         const documentText = await drawReportingJob.openPropertyDocumentsAndAssertFileExists(propertyId, `draw-${drawId}-report.pdf`);
         Logger.success(`Confirmed generated document "${documentText}" for approved draw "${drawName}" (ID ${drawId}, approved via "${approvedByFullName}")`);

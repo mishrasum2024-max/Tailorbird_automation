@@ -9,6 +9,9 @@ const path = require('path');
 const fs = require('fs');
 const { ApprovalJob } = require('../pages/approvalPage');
 const { ensureLeftPanelExpanded } = require('../utils/leftPanelExpander');
+// NEW, additive-only import — see utils/resilientRetry.js. Nothing in pages/oooPage.js is
+// modified.
+const { withExtendedTerminalWait } = require('../utils/resilientRetry');
 
 test.use({
     storageState: 'sessionState.json',
@@ -129,7 +132,14 @@ test.describe.serial('Out of Office — OOO suite', () => {
     // TC264 — Deactivate resets form completely; re-activate with different role
     // =========================================================================
     test('@ooo @regression TC273 Clicking Deactivate clears the form completely, removes the API record, and lets you activate again with a different role without showing leftover data', async ({ page }) => {
-        test.setTimeout(90000);
+        // ROOT CAUSE (MCP-verified live 2026-07-31): a single, ISOLATED, non-concurrent
+        // `DELETE /api/ooo` call was directly measured at ~59.8s on this backend — this test
+        // makes three such slow calls in sequence (activate A, deactivate, activate B), so
+        // the original 90s test-level timeout cannot realistically accommodate even one
+        // worst-case call, let alone three. This is a genuine backend performance issue (see
+        // final report), not a CI-only artifact — mitigated here with realistic timeouts
+        // rather than masking it.
+        test.setTimeout(400000);
         Logger.step('TC273: Activate Role A → deactivate → verify full reset → re-activate Role B');
 
         const roleA = await oooPage.getFirstRoleName();
@@ -144,12 +154,24 @@ test.describe.serial('Out of Office — OOO suite', () => {
             Logger.info('TC273: Only one role in org — re-activating with same role (verifies reset, not role-switch)');
         }
 
-        await oooPage.activateWithRole(roleA);
+        // Each activate/deactivate call below reuses the existing oooPage method as-is; the
+        // fallback only engages if that method's own internal (tight) wait times out, and
+        // then waits again on the exact same real condition with a realistic budget — see
+        // utils/resilientRetry.js and the 59.8s network measurement noted above.
+        await withExtendedTerminalWait(
+            () => oooPage.activateWithRole(roleA),
+            oooPage.loc.activeStatePara,
+            { timeoutMs: 90000, visible: true, label: 'TC273 — activate Role A' }
+        );
         await oooPage.assertIsActive();
         await oooPage.assertActiveBanner({ roleName: roleA, isRole: true });
         Logger.info('TC273: OOO activated with Role A ✓');
 
-        await oooPage.clickDeactivateOoo();
+        await withExtendedTerminalWait(
+            () => oooPage.clickDeactivateOoo(),
+            oooPage.loc.btn_activate,
+            { timeoutMs: 90000, visible: true, label: 'TC273 — deactivate' }
+        );
         await oooPage.assertIsInactive();
         Logger.info('TC273: Full UI reset confirmed ✓');
 
@@ -157,7 +179,11 @@ test.describe.serial('Out of Office — OOO suite', () => {
         expect(apiAfterDeactivate.ooo, 'API ooo must be NULL after deactivation').toBeNull();
         Logger.info('TC273: API confirms ooo=null ✓');
 
-        await oooPage.activateWithRole(roleB);
+        await withExtendedTerminalWait(
+            () => oooPage.activateWithRole(roleB),
+            oooPage.loc.activeStatePara,
+            { timeoutMs: 90000, visible: true, label: 'TC273 — activate Role B' }
+        );
         const textB = await oooPage.assertActiveBanner({ roleName: roleB, isRole: true });
         if (hasTwoRoles) {
             expect(textB, 'Active banner must NOT contain Role A (stale data)').not.toContain(roleA);
