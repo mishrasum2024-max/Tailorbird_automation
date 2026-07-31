@@ -182,8 +182,8 @@ function drawReportingLocators(page) {
         // --- Top nav "Approvals" link + "All Approvals"/"My Approvals" tabs (for client-side SPA navigation) ---
         // "All Approvals" is an admin-wide view — it renders ZERO rows for a regular approver
         // (e.g. the real eligible approver logged in on their own account). That user's queue
-        // lives under "My Approvals" instead. Both grids share the same row-finding problem
-        // (see dataRowsWithDate below), just scoped to a different list.
+        // lives under "My Approvals" instead. Both grids share the same row-finding problem,
+        // just scoped to a different list.
         approvalsNavLink: page.locator('nav').getByText('Approvals', { exact: true }).first(),
         allApprovalsTab: page.getByRole('tab', { name: 'All Approvals', exact: true }),
         myApprovalsTab: page.getByRole('tab', { name: 'My Approvals', exact: true }),
@@ -191,18 +191,21 @@ function drawReportingLocators(page) {
         // --- All Approvals / My Approvals grids + Approval Details dialog ---
         // The grid's rows do NOT render the draw's name anywhere (only Property Name, Job,
         // Approval Type, ID, Amount, etc.) and the page's search box does not index draw name
-        // either — searching by draw name always yields zero rows. Since the domain only
-        // allows one Pending draw submission per property at a time, the unique way to find
-        // "the draw I just submitted" is by property name + type "Draw" (+ status "Pending
-        // Approval" on All Approvals only — My Approvals' rows don't render a status column at
-        // all, since everything listed there is implicitly pending); the exact draw name is
-        // then verified from the opened dialog's own text.
+        // either — searching by draw name always yields zero rows. MCP-verified live
+        // (2026-07-30, exhaustive shadow-DOM scan of the whole page): neither grid renders a
+        // Status column at all — "Pending Approval"/"Approved"/"Rejected" text exists only
+        // inside the Approval Details dialog, never in a row. Filtering a row on
+        // hasText:'Pending Approval' therefore always matches zero rows, which silently broke
+        // every approve/reject flow that went through the "All Approvals" tab. Since the domain
+        // only allows one Pending draw submission per property at a time, and a newly-submitted
+        // draw sorts first, the unique way to find "the draw I just submitted" is by property
+        // name + type "Draw", taking the first (most recent) match; the exact draw name is then
+        // verified from the opened dialog's own text.
         allApprovalsRowByName: (name) => page.getByRole('row').filter({ hasText: name }),
         allApprovalsPendingDrawRowForProperty: (propertyName) => page
             .getByRole('row')
             .filter({ hasText: propertyName })
-            .filter({ hasText: 'Draw' })
-            .filter({ hasText: 'Pending Approval' }),
+            .filter({ hasText: 'Draw' }),
         myApprovalsPendingDrawRowForProperty: (propertyName) => page
             .getByRole('row')
             .filter({ hasText: propertyName })
@@ -210,12 +213,19 @@ function drawReportingLocators(page) {
         // The grid virtualizes the "Actions" column as a structurally separate column group —
         // its rows are DOM siblings of the data rows, not descendants, and row.getByRole('button',
         // {name:'View Details'}) therefore always matches zero elements (confirmed via direct
-        // count() inspection). The two column groups render in the same top-to-bottom order, so
-        // the button is instead resolved by the data row's positional index among all real data
-        // rows (identified by containing a Submitted-On date, which no Actions-only row has).
-        dataRowsWithDate: page.getByRole('row').filter({ hasText: /\d{2}\/\d{2}\/\d{4}/ }),
+        // count() inspection). The button is instead resolved by matching the data row's
+        // vertical screen position against each Actions button's position (see
+        // resolveViewDetailsButtonForRow) — index-based and text-based matching were both tried
+        // first and both broke under column virtualization / split DOM row structure.
         allViewDetailsButtons: page.getByRole('button', { name: 'View Details' }),
         approvalDetailsDialog: page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: 'Approval Details' }) }),
+        // The dialog's own status badge (next to the eligible-approver line) — the ONLY place
+        // "Pending Approval"/"Approved"/"Rejected" text actually renders anywhere in the app;
+        // see the All Approvals comment above.
+        approvalDetailsStatusBadge: page
+            .getByRole('dialog')
+            .filter({ has: page.getByRole('heading', { name: 'Approval Details' }) })
+            .getByText(/^(Pending Approval|Approved|Rejected)$/),
         eligibleApproversText: page.getByText(/Eligible approvers:/),
         directApproveButton: page.getByRole('button', { name: 'Approve', exact: true }),
         directRejectButton: page.getByRole('button', { name: 'Reject', exact: true }),

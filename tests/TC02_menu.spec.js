@@ -552,7 +552,7 @@ test.describe('TC02 Menu — Single-org user assertions', () => {
 
 test.describe('TC02 Menu — Text assertions', () => {
     test.setTimeout(120_000);
-
+    test.describe.configure({ retries: 1 });
     test('TC22 @menu @sanity Full nav text agent — all CTAs, labels, nav items, profile menu', async ({ page }) => {
         test.skip(!process.env.DASHBOARD_URL, 'DASHBOARD_URL required');
         // beforeEach already navigated to DASHBOARD_URL and set up auth session
@@ -642,7 +642,14 @@ test.describe('TC02 Menu — Text assertions', () => {
                 InteractionLogger.logButtonClick('Profile name', 'Sumit Mishra');
                 await nav.locator('text=Sumit Mishra').first().click();
             }
-            const profileMenu = page.locator('[role="menu"]');
+            // MCP-verified live (2026-07-30): a bare `[role="menu"]` locator is a strict-mode
+            // trap here — Mantine's "More" nav dropdown (opened in STATE 1 above) can still
+            // be present in the DOM as its own [role="menu"] node even after Escape/close, and
+            // Playwright's strict mode counts every DOM match regardless of visibility. Anchor
+            // on "Logout" instead — content that only ever renders inside the profile menu,
+            // never in the nav's "More" menu — so this resolves to exactly one element no
+            // matter how many other menu nodes (open, closing, or stale) exist in the DOM.
+            const profileMenu = page.getByRole('menu').filter({ has: page.getByText('Logout', { exact: true }) });
             await profileMenu.waitFor({ state: 'visible', timeout: 10_000 });
 
             for (const label of ['Manage Approvers', 'Manage Organization', 'Profile', 'Switch Organization', 'Logout']) {

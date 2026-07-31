@@ -26,6 +26,34 @@ async function applyWorkspaceZoom(page) {
   });
 }
 
+/** Access column format used by the Property access tab's user-centric (transposed) view. */
+const PROPERTY_ACCESS_COUNT_PATTERN = /^\d+\s+Propert(y|ies)$/i;
+
+/**
+ * The "Property access" tab renders two orientations behind its own "Transpose view"
+ * control (an icon button top-right of the table, next to Search): a property-centric
+ * grid (Property/Location/Access/Actions) by default, and a user-centric one (User/Email/
+ * Access/Actions, with Access showing "N Properties") once transposed. MCP-verified live
+ * (2026-07-30): the literal "Users" tab's own "Property access" column only ever shows
+ * actual property name(s), "All properties", or "—" — never a numeric count — so it
+ * cannot satisfy a "N Properties" style assertion; that format and column set exist only
+ * in this transposed view. This checks the current state before toggling (rather than
+ * assuming a fixed prior state) since the toggle can already be applied depending on
+ * in-page navigation history.
+ */
+async function ensureUserCentricPropertyAccessView(page) {
+  await page.getByRole('tablist').getByRole('tab', { name: 'Property access' }).click();
+  const userColumnHeader = page.getByRole('columnheader', { name: 'User', exact: true });
+  const alreadyTransposed = await userColumnHeader.isVisible({ timeout: 3000 }).catch(() => false);
+  if (!alreadyTransposed) {
+    await page.getByRole('button', { name: 'Transpose view' }).click();
+    await expect(
+      userColumnHeader,
+      'User-centric Property access view must render after Transpose view',
+    ).toBeVisible({ timeout: 10_000 });
+  }
+}
+
 test.beforeAll(async ({ browser }) => {
   sharedBrowserContext = await browser.newContext({
     storageState: 'sessionState.json',
@@ -139,6 +167,172 @@ test.describe('Manage Organization Flow ', () => {
     Logger.info(`[TC27] Asserting: role updated to ${toggledRole} for ${existingAdminEmail}`);
     await organizationHelper.verifyUpdatedRole(existingAdminEmail, toggledRole);
     Logger.success(`[TC27] ✅ Role toggled and verified for ${existingAdminEmail}: ${toggledRole}`);
+  });
+
+  test('@sanity @regression TC36 - Property access users list validation and property assignment increments count by one', async () => {
+    Logger.info('[TC36] Starting: Property access user-centric list validation + property assignment');
+
+    // Steps 1-2: Manage Organization is already loaded (beforeEach, lands on the Users
+    // tab); the "Users list" with User/Email/Access/Actions columns and an "N Properties"
+    // count lives on the Property access tab's user-centric (transposed) view — see
+    // ensureUserCentricPropertyAccessView() above for why.
+    await ensureUserCentricPropertyAccessView(sharedPage);
+    await applyWorkspaceZoom(sharedPage);
+
+    // Steps 3-4: table loaded and visible
+    const usersTable = sharedPage
+      .locator('table')
+      .filter({ has: sharedPage.getByRole('columnheader', { name: 'User', exact: true }) });
+    await expect(usersTable, 'Property access user-centric table must be visible').toBeVisible({ timeout: 15_000 });
+    Logger.info('[TC36] Users list page loaded successfully');
+
+    // Step 5: required columns present
+    for (const columnName of ['User', 'Email', 'Access', 'Actions']) {
+      Logger.info(`[TC36] Asserting column present: ${columnName}`);
+      await expect(
+        usersTable.getByRole('columnheader', { name: columnName, exact: true }),
+        `Column "${columnName}" must be present`,
+      ).toBeVisible({ timeout: 10_000 });
+    }
+
+    // Steps 6-7: at least one row, and every row structurally valid (User/Email non-empty,
+    // Access matches "N Properties", Actions has an actionable control) — data itself is
+    // dynamic, so no exact-value assertions. Batched into a single evaluate() call since
+    // this table renders every row in the DOM (not virtualized, MCP-verified live —
+    // 300+ rows in this organization), so validating "every row" doesn't cost one
+    // round-trip per row.
+    const rowValidation = await usersTable.evaluate((table, accessPatternSource) => {
+      const accessPattern = new RegExp(accessPatternSource, 'i');
+      const rows = Array.from(table.querySelectorAll('tbody tr'));
+      const failures = [];
+      rows.forEach((row, i) => {
+        const cells = row.querySelectorAll('td');
+        const userText = (cells[0]?.textContent || '').trim();
+        const emailText = (cells[1]?.textContent || '').trim();
+        const accessText = (cells[2]?.textContent || '').trim();
+        const hasActionableControl = !!cells[3]?.querySelector('button');
+        if (!userText) failures.push(`Row ${i}: User column is empty`);
+        if (!emailText) failures.push(`Row ${i}: Email column is empty`);
+        if (!accessPattern.test(accessText)) failures.push(`Row ${i}: Access column "${accessText}" is not a valid property count`);
+        if (!hasActionableControl) failures.push(`Row ${i}: Actions column has no actionable control`);
+      });
+      return { rowCount: rows.length, failures };
+    }, PROPERTY_ACCESS_COUNT_PATTERN.source);
+
+    Logger.info(`[TC36] Validated ${rowValidation.rowCount} row(s)`);
+    expect(rowValidation.rowCount, 'At least one user row must exist').toBeGreaterThan(0);
+    expect(
+      rowValidation.failures,
+      `Row validation failure(s):\n${rowValidation.failures.join('\n')}`,
+    ).toHaveLength(0);
+    Logger.success(`[TC36] ✅ Users list validated — ${rowValidation.rowCount} row(s), all columns and formats correct`);
+
+    // Steps 8-16: property assignment validation. A freshly-invited Member is used ("any
+    // suitable user") so this test never mutates a pre-existing/shared user's real access
+    // (isolation) — inviting via the existing organizationHelper.inviteUser() reuses the
+    // framework's own utility rather than a new one. MCP-verified live (2026-07-30): the
+    // Invite users control lives only on the literal "Users" tab, so navigate back there
+    // first (inviteUser() itself does not manage tab navigation).
+    await sharedPage.getByRole('tablist').getByRole('tab', { name: 'Users', exact: true }).click();
+    await applyWorkspaceZoom(sharedPage);
+
+    const targetEmail = `tc36_property_access_${Date.now()}@yopmail.com`;
+    Logger.info(`[TC36] Step 8: Inviting a fresh Member user to use as the target: ${targetEmail}`);
+    await organizationHelper.inviteUser(targetEmail, 'Member');
+    await applyWorkspaceZoom(sharedPage);
+
+    await ensureUserCentricPropertyAccessView(sharedPage);
+    await applyWorkspaceZoom(sharedPage);
+
+    Logger.info(`[TC36] Locating target user in the Property access list: ${targetEmail}`);
+    const propertyAccessSearchInput = sharedPage.getByRole('textbox', { name: 'Search', exact: true });
+    await propertyAccessSearchInput.fill(targetEmail);
+    const targetRow = usersTable.locator('tbody tr').filter({ hasText: targetEmail });
+
+    // MCP-verified live (2026-07-30): a just-invited user can take a moment to be indexed
+    // into this list — the same class of grid-freshness gap already handled elsewhere in
+    // this file's helpers (e.g. inviteUser()'s own reload fallback). Poll first; only
+    // reload if the row genuinely never shows up in that window.
+    const rowAppeared = await targetRow.isVisible({ timeout: 20_000 }).catch(() => false);
+    if (!rowAppeared) {
+      Logger.info('[TC36] Target row not yet visible — reloading and retrying once');
+      await sharedPage.reload({ waitUntil: 'domcontentloaded' });
+      await ensureUserCentricPropertyAccessView(sharedPage);
+      await propertyAccessSearchInput.fill(targetEmail);
+    }
+    await expect(targetRow, `Row for ${targetEmail} must be visible`).toBeVisible({ timeout: 20_000 });
+
+    // Step 9: capture the current property count exactly as displayed — no assumption
+    // about what the starting value should be, since it is dynamic (data-driven).
+    const accessCell = targetRow.locator('td').nth(2);
+    const previousAccessText = (await accessCell.innerText()).trim();
+    const previousCount = parseInt(previousAccessText, 10);
+    Logger.info(`[TC36] Step 9: Captured previous property count for ${targetEmail}: "${previousAccessText}" (${previousCount})`);
+    expect(Number.isNaN(previousCount), `Previous Access text "${previousAccessText}" must parse to a valid number`).toBe(false);
+
+    // Step 10: open the Actions menu — the row's "Settings" button opens a
+    // "Property access: {email}" dialog with a per-property checkbox picker.
+    Logger.info('[TC36] Step 10: Opening Actions (Settings) for the target user');
+    await targetRow.getByRole('button', { name: 'Settings' }).click();
+    const propertyDialog = sharedPage
+      .getByRole('dialog')
+      .filter({ has: sharedPage.getByRole('heading', { name: `Property access: ${targetEmail}` }) });
+    await expect(propertyDialog, 'Property access dialog must open').toBeVisible({ timeout: 10_000 });
+
+    // Step 11: assign "Test Property1" — MCP-verified live (2026-07-30): no property is
+    // literally named "Test Property1" in this organization; the only property matching
+    // that intent is "Test Property 1_Cottages on Elm" (this org's other numbered test
+    // properties, 2 through 6, follow the same "Test Property N_<description>" naming
+    // convention and none of their descriptive suffixes contain the digit "1"), so this
+    // targets it via a partial match on "Test Property 1" that tolerates the descriptive
+    // suffix. Each checkbox row is a Mantine Group (`.mantine-Group-root` — a stable
+    // component class, not a hashed one) wrapping the checkbox and its label together.
+    await propertyDialog.getByPlaceholder('Search by property name or address').fill('Test Property 1');
+    const targetPropertyRow = propertyDialog.locator('.mantine-Group-root').filter({ hasText: 'Test Property 1' }).first();
+    await expect(targetPropertyRow, 'Target property row must be visible in the picker').toBeVisible({ timeout: 10_000 });
+    await expect(
+      targetPropertyRow.getByRole('checkbox'),
+      'Target property must not already be assigned (would make the +1 assertion below invalid)',
+    ).not.toBeChecked();
+
+    // Steps 12-13: assigning here is a checkbox toggle that auto-saves immediately via
+    // POST /api/user-property-access — MCP-verified live: there is no separate "Save"
+    // button in this dialog, so the network response itself is the completion signal
+    // (proper synchronization instead of a hardcoded wait).
+    const propertyAccessSavedPromise = sharedPage.waitForResponse(
+      (res) => res.url().includes('/api/user-property-access') && res.request().method() === 'POST' && res.status() === 200,
+      { timeout: 20_000 },
+    );
+    await targetPropertyRow.click();
+    await propertyAccessSavedPromise;
+    Logger.info('[TC36] Steps 12-13: Property assignment saved (user-property-access POST confirmed)');
+
+    await sharedPage.keyboard.press('Escape');
+    await expect(propertyDialog, 'Property access dialog must close after assignment').toBeHidden({ timeout: 10_000 });
+
+    // Steps 14-15: read the updated count and assert it increased by exactly 1.
+    const updatedAccessText = (await accessCell.innerText()).trim();
+    const updatedCount = parseInt(updatedAccessText, 10);
+    Logger.info(`[TC36] Step 14: Captured updated property count: "${updatedAccessText}" (${updatedCount})`);
+    expect(Number.isNaN(updatedCount), `Updated Access text "${updatedAccessText}" must parse to a valid number`).toBe(false);
+    expect(
+      updatedCount,
+      `Access count must increase by exactly 1 (was ${previousCount}, now ${updatedCount})`,
+    ).toBe(previousCount + 1);
+    Logger.success(`[TC36] ✅ Property count incremented correctly: ${previousCount} → ${updatedCount}`);
+
+    // Step 16: verify the assignment is genuinely reflected in the UI, not just the count.
+    await targetRow.getByRole('button', { name: 'Settings' }).click();
+    await expect(propertyDialog, 'Property access dialog must reopen for final verification').toBeVisible({ timeout: 10_000 });
+    await propertyDialog.getByPlaceholder('Search by property name or address').fill('Test Property 1');
+    const confirmedPropertyRow = propertyDialog.locator('.mantine-Group-root').filter({ hasText: 'Test Property 1' }).first();
+    await expect(
+      confirmedPropertyRow.getByRole('checkbox'),
+      'Assigned property checkbox must be checked',
+    ).toBeChecked({ timeout: 10_000 });
+    await sharedPage.keyboard.press('Escape');
+    await expect(propertyDialog, 'Property access dialog must close').toBeHidden({ timeout: 10_000 });
+    Logger.success(`[TC36] ✅ Assignment of "Test Property 1_Cottages on Elm" confirmed reflected in UI for ${targetEmail}`);
   });
 });
 
