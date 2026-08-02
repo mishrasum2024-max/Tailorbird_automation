@@ -76,8 +76,18 @@ class UserActivationPage {
      * returns that message's summary object (which carries the "id" needed to fetch its
      * full body). A fresh request each poll — unlike the previous yopmail iframe, there is
      * no local page state to go stale, so no reload is needed between attempts.
+     *
+     * ROOT CAUSE (MCP + local --workers=4 reproduction, 2026-08-02): the FGA scope-
+     * validation describe block below runs in `mode: "parallel"`, so Playwright starts a
+     * SEPARATE `beforeAll` per worker that picks up one of its tests — under CI's
+     * --workers=4 that means up to 4 concurrent invite+activate flows, each sending its
+     * own invite email through the same real backend at once. The original 60s budget is
+     * enough in isolation (confirmed via a single-worker local run) but not once that
+     * email-sending pipeline is queuing 4 concurrent invites, which reproducibly pushed
+     * one mail past 60s locally. Raised to give real headroom for that queueing delay
+     * rather than a blind guess.
      */
-    async waitForMailinatorMessage(subjectPattern, timeoutMs = 60000) {
+    async waitForMailinatorMessage(subjectPattern, timeoutMs = 150000) {
         const deadline = Date.now() + timeoutMs;
         while (Date.now() < deadline) {
             const response = await this.mailCheckPage.request.get(

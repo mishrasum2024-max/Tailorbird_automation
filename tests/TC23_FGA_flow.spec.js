@@ -262,6 +262,10 @@ test.describe("FEAT-972 FGA User Management", () => {
     });
 
     test("TC355 @regression @FGA @activation : Invited user completes full account activation via mailinator (name, password, organization) and lands on dashboard", async ({ page, browser }) => {
+        // waitForMailinatorMessage's timeout was raised to 150s (see userActivationPage.js)
+        // to absorb invite-email queueing delay under concurrent CI workers — this test's
+        // own timeout needs headroom for that plus the OTP wait plus the rest of the flow.
+        test.setTimeout(400000);
         const fga = new FgaUserManagementPage(page);
         const { email, randomSuffix } = generateFgaTestUser("fga_activate");
         const firstName = "Test";
@@ -353,6 +357,13 @@ test.describe("FEAT-972 FGA scope validation — activated Member user (single-p
     let sharedEmail = null;
 
     test.beforeAll(async ({ browser }) => {
+        // See TC355 above — this hook runs the same full invite+activate flow, and with
+        // `mode: "parallel"` on this describe block, Playwright runs a SEPARATE copy of
+        // this beforeAll per worker that picks up one of its tests. Under CI's
+        // --workers=4 that means up to 4 concurrent invite+activate flows at once,
+        // reproducibly pushing an invite email's arrival past the old 60s budget
+        // (confirmed via local --workers=4 run) — hence the same generous headroom here.
+        test.setTimeout(400000);
         test.skip(!dashboardLandingUrl, "DASHBOARD_URL or fixture dashboard required");
 
         const adminContext = await browser.newContext({ storageState: "sessionState.json" });
