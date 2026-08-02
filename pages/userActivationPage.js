@@ -4,39 +4,49 @@ const { propertyLocators } = require('../locators/propertyLocator.js');
 
 /**
  * Drives the full "accept invite" activation flow for a brand-new invited user:
- * yopmail inbox -> "Open Tailorbird" link -> AuthKit accept-invitation -> sign-up
+ * mailinator inbox -> "Open Tailorbird" link -> AuthKit accept-invitation -> sign-up
  * (first/last name) -> password -> email OTP verification -> (optional) organization
  * selection -> landing on the dashboard.
  *
  * Runs in its own, unauthenticated BrowserContext (via create()) so it never touches
  * the admin session used elsewhere in the suite (sessionState.json).
  *
- * MCP-verified live (2026-07-08) against yopmail.com and
+ * MCP-verified live (2026-08-02) against mailinator.com's public inbox (both its UI at
+ * mailinator.com/v4/public/inboxes.jsp and its unauthenticated public JSON API at
+ * api.mailinator.com/api/v2/domains/public/...) and
  * stalwart-collection-11-staging.authkit.app (QA Automations Org_2026 invite).
+ *
+ * Switched from yopmail.com (2026-08-02): yopmail began showing a CAPTCHA that blocked
+ * automated inbox access. Mailinator's public inbox needs no login/CAPTCHA for a
+ * "<name>@mailinator.com" address, and its JSON API returns full message content
+ * directly (including the invite link in the plain-text body, unwrapped from any
+ * click-tracking redirect) — more robust than the previous iframe-based mail scraping,
+ * since it removes the dependency on scraping a live inbox UI/iframe entirely.
  */
 class UserActivationPage {
     /**
      * @param {import('@playwright/test').BrowserContext} context
-     * @param {import('@playwright/test').Page} yopmailPage
+     * @param {import('@playwright/test').Page} mailCheckPage
      */
-    constructor(context, yopmailPage) {
+    constructor(context, mailCheckPage) {
         this.context = context;
-        this.yopmailPage = yopmailPage;
+        this.mailCheckPage = mailCheckPage;
         this.activationPage = null;
+        this.mailboxLocalPart = null;
     }
 
     /** @param {import('@playwright/test').Browser} browser */
     static async create(browser) {
         const context = await browser.newContext();
-        const yopmailPage = await context.newPage();
-        return new UserActivationPage(context, yopmailPage);
+        const mailCheckPage = await context.newPage();
+        return new UserActivationPage(context, mailCheckPage);
     }
 
     /**
      * Wraps an already-authenticated page/context (typically created from a storageState
      * captured after a prior run of the full activation flow) so callers can reuse the
      * post-activation navigation/assertion methods (gotoXPage, getProfileMenuOptions,
-     * getGridColumnValues, ...) without repeating the yopmail + AuthKit dance every time.
+     * getGridColumnValues, ...) without repeating the mailinator + AuthKit dance every time.
      * @param {import('@playwright/test').BrowserContext} context
      * @param {import('@playwright/test').Page} page
      */
@@ -46,54 +56,80 @@ class UserActivationPage {
         return instance;
     }
 
-    inboxFrame() {
-        return this.yopmailPage.frameLocator('iframe[name="ifinbox"]');
-    }
-
-    mailFrame() {
-        return this.yopmailPage.frameLocator('iframe[name="ifmail"]');
-    }
-
+    /**
+     * Navigates to the public inbox UI (purely so a headed run shows the actual inbox —
+     * message retrieval itself goes through the JSON API below, not this page) and
+     * records the mailbox's local part (Mailinator's inbox name) for later API polling.
+     */
     async openInbox(email) {
-        const localPart = email.split('@')[0];
-        Logger.step(`[Activation] Opening yopmail inbox for ${email}`);
-        await this.yopmailPage.goto(`https://yopmail.com/en/?login=${localPart}&d=1`, { waitUntil: 'load' });
+        this.mailboxLocalPart = email.split('@')[0];
+        Logger.step(`[Activation] Opening mailinator inbox for ${email}`);
+        await this.mailCheckPage.goto(
+            `https://www.mailinator.com/v4/public/inboxes.jsp?to=${this.mailboxLocalPart}`,
+            { waitUntil: 'load' },
+        );
     }
 
     /**
-     * Polls the inbox (reloading) until a mail row matching subjectPattern is visible.
-     * Yopmail's inbox iframe does not always reflect a just-arrived mail on first load.
+     * Polls Mailinator's public JSON API (GET /api/v2/domains/public/inboxes/<name>,
+     * unauthenticated) until a message whose subject matches subjectPattern appears, and
+     * returns that message's summary object (which carries the "id" needed to fetch its
+     * full body). A fresh request each poll — unlike the previous yopmail iframe, there is
+     * no local page state to go stale, so no reload is needed between attempts.
      */
-    async waitForMailRow(subjectPattern, timeoutMs = 60000) {
+    async waitForMailinatorMessage(subjectPattern, timeoutMs = 60000) {
         const deadline = Date.now() + timeoutMs;
-        const row = this.inboxFrame().getByRole('button', { name: subjectPattern }).first();
         while (Date.now() < deadline) {
-            if (await row.isVisible().catch(() => false)) return row;
-            await this.yopmailPage.reload({ waitUntil: 'load' }).catch(() => {});
-            await this.yopmailPage.waitForTimeout(3000);
+            const response = await this.mailCheckPage.request.get(
+                `https://api.mailinator.com/api/v2/domains/public/inboxes/${this.mailboxLocalPart}`,
+            );
+            const body = await response.json().catch(() => null);
+            const match = (body?.msgs || []).find((m) => subjectPattern.test(m.subject || ''));
+            if (match) return match;
+            await this.mailCheckPage.waitForTimeout(3000);
         }
         throw new Error(`[Activation] Mail matching "${subjectPattern}" did not arrive within ${timeoutMs}ms`);
     }
 
     /**
-     * Opens the invite mail, clicks "Open Tailorbird" (which opens a new tab), and
-     * returns that new page — the AuthKit "Accept invitation" screen.
+     * Fetches a Mailinator message's full body (GET /api/v2/domains/public/messages/<id>)
+     * and returns its plain-text part — every Tailorbird transactional email observed
+     * live sends a text/plain alternative alongside the HTML one.
+     */
+    async fetchMailinatorMessageText(messageId) {
+        const response = await this.mailCheckPage.request.get(
+            `https://api.mailinator.com/api/v2/domains/public/messages/${messageId}`,
+        );
+        const body = await response.json().catch(() => null);
+        const parts = body?.parts || [];
+        const plainPart = parts.find((p) => (p.headers?.['content-type'] || '').includes('text/plain'));
+        if (!plainPart) {
+            throw new Error(`[Activation] Message ${messageId} has no text/plain part to read`);
+        }
+        return plainPart.body || '';
+    }
+
+    /**
+     * Finds the invite mail, reads its body for the "Open Tailorbird" link, and opens
+     * that link directly in a brand-new page — the AuthKit "Accept invitation" screen.
+     * MCP-verified live: the plain-text body's link is the direct, un-redirected
+     * destination URL (the HTML part's link goes through a click-tracking redirect
+     * domain instead), so navigating straight to it is both simpler and more reliable
+     * than clicking through an email UI and waiting on a tracking redirect to resolve.
      * @returns {Promise<import('@playwright/test').Page>}
      */
     async openInviteEmailAndLaunchActivation() {
-        const inviteRow = await this.waitForMailRow(/invited you to Tailorbird/);
-        Logger.step('[Activation] Opening invite email');
-        await inviteRow.click();
+        const inviteMessage = await this.waitForMailinatorMessage(/invited you to Tailorbird/);
+        Logger.step('[Activation] Reading invite email body for the activation link');
+        const bodyText = await this.fetchMailinatorMessageText(inviteMessage.id);
+        const linkMatch = bodyText.match(/<(https:\/\/[^\s>]+)>/);
+        if (!linkMatch) {
+            throw new Error(`[Activation] Could not find an activation link in invite mail body: "${bodyText}"`);
+        }
 
-        const openTailorbirdLink = this.mailFrame().getByRole('link', { name: 'Open Tailorbird' });
-        await expect(openTailorbirdLink).toBeVisible({ timeout: 15000 });
-
-        Logger.step('[Activation] Clicking "Open Tailorbird" — expecting a new tab');
-        const [activationPage] = await Promise.all([
-            this.context.waitForEvent('page'),
-            openTailorbirdLink.click(),
-        ]);
-        await activationPage.waitForLoadState('load');
+        Logger.step('[Activation] Opening the activation link in a new page');
+        const activationPage = await this.context.newPage();
+        await activationPage.goto(linkMatch[1], { waitUntil: 'load' });
         this.activationPage = activationPage;
         return activationPage;
     }
@@ -149,17 +185,13 @@ class UserActivationPage {
     }
 
     /**
-     * Reads the OTP mail from yopmail (separate mail from the original invite) and
+     * Reads the OTP mail from mailinator (separate mail from the original invite) and
      * returns the 6-digit code found in its body.
      */
     async fetchEmailVerificationCode() {
-        Logger.step('[Activation] Fetching email verification code from yopmail');
-        const otpRow = await this.waitForMailRow(/Verify your email address/);
-        await otpRow.click();
-
-        const bodyLocator = this.mailFrame().locator('body');
-        await expect(bodyLocator).toBeVisible({ timeout: 15000 });
-        const bodyText = (await bodyLocator.innerText()) || '';
+        Logger.step('[Activation] Fetching email verification code from mailinator');
+        const otpMessage = await this.waitForMailinatorMessage(/Verify your email address/);
+        const bodyText = await this.fetchMailinatorMessageText(otpMessage.id);
         const match = bodyText.match(/\b(\d{6})\b/);
         if (!match) {
             throw new Error(`[Activation] Could not find a 6-digit verification code in mail body: "${bodyText}"`);

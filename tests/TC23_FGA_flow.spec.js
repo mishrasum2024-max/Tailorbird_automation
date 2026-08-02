@@ -23,7 +23,11 @@ const CREATED_USERS_FILE = path.join(__dirname, "../data/fgaCreatedUsers.json");
  */
 function generateFgaTestUser(prefix = "fga") {
     const randomSuffix = Math.random().toString(36).slice(2, 8);
-    const email = `${prefix}_${Date.now()}_${randomSuffix}@yopmail.com`;
+    // Switched from @yopmail.com to @mailinator.com (2026-08-02): yopmail began showing a
+    // CAPTCHA that blocked automated inbox access (see pages/userActivationPage.js for the
+    // full rationale). Mailinator's public inbox needs no pre-registration either — any
+    // "<local-part>@mailinator.com" address just works.
+    const email = `${prefix}_${Date.now()}_${randomSuffix}@mailinator.com`;
     return { email, prefix, randomSuffix };
 }
 
@@ -257,7 +261,7 @@ test.describe("FEAT-972 FGA User Management", () => {
         }
     });
 
-    test("TC355 @regression @FGA @activation : Invited user completes full account activation via yopmail (name, password, organization) and lands on dashboard", async ({ page, browser }) => {
+    test("TC355 @regression @FGA @activation : Invited user completes full account activation via mailinator (name, password, organization) and lands on dashboard", async ({ page, browser }) => {
         const fga = new FgaUserManagementPage(page);
         const { email, randomSuffix } = generateFgaTestUser("fga_activate");
         const firstName = "Test";
@@ -272,7 +276,7 @@ test.describe("FEAT-972 FGA User Management", () => {
         expect(inviteResult.status).toBe(200);
         expect(inviteResult.ok).toBeTruthy();
 
-        saveCreatedUser({ email, role: "Member", testCase: "TC355", purpose: "full activation via yopmail", createdAt: new Date().toISOString() });
+        saveCreatedUser({ email, role: "Member", testCase: "TC355", purpose: "full activation via mailinator", createdAt: new Date().toISOString() });
         await fga.validateInvitedBadge(email);
         Logger.success(`[TC355] Invite verified — badge shown for ${email}`);
 
@@ -288,7 +292,7 @@ test.describe("FEAT-972 FGA User Management", () => {
 
         const activation = await UserActivationPage.create(browser);
         try {
-            Logger.step("[TC355] Opening yopmail and the invite email");
+            Logger.step("[TC355] Opening mailinator and the invite email");
             await activation.openInbox(email);
             await activation.openInviteEmailAndLaunchActivation();
 
@@ -381,7 +385,7 @@ test.describe("FEAT-972 FGA scope validation — activated Member user (single-p
 
         const activation = await UserActivationPage.create(browser);
         try {
-            Logger.step("[FGA scope setup] Opening yopmail and the invite email");
+            Logger.step("[FGA scope setup] Opening mailinator and the invite email");
             await activation.openInbox(email);
             await activation.openInviteEmailAndLaunchActivation();
             await activation.acceptInvitation();
