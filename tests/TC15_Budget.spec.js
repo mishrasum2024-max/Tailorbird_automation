@@ -4,6 +4,9 @@ const fs = require('fs');
 const { test, expect } = require('@playwright/test');
 const { BudgetJob } = require('../pages/budgetPage');
 const { ApprovalJob } = require('../pages/approvalPage');
+const OrganizationHelper = require('../pages/organizationHelper');
+const { FgaUserManagementPage } = require('../pages/fgaUserManagementPage');
+const { UserActivationPage } = require('../pages/userActivationPage');
 const { Logger } = require('../utils/logger');
 const { ensureLeftPanelExpanded } = require('../utils/leftPanelExpander');
 
@@ -18,6 +21,29 @@ test.use({
 });
 
 let page, budgetJob;
+
+/**
+ * Retries an async check up to `attempts` times (waiting `delayMs` between attempts)
+ * before letting the final failure propagate. Used only to absorb settling-time
+ * flakiness (e.g. a dialog's content not yet finished loading) — it does not change
+ * what is being asserted, only how many times a not-yet-settled read may be retaken
+ * before the assertion must hold.
+ */
+async function retryUntilPass(fn, { attempts = 3, delayMs = 1000 } = {}) {
+    let lastErr;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+        try {
+            await fn(attempt);
+            return;
+        } catch (err) {
+            lastErr = err;
+            if (attempt < attempts) {
+                await new Promise((resolve) => setTimeout(resolve, delayMs));
+            }
+        }
+    }
+    throw lastErr;
+}
 
 test.describe('Budget Workflow - E2E Tests', () => {
     test.describe.configure({ retries: 1 });
@@ -635,6 +661,316 @@ test.describe('Budget Workflow - E2E Tests', () => {
 
         await budgetJob.clickSubmitForApproval();
         Logger.success('TC271: Budget Reallocation revision submitted for approval — TC271 PASSED');
+    });
+
+    // ===== TC272: Budget Approval Single-Approver Regression — approver must remain actionable, not auto-Skipped =====
+
+    test('TC272 @budget @regression @approval @bug : Budget Approval Single-Approver Regression — Verify a single "Always Required" approver remains actionable in All Approvals instead of being incorrectly auto-Skipped', async () => {
+        test.setTimeout(600000); // 10 minutes — property + template + upload + revise + reallocate + approval check
+
+        const timestamp = Date.now();
+        const propertyName = `TC272_BudgetSingleApproverProp_${timestamp}`;
+        const templateName = `TC272_BudgetSingleApprover_${timestamp}`;
+
+        const approvalJob = new ApprovalJob(page);
+
+        // ===== STEP 1: Create new property =====
+        Logger.step('TC272 Step 1: Creating new property');
+        await approvalJob.createProperty(
+            propertyName,
+            'Domestic Terminal, College Park, GA 30337, USA',
+            'College Park',
+            'GA',
+            '30337',
+            'Garden Style'
+        );
+        Logger.success(`TC272 Step 1: Property created — ${propertyName}`);
+
+        // ===== STEP 2: Create Budget Approval template — single approver "sumit harsh", Always Required =====
+        Logger.step('TC272 Step 2: Creating single-approver Budget Approval template');
+        await approvalJob.navigateToApprovalTab();
+        await approvalJob.createBudgetApprovalTemplateSingleApprover(templateName, propertyName, 'sumit harsh');
+        Logger.success(`TC272 Step 2: Template created — ${templateName}`);
+
+        // ===== STEP 3: Navigate to Budget, upload Budget file =====
+        Logger.step('TC272 Step 3: Uploading budget file for initial budget');
+        await budgetJob.navigateToBudget();
+        await page.waitForTimeout(5000);
+        await budgetJob.selectPropertyByName(propertyName);
+        await budgetJob.openRevisionEditor();
+        const budgetFilePath = path.resolve(process.cwd(), 'files', 'budget_data_for_E2EFlow.csv');
+        expect(fs.existsSync(budgetFilePath)).toBeTruthy();
+        await budgetJob.uploadFileInRevision(budgetFilePath);
+        await budgetJob.ensureSubmitEnabledAfterUpload();
+        await budgetJob.clickSubmitForApproval();
+        await page.waitForTimeout(5000);
+        Logger.success('TC272 Step 3: Initial budget uploaded and submitted for approval');
+
+        // ===== STEP 4: Revise the uploaded Budget =====
+        Logger.step('TC272 Step 4: Revising the uploaded Budget');
+        await budgetJob.navigateToBudget();
+        await page.waitForTimeout(5000);
+        await budgetJob.selectPropertyByName(propertyName);
+        await page.waitForTimeout(5000);
+        await budgetJob.openRevisionEditor();
+        await budgetJob.enterRevisionAdjustmentByItemNameV2('Bathroom fixtures install', 1000);
+        await page.waitForTimeout(3000);
+        await budgetJob.clickSubmitForApproval();
+        await page.waitForTimeout(5000);
+        Logger.success('TC272 Step 4: Budget revision submitted for approval');
+
+        // ===== STEP 5: Open Budget again, perform a Budget Reallocation =====
+        Logger.step('TC272 Step 5: Performing a Budget Reallocation');
+        await budgetJob.navigateToBudget();
+        await page.waitForTimeout(5000);
+        await budgetJob.selectPropertyByName(propertyName);
+        await page.waitForTimeout(5000);
+        await budgetJob.openRevisionEditor();
+        await budgetJob.verifyRevisionEditorOpen();
+        await budgetJob.reallocateBudgetAmount('Concrete', 'Bathroom fixtures install', 500);
+        await budgetJob.clickSubmitForApproval();
+        await page.waitForTimeout(5000);
+        Logger.success('TC272 Step 5: Budget reallocation submitted for approval');
+
+        // ===== STEP 6: All Approvals — locate the approval request created during this test, open View Details =====
+        Logger.step('TC272 Step 6: Locating the approval request created during this test in All Approvals');
+        await approvalJob.navigateToAllApprovalsTab();
+
+        // Grid truncates property names (drops the timestamp suffix) — search by base name,
+        // same convention used by ApprovalJob.approveRevisionOnBehalfByPropertyInAllApprovals.
+        const searchBaseName = propertyName.replace(/_\d+$/, '');
+        const treegrid = page.locator('[role="treegrid"]').first();
+        const dataRows = treegrid.locator('[role="row"]').filter({ has: page.locator('[role="gridcell"]') });
+
+        await expect.poll(() => dataRows.count(), { timeout: 15000 }).toBeGreaterThan(0);
+
+        let targetIndex = -1;
+        const rowCount = await dataRows.count();
+        for (let i = 0; i < rowCount; i++) {
+            const rowText = (await dataRows.nth(i).textContent().catch(() => '')).toLowerCase();
+            if (rowText.includes(searchBaseName.toLowerCase())) {
+                targetIndex = i;
+                break;
+            }
+        }
+        expect(targetIndex, `Approval request for property "${propertyName}" must be visible in All Approvals`).toBeGreaterThanOrEqual(0);
+
+        const eyeButtons = page.locator('button:has(svg.lucide-eye):visible');
+        await eyeButtons.nth(targetIndex).click();
+
+        const detailsDialog = page.getByRole('dialog').filter({ hasText: /Approval Details/i });
+        await expect(detailsDialog).toBeVisible({ timeout: 20000 });
+        Logger.success('TC272 Step 6: Approval Details dialog opened for the approval request created during this test');
+
+        // ===== STEP 7: Bug assertion — Approve action must remain available, not auto-Skipped =====
+        Logger.step('TC272 Step 7: Verifying the approval remains actionable (known bug: status incorrectly shows "Skipped")');
+        const observedStatus = (await detailsDialog.textContent().catch(() => '')).trim();
+        Logger.info(`TC272 Step 7: Approval Details dialog text (for diagnostics only, not asserted): "${observedStatus.substring(0, 200)}..."`);
+
+        const approveButton = detailsDialog.getByRole('button', { name: /Approve/i });
+        await expect(
+            approveButton,
+            'BUG: The Budget Approval request must remain actionable for its sole "Always Required" approver — an "Approve" button should be visible and enabled. Instead the system is auto-resolving the approval (status incorrectly shows "Skipped"/"Auto-approved") without ever giving the approver a chance to approve it.'
+        ).toBeEnabled({ timeout: 10000 });
+        Logger.success('TC272 Step 7: Approve action confirmed available and enabled — TC272 PASSED');
+    });
+
+    // ===== TC273: Revoked Approver Regression — a revoked user must lose Budget Approval access =====
+
+    test('TC273 @budget @regression @approval @security : Revoked User Loses Approval Access — invited user is assigned as sole approver on a Budget Approval, then revoked, and must no longer be able to act on it', async ({ browser }) => {
+        test.setTimeout(900000); // invite + mailinator activation + property + template + budget submit + revoke + post-revoke access check
+
+        const timestamp = Date.now();
+        const approverEmail = `tc273_approver_${timestamp}@mailinator.com`;
+        const propertyName = `TC273_RevokeProp_${timestamp}`;
+        const templateName = `TC273_RevokeApproverTemplate_${timestamp}`;
+        const firstName = 'TC273';
+        const lastName = 'Approver';
+        const approverFullName = `${firstName} ${lastName}`;
+        const password = process.env.TEST_PASSWORD || 'Pitney51@@';
+
+        const approvalJob = new ApprovalJob(page);
+        const organizationHelper = new OrganizationHelper(page);
+        const fgaUserManagementPage = new FgaUserManagementPage(page);
+
+        // ===== STEP 1: Invite a new user =====
+        Logger.step(`TC273 Step 1: Inviting new user — ${approverEmail}`);
+        await organizationHelper.gotoOrganizationWorkspace();
+        await organizationHelper.inviteUser(approverEmail, 'Member');
+        Logger.success(`TC273 Step 1: Invitation created — ${approverEmail}`);
+
+        // ===== STEP 2: Create a new property =====
+        Logger.step('TC273 Step 2: Creating new property');
+        await approvalJob.createProperty(
+            propertyName,
+            'Domestic Terminal, College Park, GA 30337, USA',
+            'College Park',
+            'GA',
+            '30337',
+            'Garden Style'
+        );
+        Logger.success(`TC273 Step 2: Property created — ${propertyName}`);
+
+        // Grant the still-pending invited user explicit access to the new property — required
+        // before they can be assigned as a Budget Approval approver on it (see the
+        // property-access-before-approver-assignment constraint documented on
+        // createBudgetApprovalTemplateSingleApprover's callers elsewhere in this file).
+        Logger.step(`TC273: Granting "${approverEmail}" access to "${propertyName}"`);
+        await organizationHelper.gotoOrganizationWorkspace();
+        await fgaUserManagementPage.openPropertyAccessTab();
+        await fgaUserManagementPage.searchProperty(propertyName);
+        await fgaUserManagementPage.assignUserToProperty(propertyName, approverEmail);
+        await fgaUserManagementPage.expectAccessGrantedToast();
+        await fgaUserManagementPage.closePropertySettings(propertyName);
+        Logger.success(`TC273: Property access granted — "${approverEmail}" on "${propertyName}"`);
+
+        const activation = await UserActivationPage.create(browser);
+        try {
+            // Activate the invited user via mailinator now — the Budget Approval Template's
+            // approver picker searches by display name, which only exists once the invite is
+            // accepted (fillNameAndContinue), so this must happen before Step 3.
+            Logger.step(`TC273: Activating invited user via mailinator — ${approverEmail}`);
+            await activation.openInbox(approverEmail);
+            await activation.openInviteEmailAndLaunchActivation();
+            await activation.acceptInvitation();
+            await activation.fillNameAndContinue(firstName, lastName);
+            await activation.setPasswordAndContinue(password);
+            await activation.completeEmailVerificationIfPrompted();
+            await activation.selectOrganizationIfPrompted('2026');
+            await activation.expectLandedOnDashboard(process.env.DASHBOARD_URL || /financials\/capex/);
+            Logger.success(`TC273: Invited user activated — ${approverEmail} (${approverFullName})`);
+
+            // ===== STEP 3: Create Budget Approval — assign the newly invited user as sole approver =====
+            Logger.step('TC273 Step 3: Creating single-approver Budget Approval template for the invited user');
+            await approvalJob.navigateToApprovalTab();
+            await approvalJob.createBudgetApprovalTemplateSingleApprover(templateName, propertyName, approverFullName);
+            Logger.success(`TC273 Step 3: Template created — ${templateName} (approver: ${approverFullName})`);
+
+            // ===== STEP 4: Create the Budget — upload and submit for approval =====
+            Logger.step('TC273 Step 4: Uploading budget file and submitting for approval');
+            await budgetJob.navigateToBudget();
+            await page.waitForTimeout(5000);
+            await budgetJob.selectPropertyByName(propertyName);
+            await budgetJob.openRevisionEditor();
+            const budgetFilePath = path.resolve(process.cwd(), 'files', 'budget_data_for_E2EFlow.csv');
+            expect(fs.existsSync(budgetFilePath)).toBeTruthy();
+            await budgetJob.uploadFileInRevision(budgetFilePath);
+            await budgetJob.ensureSubmitEnabledAfterUpload();
+            await budgetJob.clickSubmitForApproval();
+            await page.waitForTimeout(5000);
+            Logger.success('TC273 Step 4: Budget uploaded and submitted for approval');
+
+            // ===== STEP 5: Verify Approval Created — Pending status, assigned to the invited user =====
+            Logger.step('TC273 Step 5: Locating the approval request in All Approvals and verifying its status');
+            await approvalJob.navigateToAllApprovalsTab();
+
+            const searchBaseName = propertyName.replace(/_\d+$/, '');
+            const treegrid = page.locator('[role="treegrid"]').first();
+            const dataRows = treegrid.locator('[role="row"]').filter({ has: page.locator('[role="gridcell"]') });
+
+            await expect.poll(() => dataRows.count(), { timeout: 15000 }).toBeGreaterThan(0);
+
+            let targetIndex = -1;
+            const rowCount = await dataRows.count();
+            for (let i = 0; i < rowCount; i++) {
+                const rowText = (await dataRows.nth(i).textContent().catch(() => '')).toLowerCase();
+                if (rowText.includes(searchBaseName.toLowerCase())) {
+                    targetIndex = i;
+                    break;
+                }
+            }
+            expect(targetIndex, `Approval request for property "${propertyName}" must be visible in All Approvals`).toBeGreaterThanOrEqual(0);
+
+            const eyeButtons = page.locator('button:has(svg.lucide-eye):visible');
+            await eyeButtons.nth(targetIndex).click();
+
+            const detailsDialog = page.getByRole('dialog').filter({ hasText: /Approval Details/i });
+            await expect(detailsDialog).toBeVisible({ timeout: 20000 });
+            // The dialog's outer shell (heading) renders before its content (Approval Status,
+            // Eligible approvers) finishes loading — wait for that stable label first so the
+            // textContent() read below isn't taken against a still-loading dialog.
+            await expect(detailsDialog.getByText('Approval Status', { exact: true })).toBeVisible({ timeout: 15000 });
+
+            let detailsText = '';
+            await retryUntilPass(async (attempt) => {
+                if (attempt > 1) {
+                    Logger.info(`TC273 Step 5: retry ${attempt}/3 — Approval Details content not yet fully loaded, rereading`);
+                }
+                detailsText = (await detailsDialog.textContent().catch(() => '')).trim();
+                expect(detailsText, 'Approval status must be "Pending Approval"').toContain('Pending Approval');
+                expect(detailsText, `Approval must be assigned to the newly invited approver "${approverFullName}"`).toContain(approverFullName);
+            }, { attempts: 3, delayMs: 1500 });
+            Logger.success('TC273 Step 5: Approval confirmed Pending and assigned to the newly invited user');
+
+            await page.keyboard.press('Escape');
+            await expect(detailsDialog).toBeHidden({ timeout: 10000 }).catch(() => { });
+
+            // ===== STEP 6: Revoke the User =====
+            Logger.step(`TC273 Step 6: Revoking access for the now-active user — ${approverEmail}`);
+            await organizationHelper.gotoOrganizationWorkspace();
+            await organizationHelper.search(approverEmail);
+            const userRow = await organizationHelper.getRow(approverEmail);
+            await organizationHelper.revokeActiveUser(userRow, approverEmail);
+            await organizationHelper.search(approverEmail);
+            await organizationHelper.verifyNoResults();
+            Logger.success(`TC273 Step 6: Access revoked — ${approverEmail}`);
+
+            // ===== STEP 7: Validate Approval Access — revoked user must no longer act on the approval =====
+            Logger.step('TC273 Step 7: Verifying the revoked user can no longer access approvals');
+            const errorAlert = activation.activationPage.getByRole('alert').filter({ hasText: 'Error Loading Data' });
+            // Backend org-membership invalidation after revoke may take a moment to propagate —
+            // re-navigate a few times rather than asserting on a single immediate check.
+            await retryUntilPass(async (attempt) => {
+                if (attempt > 1) {
+                    Logger.info(`TC273 Step 7: retry ${attempt}/5 — revoked-access state not yet reflected, re-navigating`);
+                }
+                await activation.gotoPath('/approvals/my-approvals');
+                await expect(
+                    errorAlert,
+                    'Revoked user must be blocked from My Approvals (expected an "Error Loading Data" state)'
+                ).toBeVisible({ timeout: 20000 });
+            }, { attempts: 5, delayMs: 3000 });
+            await expect(
+                activation.activationPage.getByText('You are not associated with an organization', { exact: false }),
+                'Revoked user must see the "not associated with an organization" message'
+            ).toBeVisible();
+
+            await expect(
+                activation.activationPage.getByRole('button', { name: /^Approve$/i }),
+                'Revoked user must NOT see an Approve control'
+            ).toHaveCount(0);
+            await expect(
+                activation.activationPage.getByRole('button', { name: /^Reject$/i }),
+                'Revoked user must NOT see a Reject control'
+            ).toHaveCount(0);
+            Logger.success('TC273 Step 7: Revoked user confirmed blocked from My Approvals');
+
+            // Also confirm the same block holds on the "All Approvals" tab, not just "My Approvals" —
+            // access is lost at the organization level, so it must be inaccessible app-wide.
+            Logger.step('TC273 Step 7: Verifying the revoked user is also blocked from All Approvals');
+            const allApprovalsErrorAlert = activation.activationPage.getByRole('alert').filter({ hasText: 'Error Loading Data' });
+            await retryUntilPass(async (attempt) => {
+                if (attempt > 1) {
+                    Logger.info(`TC273 Step 7: retry ${attempt}/5 — All Approvals block not yet reflected, re-navigating`);
+                }
+                await activation.gotoPath('/approvals/all-approvals');
+                await expect(
+                    allApprovalsErrorAlert,
+                    'Revoked user must be blocked from All Approvals (expected an "Error Loading Data" state)'
+                ).toBeVisible({ timeout: 20000 });
+            }, { attempts: 5, delayMs: 3000 });
+            await expect(
+                activation.activationPage.getByRole('button', { name: /^Approve$/i }),
+                'Revoked user must NOT see an Approve control on All Approvals'
+            ).toHaveCount(0);
+            await expect(
+                activation.activationPage.getByRole('button', { name: /^Reject$/i }),
+                'Revoked user must NOT see a Reject control on All Approvals'
+            ).toHaveCount(0);
+            Logger.success('TC273 Step 7: Revoked user confirmed blocked from approval access on both My Approvals and All Approvals — TC273 PASSED');
+        } finally {
+            await activation.close();
+        }
     });
 
 });

@@ -105,18 +105,35 @@ class UserActivationPage {
      * Fetches a Mailinator message's full body (GET /api/v2/domains/public/messages/<id>)
      * and returns its plain-text part — every Tailorbird transactional email observed
      * live sends a text/plain alternative alongside the HTML one.
+     *
+     * MCP-verified live (2026-08-03): a message can appear in the inbox LIST
+     * (waitForMailinatorMessage) a moment before mailinator's public API has finished
+     * syncing that same message's full `parts` array on the MESSAGE DETAIL endpoint this
+     * method reads — hitting detail immediately after the list match can transiently see
+     * zero parts (or parts missing text/plain) even though the message is otherwise
+     * complete. Retries a few times with a short wait before giving up, to absorb that
+     * lag; a message that genuinely never gets a text/plain part still fails the same way
+     * as before, just after these extra attempts.
      */
-    async fetchMailinatorMessageText(messageId) {
-        const response = await this.mailCheckPage.request.get(
-            `https://api.mailinator.com/api/v2/domains/public/messages/${messageId}`,
-        );
-        const body = await response.json().catch(() => null);
-        const parts = body?.parts || [];
-        const plainPart = parts.find((p) => (p.headers?.['content-type'] || '').includes('text/plain'));
-        if (!plainPart) {
-            throw new Error(`[Activation] Message ${messageId} has no text/plain part to read`);
+    async fetchMailinatorMessageText(messageId, attempts = 5, delayMs = 2000) {
+        let lastErr;
+        for (let attempt = 1; attempt <= attempts; attempt++) {
+            const response = await this.mailCheckPage.request.get(
+                `https://api.mailinator.com/api/v2/domains/public/messages/${messageId}`,
+            );
+            const body = await response.json().catch(() => null);
+            const parts = body?.parts || [];
+            const plainPart = parts.find((p) => (p.headers?.['content-type'] || '').includes('text/plain'));
+            if (plainPart) {
+                return plainPart.body || '';
+            }
+            lastErr = new Error(`[Activation] Message ${messageId} has no text/plain part to read`);
+            if (attempt < attempts) {
+                Logger.info(`[Activation] Message ${messageId} has no text/plain part yet (attempt ${attempt}/${attempts}) — waiting and retrying`);
+                await this.mailCheckPage.waitForTimeout(delayMs);
+            }
         }
-        return plainPart.body || '';
+        throw lastErr;
     }
 
     /**

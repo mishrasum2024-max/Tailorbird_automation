@@ -1229,6 +1229,7 @@ exports.ApprovalJob = class ApprovalJob {
         }
 
         for (const pattern of patterns) {
+            await this.ensureColumnHeaderVisible(pattern);
             await expect(this.page.getByRole('columnheader', { name: pattern }).first()).toBeVisible({
                 timeout: 30000,
             });
@@ -1824,6 +1825,41 @@ exports.ApprovalJob = class ApprovalJob {
     }
 
     /**
+     * Creates a Budget Approval Template with exactly ONE approver and "Always Required" checked.
+     * The Create Template dialog defaults to 3 approver rows; the extra two are removed first
+     * (same delete-row mechanic already used for Draw templates in
+     * DrawReportingJob.createDrawApprovalTemplateSingleApprover), leaving exactly one row to fill
+     * via the existing addApprover()/fillAmount()/checkAlwaysRequiredInTemplateDialog() helpers.
+     */
+    async createBudgetApprovalTemplateSingleApprover(templateName, propertyName, approverFullName = 'sumit harsh') {
+        try {
+            Logger.step(`Creating single-approver Budget Approval template "${templateName}" linked to "${propertyName}"`);
+            await this.navigateToApprovalTemplatesTab();
+            await this.clickCreateTemplate();
+            await this.fillTemplateName(templateName);
+            await this.selectTemplateType('budget');
+
+            const dialog = this.createTemplateDialog();
+            await dialog.getByRole('row').nth(3).getByRole('button').last().click();
+            await this.page.waitForTimeout(500);
+            await dialog.getByRole('row').nth(2).getByRole('button').last().click();
+            await this.page.waitForTimeout(500);
+            Logger.info('Removed 2 default approver rows, leaving exactly 1');
+
+            await this.addProperty(propertyName);
+            await this.addApprover(approverFullName);
+            await this.fillAmount('5555');
+            await this.checkAlwaysRequiredInTemplateDialog(1);
+
+            await this.submitCreateTemplate();
+            Logger.success(`Single-approver Budget Approval template created: ${templateName}`);
+        } catch (error) {
+            Logger.error(`createBudgetApprovalTemplateSingleApprover failed: ${error.message}`);
+            throw error;
+        }
+    }
+
+    /**
      * Forces the All Approvals revo-grid to a large width so it mounts every column
      * instead of virtualizing rightmost ones out of the DOM. MCP-verified live (2026-07-28):
      * at default width the grid renders only Property Name through Requested By + Actions —
@@ -1839,6 +1875,38 @@ exports.ApprovalJob = class ApprovalJob {
                 g.style.setProperty('width', '3500px', 'important');
                 g.style.setProperty('min-width', '3500px', 'important');
             }).catch(() => {});
+            await this.page.waitForTimeout(400);
+        }
+    }
+
+    /**
+     * Ensures a columnheader matching `pattern` is actually rendered/visible rather than
+     * virtualized out of the DOM — revo-grid unmounts off-screen columns entirely (not
+     * just visually hides them), which can happen even without a full column count
+     * overflow when other columns (e.g. a long "Approval Rules" or "Properties" cell
+     * value) grow wide enough to crowd a later column past the grid's visible/scrolled
+     * area (MCP-verified live 2026-08-03; same class of issue already documented for the
+     * Budget grid's horizontally-scrolled columns). Tries, in order: (1) widening the
+     * grid via the existing forceGridFullWidth() so nothing needs to be virtualized, then
+     * (2) scrolling the grid's main viewport fully to the right to bring a still-missing
+     * trailing column into view. Purely visual — does not change any data or selection.
+     */
+    async ensureColumnHeaderVisible(pattern) {
+        const header = this.page.getByRole('columnheader', { name: pattern }).first();
+        if (await header.isVisible({ timeout: 2000 }).catch(() => false)) {
+            return;
+        }
+
+        Logger.info(`[ensureColumnHeaderVisible] Column matching ${pattern} not visible — widening grid`);
+        await this.forceGridFullWidth();
+        if (await header.isVisible({ timeout: 3000 }).catch(() => false)) {
+            return;
+        }
+
+        Logger.info(`[ensureColumnHeaderVisible] Column matching ${pattern} still not visible — scrolling grid viewport horizontally`);
+        const viewport = this.page.locator('.main-viewport').first();
+        if (await viewport.count().catch(() => 0)) {
+            await viewport.evaluate((el) => { el.scrollLeft = el.scrollWidth; }).catch(() => {});
             await this.page.waitForTimeout(400);
         }
     }

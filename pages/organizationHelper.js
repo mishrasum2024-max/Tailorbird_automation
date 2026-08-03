@@ -439,6 +439,77 @@ class OrganizationHelper {
     }
   }
 
+  /**
+   * Revokes an already-ACTIVE (not pending) user's organization access.
+   * MCP-verified live (2026-08-03): once a user has accepted their invite, the row's
+   * "User actions" menu no longer offers "Revoke invitation" (see revoke() above, which
+   * stays scoped to pending invites) — it shows "Revoke access" instead, opening a
+   * differently-worded confirmation dialog ("Revoke access?" / "...will lose organization
+   * and property access."). Mirrors revoke()'s structure (including its revo-grid
+   * actions-pane fallback) but targets this active-user menu item/dialog copy.
+   */
+  async revokeActiveUser(row, email) {
+    try {
+      this.log(`Revoking access for active user: ${email}`);
+      const menu = row.locator(organizationLocators.userActionsBtn);
+      await menu.click({ timeout: 3000 });
+      this.log("Opened user action menu.");
+      await this.page.locator(organizationLocators.menuItemRevokeAccess).click();
+      this.log("Clicked 'Revoke access'.");
+      const modal = this.page.locator(organizationLocators.modal);
+      await expect(modal).toBeVisible({ timeout: 5000 });
+      this.log("Revoke modal visible.");
+      const title = modal.locator(organizationLocators.modalTitle);
+      await expect(title).toHaveText(data.revokeAccessDialogTitle);
+      this.log("Revoke dialog title validated.");
+      const expectedMsg = this.fillDynamic(data.revokeAccessDialogMessage, email);
+      const msgLocator = modal.locator("p");
+      const actualMsg = (await msgLocator.innerText()).trim();
+      this.log("Extracted message: " + actualMsg);
+      await expect(msgLocator).toHaveText(expectedMsg);
+      this.log("Revoke message validated.");
+      await modal.locator(`button:has-text("${data.revokeConfirmButton}")`).click();
+      this.log("Clicked revoke confirm.");
+      await modal.waitFor({ state: "hidden" });
+      this.log(`Access revoked for ${email}.`);
+    } catch (err) {
+      this.log(`❌ ERROR revoking access for ${email}: ${err}`);
+      // Same revo-grid actions-pane fallback as revoke() (see its comment above).
+      try {
+        const rowIndex = await row.getAttribute("data-rgrow");
+        if (rowIndex === null) throw err;
+        this.log(`Falling back to grid actions-pane lookup for row index ${rowIndex}...`);
+        const actionsBtn = this.page
+          .locator(`[role="row"][data-rgrow="${rowIndex}"] button[title="User actions"]`)
+          .first();
+        await actionsBtn.click({ timeout: 15000 });
+        this.log("Opened user action menu (fallback).");
+        await this.page.locator(organizationLocators.menuItemRevokeAccess).click();
+        this.log("Clicked 'Revoke access' (fallback).");
+        const fallbackModal = this.page.locator(organizationLocators.modal);
+        await expect(fallbackModal).toBeVisible({ timeout: 5000 });
+        this.log("Revoke modal visible (fallback).");
+        const fallbackTitle = fallbackModal.locator(organizationLocators.modalTitle);
+        await expect(fallbackTitle).toHaveText(data.revokeAccessDialogTitle);
+        this.log("Revoke dialog title validated (fallback).");
+        const fallbackExpectedMsg = this.fillDynamic(data.revokeAccessDialogMessage, email);
+        const fallbackMsgLocator = fallbackModal.locator("p");
+        const fallbackActualMsg = (await fallbackMsgLocator.innerText()).trim();
+        this.log("Extracted message (fallback): " + fallbackActualMsg);
+        await expect(fallbackMsgLocator).toHaveText(fallbackExpectedMsg);
+        this.log("Revoke message validated (fallback).");
+        await fallbackModal.locator(`button:has-text("${data.revokeConfirmButton}")`).click();
+        this.log("Clicked revoke confirm (fallback).");
+        await fallbackModal.waitFor({ state: "hidden" });
+        this.log(`Access revoked for ${email} (fallback).`);
+        return;
+      } catch (fallbackErr) {
+        this.log(`❌ Fallback also failed revoking access for ${email}: ${fallbackErr}`);
+      }
+      throw err;
+    }
+  }
+
   async verifyNoResults() {
     try {
       this.log("Verifying organization user search empty state...");

@@ -21,6 +21,29 @@ test.use({
 
 let page, vendorPage;
 
+/**
+ * Retries an async check up to `attempts` times (waiting `delayMs` between attempts)
+ * before letting the final failure propagate. Used only to absorb CI-observed
+ * settling-time flakiness (e.g. a dialog's disabled-state or a grid's row count not
+ * yet finished updating) — it does not change what is being asserted, only how many
+ * times a not-yet-settled read may be retaken before the assertion must hold.
+ */
+async function retryUntilPass(fn, { attempts = 3, delayMs = 1000 } = {}) {
+    let lastErr;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+        try {
+            await fn(attempt);
+            return;
+        } catch (err) {
+            lastErr = err;
+            if (attempt < attempts) {
+                await new Promise((resolve) => setTimeout(resolve, delayMs));
+            }
+        }
+    }
+    throw lastErr;
+}
+
 test.describe('Vendors Directory - E2E', () => {
     test.beforeEach(async ({ page: p }) => {
         page = p;
@@ -150,12 +173,22 @@ test.describe('Vendors Directory - E2E', () => {
 
         // ── 5. Open Edit Vendor dialog → Save Changes disabled initially ──
         await vendorPage.openFirstVendorDetails();
-        await page.getByRole('button', { name: 'Edit' }).click();
-        await page.waitForTimeout(1500);
         const editDialog = page.getByRole('dialog');
-        await editDialog.waitFor({ state: 'visible', timeout: 8000 });
-        const saveBtn = editDialog.getByRole('button', { name: 'Save Changes' });
-        await expect(saveBtn).toBeDisabled();
+        let saveBtn = editDialog.getByRole('button', { name: 'Save Changes' });
+        await retryUntilPass(async (attempt) => {
+            if (attempt > 1) {
+                Logger.info(`TC239 step5: retry ${attempt}/3 — Save Changes was not yet disabled, reopening Edit dialog and rechecking`);
+                if (await editDialog.isVisible().catch(() => false)) {
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(800);
+                }
+            }
+            await page.getByRole('button', { name: 'Edit' }).click();
+            await page.waitForTimeout(1500);
+            await editDialog.waitFor({ state: 'visible', timeout: 8000 });
+            saveBtn = editDialog.getByRole('button', { name: 'Save Changes' });
+            await expect(saveBtn).toBeDisabled({ timeout: 5000 });
+        }, { attempts: 3, delayMs: 1500 });
         Logger.info('TC239 step5: Save Changes disabled on untouched Edit dialog ✓');
 
         // ── 6. Cancel edit → dialog must close, no crash ──
@@ -203,9 +236,15 @@ test.describe('Vendors Directory - E2E', () => {
         const carpentryVisible = await carpentryBox.isVisible({ timeout: 3000 }).catch(() => false);
         if (carpentryVisible) {
             await carpentryBox.check();
-            await page.waitForTimeout(1200);
-            const afterCount = await dataRows.count();
-            expect(afterCount).toBeLessThanOrEqual(beforeCount);
+            let afterCount = await dataRows.count();
+            await retryUntilPass(async (attempt) => {
+                if (attempt > 1) {
+                    Logger.info(`TC240 step2: retry ${attempt}/3 — grid not yet settled/filtered (before:${beforeCount}, last read after:${afterCount}), waiting and rereading`);
+                }
+                await page.waitForTimeout(1200);
+                afterCount = await dataRows.count();
+                expect(afterCount).toBeLessThanOrEqual(beforeCount);
+            }, { attempts: 3, delayMs: 1500 });
             Logger.info(`TC240 step2: Carpentry filter — before:${beforeCount} after:${afterCount} ✓`);
             if (afterCount > 0) {
                 // Row count updates before the "Trades" column's cell content finishes

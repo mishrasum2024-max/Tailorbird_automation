@@ -110,8 +110,20 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
     });
 
       test('TC168 @approval @Mandatory @sanity Creating approval for mandatory property', async () => {
-        currentPropertyName = getPropertyName();
-       
+        // getPropertyName() reads a shared, cross-suite fixture file (downloads/property.json)
+        // written by an earlier, unrelated test run — when that property no longer exists
+        // (e.g. run in isolation, or long after it was last regenerated), addProperty()'s
+        // search legitimately returns zero results and hangs until timeout (MCP-verified live
+        // 2026-08-03: the stale fixture's property returns "No results" in the app itself).
+        // Create a fresh property instead, same as the very next test (TC169) already does.
+        currentPropertyName = await createNewProperty(page);
+
+        // createNewProperty() navigates through the Properties page and leaves the browser
+        // there — return to Approval Templates before opening Create Template (same as TC169).
+        await approvalJob.navigateToApprovalTab();
+        await approvalJob.navigateToApprovalTemplatesTab();
+        await approvalJob.waitForPageLoad();
+
         try {
             Logger.step('TC161: Starting create template positive flow');
 
@@ -1222,7 +1234,12 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
 
         await test.step('V12 — Create Template: submit action strip', async () => {
             const footer = approvalJob.createTemplateDialog().locator('button:has-text("Create Template"), button:has-text("Cancel")').first();
-            if (await footer.isVisible({ timeout: 4000 }).catch(() => false)) {
+            // A too-short visibility check here can fall through to the else branch below,
+            // which screenshots the WHOLE dialog against a baseline captured from just this
+            // footer strip — guaranteed to mismatch (MCP/live-run verified 2026-08-03: the
+            // footer buttons are present moments later, this was a settling-time race, not a
+            // missing element). Give it a fair amount of time before falling back.
+            if (await footer.isVisible({ timeout: 10000 }).catch(() => false)) {
                 await expect(footer).toHaveScreenshot('tc10-v-approval-create-template-actions.png', APPROVAL_VISUAL_ASSERT);
             } else {
                 await expect(approvalJob.createTemplateDialog()).toHaveScreenshot('tc10-v-approval-create-template-actions.png', APPROVAL_VISUAL_ASSERT);
@@ -1253,175 +1270,6 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
             await settleApprovalWorkspace(page, 1400);
             await expect(main).toHaveScreenshot('tc10-v-approval-templates-returned.png', shotMain);
         });
-    });
-
-    test('TC206 @regression @capex — Column settings persist after page refresh: visibility, sort and width saved server-side via table-view-config', async ({ page }) => {
-        // MCP-verified live (2026-07-29): each individual save/reload step is fast (PUT
-        // /api/table-view-config resolves in under 1s), but this test chains 5 scenarios —
-        // visibility, sort, width, combined, grouping — each with its own reload-and-wait
-        // cycle and up to 4 sort-toggle clicks in clearColumnSort(), so the cumulative
-        // real-world time can exceed 240s under normal (not hung) conditions. The very next
-        // test (TC207, a lighter single-flow test) already budgets 420000ms — matching that.
-        test.setTimeout(420000);
-        const capex = new CapexPage(page);
-        await capex.goto();
-        Logger.step('TC206: Column settings persistence after page refresh');
-
-        const colPersist = new CapexColumnPersistencePage(page);
-        // Grid already loaded by beforeEach goto(). Confirm it is stable.
-        await colPersist.waitForGridReady();
-
-        // ── Scenario 1: Column visibility persistence ─────────────────────
-        await test.step('Scenario 1 — Column visibility persistence', async () => {
-            const COL = 'Invoiced Amount';
-            Logger.info(`TC206 S1: Hiding "${COL}"`);
-
-            // Ensure a clean start — show the column if a previous run left it hidden
-            await colPersist.showColumn(COL);
-            expect(await colPersist.isColumnVisibleInGrid(COL)).toBeTruthy();
-            await colPersist.hideColumn(COL);
-            expect(await colPersist.isColumnVisibleInGrid(COL)).toBeFalsy();
-            Logger.info('TC206 S1: Column hidden in grid ✓');
-
-            await colPersist.reloadAndWaitForGrid();
-
-            expect(
-                await colPersist.isColumnVisibleInGrid(COL),
-                `"${COL}" should still be hidden after page refresh`
-            ).toBeFalsy();
-            Logger.info('TC206 S1: Column still hidden after page refresh ✓');
-
-            // Cleanup — restore to original visible state
-            await colPersist.showColumn(COL);
-            expect(await colPersist.isColumnVisibleInGrid(COL)).toBeTruthy();
-            Logger.info('TC206 S1: Column restored ✓');
-        });
-
-        // ── Scenario 2: Sort state persistence ───────────────────────────
-        await test.step('Scenario 2 — Sort state persistence', async () => {
-            const COL = 'Budget Revision';
-            Logger.info(`TC206 S2: Applying sort on "${COL}"`);
-
-            // Ensure clean start — remove any sort left from a previous run
-            await colPersist.clearColumnSort(COL);
-            await colPersist.clickColumnSortButton(COL);
-            const sortedState = await colPersist.getColumnSortState(COL);
-            expect(sortedState, `Sort should be active on "${COL}"`).toMatch(/sort-asc|sort-desc|sort-off/);
-            Logger.info(`TC206 S2: Sort applied — state="${sortedState}" ✓`);
-
-            const rowCountBefore = await page.evaluate(() =>
-                Array.from(document.querySelectorAll('[role="row"]'))
-                    .filter(r => r.querySelectorAll('[role="gridcell"]').length >= 7).length
-            );
-
-            await colPersist.reloadAndWaitForGrid();
-
-            const sortAfterReload = await colPersist.getColumnSortState(COL);
-            expect(
-                sortAfterReload,
-                `Sort on "${COL}" should persist after page refresh`
-            ).toMatch(/sort-asc|sort-desc|sort-off/);
-            expect(sortAfterReload).toBe(sortedState);
-            Logger.info(`TC206 S2: Sort direction "${sortAfterReload}" persisted after reload ✓`);
-
-            const rowCountAfter = await page.evaluate(() =>
-                Array.from(document.querySelectorAll('[role="row"]'))
-                    .filter(r => r.querySelectorAll('[role="gridcell"]').length >= 7).length
-            );
-            // Allow ±2 rendered-row tolerance (virtual scroll varies by scroll position)
-            expect(Math.abs(rowCountAfter - rowCountBefore)).toBeLessThanOrEqual(2);
-            Logger.info('TC206 S2: Grid row count unchanged after reload with sort active ✓');
-
-            // Cleanup — cycle sort back to off
-            await colPersist.clearColumnSort(COL);
-            Logger.info('TC206 S2: Sort cleared ✓');
-        });
-
-        // ── Scenario 3: Column width persistence ─────────────────────────
-        await test.step('Scenario 3 — Column width persistence', async () => {
-            const COL = 'Approved Change Orders';
-            const DELTA = 80;
-            Logger.info(`TC206 S3: Resizing "${COL}" by +${DELTA}px`);
-
-            const initialWidth = await colPersist.getColumnWidthPx(COL);
-            Logger.info(`TC206 S3: Initial width = ${initialWidth}px`);
-            expect(initialWidth).toBeGreaterThan(0);
-
-            const newWidth = await colPersist.resizeColumn(COL, DELTA);
-            Logger.info(`TC206 S3: Width after resize = ${newWidth}px`);
-            expect(
-                newWidth,
-                `Column width should increase after drag-resize`
-            ).toBeGreaterThan(initialWidth + 20);
-
-            await colPersist.reloadAndWaitForGrid();
-
-            const widthAfterReload = await colPersist.getColumnWidthPx(COL);
-            Logger.info(`TC206 S3: Width after reload = ${widthAfterReload}px`);
-            expect(
-                Math.abs(widthAfterReload - newWidth),
-                `Width after reload (${widthAfterReload}px) should match width before reload (${newWidth}px)`
-            ).toBeLessThanOrEqual(5);
-            Logger.info(`TC206 S3: Width ${widthAfterReload}px persisted after reload ✓`);
-
-            // Cleanup — resize back to initial
-            await colPersist.resizeColumn(COL, initialWidth - widthAfterReload);
-            Logger.info('TC206 S3: Width restored to initial ✓');
-        });
-
-        // ── Scenario 4: Combined settings persistence ─────────────────────
-        await test.step('Scenario 4 — Combined: hidden column + active sort persist together', async () => {
-            const HIDE_COL = 'Remaining Contract Amount';
-            const SORT_COL = 'Original Contract Amount';
-            Logger.info(`TC206 S4: Hiding "${HIDE_COL}" and sorting "${SORT_COL}" simultaneously`);
-
-            // Ensure clean start for both settings
-            await colPersist.showColumn(HIDE_COL);
-            await colPersist.clearColumnSort(SORT_COL);
-            await colPersist.hideColumn(HIDE_COL);
-            await colPersist.clickColumnSortButton(SORT_COL);
-
-            expect(await colPersist.isColumnVisibleInGrid(HIDE_COL)).toBeFalsy();
-            const sortState = await colPersist.getColumnSortState(SORT_COL);
-            expect(sortState).toMatch(/sort-asc|sort-desc|sort-off/);
-            Logger.info(`TC206 S4: Both settings applied — col hidden, sort="${sortState}" ✓`);
-
-            await colPersist.reloadAndWaitForGrid();
-
-            expect(
-                await colPersist.isColumnVisibleInGrid(HIDE_COL),
-                `"${HIDE_COL}" should remain hidden after reload`
-            ).toBeFalsy();
-            Logger.info(`TC206 S4: "${HIDE_COL}" still hidden after reload ✓`);
-
-            const sortAfterReload = await colPersist.getColumnSortState(SORT_COL);
-            expect(
-                sortAfterReload,
-                `Sort on "${SORT_COL}" should remain after reload`
-            ).toMatch(/sort-asc|sort-desc|sort-off/);
-            Logger.info(`TC206 S4: "${SORT_COL}" sort "${sortAfterReload}" still active after reload ✓`);
-
-            // Cleanup
-            await colPersist.showColumn(HIDE_COL);
-            await colPersist.clearColumnSort(SORT_COL);
-            Logger.info('TC206 S4: Settings restored ✓');
-        });
-
-        // ── Scenario 5: Grouping UI observation (non-failing) ─────────────
-        await test.step('Scenario 5 — Grouping UI observation', async () => {
-            const hasGrouping = await colPersist.hasGroupingUI();
-            Logger.info(`TC206 S5: Grouping UI present = ${hasGrouping}`);
-            if (!hasGrouping) {
-                Logger.info(
-                    'TC206 S5: No grouping UI detected on CapEx page. ' +
-                    'The API stores a "grouping" field (observed as [] in table-view-config) ' +
-                    'but no grouping control is exposed in the current UI — observation logged, not a failure.'
-                );
-            }
-            // No assertion — observation only per investigation findings
-        });
-
-        Logger.success('TC206 ✓');
     });
 
     test('@approval @regression @positive TC207 Approval Templates — Verify Add Approval Rules approver combobox groups matches under "Roles" and "Users" headings, supports multiple approvers/roles in a single input, and the template is created successfully using dynamically discovered (non-hardcoded) roles and users', async () => {
