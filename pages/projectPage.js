@@ -11,9 +11,11 @@ exports.ProjectPage = class ProjectPage {
         this.page = page;
 
         // ── Self-healing locators (TC71 Create Project flow) ───────────────────
-        // Ordered strategies per element: role/label-based first (resilient to markup
-        // changes), the original single CSS/nav-scoped selector as fallback. See
-        // utils/locatorHealer.js — `this.X` stays a plain Locator, so every existing
+        // Strategy #1 per element is always the EXACT original locator this file used
+        // before healing was added, so normal runs resolve identically (same expression,
+        // same cost) to the pre-existing passing baseline. Role/label-based strategies
+        // are pure fallback safety nets that only engage if the original stops matching.
+        // See utils/locatorHealer.js — `this.X` stays a plain Locator, so every existing
         // `.fill()`/`.click()`/`expect(...).toBeVisible()` call site is unaffected.
         this._elementStrategies = {
             projectsTab: [
@@ -26,12 +28,12 @@ exports.ProjectPage = class ProjectPage {
                 { name: 'text:Projects[in nav]', locator: page.locator('nav').getByText('Projects', { exact: true }).locator('visible=true').first() },
             ],
             createProjectBtn: [
-                { name: 'role:button[name=Create Project]', locator: page.getByRole('button', { name: /^Create Project$/i }) },
                 { name: 'css:button:has-text(Create Project)', locator: page.locator(`button:has-text('Create Project')`) },
+                { name: 'role:button[name=Create Project]', locator: page.getByRole('button', { name: /^Create Project$/i }) },
             ],
             modal: [
-                { name: 'role:dialog', locator: page.getByRole('dialog') },
                 { name: 'css:section[role=dialog][data-modal-content]', locator: page.locator('section[role="dialog"][data-modal-content="true"], [role="dialog"]') },
+                { name: 'role:dialog', locator: page.getByRole('dialog') },
             ],
             modalTitle: [
                 { name: 'role:heading[name=/Add project/i]', locator: page.getByRole('heading', { name: /Add project/i }) },
@@ -39,6 +41,8 @@ exports.ProjectPage = class ProjectPage {
             nameInput: [
                 { name: 'label:Name', locator: page.getByLabel('Name') },
                 { name: 'role:textbox[name=Name]', locator: page.getByRole('textbox', { name: 'Name' }) },
+                /** MCP-verified 2026-08-04: real placeholder is "Enter project name" — no data-testid/aria-label exists anywhere in this modal, so placeholder is the only further independent attribute available. */
+                { name: 'placeholder:Enter project name', locator: page.getByPlaceholder('Enter project name') },
             ],
             propertyDropdown: [
                 { name: 'role:textbox[name=Property]', locator: page.getByRole('textbox', { name: 'Property' }).first() },
@@ -48,14 +52,19 @@ exports.ProjectPage = class ProjectPage {
             descInput: [
                 { name: 'label:Description', locator: page.getByLabel('Description') },
                 { name: 'role:textbox[name=Description]', locator: page.getByRole('textbox', { name: 'Description' }) },
+                /** MCP-verified 2026-08-04: real placeholder is "Enter project description". */
+                { name: 'placeholder:Enter project description', locator: page.getByPlaceholder('Enter project description') },
             ],
             startDateInput: [
                 { name: 'label:Start Date', locator: page.getByLabel('Start Date') },
                 { name: 'role:textbox[name=Start Date]', locator: page.getByRole('textbox', { name: 'Start Date' }) },
+                /** MCP-verified 2026-08-04: both date fields share the literal placeholder "YYYY-MM-DD" (not unique alone) — Start renders first in DOM order, so `.nth(0)` disambiguates. Positional, so only a 3rd-tier fallback behind the two label/role strategies above. */
+                { name: 'placeholder:YYYY-MM-DD[nth=0]', locator: page.getByPlaceholder('YYYY-MM-DD').nth(0) },
             ],
             endDateInput: [
                 { name: 'label:End Date', locator: page.getByLabel('End Date') },
                 { name: 'role:textbox[name=End Date]', locator: page.getByRole('textbox', { name: 'End Date' }) },
+                { name: 'placeholder:YYYY-MM-DD[nth=1]', locator: page.getByPlaceholder('YYYY-MM-DD').nth(1) },
             ],
         };
 
