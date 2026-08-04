@@ -1,6 +1,7 @@
 const { expect } = require('@playwright/test');
 const { Logger } = require('../utils/logger');
 const { InteractionLogger } = require('../utils/InteractionLogger');
+const { healingLocator, logLocatorHealth } = require('../utils/locatorHealer');
 const authKitMessages = require('../fixture/authKitMessages.json');
 
 class LoginPage {
@@ -8,20 +9,70 @@ class LoginPage {
   constructor(page) {
     this.page = page;
 
-    // Locators
-    this.emailInput = page.locator('input[name="email"], input[type="email"]');
-    this.passwordInput = page.locator('input[name="password"], input[type="password"]');
-    this.continueButton = page.locator('button[type="submit"]:has-text("Continue")');
-    this.signInButton = page.locator('button[name="intent"]:has-text("Sign in")');
+    // ── Self-healing locators ──────────────────────────────────────────────
+    // Each tracked element is defined as an ORDERED list of independent strategies
+    // (role/label first — resilient to markup/class changes — then the original CSS
+    // as fallback). `healingLocator()` chains them with Playwright's native `.or()`,
+    // so `this.emailInput` etc. remain plain Locators: every existing `.fill()`,
+    // `.click()`, `expect(...).toBeVisible()` call site below and in the spec files
+    // keeps working unchanged. Primary strategies marked "MCP-verified" were confirmed
+    // against the live AuthKit UI (see dated comments further down this file).
+    this._elementStrategies = {
+      emailInput: [
+        { name: 'role:textbox[name=Email]', locator: page.getByRole('textbox', { name: 'Email' }) },
+        { name: 'css:input[name=email]', locator: page.locator('input[name="email"]') },
+        { name: 'css:input[type=email]', locator: page.locator('input[type="email"]') },
+      ],
+      passwordInput: [
+        { name: 'label:/password/i', locator: page.getByLabel(/password/i) },
+        { name: 'css:input[name=password]', locator: page.locator('input[name="password"]') },
+        { name: 'css:input[type=password]', locator: page.locator('input[type="password"]') },
+      ],
+      continueButton: [
+        { name: 'role:button[name=/^Continue/]', locator: page.getByRole('button', { name: /^Continue(\s|$)/ }) },
+        { name: 'css:button[type=submit]:has-text(Continue)', locator: page.locator('button[type="submit"]:has-text("Continue")') },
+      ],
+      signInButton: [
+        { name: 'role:button[name=Sign in]', locator: page.getByRole('button', { name: 'Sign in' }) },
+        { name: 'css:button[name=intent]:has-text(Sign in)', locator: page.locator('button[name="intent"]:has-text("Sign in")') },
+      ],
+      organizationSelect: [
+        { name: 'scoped:.ak-OrgSelection>role:button[name=QA Automations Org_2026]', locator: page.locator('.ak-OrgSelection').getByRole('button', { name: 'QA Automations Org_2026' }) },
+        { name: 'role:button[name=QA Automations Org_2026]', locator: page.getByRole('button', { name: 'QA Automations Org_2026' }) },
+      ],
+      errorMessage: [
+        { name: 'role:alert', locator: page.getByRole('alert') },
+        { name: 'css:.error,.form-error,[role=alert]', locator: page.locator('.error, .form-error, [role="alert"]') },
+      ],
+    };
+
+    // Locators (each a healed Locator — same type/behavior as a plain page.locator())
+    this.emailInput = healingLocator(this._elementStrategies.emailInput);
+    this.passwordInput = healingLocator(this._elementStrategies.passwordInput);
+    this.continueButton = healingLocator(this._elementStrategies.continueButton);
+    this.signInButton = healingLocator(this._elementStrategies.signInButton);
     /** Broad locator for AuthKit / form validation failures */
-    this.errorMessage = page.locator('.error, .form-error, [role="alert"]');
-    // this.organizationSelect = page.locator("button:has-text('Tailorbird_QA_Automations')");
-    this.organizationSelect = page
-      .locator('.ak-OrgSelection')
-      .getByRole('button', { name: 'QA Automations Org_2026' });
+    this.errorMessage = healingLocator(this._elementStrategies.errorMessage);
+    this.organizationSelect = healingLocator(this._elementStrategies.organizationSelect);
 
     /** Exact strings from AuthKit (keep in sync with fixture/authKitMessages.json; verify via MCP if UI changes). */
     this.authKit = authKitMessages;
+  }
+
+  /**
+   * Non-blocking diagnostic: logs which strategy is currently live for each tracked
+   * element. Never throws — call it at a point in the flow where the given elements are
+   * actually expected to be rendered (e.g. emailInput/continueButton right after `goto()`,
+   * passwordInput/signInButton once the password step is showing). Checking an element
+   * before its step exists always reports "NONE matched" — that's not drift, it's just
+   * asking too early — so pass `only` to scope the check to what's live at that point.
+   * @param {string} [contextLabel]
+   * @param {string[]} [only] subset of keys from _elementStrategies to check; omit for all
+   */
+  async checkLocatorHealth(contextLabel = 'LoginPage', only = null) {
+    const entries = Object.entries(this._elementStrategies).filter(([label]) => !only || only.includes(label));
+    const checks = entries.map(([label, strategies]) => ({ label, strategies }));
+    return logLocatorHealth(checks, contextLabel);
   }
 
   /**
@@ -241,6 +292,7 @@ class LoginPage {
 
     Logger.step('Step 3: Waiting for password input...');
     await this.passwordInput.waitFor({ state: 'visible', timeout: 15000 });
+    await this.checkLocatorHealth('TC01 password step', ['passwordInput', 'signInButton']);
     await this.passwordInput.fill(password);
 
     Logger.step('Step 4: Clicking Sign in...');
@@ -255,6 +307,7 @@ class LoginPage {
       await this.page.waitForURL(/organization-selection/, { timeout: 30000 });
       Logger.step('Step 6: Verifying successful login...');
       await this.page.waitForTimeout(5000);
+      await this.checkLocatorHealth('TC01 org selection step', ['organizationSelect']);
       await this.organizationSelect.click();
     }
 

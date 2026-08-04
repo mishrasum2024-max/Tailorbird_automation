@@ -4,25 +4,70 @@ const fs = require('fs');
 const path = require('path');
 const { propertyLocators } = require('../locators/propertyLocator');
 const { projectJobLocators } = require('../locators/projectPageLocator');
+const { healingLocator, logLocatorHealth } = require('../utils/locatorHealer');
 
 exports.ProjectPage = class ProjectPage {
     constructor(page) {
         this.page = page;
-        /** Keep under `nav` only — breadcrumb "Projects" on project/property views also matches `getByRole('link')` (strict mode violation). */
-        /** Mantine renders duplicate NavLink nodes (e.g. responsive); `.first()` often hits a hidden clone — only match visible. */
-        this.projectsTab = page
-            .locator('nav')
-            .locator('a, button, [role="link"]')
-            .filter({ hasText: /^Projects$/ })
-            .locator('visible=true')
-            .first();
-        this.modal = page.locator('section[role="dialog"][data-modal-content="true"], [role="dialog"]');
-        this.modalTitle = page.getByRole('heading', { name: /Add project/i });
-        this.nameInput = page.getByLabel('Name');
-        this.propertyDropdown = page.getByRole('textbox', { name: 'Property' }).first();
-        this.descInput = page.getByLabel('Description');
-        this.startDateInput = page.getByLabel('Start Date');
-        this.endDateInput = page.getByLabel('End Date');
+
+        // ── Self-healing locators (TC71 Create Project flow) ───────────────────
+        // Ordered strategies per element: role/label-based first (resilient to markup
+        // changes), the original single CSS/nav-scoped selector as fallback. See
+        // utils/locatorHealer.js — `this.X` stays a plain Locator, so every existing
+        // `.fill()`/`.click()`/`expect(...).toBeVisible()` call site is unaffected.
+        this._elementStrategies = {
+            projectsTab: [
+                {
+                    name: 'nav>filter[text=Projects]',
+                    /** Keep under `nav` only — breadcrumb "Projects" on project/property views also matches `getByRole('link')` (strict mode violation). Mantine renders duplicate NavLink nodes (e.g. responsive); `.first()` often hits a hidden clone — only match visible. */
+                    locator: page.locator('nav').locator('a, button, [role="link"]').filter({ hasText: /^Projects$/ }).locator('visible=true').first(),
+                },
+                /** MCP-verified 2026-08-04: the live nav renders "Projects" as an <a> WITHOUT href/role, so it has no accessibility role — getByRole('link') never matches it. getByText is tag-agnostic, so it survives even if this switches to a <button>/<div>. */
+                { name: 'text:Projects[in nav]', locator: page.locator('nav').getByText('Projects', { exact: true }).locator('visible=true').first() },
+            ],
+            createProjectBtn: [
+                { name: 'role:button[name=Create Project]', locator: page.getByRole('button', { name: /^Create Project$/i }) },
+                { name: 'css:button:has-text(Create Project)', locator: page.locator(`button:has-text('Create Project')`) },
+            ],
+            modal: [
+                { name: 'role:dialog', locator: page.getByRole('dialog') },
+                { name: 'css:section[role=dialog][data-modal-content]', locator: page.locator('section[role="dialog"][data-modal-content="true"], [role="dialog"]') },
+            ],
+            modalTitle: [
+                { name: 'role:heading[name=/Add project/i]', locator: page.getByRole('heading', { name: /Add project/i }) },
+            ],
+            nameInput: [
+                { name: 'label:Name', locator: page.getByLabel('Name') },
+                { name: 'role:textbox[name=Name]', locator: page.getByRole('textbox', { name: 'Name' }) },
+            ],
+            propertyDropdown: [
+                { name: 'role:textbox[name=Property]', locator: page.getByRole('textbox', { name: 'Property' }).first() },
+                /** MCP-verified 2026-08-04: despite aria-haspopup="listbox", this input's computed accessibility role is "textbox", not "combobox" (no role attribute set anywhere in the DOM) — getByRole('combobox') never matches it. Placeholder is a genuinely independent attribute (label vs. placeholder), so it survives if the <label> association breaks. */
+                { name: 'placeholder:Select property', locator: page.getByPlaceholder('Select property').first() },
+            ],
+            descInput: [
+                { name: 'label:Description', locator: page.getByLabel('Description') },
+                { name: 'role:textbox[name=Description]', locator: page.getByRole('textbox', { name: 'Description' }) },
+            ],
+            startDateInput: [
+                { name: 'label:Start Date', locator: page.getByLabel('Start Date') },
+                { name: 'role:textbox[name=Start Date]', locator: page.getByRole('textbox', { name: 'Start Date' }) },
+            ],
+            endDateInput: [
+                { name: 'label:End Date', locator: page.getByLabel('End Date') },
+                { name: 'role:textbox[name=End Date]', locator: page.getByRole('textbox', { name: 'End Date' }) },
+            ],
+        };
+
+        this.projectsTab = healingLocator(this._elementStrategies.projectsTab);
+        this.createProjectBtn = healingLocator(this._elementStrategies.createProjectBtn);
+        this.modal = healingLocator(this._elementStrategies.modal);
+        this.modalTitle = healingLocator(this._elementStrategies.modalTitle);
+        this.nameInput = healingLocator(this._elementStrategies.nameInput);
+        this.propertyDropdown = healingLocator(this._elementStrategies.propertyDropdown);
+        this.descInput = healingLocator(this._elementStrategies.descInput);
+        this.startDateInput = healingLocator(this._elementStrategies.startDateInput);
+        this.endDateInput = healingLocator(this._elementStrategies.endDateInput);
         this.budgetInput = page.getByRole('textbox', { name: 'Estimated Budget' })
             .or(page.getByPlaceholder('Enter estimated budget'));
         this.budgetCategoryInput = page.getByRole('textbox', { name: 'Budget Category' })
@@ -113,6 +158,21 @@ exports.ProjectPage = class ProjectPage {
         this.bulkUpdateStatusBtn = page.locator('button:has-text("Bulk Update Status")');
     }
 
+    /**
+     * Non-blocking diagnostic: logs which strategy is currently live for each tracked
+     * Create-Project-flow element. Never throws. Pass `only` to scope to the elements
+     * actually expected to be rendered at that point (checking too early always reports
+     * "NONE matched", which isn't drift — see LoginPage.checkLocatorHealth for the same
+     * pattern in the login flow).
+     * @param {string} [contextLabel]
+     * @param {string[]} [only]
+     */
+    async checkLocatorHealth(contextLabel = 'ProjectPage', only = null) {
+        const entries = Object.entries(this._elementStrategies).filter(([label]) => !only || only.includes(label));
+        const checks = entries.map(([label, strategies]) => ({ label, strategies }));
+        return logLocatorHealth(checks, contextLabel);
+    }
+
     /** Resolves absolute URL for the global projects list (not a loading heuristic — same destination as sidebar "Projects"). */
     _projectsListUrl() {
         const raw = process.env.BASE_URL || process.env.DASHBOARD_URL;
@@ -178,6 +238,7 @@ exports.ProjectPage = class ProjectPage {
                     }
                 }
 
+                await this.checkLocatorHealth('ProjectPage sidebar nav', ['projectsTab']);
                 await this.projectsTab.waitFor({ state: 'attached', timeout: 15000 });
                 await this.projectsTab.click({ force: true });
                 await this.page.waitForURL(/\/projects/i, { timeout: 30000 }).catch(() => { });
@@ -209,21 +270,20 @@ exports.ProjectPage = class ProjectPage {
             const loadTime = ((endTime - startTime) / 1000).toFixed(2);
             Logger.info(`Project Page fully loaded in ${loadTime} seconds`);
 
-            const createProjectBtn = this.page.locator(`button:has-text('Create Project')`);
-            await expect(createProjectBtn).toBeVisible({ timeout: 5000 });
+            await this.checkLocatorHealth('ProjectPage projects list', ['createProjectBtn']);
+            await expect(this.createProjectBtn).toBeVisible({ timeout: 5000 });
             Logger.success('✅ Create Project button is visible.');
 
-            await createProjectBtn.waitFor({ state: 'visible' });
-            await createProjectBtn.click();
+            await this.createProjectBtn.waitFor({ state: 'visible' });
+            await this.createProjectBtn.click();
             Logger.success('✅ Clicked on Create Project button.');
 
             await this.page.waitForTimeout(800);
 
-            const modal = this.page.locator('section[role="dialog"][data-modal-content="true"]');
-            await expect(modal).toBeVisible({ timeout: 5000 });
+            await expect(this.modal).toBeVisible({ timeout: 5000 });
 
-            const modalTitle = this.page.getByRole('heading', { name: /Add project/i });
-            await expect(modalTitle).toBeVisible({ timeout: 5000 });
+            await this.checkLocatorHealth('ProjectPage create-project modal', ['modal', 'modalTitle', 'nameInput', 'propertyDropdown', 'descInput', 'startDateInput', 'endDateInput']);
+            await expect(this.modalTitle).toBeVisible({ timeout: 5000 });
             Logger.success(' "Add project" modal opened successfully.');
         } catch (e) {
             Logger.step(`Error in openCreateProjectModal: ${e.message}`);

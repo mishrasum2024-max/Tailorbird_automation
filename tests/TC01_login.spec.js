@@ -29,6 +29,7 @@ test.describe('Tailorbird Login Flow', () => {
     await test.step('Go to login page', async () => {
       Logger.step('Navigating to login URL...');
       await page.goto(process.env.LOGIN_URL, { waitUntil: 'load' });
+      await login.checkLocatorHealth('TC01 email step', ['emailInput', 'continueButton', 'errorMessage']);
     });
 
     await test.step('Perform login', async () => {

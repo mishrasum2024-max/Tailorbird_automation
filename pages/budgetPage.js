@@ -3,6 +3,7 @@ const fs = require('fs');
 const { expect } = require('@playwright/test');
 const { Logger } = require('../utils/logger');
 const { budgetLocators } = require('../locators/budgetLocator');
+const { healingLocator, logLocatorHealth } = require('../utils/locatorHealer');
 const leftPanel = require('./leftPanel');
 
 let budget;
@@ -11,6 +12,52 @@ exports.BudgetJob = class BudgetJob {
     constructor(page) {
         this.page = page;
         budget = budgetLocators(page);
+
+        // ── Self-healing locators (TC71 budget upload/submit flow) ─────────────
+        // budgetLocator.js already gives most elements resilient role/regex names;
+        // these four were single-strategy, so we layer a second, independent
+        // strategy on top via healingLocator() (see utils/locatorHealer.js) — same
+        // pattern as loginPage.js/projectPage.js. Reassigning on the shared `budget`
+        // object means every existing call site (`budget.propertyDropdownButton`, etc.
+        // elsewhere in this file) gets the fallback too, with no behavior change
+        // unless the primary strategy actually stops matching.
+        this._elementStrategies = {
+            propertyDropdownButton: [
+                { name: 'role:button[name=/Select a Property|Test Property|Sample Property|name_/i]', locator: budget.propertyDropdownButton },
+                /** MCP-verified 2026-08-04: real class is `.tb-property-selector-button` (a dedicated, purpose-built class) — the icon SVG has no class attribute at all, so an icon-based selector would never match. */
+                { name: 'css:.tb-property-selector-button', locator: page.locator('.tb-property-selector-button').first() },
+            ],
+            reviseBudgetsBtn: [
+                { name: 'role:button[name=/Revise Budgets|Create First Budget/i]', locator: budget.reviseBudgetsBtn },
+                /** MCP-verified 2026-08-04: a brand-new property with no budget yet renders "Create First Budget", not "Revise Budgets" — a literal `:has-text("Revise Budgets")` fallback would silently fail on exactly the properties most likely to need it. Filter (not role) so it doesn't share the primary's accessible-name computation. */
+                { name: 'css:button[filter=/Revise Budgets|Create First Budget/i]', locator: page.locator('button').filter({ hasText: /Revise Budgets|Create First Budget/i }).first() },
+            ],
+            submitForApprovalBtn: [
+                { name: 'role:dialog>button[name=/Submit for Approval|Submit for Review/i]', locator: page.getByRole('dialog').getByRole('button', { name: /Submit for Approval|Submit for Review/i }).first() },
+                { name: 'role:button[name=/Submit for Approval|Submit for Review/i]', locator: page.getByRole('button', { name: /Submit for Approval|Submit for Review/i }).first() },
+            ],
+        };
+
+        budget.propertyDropdownButton = healingLocator(this._elementStrategies.propertyDropdownButton);
+        budget.reviseBudgetsBtn = healingLocator(this._elementStrategies.reviseBudgetsBtn);
+        // submitForApprovalBtn is left as-is (already correct — budgetLocator.js's own .or()) —
+        // tracked in _elementStrategies for health-check visibility only. The file-input upload
+        // has its own multi-candidate retry logic in uploadFileInRevision() that is more capable
+        // than a single-strategy health check could be, so it isn't tracked here at all.
+    }
+
+    /**
+     * Non-blocking diagnostic: logs which strategy is currently live for each tracked
+     * budget-flow element. Never throws. Pass `only` to scope to elements expected to be
+     * rendered at that point in the flow (property dropdown vs. revision editor vs. submit
+     * dialog are different pages/steps).
+     * @param {string} [contextLabel]
+     * @param {string[]} [only]
+     */
+    async checkLocatorHealth(contextLabel = 'BudgetJob', only = null) {
+        const entries = Object.entries(this._elementStrategies).filter(([label]) => !only || only.includes(label));
+        const checks = entries.map(([label, strategies]) => ({ label, strategies }));
+        return logLocatorHealth(checks, contextLabel);
     }
 
     // ===================== Navigation =====================
@@ -66,6 +113,7 @@ exports.BudgetJob = class BudgetJob {
     }
 
     async selectPropertyByName(propertyName) {
+        await this.checkLocatorHealth('BudgetJob property dropdown', ['propertyDropdownButton']);
         await budget.propertyDropdownButton.click();
         await this.page.waitForTimeout(1000);
 
@@ -611,6 +659,7 @@ exports.BudgetJob = class BudgetJob {
     }
 
     async clickReviseBudgets() {
+        await this.checkLocatorHealth('BudgetJob revise budgets', ['reviseBudgetsBtn']);
         let btn = budget.reviseBudgetsBtn;
         let enabled = await btn.isEnabled({ timeout: 15000 }).catch(() => false);
 
@@ -755,6 +804,7 @@ exports.BudgetJob = class BudgetJob {
     }
 
     async clickSubmitForApproval() {
+        await this.checkLocatorHealth('BudgetJob submit for approval', ['submitForApprovalBtn']);
         const submitButtons = this.page.getByRole('button', { name: /Submit for Approval/i });
         const initialCount = await submitButtons.count();
         Logger.info(`Submit for Approval buttons visible before click: ${initialCount}`);
