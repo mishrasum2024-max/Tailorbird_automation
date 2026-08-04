@@ -37,6 +37,7 @@ exports.MultiYearBudgetJob = class MultiYearBudgetJob {
     async selectPropertyByName(propertyName) {
         await myb.propertySwitcherButton.click();
         await this.page.waitForTimeout(800);
+        // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- propertyName's regex metacharacters are escaped inline before construction, so this can only ever match the literal `propertyName` substring (no ReDoS surface); it's also a test-helper parameter, not attacker-controlled input.
         const option = this.page.getByRole('menuitem', { name: new RegExp(propertyName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }).first();
         await expect(option, `Property "${propertyName}" must appear in the property switcher`).toBeVisible({ timeout: 10000 });
         await option.click();
@@ -279,6 +280,7 @@ exports.MultiYearBudgetJob = class MultiYearBudgetJob {
             this.page.waitForEvent('download'),
             myb.downloadTemplateBtn.click(),
         ]);
+        // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- suggestedFilename() comes from Playwright's own Download API for a file downloaded from our own test app during an automated test run, not externally attacker-controlled input; downloadsDir defaults to a fixed literal test folder.
         const savePath = path.join(downloadsDir, await download.suggestedFilename());
         await download.saveAs(savePath);
         Logger.success(`Downloaded CSV template to ${savePath}`);
@@ -296,6 +298,7 @@ exports.MultiYearBudgetJob = class MultiYearBudgetJob {
             this.page.waitForEvent('download'),
             myb.exportCsvBtn.click(),
         ]);
+        // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- suggestedFilename() comes from Playwright's own Download API for a file downloaded from our own test app during an automated test run, not externally attacker-controlled input; downloadsDir defaults to a fixed literal test folder.
         const savePath = path.join(downloadsDir, await download.suggestedFilename());
         await download.saveAs(savePath);
         Logger.success(`Exported multi-year budget CSV to ${savePath}`);

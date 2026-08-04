@@ -17,9 +17,6 @@
   "revokeDialogMessage": "Are you sure you want to revoke the invite to {{email}}? This action is immediate and cannot be undone.",
   "revokeConfirmButton": "Revoke",
 
-  "revokeAccessDialogTitle": "Revoke access?",
-  "revokeAccessDialogMessage": "Are you sure you want to revoke access for {{email}}? They will lose organization and property access.",
-
   "resendDialogTitle": "Resend invite?",
   "resendDialogMessage": "Are you sure you want to resend the invite to {{email}}?",
   "resendConfirmButton": "Resend",

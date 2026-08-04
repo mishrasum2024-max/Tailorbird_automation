@@ -24,9 +24,5 @@ module.exports = {
   userActionsBtn: 'button[title="User actions"]',
   firstRowMenuBtn: 'table tbody tr:first-child button[title="User actions"]',
   menuItemRevoke: 'role=menuitem >> text=Revoke invitation',
-  // MCP-verified live (2026-08-03): an already-ACTIVE user's "User actions" menu shows
-  // "Revoke access" (not "Revoke invitation") and a different confirmation dialog — see
-  // OrganizationHelper.revokeActiveUser().
-  menuItemRevokeAccess: 'role=menuitem >> text=Revoke access',
   menuItemResend: 'role=menuitem >> text=Resend'
 };
