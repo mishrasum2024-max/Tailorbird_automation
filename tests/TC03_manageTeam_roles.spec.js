@@ -16,6 +16,8 @@ const {
   manageTeamRolesBench: roleManagementUiLabels,
   orgUrls,
 } = require("../pages/manageTeamRolesHelper");
+const { healingLocator } = require("../utils/locatorHealer");
+const { tableButtonStrategies } = require("../locators/manageTeamRolesLocator");
 
 const dashboardLandingUrl = process.env.DASHBOARD_URL || orgUrls.dashboardUrl;
 const tailorbirdOrigin = process.env.BASE_URL
@@ -308,7 +310,13 @@ test.describe("TC03 Manage Team Roles — Text Agent (live MCP browser scan)", (
 
         for (const btnName of ["View", "Table", "Export", "Import Property Role"]) {
           InteractionLogger.logButtonClick(btnName, btnName);
-          await expect(page.getByRole("button", { name: btnName })).toBeVisible({ timeout: 8_000 });
+          // "Table" strategies live in locators/manageTeamRolesLocator.js (tableButtonStrategies) —
+          // see that file for the 4-strategy rationale and the strict-mode bug it documents.
+          // View/Export/Add Role/Import Property Role have no further independent attribute, so stay text-only.
+          const buttonLocator = btnName === "Table"
+            ? healingLocator(tableButtonStrategies(page))
+            : page.getByRole("button", { name: btnName });
+          await expect(buttonLocator).toBeVisible({ timeout: 8_000 });
         }
 
         for (const col of ["Properties", "Location", "address"]) {

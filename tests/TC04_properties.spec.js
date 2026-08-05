@@ -10,7 +10,8 @@ import testData from '../fixture/property.json';
 const uiMessages = require('../fixture/tailorbirdUiMessages.json');
 const loc = require('../locators/locationLocator');
 const { verifyColumnContentDoesNotWrap, forceGridFullWidth } = require('../utils/columnResizeHelper');
-import { propertyLocators } from '../locators/propertyLocator.js';
+import { propertyLocators, filterButtonStrategies, filterCloseButtonStrategies } from '../locators/propertyLocator.js';
+const { healingLocator } = require('../utils/locatorHealer');
 const { ProjectPage } = require('../pages/projectPage');
 const { AddColumnPage } = require('../pages/addColumnPage');
 const { Logger } = require('../utils/logger');
@@ -133,8 +134,9 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
 
   test('@sanity @property @regression TC51 - Validate Filters: Garden, Mid-Rise, High-Rise, and Military', async () => {
     await prop.changeView(testData.viewName);
-    await page.locator(propertyLocators.birdTableFilterButton).waitFor({ state: 'visible' });
-    await page.locator(propertyLocators.birdTableFilterButton).click();
+    const filterBtn = healingLocator(filterButtonStrategies(page));
+    await filterBtn.waitFor({ state: 'visible' });
+    await filterBtn.click();
 
     const filterDrawer = prop.filterPopup();
     await filterDrawer.waitFor({ state: 'visible', timeout: 15000 });
@@ -148,8 +150,9 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
 
     await expect(filterDrawer.getByRole('button', { name: 'Reset Filters' })).toHaveCount(0);
 
-    await filterDrawer.locator('.mantine-CloseButton-root').waitFor({ state: 'visible' });
-    await filterDrawer.locator('.mantine-CloseButton-root').click();
+    const filterCloseBtn = healingLocator(filterCloseButtonStrategies(filterDrawer));
+    await filterCloseBtn.waitFor({ state: 'visible' });
+    await filterCloseBtn.click();
   });
 
   test('@regression @property TC52 - Validate All Column Headers in Table View', async () => {

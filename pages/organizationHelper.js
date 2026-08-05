@@ -1,10 +1,23 @@
 const { expect } = require("@playwright/test");
 const organizationLocators = require("../locators/organization");
 const data = require("../fixture/organization.json");
+const { healingLocator } = require("../utils/locatorHealer");
 
 class OrganizationHelper {
   constructor(page) {
     this.page = page;
+  }
+
+  /**
+   * Healed "User actions" row-menu button. Strategy definitions live in
+   * locators/organization.js (userActionsButtonStrategies — 4 independent
+   * strategies, see that file for the MCP-verification rationale). `scope` lets
+   * callers pass a row-scoped locator (revoke's primary attempt) or the page
+   * itself (rowIndex-correlated fallback, openFirstMenu's fallback).
+   * @param {import('@playwright/test').Locator} scope
+   */
+  userActionsButton(scope) {
+    return healingLocator(organizationLocators.userActionsButtonStrategies(scope));
   }
 
   /**
@@ -369,7 +382,7 @@ class OrganizationHelper {
   async revoke(row, email) {
     try {
       this.log(`Revoking invitation for: ${email}`);
-      const menu = row.locator(organizationLocators.userActionsBtn);
+      const menu = this.userActionsButton(row);
       // Short timeout: this locator is scoped to the data-pane row and the "User actions"
       // button lives in a structurally separate actions-pane row (MCP-verified live), so this
       // can never resolve — waiting the full default timeout here only burns real-world time
@@ -408,9 +421,8 @@ class OrganizationHelper {
         const rowIndex = await row.getAttribute("data-rgrow");
         if (rowIndex === null) throw err;
         this.log(`Falling back to grid actions-pane lookup for row index ${rowIndex}...`);
-        const actionsBtn = this.page
-          .locator(`[role="row"][data-rgrow="${rowIndex}"] button[title="User actions"]`)
-          .first();
+        const actionsPaneRow = this.page.locator(`[role="row"][data-rgrow="${rowIndex}"]`);
+        const actionsBtn = this.userActionsButton(actionsPaneRow).first();
         await actionsBtn.click({ timeout: 15000 });
         this.log("Opened user action menu (fallback).");
         await this.page.locator(organizationLocators.menuItemRevoke).click();
@@ -472,9 +484,8 @@ class OrganizationHelper {
       // (data-rgrow="0") and its row-index-correlated actions-pane "User actions" button.
       try {
         this.log("Falling back to grid actions-pane lookup for the first row...");
-        const actionsBtn = this.page
-          .locator('[role="row"][data-rgrow="0"] button[title="User actions"]')
-          .first();
+        const firstActionsPaneRow = this.page.locator('[role="row"][data-rgrow="0"]');
+        const actionsBtn = this.userActionsButton(firstActionsPaneRow).first();
         await actionsBtn.click({ timeout: 15000 });
         this.log("First row menu opened (fallback).");
         return;

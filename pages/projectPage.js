@@ -3,7 +3,7 @@ const { Logger } = require('../utils/logger');
 const fs = require('fs');
 const path = require('path');
 const { propertyLocators } = require('../locators/propertyLocator');
-const { projectJobLocators } = require('../locators/projectPageLocator');
+const { projectJobLocators, projectElementStrategies } = require('../locators/projectPageLocator');
 const { healingLocator, logLocatorHealth } = require('../utils/locatorHealer');
 
 exports.ProjectPage = class ProjectPage {
@@ -11,62 +11,11 @@ exports.ProjectPage = class ProjectPage {
         this.page = page;
 
         // ── Self-healing locators (TC71 Create Project flow) ───────────────────
-        // Strategy #1 per element is always the EXACT original locator this file used
-        // before healing was added, so normal runs resolve identically (same expression,
-        // same cost) to the pre-existing passing baseline. Role/label-based strategies
-        // are pure fallback safety nets that only engage if the original stops matching.
-        // See utils/locatorHealer.js — `this.X` stays a plain Locator, so every existing
-        // `.fill()`/`.click()`/`expect(...).toBeVisible()` call site is unaffected.
-        this._elementStrategies = {
-            projectsTab: [
-                {
-                    name: 'nav>filter[text=Projects]',
-                    /** Keep under `nav` only — breadcrumb "Projects" on project/property views also matches `getByRole('link')` (strict mode violation). Mantine renders duplicate NavLink nodes (e.g. responsive); `.first()` often hits a hidden clone — only match visible. */
-                    locator: page.locator('nav').locator('a, button, [role="link"]').filter({ hasText: /^Projects$/ }).locator('visible=true').first(),
-                },
-                /** MCP-verified 2026-08-04: the live nav renders "Projects" as an <a> WITHOUT href/role, so it has no accessibility role — getByRole('link') never matches it. getByText is tag-agnostic, so it survives even if this switches to a <button>/<div>. */
-                { name: 'text:Projects[in nav]', locator: page.locator('nav').getByText('Projects', { exact: true }).locator('visible=true').first() },
-            ],
-            createProjectBtn: [
-                { name: 'css:button:has-text(Create Project)', locator: page.locator(`button:has-text('Create Project')`) },
-                { name: 'role:button[name=Create Project]', locator: page.getByRole('button', { name: /^Create Project$/i }) },
-            ],
-            modal: [
-                { name: 'css:section[role=dialog][data-modal-content]', locator: page.locator('section[role="dialog"][data-modal-content="true"], [role="dialog"]') },
-                { name: 'role:dialog', locator: page.getByRole('dialog') },
-            ],
-            modalTitle: [
-                { name: 'role:heading[name=/Add project/i]', locator: page.getByRole('heading', { name: /Add project/i }) },
-            ],
-            nameInput: [
-                { name: 'label:Name', locator: page.getByLabel('Name') },
-                { name: 'role:textbox[name=Name]', locator: page.getByRole('textbox', { name: 'Name' }) },
-                /** MCP-verified 2026-08-04: real placeholder is "Enter project name" — no data-testid/aria-label exists anywhere in this modal, so placeholder is the only further independent attribute available. */
-                { name: 'placeholder:Enter project name', locator: page.getByPlaceholder('Enter project name') },
-            ],
-            propertyDropdown: [
-                { name: 'role:textbox[name=Property]', locator: page.getByRole('textbox', { name: 'Property' }).first() },
-                /** MCP-verified 2026-08-04: despite aria-haspopup="listbox", this input's computed accessibility role is "textbox", not "combobox" (no role attribute set anywhere in the DOM) — getByRole('combobox') never matches it. Placeholder is a genuinely independent attribute (label vs. placeholder), so it survives if the <label> association breaks. */
-                { name: 'placeholder:Select property', locator: page.getByPlaceholder('Select property').first() },
-            ],
-            descInput: [
-                { name: 'label:Description', locator: page.getByLabel('Description') },
-                { name: 'role:textbox[name=Description]', locator: page.getByRole('textbox', { name: 'Description' }) },
-                /** MCP-verified 2026-08-04: real placeholder is "Enter project description". */
-                { name: 'placeholder:Enter project description', locator: page.getByPlaceholder('Enter project description') },
-            ],
-            startDateInput: [
-                { name: 'label:Start Date', locator: page.getByLabel('Start Date') },
-                { name: 'role:textbox[name=Start Date]', locator: page.getByRole('textbox', { name: 'Start Date' }) },
-                /** MCP-verified 2026-08-04: both date fields share the literal placeholder "YYYY-MM-DD" (not unique alone) — Start renders first in DOM order, so `.nth(0)` disambiguates. Positional, so only a 3rd-tier fallback behind the two label/role strategies above. */
-                { name: 'placeholder:YYYY-MM-DD[nth=0]', locator: page.getByPlaceholder('YYYY-MM-DD').nth(0) },
-            ],
-            endDateInput: [
-                { name: 'label:End Date', locator: page.getByLabel('End Date') },
-                { name: 'role:textbox[name=End Date]', locator: page.getByRole('textbox', { name: 'End Date' }) },
-                { name: 'placeholder:YYYY-MM-DD[nth=1]', locator: page.getByPlaceholder('YYYY-MM-DD').nth(1) },
-            ],
-        };
+        // Strategy definitions live in locators/projectPageLocator.js (see that file
+        // for the ordering rationale). See utils/locatorHealer.js — `this.X` stays a
+        // plain Locator, so every existing `.fill()`/`.click()`/
+        // `expect(...).toBeVisible()` call site is unaffected.
+        this._elementStrategies = projectElementStrategies(page);
 
         this.projectsTab = healingLocator(this._elementStrategies.projectsTab);
         this.createProjectBtn = healingLocator(this._elementStrategies.createProjectBtn);

@@ -205,4 +205,97 @@ const projectJobLocators = (page) => ({
 
 });
 
-module.exports = { projectJobLocators };
+/**
+ * Self-healing locator strategies for the TC71 Create Project flow (pages/projectPage.js).
+ * Strategy #1 per element is always the EXACT original locator this file used before
+ * healing was added, so normal runs resolve identically (same expression, same cost)
+ * to the pre-existing passing baseline. Later strategies are pure fallback safety nets
+ * that only engage if the original stops matching. No regex, no XPath (semgrep-safe).
+ *
+ * All strategies MCP-verified live 2026-08-04 (beta.tailorbird.com/projects). Where an
+ * element genuinely has no further independent attribute (e.g. "Projects" nav item has
+ * no data-testid/aria-label/icon), the strategy count is honest, not padded.
+ * @param {import('@playwright/test').Page} page
+ */
+function projectElementStrategies(page) {
+    return {
+        projectsTab: [
+            {
+                name: 'nav>filter[text=Projects]',
+                /** Keep under `nav` only — breadcrumb "Projects" on project/property views also matches `getByRole('link')` (strict mode violation). Mantine renders duplicate NavLink nodes (e.g. responsive); `.first()` often hits a hidden clone — only match visible. */
+                locator: page.locator('nav').locator('a, button, [role="link"]').filter({ hasText: /^Projects$/ }).locator('visible=true').first(),
+            },
+            /** MCP-verified: the live nav renders "Projects" as an <a> WITHOUT href/role, so it has no accessibility role — getByRole('link') never matches it. getByText is tag-agnostic, so it survives even if this switches to a <button>/<div>. */
+            { name: 'text:Projects[in nav]', locator: page.locator('nav').getByText('Projects', { exact: true }).locator('visible=true').first() },
+            /** MCP-verified: only 2 genuinely independent strategies exist for this element — no data-testid, aria-label, or distinguishing class anywhere on the live nav item. Not padded with a 3rd/4th. */
+        ],
+        createProjectBtn: [
+            { name: 'css:button:has-text(Create Project)', locator: page.locator(`button:has-text('Create Project')`) },
+            /** No-regex: exact:true gives the same precise "Create Project" (not "Create Project Something") match the former /^Create Project$/i regex gave, without a regex literal. */
+            { name: 'role:button[name=Create Project]', locator: page.getByRole('button', { name: 'Create Project', exact: true }) },
+            /**
+             * MCP-verified: the toolbar trigger has a "plus" icon (svg.lucide-plus); the modal's
+             * OWN internal "Create Project" submit button (same text!) was confirmed to have NO
+             * icon at all — so icon+text together unambiguously identify the toolbar button even
+             * while the modal is open (both "Create Project" buttons coexist in the DOM then).
+             */
+            { name: 'css:button:has(svg.lucide-plus):has-text(Create Project)', locator: page.locator('button:has(svg.lucide-plus)').filter({ hasText: 'Create Project' }) },
+            /** Scoped to <main> — the modal's own submit button is NOT a descendant of <main>, so this also disambiguates from the modal's duplicate-text button. Weakest signal (breaks if markup ever moves), kept last. */
+            { name: 'css:main>>button[hasText=Create Project]', locator: page.locator('main').locator('button').filter({ hasText: 'Create Project' }) },
+        ],
+        modal: [
+            { name: 'css:section[role=dialog][data-modal-content]', locator: page.locator('section[role="dialog"][data-modal-content="true"], [role="dialog"]') },
+            { name: 'role:dialog', locator: page.getByRole('dialog') },
+            /** MCP-verified: structural — the dialog's aria-labelledby points at an h2.mantine-Modal-title inside it; matching "a dialog that HAS that heading" is a different mechanism (DOM containment) than matching by role alone. */
+            { name: 'css:dialog:has(h2.mantine-Modal-title)', locator: page.locator('[role="dialog"]').filter({ has: page.locator('h2.mantine-Modal-title') }) },
+            /** MCP-verified: aria-modal="true" is a real, separate attribute from role="dialog" (both usually co-occur, but are independently settable). */
+            { name: 'css:[aria-modal=true]', locator: page.locator('[aria-modal="true"]') },
+        ],
+        modalTitle: [
+            { name: 'role:heading[name=/Add project/i]', locator: page.getByRole('heading', { name: /Add project/i }) },
+            /** MCP-verified: Mantine's own modal-title class, filtered by text — a different mechanism (CSS class match) than ARIA role+accessible-name computation. */
+            { name: 'css:.mantine-Modal-title[hasText=Add project]', locator: page.locator('.mantine-Modal-title').filter({ hasText: 'Add project' }) },
+            /** MCP-verified: structural — the dialog's title is always its first <h2>, regardless of text/copy changes. Weakest signal (breaks if the dialog ever has an earlier h2), kept last. Only 3 genuinely independent strategies found for this element — not padded to 4. */
+            { name: 'position:dialog-first-h2', locator: page.locator('[role="dialog"] h2').first() },
+        ],
+        nameInput: [
+            { name: 'label:Name', locator: page.getByLabel('Name') },
+            { name: 'role:textbox[name=Name]', locator: page.getByRole('textbox', { name: 'Name' }) },
+            /** MCP-verified: real placeholder is "Enter project name" — no data-testid/aria-label exists anywhere in this modal. */
+            { name: 'placeholder:Enter project name', locator: page.getByPlaceholder('Enter project name') },
+            /** MCP-verified: field order in the modal is fixed [Name, Property, Description, Start Date, End Date, ...] — Name is always the 1st non-hidden input. Positional, weakest signal, kept last. */
+            { name: 'position:dialog-input-nth(0)', locator: page.locator('[role="dialog"] input:not([type="hidden"])').nth(0) },
+        ],
+        propertyDropdown: [
+            { name: 'role:textbox[name=Property]', locator: page.getByRole('textbox', { name: 'Property' }).first() },
+            /** MCP-verified: despite aria-haspopup="listbox", this input's computed accessibility role is "textbox", not "combobox" (no role attribute set anywhere in the DOM) — getByRole('combobox') never matches it. Placeholder is a genuinely independent attribute (label vs. placeholder), so it survives if the <label> association breaks. */
+            { name: 'placeholder:Select property', locator: page.getByPlaceholder('Select property').first() },
+            /** MCP-verified: no name attribute, no data-testid on any modal field — aria-haspopup="listbox" is real but shared with Budget Category's field too, so alone it's not unique; combined with position it is. */
+            { name: 'css:[aria-haspopup=listbox][nth=0]', locator: page.locator('[role="dialog"] [aria-haspopup="listbox"]').nth(0) },
+            { name: 'position:dialog-input-nth(1)', locator: page.locator('[role="dialog"] input:not([type="hidden"])').nth(1) },
+        ],
+        descInput: [
+            { name: 'label:Description', locator: page.getByLabel('Description') },
+            { name: 'role:textbox[name=Description]', locator: page.getByRole('textbox', { name: 'Description' }) },
+            /** MCP-verified: real placeholder is "Enter project description". */
+            { name: 'placeholder:Enter project description', locator: page.getByPlaceholder('Enter project description') },
+            { name: 'position:dialog-input-nth(2)', locator: page.locator('[role="dialog"] input:not([type="hidden"])').nth(2) },
+        ],
+        startDateInput: [
+            { name: 'label:Start Date', locator: page.getByLabel('Start Date') },
+            { name: 'role:textbox[name=Start Date]', locator: page.getByRole('textbox', { name: 'Start Date' }) },
+            /** MCP-verified: both date fields share the literal placeholder "YYYY-MM-DD" (not unique alone) — Start renders first in DOM order, so `.nth(0)` disambiguates. */
+            { name: 'placeholder:YYYY-MM-DD[nth=0]', locator: page.getByPlaceholder('YYYY-MM-DD').nth(0) },
+            /** MCP-verified: field-order position within the modal (index 3 of the non-hidden inputs) — a genuinely different mechanism (absolute field order) than "nth among same-placeholder fields" above. Weakest signal, kept last. */
+            { name: 'position:dialog-input-nth(3)', locator: page.locator('[role="dialog"] input:not([type="hidden"])').nth(3) },
+        ],
+        endDateInput: [
+            { name: 'label:End Date', locator: page.getByLabel('End Date') },
+            { name: 'role:textbox[name=End Date]', locator: page.getByRole('textbox', { name: 'End Date' }) },
+            { name: 'placeholder:YYYY-MM-DD[nth=1]', locator: page.getByPlaceholder('YYYY-MM-DD').nth(1) },
+            { name: 'position:dialog-input-nth(4)', locator: page.locator('[role="dialog"] input:not([type="hidden"])').nth(4) },
+        ],
+    };
+}
+
+module.exports = { projectJobLocators, projectElementStrategies };

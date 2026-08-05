@@ -1,7 +1,3 @@
-/**
- * TC03 — Manage Organization (`/organization`): invites, revoke/resend, role edits, validation regressions.
- * MCP-verified beta UI (2026-05-05); reference screenshots: `mcp-reference-screenshots/`.
- */
 require('dotenv').config();
 const { test, expect } = require('@playwright/test');
 const { Logger } = require('../utils/logger');
@@ -13,6 +9,15 @@ const { ensureLeftPanelExpanded } = require('../utils/leftPanelExpander');
 // NEW, additive-only import — see utils/resilientRetry.js. Nothing in any page object,
 // helper, or config is modified.
 const { retryOperation } = require('../utils/resilientRetry');
+const { healingLocator } = require('../utils/locatorHealer');
+const {
+  orgWorkspaceTabsListStrategies,
+  orgWorkspaceSearchInputStrategies,
+  orgWorkspaceBreadcrumbStrategies,
+  orgWorkspaceTabStrategies,
+  orgWorkspaceInviteButtonStrategies,
+  orgWorkspaceColumnHeaderStrategies,
+} = require('../locators/organization');
 
 let sharedBrowserContext;
 let sharedPage;
@@ -32,54 +37,12 @@ async function applyWorkspaceZoom(page) {
 /** Access column format used by the Property access tab's user-centric (transposed) view. */
 const PROPERTY_ACCESS_COUNT_PATTERN = /^\d+\s+Propert(y|ies)$/i;
 
-/**
- * The "Property access" tab renders two orientations behind its own "Transpose view"
- * control (an icon button top-right of the table, next to Search): a property-centric
- * grid (Property/Location/Access/Actions) by default, and a user-centric one (User/Email/
- * Access/Actions, with Access showing "N Properties") once transposed. MCP-verified live
- * (2026-07-30): the literal "Users" tab's own "Property access" column only ever shows
- * actual property name(s), "All properties", or "—" — never a numeric count — so it
- * cannot satisfy a "N Properties" style assertion; that format and column set exist only
- * in this transposed view. This checks the current state before toggling (rather than
- * assuming a fixed prior state) since the toggle can already be applied depending on
- * in-page navigation history.
- */
 async function ensureUserCentricPropertyAccessView(page) {
   await page.getByRole('tablist').getByRole('tab', { name: 'Property access' }).click();
-  // ROOT CAUSE (MCP-verified live 2026-07-31, confirmed via error-context/accessibility-tree
-  // dump on a genuine local failure — NOT a timing issue, the view visibly renders correctly
-  // in the failure screenshot): this table's header row exposes as `role="columnheader"` in a
-  // plain, unzoomed page, but this file's own applyWorkspaceZoom() (`el.style.zoom = '70%'`,
-  // applied to match committed screenshot baselines and re-applied on every navigation)
-  // deterministically degrades it to plain `role="cell"` instead — a real, reproducible
-  // side effect of the zoom hack on THIS specific grid, not CI flakiness. Matching on either
-  // role (rather than modifying the shared applyWorkspaceZoom, which many other passing
-  // tests in this file rely on for their own screenshot baselines) fixes this without
-  // touching that shared helper. Uses getByRole() (not a raw `[role="cell"]` CSS attribute
-  // selector) because a <td>'s "cell" role is IMPLICIT ARIA semantics from the tag itself —
-  // there is no literal role="cell" DOM attribute for a CSS selector to match, whereas
-  // getByRole() correctly computes implicit roles the same way it does explicit ones
-  // (confirmed live: the CSS-attribute version above matched zero elements despite the
-  // exact same cell being visible on screen and present in the accessibility tree).
   const userColumnHeader = page.getByRole('columnheader', { name: 'User', exact: true })
     .or(page.getByRole('cell', { name: 'User', exact: true }));
   const alreadyTransposed = await userColumnHeader.isVisible({ timeout: 3000 }).catch(() => false);
   if (!alreadyTransposed) {
-    // ROOT CAUSE (2026-07-31): the original 10s wait for this re-render is too tight for
-    // GitHub Actions' --workers=4 on a 2 vCPU runner (this environment's backend has been
-    // independently measured elsewhere as capable of tens-of-seconds latency even without
-    // concurrency — see utils/resilientRetry.js). "Transpose view" is a TOGGLE, so a naive
-    // retry that unconditionally re-clicks on every attempt could flip it back off if the
-    // first click actually succeeded and only the render was slow — each attempt below
-    // re-checks current state first and only clicks if still not transposed, so a retry can
-    // only ever move state toward "transposed", never away from it.
-    // MCP-verified live 2026-07-31: the org's Property access table has grown to ~90+ rows
-    // from accumulated test-created properties across many prior runs — a plausible reason
-    // the transpose re-render is slower now than when the original 10s timeout was set, and
-    // one that will keep getting slower as more test runs add more properties. Budget and
-    // attempts increased accordingly; also waits for network idle (the transpose likely
-    // re-fetches/re-groups this larger dataset) as a real completion signal rather than a
-    // longer blind wait alone.
     await retryOperation(
       async () => {
         const isTransposed = await userColumnHeader.isVisible({ timeout: 1000 }).catch(() => false);
@@ -527,10 +490,10 @@ test.describe('TC03 Manage Organization — Text Agent (live MCP browser scan)',
     try {
       await test.step('STATE 1 | Organization page — full scan of all text elements', async () => {
         await page.goto(orgUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
-        await page.locator('[role="tablist"]').waitFor({ state: 'visible', timeout: 20_000 });
+        await healingLocator(orgWorkspaceTabsListStrategies(page)).waitFor({ state: 'visible', timeout: 20_000 });
         // aria-label copy changed to "Search users by name or email" (MCP-verified);
         // match on the unchanged placeholder instead of the old exact aria-label.
-        await page.locator('input[placeholder="Search by name or email"], input[placeholder="Search by name or e-mail"]').waitFor({ state: 'visible', timeout: 20_000 });
+        await healingLocator(orgWorkspaceSearchInputStrategies(page)).waitFor({ state: 'visible', timeout: 20_000 });
 
         const snapshot = await LoginPage.scanAllTextElements(page);
         const failures = LoginPage.logAndAssertSnapshot(snapshot, 'org-workspace');
@@ -549,30 +512,25 @@ test.describe('TC03 Manage Organization — Text Agent (live MCP browser scan)',
       });
 
       await test.step('STATE 1b | Known CTAs and labels — MCP-verified 2026-05-18', async () => {
-        const main = page.locator('main');
-
         InteractionLogger.logNavigation(orgUrl, 'Breadcrumb: Organization');
-        await expect(main.getByText('Organization', { exact: true })).toBeVisible({ timeout: 8_000 });
+        await expect(healingLocator(orgWorkspaceBreadcrumbStrategies(page))).toBeVisible({ timeout: 8_000 });
 
-        const tablist = page.locator('[role="tablist"]');
         for (const tabName of ['Users', 'Property access']) {
           InteractionLogger.logVisibility(`${tabName} tab`, true);
-          await expect(tablist.getByRole('tab', { name: tabName })).toBeVisible({ timeout: 8_000 });
+          await expect(healingLocator(orgWorkspaceTabStrategies(page, tabName))).toBeVisible({ timeout: 8_000 });
         }
 
         InteractionLogger.logButtonClick('Invite user', 'Invite user');
-        await expect(page.getByRole('button', { name: /invite user/i })).toBeVisible({ timeout: 8_000 });
+        await expect(healingLocator(orgWorkspaceInviteButtonStrategies(page))).toBeVisible({ timeout: 8_000 });
 
         InteractionLogger.logVisibility('Search by name or e-mail input', true);
-        // MCP-verified current placeholder is "Search by name or email" (no hyphen);
-        // accept both spellings so the exact hyphenation doesn't break this again.
-        await expect(page.getByPlaceholder(/search by name or e-?mail/i)).toBeVisible({ timeout: 8_000 });
+        await expect(healingLocator(orgWorkspaceSearchInputStrategies(page))).toBeVisible({ timeout: 8_000 });
 
         // MCP-verified live 2026-07-26 — current columns are Name, Email, Status, Role,
         // Property access, Actions (replaced the older User / Roles / Last active columns).
         for (const col of ['Email', 'Status', 'Role']) {
           InteractionLogger.logVisibility(`Column: ${col}`, true);
-          await expect(page.getByRole('columnheader', { name: col })).toBeVisible({ timeout: 8_000 });
+          await expect(healingLocator(orgWorkspaceColumnHeaderStrategies(page, col))).toBeVisible({ timeout: 8_000 });
         }
       });
     } finally {

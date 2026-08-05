@@ -5,6 +5,7 @@ const { LoginPage } = require('../pages/loginPage');
 const { InteractionLogger } = require('../utils/InteractionLogger');
 const helper = require('../pages/leftPanel');
 const locators = require('../locators/leftPanelLocator');
+const { healingLocator } = require('../utils/locatorHealer');
 const { ensureLeftPanelExpanded } = require('../utils/leftPanelExpander');
 const data = require('../fixture/leftPanel.json');
 const uiBenchmark = require('../fixture/tailorbirdUiMessages.json');
@@ -634,7 +635,9 @@ test.describe('TC02 Menu — Text assertions', () => {
 
         await test.step('STATE 2 | Profile menu — open and assert all action labels', async () => {
             const nav = page.getByRole('navigation');
-            const profileTrigger = nav.locator('[class*="Avatar-root"]').first();
+            // Healed (locators/leftPanelLocator.js: profileTriggerStrategies) — original
+            // class-partial-match kept as primary, ARIA-based `[aria-haspopup=menu]` as fallback.
+            const profileTrigger = healingLocator(locators.profileTriggerStrategies(page));
             if (await profileTrigger.isVisible({ timeout: 3_000 }).catch(() => false)) {
                 InteractionLogger.logButtonClick('Profile avatar', 'S');
                 await profileTrigger.click();

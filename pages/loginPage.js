@@ -2,6 +2,7 @@ const { expect } = require('@playwright/test');
 const { Logger } = require('../utils/logger');
 const { InteractionLogger } = require('../utils/InteractionLogger');
 const { healingLocator, logLocatorHealth } = require('../utils/locatorHealer');
+const { loginElementStrategies } = require('../locators/loginLocator');
 const authKitMessages = require('../fixture/authKitMessages.json');
 
 class LoginPage {
@@ -10,47 +11,13 @@ class LoginPage {
     this.page = page;
 
     // ── Self-healing locators ──────────────────────────────────────────────
-    // Each tracked element is defined as an ORDERED list of independent strategies.
-    // Strategy #1 is always the EXACT original locator this file used before healing
-    // was added — same expression, same resolution cost, so normal runs behave
-    // identically to the pre-existing passing baseline. Strategy #2+ (role/label-based)
-    // is a pure fallback safety net that only engages if the original ever stops
-    // matching a real UI change. (Earlier revision had this backwards — new locator
-    // first — which meant every run paid the new locator's resolution cost up front;
-    // under GitHub Actions' slower/CPU-constrained runner that was enough to blow
-    // through passwordInput's 15s budget where the plain CSS selector always fit
-    // comfortably. Original-first removes that regression risk entirely.)
-    // `healingLocator()` chains strategies with Playwright's native `.or()`, so
-    // `this.emailInput` etc. remain plain Locators: every existing `.fill()`,
-    // `.click()`, `expect(...).toBeVisible()` call site below and in the spec files
-    // keeps working unchanged. Fallback strategies marked "MCP-verified" were
-    // confirmed against the live AuthKit UI (see dated comments further down this file).
-    this._elementStrategies = {
-      emailInput: [
-        { name: 'css:input[name=email],input[type=email]', locator: page.locator('input[name="email"], input[type="email"]') },
-        { name: 'role:textbox[name=Email]', locator: page.getByRole('textbox', { name: 'Email' }) },
-      ],
-      passwordInput: [
-        { name: 'css:input[name=password],input[type=password]', locator: page.locator('input[name="password"], input[type="password"]') },
-        { name: 'label:/password/i', locator: page.getByLabel(/password/i) },
-      ],
-      continueButton: [
-        { name: 'css:button[type=submit]:has-text(Continue)', locator: page.locator('button[type="submit"]:has-text("Continue")') },
-        { name: 'role:button[name=/^Continue/]', locator: page.getByRole('button', { name: /^Continue(\s|$)/ }) },
-      ],
-      signInButton: [
-        { name: 'css:button[name=intent]:has-text(Sign in)', locator: page.locator('button[name="intent"]:has-text("Sign in")') },
-        { name: 'role:button[name=Sign in]', locator: page.getByRole('button', { name: 'Sign in' }) },
-      ],
-      organizationSelect: [
-        { name: 'scoped:.ak-OrgSelection>role:button[name=QA Automations Org_2026]', locator: page.locator('.ak-OrgSelection').getByRole('button', { name: 'QA Automations Org_2026' }) },
-        { name: 'role:button[name=QA Automations Org_2026]', locator: page.getByRole('button', { name: 'QA Automations Org_2026' }) },
-      ],
-      errorMessage: [
-        { name: 'css:.error,.form-error,[role=alert]', locator: page.locator('.error, .form-error, [role="alert"]') },
-        { name: 'role:alert', locator: page.getByRole('alert') },
-      ],
-    };
+    // Strategy definitions live in locators/loginLocator.js (see that file for the
+    // ordering rationale: strategy #1 is always the exact original locator, later
+    // strategies are pure fallback safety nets). `healingLocator()` chains them with
+    // Playwright's native `.or()`, so `this.emailInput` etc. remain plain Locators:
+    // every existing `.fill()`, `.click()`, `expect(...).toBeVisible()` call site
+    // below and in the spec files keeps working unchanged.
+    this._elementStrategies = loginElementStrategies(page);
 
     // Locators (each a healed Locator — same type/behavior as a plain page.locator())
     this.emailInput = healingLocator(this._elementStrategies.emailInput);
