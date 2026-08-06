@@ -8,6 +8,8 @@ const { CapexColumnPersistencePage } = require('../pages/capexColumnPersistenceP
 const { CapexGridStabilityPage } = require('../pages/capexGridStabilityPage');
 const { ensureLeftPanelExpanded } = require('../utils/leftPanelExpander');
 import { getPropertyName } from '../utils/propertyUtils';
+const { healingLocator } = require('../utils/locatorHealer');
+const { templateRowByNameStrategies, approvalElementStrategies } = require('../locators/approvalLocator');
 
 test.use({
     storageState: 'sessionState.json',
@@ -120,7 +122,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
 
             await expect(approvalJob.createTemplateDialog()).toBeHidden({ timeout: 20000 });
             await approvalJob.searchTemplate(templateName);
-            await expect(page.getByRole('row').filter({ hasText: templateName })).toBeVisible({ timeout: 15000 });
+            await expect(healingLocator(templateRowByNameStrategies(page, templateName))).toBeVisible({ timeout: 15000 });
             await approvalJob.clearSearch();
 
             Logger.success('TC161 passed: Template created successfully with all elements verified');
@@ -146,7 +148,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
 
             await expect(approvalJob.createTemplateDialog()).toBeHidden({ timeout: 20000 });
             await approvalJob.searchTemplate(templateName);
-            await expect(page.getByRole('row').filter({ hasText: templateName })).toBeVisible({ timeout: 15000 });
+            await expect(healingLocator(templateRowByNameStrategies(page, templateName))).toBeVisible({ timeout: 15000 });
             await approvalJob.clearSearch();
 
             Logger.success('TC169 passed: Template created successfully with all elements verified');
@@ -962,7 +964,7 @@ test.describe('Approval Templates - Comprehensive E2E Tests', () => {
             await approvalJob.exportTemplatesCsvDownload({ timeoutMs: 25000 });
         } catch (e) {
             Logger.error('TC195 optional download assertion: ' + e.message);
-            const exportBtn = page.locator('main').getByRole('button', { name: 'Export' });
+            const exportBtn = healingLocator(approvalElementStrategies(page).exportButtonInMain);
             await expect(exportBtn).toBeEnabled();
             await exportBtn.click();
             await page.waitForTimeout(2000);

@@ -356,6 +356,149 @@ function firstClickableCardStrategies(page) {
     ];
 }
 
+/**
+ * Self-healing strategies for TC57/TC58 (tests/TC04_properties.spec.js — Takeoffs
+ * Interior/Exterior panels). All MCP-verified live 2026-08-06
+ * (beta.tailorbird.com/properties/details?selected-tab=takeoffs, "Test Property
+ * 1_Cottages on Elm").
+ */
+
+/** Property-details "Takeoffs" top-level tab. Same Mantine tab pattern (role=tab + `.mantine-Tabs-tab` class) MCP-verified throughout this suite. */
+function takeoffsTabStrategies(page) {
+    return [
+        { name: 'role:tab[name=Takeoffs](original,exact)', locator: page.getByRole('tab', { name: /^Takeoffs$/i }) },
+        { name: 'css:.mantine-Tabs-tab[hasText=Takeoffs]', locator: page.locator('.mantine-Tabs-tab').filter({ hasText: 'Takeoffs' }) },
+    ];
+}
+
+/** Floor Plans (interior) / Building Exterior sub-tabs within Takeoffs — original CSS text-match kept as #1, role-based ARIA lookup added (MCP-verified both render as role=tab buttons). */
+function interiorTabStrategies(page) {
+    return [
+        { name: 'css:interiorTab(original)', locator: page.locator(propertyLocators.interiorTab) },
+        { name: 'role:tab[name=Floor Plans]', locator: page.getByRole('tab', { name: 'Floor Plans' }) },
+    ];
+}
+function exteriorTabStrategies(page) {
+    return [
+        { name: 'css:exteriorTab(original)', locator: page.locator(propertyLocators.exteriorTab) },
+        { name: 'role:tab[name=Building Exterior]', locator: page.getByRole('tab', { name: 'Building Exterior' }) },
+    ];
+}
+
+/** Takeoffs toolbar "Filter" button — MCP-verified exact text "Filter", shares the same 5-button toolbar pattern as other BirdTable-style toolbars in this suite. */
+function takeoffsFilterButtonStrategies(page) {
+    return [
+        { name: 'role:button[name=Filter](original,exact)', locator: page.getByRole('button', { name: /^Filter$/i }) },
+    ];
+}
+
+/** Filter-drawer "Reset Filters" button and its close (X) button — reuses the same Filter-Options-drawer structure MCP-verified for TC51's property-list filter drawer. */
+function takeoffsResetFiltersStrategies(page) {
+    return [
+        { name: 'css:button[hasText=Reset Filters](original)', locator: page.locator('button:has-text("Reset Filters")') },
+    ];
+}
+function takeoffsFilterCloseButtonStrategies(page) {
+    return [
+        { name: 'css:.mantine-Paper-root .mantine-CloseButton-root(original)', locator: page.locator(".mantine-Paper-root .mantine-CloseButton-root") },
+    ];
+}
+
+/** Filter-drawer type-filter checkbox (ce-gm, ce-i, ce-l, ce-r, ce-t v1, etc.) — MCP-verified live label text matches exactly. */
+function takeoffFilterCheckboxLabelStrategies(page, type) {
+    return [
+        { name: 'css:.mantine-Checkbox-labelWrapper label[hasText](original)', locator: page.locator(`.mantine-Checkbox-labelWrapper label:has-text("${type}")`) },
+    ];
+}
+
+/** "Select Version" combobox on the Takeoffs panel — dynamic id, no label/aria-label (MCP-verified); placeholder is the only genuine signal, exposed via two independent Playwright APIs. */
+function takeoffVersionInputStrategies(page) {
+    return [
+        { name: 'css:input[placeholder=Select Version](original)', locator: page.locator('input[placeholder="Select Version"]') },
+        { name: 'placeholder:Select Version', locator: page.getByPlaceholder('Select Version') },
+    ];
+}
+
+/** Takeoffs tabpanel — scopes grid searches away from other tabs' revo-grids (e.g. Locations). */
+function takeoffsTabpanelStrategies(page) {
+    return [
+        { name: 'role:tabpanel[name=Takeoffs](original)', locator: page.getByRole('tabpanel', { name: 'Takeoffs' }) },
+    ];
+}
+
+/** The 3 candidate grid element types considered by getVisibleTakeoffTreegrid()'s scoring algorithm — centralizing the raw selectors only; the scoring/selection logic itself is untouched. */
+function revoGridStrategies(scope) {
+    return [
+        { name: 'css:revo-grid[role=treegrid](original)', locator: scope.locator('revo-grid[role="treegrid"]') },
+    ];
+}
+function genericTreegridStrategies(scope) {
+    return [
+        { name: 'role:treegrid(original)', locator: scope.locator('[role="treegrid"]') },
+    ];
+}
+function agGridStrategies(scope) {
+    return [
+        { name: 'css:.ag-root[role=grid](original)', locator: scope.locator('.ag-root[role="grid"]') },
+    ];
+}
+
+/** Filter-drawer title paragraph ("Filters" / "Filter Options") — MCP-verified live, same 2-paragraph structure as TC51's property-list filter drawer. */
+function takeoffsFilterPanelTitleStrategies(page) {
+    return [
+        { name: "css:.mantine-Paper-root p[hasText=Filter](original)", locator: page.locator(".mantine-Paper-root p:has-text('Filter')") },
+    ];
+}
+
+/** AG-Grid badge cells (floorplan_id column) used to count filtered results. */
+function takeoffFilterBadgeStrategies(page) {
+    return [
+        { name: 'css:.ag-center-cols-container div[col-id=floorplan_id](original)', locator: page.locator('.ag-center-cols-container div[col-id="floorplan_id"]') },
+    ];
+}
+
+/** "Clear All Filters" link inside the takeoff filter drawer. */
+function takeoffClearAllFiltersStrategies(page) {
+    return [
+        { name: 'css:.mantine-Paper-root a[hasText=Clear All Filters](original)', locator: page.locator('.mantine-Paper-root a:has-text("Clear All Filters")') },
+    ];
+}
+
+/**
+ * Self-healing strategies for TC59 (tests/TC04_properties.spec.js — Asset Viewer
+ * dropdown discovery). MCP-verified live 2026-08-06.
+ */
+
+/** "Asset Viewer" top-level tab — same Mantine tab pattern (role=tab + `.mantine-Tabs-tab` class) as elsewhere in this suite; original CSS text-match kept as #1. */
+function assetViewerTabStrategies(page) {
+    return [
+        { name: 'css:button[hasText=Asset Viewer](original)', locator: page.locator('button:has-text("Asset Viewer")') },
+        { name: 'role:tab[name=Asset Viewer]', locator: page.getByRole('tab', { name: 'Asset Viewer', exact: true }) },
+    ];
+}
+
+/**
+ * A dropdown input discovered by its adjacent `<label>` text (TC59 iterates whatever
+ * labels the Asset Viewer panel exposes at runtime — Neighborhoods/Type/Site/View —
+ * so `name` is caller-supplied, not a fixed value). Original adjacent-sibling CSS
+ * pattern kept as #1. MCP-verified `getByLabel(name)` (using the label's real `for`
+ * attribute) resolves to the SAME input node — a genuinely independent mechanism
+ * (semantic label association vs. structural sibling traversal), not a guess.
+ */
+function dropdownInputByLabelStrategies(panel, name) {
+    return [
+        { name: 'css:label[hasText]+div input(original)', locator: panel.locator(`label:has-text("${name}") + div input`) },
+        { name: 'label:name(getByLabel)', locator: panel.getByLabel(name) },
+    ];
+}
+
+/** Save button inside a takeoff cell-edit confirmation dialog. */
+function takeoffSaveInDialogStrategies(page) {
+    return [
+        { name: 'css:dialog>>button[hasText=Save](original)', locator: page.locator('[role="dialog"] button:has-text("Save")') },
+    ];
+}
+
 export {
     createPropertyButtonStrategies,
     addPropertyDialogStrategies,
@@ -379,4 +522,22 @@ export {
     viewDetailsButtonStrategies,
     matchingCardTitleStrategies,
     firstClickableCardStrategies,
+    takeoffsTabStrategies,
+    interiorTabStrategies,
+    exteriorTabStrategies,
+    takeoffsFilterButtonStrategies,
+    takeoffsResetFiltersStrategies,
+    takeoffsFilterCloseButtonStrategies,
+    takeoffFilterCheckboxLabelStrategies,
+    takeoffVersionInputStrategies,
+    takeoffsTabpanelStrategies,
+    revoGridStrategies,
+    genericTreegridStrategies,
+    agGridStrategies,
+    takeoffSaveInDialogStrategies,
+    takeoffsFilterPanelTitleStrategies,
+    takeoffFilterBadgeStrategies,
+    takeoffClearAllFiltersStrategies,
+    assetViewerTabStrategies,
+    dropdownInputByLabelStrategies,
 };

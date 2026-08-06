@@ -3,6 +3,8 @@ const { test, expect } = require('@playwright/test');
 const { SimpleApprovalPage } = require('../pages/simpleApprovalPage');
 const { Logger } = require('../utils/logger');
 const { ensureLeftPanelExpanded } = require('../utils/leftPanelExpander');
+const { healingLocator } = require('../utils/locatorHealer');
+const { simpleApprovalElementStrategies } = require('../locators/simpleApprovalLocator');
 
 test.use({
     storageState: 'sessionState.json',
@@ -44,7 +46,7 @@ test.describe('Approval Workflow - My Approvals & All Approvals E2E Tests', () =
             Logger.info('Navigated to My Approvals tab');
 
             // Wait for the search input to be visible
-            const searchInput = page.getByPlaceholder('Search...');
+            const searchInput = healingLocator(simpleApprovalElementStrategies(page).searchInput);
             await searchInput.waitFor({ state: 'visible', timeout: 10000 });
             const searchInputVisible = await searchInput.isVisible();
             expect(searchInputVisible).toBeTruthy();

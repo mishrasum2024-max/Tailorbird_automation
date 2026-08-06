@@ -1,13 +1,16 @@
 const { expect } = require('@playwright/test');
 const { Logger } = require('../utils/logger');
-const { approvalJobLocators } = require('../locators/approvalLocator');
+const { approvalJobLocators, approvalElementStrategies, addPropertyRowStrategies, addPropertyRowCheckboxStrategies, firstPropertyResultRowStrategies, createPropertyDialogStrategies } = require('../locators/approvalLocator');
+const { healingLocator } = require('../utils/locatorHealer');
 
 let approval;
+let approvalStrategies;
 
 exports.ApprovalJob = class ApprovalJob {
     constructor(page) {
         this.page = page;
         approval = approvalJobLocators(page);
+        approvalStrategies = approvalElementStrategies(page);
     }
 
     async navigateToApprovalTab() {
@@ -16,7 +19,7 @@ exports.ApprovalJob = class ApprovalJob {
             await approval.approvalTab.click();
             await this.page.waitForURL('**/approvals/**', { timeout: 25000 }).catch(() => { });
             const _t0 = Date.now();
-            const _tab = this.page.getByRole('tab', { name: 'Approval Templates' });
+            const _tab = healingLocator(approvalStrategies.approvalTemplatesTab);
             const _ok = await _tab.waitFor({ state: 'visible', timeout: 20_000 }).then(() => true).catch(() => false);
             if (_ok) {
                 Logger.info(`[Approval] Nav ready in ${Date.now() - _t0}ms`);
@@ -40,7 +43,7 @@ exports.ApprovalJob = class ApprovalJob {
     async waitForPageLoad() {
         const _t0 = Date.now();
         try {
-            const _btn = this.page.getByRole('button', { name: 'Create Template' }).first();
+            const _btn = healingLocator(approvalStrategies.createTemplateButton);
             const _ok = await _btn.waitFor({ state: 'visible', timeout: 30_000 }).then(() => true).catch(() => false);
             if (_ok) {
                 Logger.info(`[Approval] Page ready in ${Date.now() - _t0}ms`);
@@ -139,12 +142,12 @@ exports.ApprovalJob = class ApprovalJob {
         try {
             Logger.step('Submitting create template form');
             await approval.createTemplateSubmit.click();
-            await this.page.getByRole('button', { name: 'Create Template' }).first()
+            await healingLocator(approvalStrategies.createTemplateButton)
                 .waitFor({ state: 'visible', timeout: 20000 }).catch(() => { });
             await this.page.waitForTimeout(600);
 
             // Detect backend rejection (e.g. "already linked" property conflict).
-            const errorToast = this.page.locator('[role="alert"]').filter({ hasText: /already linked|already exists|duplicate/i });
+            const errorToast = healingLocator(approvalStrategies.duplicateTemplateToast);
             if (await errorToast.isVisible({ timeout: 1500 }).catch(() => false)) {
                 const msg = (await errorToast.textContent().catch(() => '')).trim();
                 Logger.info(`submitCreateTemplate: server rejected — "${msg}"`);
@@ -789,7 +792,7 @@ exports.ApprovalJob = class ApprovalJob {
         try {
             Logger.step('Opening Create Template dialog');
             await approval.createTemplateButton.click();
-            const dialog = this.page.getByRole('dialog').filter({ has: approval.templateNameInput });
+            const dialog = healingLocator(approvalStrategies.templateDialog);
             await expect(dialog).toBeVisible({ timeout: 30000 });
             await this.page.waitForTimeout(4000);
             Logger.success('Create Template dialog opened');
@@ -839,26 +842,23 @@ exports.ApprovalJob = class ApprovalJob {
             await this.page.waitForTimeout(5000);
 
             // Mantine renders options inside a visible Combobox dropdown; each row contains a checkbox input.
-            const dropdown = this.page.locator('.mantine-Combobox-dropdown:visible').first();
+            const dropdown = healingLocator(approvalStrategies.addPropertiesDropdown).first();
             await expect(dropdown).toBeVisible({ timeout: 15000 });
 
             // Prefer the exact matching result row (when searching full property name this should be a single option).
-            const matchingRow = dropdown.locator('div:has(input[type="checkbox"])').filter({ hasText: propertyName }).first();
+            const matchingRow = healingLocator(addPropertyRowStrategies(dropdown, propertyName)).first();
             const matchingRowVisible = await matchingRow.isVisible().catch(() => false);
 
             if (matchingRowVisible) {
-                const checkbox = matchingRow.locator('input[type="checkbox"].mantine-Checkbox-input').first();
+                const checkbox = healingLocator(addPropertyRowCheckboxStrategies(matchingRow)).first();
                 await expect(checkbox).toBeVisible({ timeout: 15000 });
                 await checkbox.check({ force: true });
             } else {
                 // Fallback: check the first result checkbox (skip the "Select all" control)
-                const firstResultRow = dropdown
-                    .locator('div:has(input[type="checkbox"])')
-                    .filter({ hasNotText: 'Select all' })
-                    .first();
+                const firstResultRow = healingLocator(firstPropertyResultRowStrategies(dropdown)).first();
                 await expect(firstResultRow).toBeVisible({ timeout: 15000 });
 
-                const checkbox = firstResultRow.locator('input[type="checkbox"].mantine-Checkbox-input').first();
+                const checkbox = healingLocator(addPropertyRowCheckboxStrategies(firstResultRow)).first();
                 await expect(checkbox).toBeVisible({ timeout: 15000 });
                 await checkbox.check({ force: true });
             }
@@ -896,7 +896,7 @@ exports.ApprovalJob = class ApprovalJob {
     async addThreeApprovers() {
         const approverTimeout = 15000;
         const approverInputs = approval.selectApproverInput;
-        const amountFields = this.createTemplateDialog().getByPlaceholder('Enter Amount');
+        const amountFields = healingLocator(approvalStrategies.amountInputInDialog);
         const input0 = approverInputs.nth(0);
         await input0.waitFor({ state: 'visible', timeout: approverTimeout });
         await input0.click();
@@ -956,8 +956,7 @@ exports.ApprovalJob = class ApprovalJob {
         const fieldTimeout = 15000;
         try {
             Logger.step('Filling amount: ' + amount);
-            const dialog = this.createTemplateDialog();
-            const amountFields = dialog.getByPlaceholder('Enter Amount');
+            const amountFields = healingLocator(approvalStrategies.amountInputInDialog);
             const n = await amountFields.count();
             for (let i = 0; i < n; i++) {
                 const amountField = amountFields.nth(i);
@@ -1548,45 +1547,46 @@ exports.ApprovalJob = class ApprovalJob {
     async createProperty(name, address, city, state, zip, type) {
         try {
             Logger.step('Creating new property: ' + name);
+            const createPropertyDialog = createPropertyDialogStrategies(this.page);
 
             // Navigate to Properties page
-            const propertiesNavLink = this.page.locator(".mantine-NavLink-root:has-text('Properties')").first();
+            const propertiesNavLink = healingLocator(createPropertyDialog.propertiesNavLink);
             await propertiesNavLink.waitFor({ state: 'visible' });
             await propertiesNavLink.click();
 
             // Wait for properties page to load
-            await this.page.locator("button:has-text('Create Property')")
+            const createPropertyButton = healingLocator(createPropertyDialog.createPropertyButton);
+            await createPropertyButton
                 .waitFor({ state: 'visible', timeout: 20000 }).catch(() => { });
             await this.page.waitForTimeout(800);
 
             // Click Create Property button
-            const createPropertyButton = this.page.locator("button:has-text('Create Property')");
             await createPropertyButton.waitFor({ state: 'visible' });
             await createPropertyButton.click({ force: true });
 
             // Wait for Add Property modal to appear
-            const addPropertyModalHeader = this.page.locator(".mantine-Modal-header:has-text('Add property')");
+            const addPropertyModalHeader = healingLocator(createPropertyDialog.addPropertyModalHeader);
             await addPropertyModalHeader.waitFor({ state: 'visible' });
 
             // Fill Name
-            const nameInput = this.page.getByLabel('Name');
+            const nameInput = healingLocator(createPropertyDialog.nameInput);
             await nameInput.waitFor({ state: 'visible' });
             await nameInput.fill(name);
 
             // Fill Address
-            const addressInput = this.page.getByRole('textbox', { name: 'Address' });
+            const addressInput = healingLocator(createPropertyDialog.addressInput);
             await addressInput.fill(address);
 
             // Select address suggestion
-            const addressSuggestion = this.page.locator(`.mantine-Autocomplete-option:has-text("${address}")`);
+            const addressSuggestion = healingLocator(createPropertyDialog.addressSuggestion(address));
             await addressSuggestion.waitFor({ state: 'visible' });
             await addressSuggestion.nth(0).click();
 
             // Select property type
-            const typeInput = this.page.locator('input[placeholder="Select type"]');
+            const typeInput = healingLocator(createPropertyDialog.typeInput);
             await typeInput.fill(type);
 
-            const propertyTypeOption = this.page.locator(`.mantine-Select-option:has-text("${type}")`);
+            const propertyTypeOption = healingLocator(createPropertyDialog.propertyTypeOption(type));
             await propertyTypeOption.waitFor({ state: 'visible' });
             await propertyTypeOption.click();
 
@@ -1594,19 +1594,19 @@ exports.ApprovalJob = class ApprovalJob {
             await this.page.waitForTimeout(1500);
 
             // Click Add Property button
-            const addPropertyBtn = this.page.getByRole('button', { name: /add property/i });
+            const addPropertyBtn = healingLocator(createPropertyDialog.addPropertyBtn);
             await addPropertyBtn.click();
 
             // Wait for property creation breadcrumb
-            const breadcrumb = this.page.locator(`.mantine-Breadcrumbs-root:has-text('${name}')`);
+            const breadcrumb = healingLocator(createPropertyDialog.breadcrumb(name));
             await breadcrumb.waitFor({ state: 'visible' });
 
             // Navigate back to properties list
-            const propertiesNavLink2 = this.page.locator(".mantine-NavLink-root:has-text('Properties')").first();
+            const propertiesNavLink2 = healingLocator(createPropertyDialog.propertiesNavLink);
             await propertiesNavLink2.click();
 
             // Verify property appears in list
-            const propertyGrid = this.page.locator(`.mantine-SimpleGrid-root p:has-text('${name}')`);
+            const propertyGrid = healingLocator(createPropertyDialog.propertyGrid(name));
             await propertyGrid.nth(0).waitFor({ state: 'visible' });
 
             Logger.success('Property created successfully: ' + name);

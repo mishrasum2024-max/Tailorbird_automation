@@ -10,7 +10,7 @@ import testData from '../fixture/property.json';
 const uiMessages = require('../fixture/tailorbirdUiMessages.json');
 const loc = require('../locators/locationLocator');
 const { verifyColumnContentDoesNotWrap, forceGridFullWidth } = require('../utils/columnResizeHelper');
-import { propertyLocators, filterButtonStrategies, filterCloseButtonStrategies } from '../locators/propertyLocator.js';
+import { propertyLocators, filterButtonStrategies, filterCloseButtonStrategies, assetViewerTabStrategies, dropdownInputByLabelStrategies, exportButtonStrategies } from '../locators/propertyLocator.js';
 const { healingLocator } = require('../utils/locatorHealer');
 const { ProjectPage } = require('../pages/projectPage');
 const { AddColumnPage } = require('../pages/addColumnPage');
@@ -343,13 +343,13 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
     await safe("Changing table view", async () => await prop.changeView("Table View"))
     await safe("Searching property", async () => await prop.searchProperty("Test Property 2_The Westerham"))
     await safe("Opening View Details", async () => await prop.viewDetailsButton())
-    await safe("Opening Asset Viewer", async () => await page.locator('button:has-text("Asset Viewer")').click({ force: true }))
+    await safe("Opening Asset Viewer", async () => await healingLocator(assetViewerTabStrategies(page)).click({ force: true }))
 
     await page.waitForTimeout(30000);
     await page.waitForTimeout(3000);
 
     log("Getting Asset Viewer panel id...")
-    let tab = page.locator('button:has-text("Asset Viewer")')
+    let tab = healingLocator(assetViewerTabStrategies(page))
     let id = await tab.getAttribute("aria-controls")
 
     while (!id) {
@@ -384,7 +384,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
       .map(name => ({
         name,
         // Use first() to avoid strict-mode collisions when similar inputs exist in panel.
-        input: pnl.locator(`label:has-text("${name}") + div input`).first()
+        input: healingLocator(dropdownInputByLabelStrategies(pnl, name)).first()
       }))
 
     log(`TOTAL DROPDOWNS FOUND = ${dropdowns.length}`)
@@ -547,7 +547,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
 
     await prop.viewDetailsButton();
 
-    const locationsTab = page.getByRole('tab', { name: /Locations/i }).first();
+    const locationsTab = healingLocator(loc.locationsTabStrategies(page)).first();
     await expect(locationsTab).toBeVisible({ timeout: 15000 });
     await locationsTab.click();
     await expect(locationsTab).toHaveAttribute('data-active', 'true');
@@ -555,7 +555,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
 
     await prop.selectLocation("unit");
     await page.waitForLoadState('domcontentloaded');
-    const locationsPanel = page.getByRole("tabpanel", { name: "Locations" });
+    const locationsPanel = healingLocator(loc.locationsTabpanelStrategies(page));
     const noUnitsState = locationsPanel.getByText(/No units added yet/i).first();
 
     await expect(
@@ -587,7 +587,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
 
     await page.waitForTimeout(1500);
 
-    const exportInLocations = page.getByRole('tabpanel', { name: 'Locations' }).getByRole('button', { name: /^Export$/i }).first();
+    const exportInLocations = healingLocator(exportButtonStrategies(healingLocator(loc.locationsTabpanelStrategies(page)))).first();
     await exportInLocations.waitFor({ state: 'visible', timeout: 15000 });
     const [download] = await Promise.all([
       page.waitForEvent('download'),

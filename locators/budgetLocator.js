@@ -173,6 +173,39 @@ function budgetElementStrategies(page) {
                     .last(),
             },
         ],
+        /**
+         * TC243 (Budget workspace load) locators — MCP-verified live 2026-08-06
+         * (beta.tailorbird.com/financials/budget, "Test Property 2_The Westerham").
+         */
+        brookProperty: [
+            { name: 'role:menuitem[name=/Test Property 2_The Westerham/i]', locator: budget.brookProperty },
+            /** MCP-verified: this menuitem is itself a real `<button>` (Mantine menu items render as buttons) — a role-scoped exact-text filter is a genuinely different mechanism (own-text filter vs. accessible-name regex) than the original. */
+            { name: 'css:role:menuitem>>button[hasText]', locator: page.getByRole('menuitem').filter({ hasText: 'Test Property 2_The Westerham' }) },
+        ],
+        propertyHeader: [
+            { name: 'role:button[name=/Test Property 2_The Westerham/i]', locator: budget.propertyHeader },
+            /** MCP-verified: same underlying button carries `aria-haspopup="menu"` — a genuinely independent compound signal from the accessible-name regex above. */
+            { name: 'css:button[aria-haspopup=menu][hasText]', locator: page.locator('button[aria-haspopup="menu"]').filter({ hasText: 'Test Property 2_The Westerham' }) },
+        ],
+        /** RevoGrid column headers — original `:has-text()` (own-text, no parent/child split risk) kept as #1; role-based fallback added since MCP-verified this table's headers carry a real `role="columnheader"`. */
+        columnHeader: (name) => [
+            { name: 'css:[role=columnheader][hasText](original)', locator: page.locator(`[role="columnheader"]:has-text("${name}")`) },
+            { name: 'role:columnheader[name]', locator: page.getByRole('columnheader', { name }) },
+        ],
+        /** Year indicator text — MCP-verified live "2026" renders as a plain leaf text node with no role/label/testid to anchor an independent fallback on; only genuinely independent option is exact-match instead of substring. */
+        yearText: [
+            { name: 'text:2026[first](original)', locator: page.locator('text=2026').first() },
+            { name: 'text:2026[exact]', locator: page.getByText('2026', { exact: true }).first() },
+        ],
+        /** Version indicator text — MCP-verified live multiple elements contain "Version" as a substring (e.g. "Version Note", "Version 102") — `.first()` already resolves this in the original; no independent second mechanism exists beyond re-confirming the same match differently, so kept honest at 1 strategy. */
+        versionText: [
+            { name: 'text:Version[first](original)', locator: page.locator('text=Version').first() },
+        ],
+        /** Budget item name cell text — MCP-verified live plain text match; no role/testid exists on these cells to hang an independent fallback on beyond exact-match. */
+        budgetItemText: (name) => [
+            { name: 'text:name[first](original)', locator: page.locator(`text=${name}`).first() },
+            { name: 'text:name[exact,first]', locator: page.getByText(name, { exact: true }).first() },
+        ],
         submitForApprovalBtn: [
             /** No-regex: `.or()` of two exact role/name locators replaces the former `/Submit for Approval|Submit for Review/i` regex with the same "A or B" coverage. */
             {

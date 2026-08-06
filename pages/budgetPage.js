@@ -27,6 +27,14 @@ exports.BudgetJob = class BudgetJob {
         // tracked in _elementStrategies for health-check visibility only. The file-input upload
         // has its own multi-candidate retry logic in uploadFileInRevision() that is more capable
         // than a single-strategy health check could be, so it isn't tracked here at all.
+
+        // ── Self-healing locators (TC243 Budget-workspace-load flow) ───────────
+        budget.brookProperty = healingLocator(this._elementStrategies.brookProperty);
+        budget.propertyHeader = healingLocator(this._elementStrategies.propertyHeader);
+        budget.yearText = healingLocator(this._elementStrategies.yearText);
+        budget.versionText = healingLocator(this._elementStrategies.versionText);
+        budget.columnHeader = (name) => healingLocator(this._elementStrategies.columnHeader(name));
+        budget.budgetItemText = (name) => healingLocator(this._elementStrategies.budgetItemText(name));
     }
 
     /**

@@ -1,8 +1,14 @@
 const { expect } = require('@playwright/test');
 const { Logger } = require('../utils/logger');
-const { drawReportingLocators } = require('../locators/drawReportingLocator');
+const { drawReportingLocators, tc372DrawReportingStrategies } = require('../locators/drawReportingLocator');
+const { healingLocator } = require('../utils/locatorHealer');
 
 let draw;
+// TC372-only: self-healing strategy set for every draw.* locator (and former raw inline
+// locator) that TC372's own call chain exercises. See locators/drawReportingLocator.js's
+// tc372DrawReportingStrategies() for details — every OTHER method in this class keeps using
+// the raw `draw.*` object above, untouched.
+let tc372;
 
 function isValidCurrencyText(text) {
     return /^-?\$[\d,]+(\.\d{1,2})?$/.test((text || '').trim());
@@ -15,6 +21,7 @@ exports.DrawReportingJob = class DrawReportingJob {
     constructor(page) {
         this.page = page;
         draw = drawReportingLocators(page);
+        tc372 = tc372DrawReportingStrategies(page);
     }
 
     // ===================== Navigation =====================
@@ -44,18 +51,19 @@ exports.DrawReportingJob = class DrawReportingJob {
         // the property breadcrumb, not "Select a Property"), so a caller that already selected
         // this property earlier in the same test can hit this again. Treat that as a no-op
         // instead of failing.
-        const alreadySelected = await draw.selectedPropertyBreadcrumbButton(propertyName).isVisible().catch(() => false);
+        const alreadySelected = await healingLocator(tc372.selectedPropertyBreadcrumbButton(propertyName)).isVisible().catch(() => false);
         if (alreadySelected) {
             this.currentPropertyName = propertyName;
             Logger.success(`Property "${propertyName}" was already selected in Draw Reporting`);
             return;
         }
 
-        await expect(draw.selectPropertyButton, `Header must show a property picker before selecting "${propertyName}"`).toBeVisible({ timeout: 45000 });
-        await draw.selectPropertyButton.click();
+        const selectPropertyButton = healingLocator(tc372.selectPropertyButton);
+        await expect(selectPropertyButton, `Header must show a property picker before selecting "${propertyName}"`).toBeVisible({ timeout: 45000 });
+        await selectPropertyButton.click();
         await this.page.waitForTimeout(800);
 
-        const option = draw.propertyMenuItems.filter({ hasText: propertyName }).first();
+        const option = healingLocator(tc372.propertyMenuItems).filter({ hasText: propertyName }).first();
         await expect(option, `Property "${propertyName}" must appear in the property picker`).toBeVisible({ timeout: 45000 });
         await option.click();
         await this.page.waitForTimeout(4000);
@@ -106,15 +114,17 @@ exports.DrawReportingJob = class DrawReportingJob {
                 break;
             }
 
-            const hasReject = await draw.directRejectButton.waitFor({ state: 'visible', timeout: 45000 }).then(() => true).catch(() => false);
-            const hasRejectOnBehalf = !hasReject && await draw.rejectOnBehalfButton.waitFor({ state: 'visible', timeout: 45000 }).then(() => true).catch(() => false);
+            const directRejectButton = healingLocator(tc372.directRejectButton);
+            const rejectOnBehalfButton = healingLocator(tc372.rejectOnBehalfButton);
+            const hasReject = await directRejectButton.waitFor({ state: 'visible', timeout: 45000 }).then(() => true).catch(() => false);
+            const hasRejectOnBehalf = !hasReject && await rejectOnBehalfButton.waitFor({ state: 'visible', timeout: 45000 }).then(() => true).catch(() => false);
             if (!hasReject && !hasRejectOnBehalf) {
                 await this.page.keyboard.press('Escape');
                 Logger.error(`Auto-cleanup found a pending draw on "${propertyName}" but no Reject/Reject on Behalf action was available — a later Submit for Approval in this test may still fail`);
                 break;
             }
-            await draw.rejectionNotesInput.fill('Auto-cleanup: stale pending draw from a prior test run');
-            await (hasReject ? draw.directRejectButton : draw.rejectOnBehalfButton).click();
+            await healingLocator(tc372.rejectionNotesInput).fill('Auto-cleanup: stale pending draw from a prior test run');
+            await (hasReject ? directRejectButton : rejectOnBehalfButton).click();
             await expect(dialog, 'Approval Details dialog must close after rejecting').not.toBeVisible({ timeout: 45000 }).catch(() => {});
 
             await this.navigateToDrawReporting();
@@ -133,7 +143,7 @@ exports.DrawReportingJob = class DrawReportingJob {
     }
 
     async assertSelectedPropertyIs(propertyName) {
-        const breadcrumbButton = draw.selectedPropertyBreadcrumbButton(propertyName);
+        const breadcrumbButton = healingLocator(tc372.selectedPropertyBreadcrumbButton(propertyName));
         await expect(breadcrumbButton, `Breadcrumb must show the selected property "${propertyName}"`).toBeVisible({ timeout: 45000 });
         const text = (await breadcrumbButton.textContent()).trim();
         expect(text, 'Breadcrumb property text must exactly match the created property name').toBe(propertyName);
@@ -169,28 +179,28 @@ exports.DrawReportingJob = class DrawReportingJob {
     // ===================== Overview tab (empty state) =====================
 
     async verifyOverviewEmptyState() {
-        await expect(draw.overviewTab, 'Overview tab must be visible').toBeVisible({ timeout: 45000 });
-        await expect(draw.historicalDrawsTab, 'Historical Draws tab must be visible').toBeVisible({ timeout: 45000 });
+        await expect(healingLocator(tc372.overviewTab), 'Overview tab must be visible').toBeVisible({ timeout: 45000 });
+        await expect(healingLocator(tc372.historicalDrawsTab), 'Historical Draws tab must be visible').toBeVisible({ timeout: 45000 });
 
         await this.assertKpiValue('Total Budget', '$0.00');
         await this.assertKpiValue('Draws to Date', '$0.00');
         await this.assertKpiValue('Remaining Budget', '$0.00');
         await this.assertKpiValue('Pending Invoices', '$0.00');
 
-        await expect(draw.budgetOverviewHeading, '"Budget Overview" heading must be visible').toBeVisible({ timeout: 45000 });
-        const emptyTitle = (await draw.budgetOverviewEmptyTitle.textContent()).trim();
+        await expect(healingLocator(tc372.budgetOverviewHeading), '"Budget Overview" heading must be visible').toBeVisible({ timeout: 45000 });
+        const emptyTitle = (await healingLocator(tc372.budgetOverviewEmptyTitle).textContent()).trim();
         expect(emptyTitle, 'Budget Overview empty-state title must match').toBe('No draw budget overviews added yet');
-        const emptySubtitle = (await draw.budgetOverviewEmptySubtitle.textContent()).trim();
+        const emptySubtitle = (await healingLocator(tc372.budgetOverviewEmptySubtitle).textContent()).trim();
         expect(emptySubtitle, 'Budget Overview empty-state subtitle must match').toBe('Use + or Create Button to create one');
 
-        await expect(draw.capexStatusHeading, '"Capex Status" widget heading must be visible').toBeVisible({ timeout: 45000 });
-        await expect(draw.drawnVsRemainingLabel, '"Drawn VS Remaining" label must be visible').toBeVisible({ timeout: 45000 });
-        const drawnText = (await draw.drawnPercentText.textContent()).trim();
+        await expect(healingLocator(tc372.capexStatusHeading), '"Capex Status" widget heading must be visible').toBeVisible({ timeout: 45000 });
+        await expect(healingLocator(tc372.drawnVsRemainingLabel), '"Drawn VS Remaining" label must be visible').toBeVisible({ timeout: 45000 });
+        const drawnText = (await healingLocator(tc372.drawnPercentText).textContent()).trim();
         expect(drawnText, 'Drawn percent/amount text must match empty-state value').toBe('0% Drawn ($0.00)');
-        const remainingText = (await draw.remainingPercentText.textContent()).trim();
+        const remainingText = (await healingLocator(tc372.remainingPercentText).textContent()).trim();
         expect(remainingText, 'Remaining percent/amount text must match empty-state value').toBe('100% Remaining ($0.00)');
 
-        await expect(draw.createDrawButton, 'Create Draw button must be enabled once a property is selected').toBeEnabled({ timeout: 45000 });
+        await expect(healingLocator(tc372.createDrawButton), 'Create Draw button must be enabled once a property is selected').toBeEnabled({ timeout: 45000 });
 
         Logger.success('Verified Draw Reporting Overview empty state for a brand-new property');
     }
@@ -198,12 +208,12 @@ exports.DrawReportingJob = class DrawReportingJob {
     // ===================== Historical Draws tab (empty state) =====================
 
     async openHistoricalDrawsTab() {
-        await draw.historicalDrawsTab.click();
+        await healingLocator(tc372.historicalDrawsTab).click();
         await this.page.waitForTimeout(1500);
     }
 
     async openOverviewTab() {
-        await draw.overviewTab.click();
+        await healingLocator(tc372.overviewTab).click();
         await this.page.waitForTimeout(1500);
     }
 
@@ -213,9 +223,9 @@ exports.DrawReportingJob = class DrawReportingJob {
         await this.assertKpiValue('Total Funded (2026)', '$0.00');
         await this.assertKpiValue('Draws with Issues', '0');
 
-        const emptyTitle = (await draw.historicalDrawsEmptyTitle.textContent()).trim();
+        const emptyTitle = (await healingLocator(tc372.historicalDrawsEmptyTitle).textContent()).trim();
         expect(emptyTitle, 'Historical Draws empty-state title must match').toBe('No draws added yet');
-        const emptySubtitle = (await draw.historicalDrawsEmptySubtitle.textContent()).trim();
+        const emptySubtitle = (await healingLocator(tc372.historicalDrawsEmptySubtitle).textContent()).trim();
         expect(emptySubtitle, 'Historical Draws empty-state subtitle must match').toBe('Use + or Create Button to create one');
 
         Logger.success('Verified Historical Draws empty state (no draws, no invoice data) for a brand-new property');
@@ -234,7 +244,7 @@ exports.DrawReportingJob = class DrawReportingJob {
      * themselves use for intentional cleanup — a no-op when Create Draw is already enabled.
      */
     async ensureNoBlockingActiveDraw() {
-        const blocked = await draw.activeDrawContinueEditingButton.isVisible({ timeout: 45000 }).catch(() => false);
+        const blocked = await healingLocator(tc372.activeDrawContinueEditingButton).isVisible({ timeout: 45000 }).catch(() => false);
         if (!blocked) return;
         Logger.info('Found a pre-existing in-progress draw blocking Create Draw — discarding it first');
         await this.reopenActiveDraw();
@@ -243,56 +253,61 @@ exports.DrawReportingJob = class DrawReportingJob {
 
     async openCreateDrawModal() {
         await this.ensureNoBlockingActiveDraw();
-        await expect(draw.createDrawButton, 'Create Draw button must be clickable').toBeEnabled({ timeout: 45000 });
-        await draw.createDrawButton.click();
-        await expect(draw.createDrawModal, 'Create New Draw modal must open').toBeVisible({ timeout: 45000 });
+        const createDrawButton = healingLocator(tc372.createDrawButton);
+        await expect(createDrawButton, 'Create Draw button must be clickable').toBeEnabled({ timeout: 45000 });
+        await createDrawButton.click();
+        await expect(healingLocator(tc372.createDrawModal), 'Create New Draw modal must open').toBeVisible({ timeout: 45000 });
         Logger.success('Create Draw modal (Step 1) opened');
     }
 
     async verifyCreateDrawModalStepOne() {
-        const heading = (await draw.createDrawModalHeading.textContent()).trim();
+        const heading = (await healingLocator(tc372.createDrawModalHeading).textContent()).trim();
         expect(heading, 'Modal heading must read "Create New Draw"').toBe('Create New Draw');
 
-        await expect(draw.drawNameInput, 'Draw Name field must be present').toBeVisible({ timeout: 45000 });
-        await expect(draw.billingStartDateInput, 'Billing Period Start Date field must be present').toBeVisible({ timeout: 45000 });
-        await expect(draw.billingEndDateInput, 'Billing Period End Date field must be present').toBeVisible({ timeout: 45000 });
+        const drawNameInput = healingLocator(tc372.drawNameInput);
+        const billingStartDateInput = healingLocator(tc372.billingStartDateInput);
+        const billingEndDateInput = healingLocator(tc372.billingEndDateInput);
+        await expect(drawNameInput, 'Draw Name field must be present').toBeVisible({ timeout: 45000 });
+        await expect(billingStartDateInput, 'Billing Period Start Date field must be present').toBeVisible({ timeout: 45000 });
+        await expect(billingEndDateInput, 'Billing Period End Date field must be present').toBeVisible({ timeout: 45000 });
 
-        expect(await draw.drawNameInput.getAttribute('placeholder'), 'Draw Name placeholder must match').toBe('Enter draw name');
-        expect(await draw.billingStartDateInput.getAttribute('placeholder'), 'Start date placeholder must match').toBe('MM/DD/YYYY');
-        expect(await draw.billingEndDateInput.getAttribute('placeholder'), 'End date placeholder must match').toBe('MM/DD/YYYY');
+        expect(await drawNameInput.getAttribute('placeholder'), 'Draw Name placeholder must match').toBe('Enter draw name');
+        expect(await billingStartDateInput.getAttribute('placeholder'), 'Start date placeholder must match').toBe('MM/DD/YYYY');
+        expect(await billingEndDateInput.getAttribute('placeholder'), 'End date placeholder must match').toBe('MM/DD/YYYY');
 
-        const submitText = (await draw.createDrawModalSubmitBtn.textContent()).trim();
+        const submitText = (await healingLocator(tc372.createDrawModalSubmitBtn).textContent()).trim();
         expect(submitText, 'Modal submit button must read "Create Draw"').toBe('Create Draw');
 
         Logger.success('Verified Create New Draw modal Step 1 fields and buttons — not submitting');
     }
 
     async closeCreateDrawModal() {
-        await draw.createDrawModalCloseBtn.click();
-        await expect(draw.createDrawModal, 'Create New Draw modal must close').not.toBeVisible({ timeout: 45000 });
+        await healingLocator(tc372.createDrawModalCloseBtn).click();
+        await expect(healingLocator(tc372.createDrawModal), 'Create New Draw modal must close').not.toBeVisible({ timeout: 45000 });
         Logger.success('Closed Create Draw modal without submitting');
     }
 
     // ===================== Grid toolbar controls: Filter / View / Table / Export =====================
 
     async verifyFilterPanel() {
-        await draw.filterButtonIn(draw.overviewTabPanel).click();
+        const overviewTabPanel = healingLocator(tc372.overviewTabPanel);
+        await healingLocator(tc372.filterButtonIn(overviewTabPanel)).click();
         await this.page.waitForTimeout(500);
 
-        const heading = (await draw.filtersPanelHeading.textContent()).trim();
+        const heading = (await healingLocator(tc372.filtersPanelHeading).textContent()).trim();
         expect(heading, 'Filters popover heading must match').toBe('Filters');
-        const subheading = (await draw.filterOptionsHeading.textContent()).trim();
+        const subheading = (await healingLocator(tc372.filterOptionsHeading).textContent()).trim();
         expect(subheading, 'Filter Options subheading must match').toBe('Filter Options');
 
         const expectedFields = ['Budget Item', 'Original Budget', 'Reallocation', 'Current Budget', 'Committed', 'Drawn', 'Budget Remaining', 'Progress %'];
         const capturedFields = [];
         for (const field of expectedFields) {
-            const label = (await draw.filterFieldLabel(field).textContent()).trim();
+            const label = (await healingLocator(tc372.filterFieldLabel(field)).textContent()).trim();
             expect(label, `Filter field "${field}" must be present`).toBe(field);
             capturedFields.push(label);
         }
 
-        const comboboxOptions = (await this.page.locator('select, [role="combobox"]').first().locator('option').allTextContents())
+        const comboboxOptions = (await healingLocator(tc372.filterComparatorCombobox).locator('option').allTextContents())
             .map((o) => o.trim());
         expect(comboboxOptions, 'Filter comparator dropdown options must match').toEqual(['Equals', 'Greater than', 'Less than', 'Between']);
 
@@ -304,12 +319,12 @@ exports.DrawReportingJob = class DrawReportingJob {
     }
 
     async verifyViewDialog(panel) {
-        await draw.viewButtonIn(panel).click();
+        await healingLocator(tc372.viewButtonIn(panel)).click();
         await this.page.waitForTimeout(500);
 
-        const heading = (await draw.saveViewDialogHeading.textContent()).trim();
+        const heading = (await healingLocator(tc372.saveViewDialogHeading).textContent()).trim();
         expect(heading, 'Save view popover heading must match').toBe('Save current view as');
-        const placeholder = await draw.saveViewNameInput.getAttribute('placeholder');
+        const placeholder = await healingLocator(tc372.saveViewNameInput).getAttribute('placeholder');
         expect(placeholder, 'Save view input placeholder must match').toBe('Enter a view name');
 
         await this.page.keyboard.press('Escape');
@@ -320,22 +335,22 @@ exports.DrawReportingJob = class DrawReportingJob {
     }
 
     async verifyManageColumns(panel, expectedColumns) {
-        await draw.tableButtonIn(panel).click();
+        await healingLocator(tc372.tableButtonIn(panel)).click();
         await this.page.waitForTimeout(500);
-        const addCustomColumnText = (await draw.addCustomColumnButton.textContent()).trim();
+        const addCustomColumnText = (await healingLocator(tc372.addCustomColumnButton).textContent()).trim();
         expect(addCustomColumnText, '"Add custom column" button text must match').toBe('Add custom column');
 
-        await draw.hideShowColumnsButton.click();
+        await healingLocator(tc372.hideShowColumnsButton).click();
         await this.page.waitForTimeout(500);
 
-        const heading = (await draw.manageColumnsHeading.textContent()).trim();
+        const heading = (await healingLocator(tc372.manageColumnsHeading).textContent()).trim();
         expect(heading, 'Manage Columns dialog heading must match').toBe('Manage Columns');
-        const groupLabel = (await draw.defaultColumnsLabel.textContent()).trim();
+        const groupLabel = (await healingLocator(tc372.defaultColumnsLabel).textContent()).trim();
         expect(groupLabel, 'Default Columns group label must match').toBe('Default Columns');
 
         const capturedColumns = [];
         for (const column of expectedColumns) {
-            const label = (await draw.columnLabel(column).textContent()).trim();
+            const label = (await healingLocator(tc372.columnLabel(column)).textContent()).trim();
             expect(label, `Column "${column}" must be present in Manage Columns`).toBe(column);
             capturedColumns.push(label);
         }
@@ -350,7 +365,7 @@ exports.DrawReportingJob = class DrawReportingJob {
     async captureExportDownload(panel, expectedFilename) {
         const [download] = await Promise.all([
             this.page.waitForEvent('download', { timeout: 45000 }),
-            draw.exportButtonIn(panel).click(),
+            healingLocator(tc372.exportButtonIn(panel)).click(),
         ]);
         const filename = download.suggestedFilename();
         expect(filename, `Export button must download "${expectedFilename}"`).toBe(expectedFilename);
@@ -359,21 +374,23 @@ exports.DrawReportingJob = class DrawReportingJob {
     }
 
     async captureAllBudgetOverviewControls() {
+        const overviewTabPanel = healingLocator(tc372.overviewTabPanel);
         const filter = await this.verifyFilterPanel();
-        const view = await this.verifyViewDialog(draw.overviewTabPanel);
-        const table = await this.verifyManageColumns(draw.overviewTabPanel, [
+        const view = await this.verifyViewDialog(overviewTabPanel);
+        const table = await this.verifyManageColumns(overviewTabPanel, [
             'Budget Item', 'Budget Remaining', 'Committed', 'Current Budget', 'Drawn', 'Original Budget', 'Progress %', 'Reallocation',
         ]);
-        const exportResult = await this.captureExportDownload(draw.overviewTabPanel, 'draw-budget-overview-data.csv');
+        const exportResult = await this.captureExportDownload(overviewTabPanel, 'draw-budget-overview-data.csv');
         return { filter, view, table, export: exportResult };
     }
 
     async captureAllHistoricalDrawsControls() {
-        const view = await this.verifyViewDialog(draw.historicalDrawsTabPanel);
-        const table = await this.verifyManageColumns(draw.historicalDrawsTabPanel, [
+        const historicalDrawsTabPanel = healingLocator(tc372.historicalDrawsTabPanel);
+        const view = await this.verifyViewDialog(historicalDrawsTabPanel);
+        const table = await this.verifyManageColumns(historicalDrawsTabPanel, [
             'Draw Amount', 'Draw Name', 'Draw PDF', 'Previously Drawn', 'Property', 'Remaining at Submission', 'Status', 'Submitted on', 'Total Draw at Submission',
         ]);
-        const exportResult = await this.captureExportDownload(draw.historicalDrawsTabPanel, 'draw-data.csv');
+        const exportResult = await this.captureExportDownload(historicalDrawsTabPanel, 'draw-data.csv');
         return { view, table, export: exportResult };
     }
 
@@ -381,28 +398,28 @@ exports.DrawReportingJob = class DrawReportingJob {
 
     async createDraw(drawName, startDate, endDate) {
         await this.openCreateDrawModal();
-        await draw.drawNameInput.fill(drawName);
-        await draw.billingStartDateInput.fill(startDate);
-        await draw.billingEndDateInput.fill(endDate);
-        await draw.createDrawModalHeading.click();
+        await healingLocator(tc372.drawNameInput).fill(drawName);
+        await healingLocator(tc372.billingStartDateInput).fill(startDate);
+        await healingLocator(tc372.billingEndDateInput).fill(endDate);
+        await healingLocator(tc372.createDrawModalHeading).click();
         await this.page.waitForTimeout(300);
 
-        await draw.createDrawModalSubmitBtn.click();
+        await healingLocator(tc372.createDrawModalSubmitBtn).click();
 
-        const toastTitle = (await draw.drawCreatedToastTitle.textContent({ timeout: 45000 })).trim();
+        const toastTitle = (await healingLocator(tc372.drawCreatedToastTitle).textContent({ timeout: 45000 })).trim();
         expect(toastTitle, 'Draw-created toast title must match').toBe('Draw created');
-        const toastMessage = (await draw.drawCreatedToastMessage.textContent()).trim();
+        const toastMessage = (await healingLocator(tc372.drawCreatedToastMessage).textContent()).trim();
         expect(toastMessage, 'Draw-created toast message must match').toBe('Your new draw has been created successfully.');
 
-        await expect(draw.drawEditorDialog, 'Draw editor (Step 2) must open after creating the draw').toBeVisible({ timeout: 45000 });
+        await expect(healingLocator(tc372.drawEditorDialog), 'Draw editor (Step 2) must open after creating the draw').toBeVisible({ timeout: 45000 });
         Logger.success(`Created draw "${drawName}" — toast confirmed, editor opened`);
     }
 
     async verifyDrawEditorStepTwo(expectedName) {
-        const nameValue = await draw.drawEditorNameInput.inputValue();
+        const nameValue = await healingLocator(tc372.drawEditorNameInput).inputValue();
         expect(nameValue, 'Draw editor name field must show the created draw name').toBe(expectedName);
 
-        const status = (await draw.drawEditorStatusBadge.textContent()).trim();
+        const status = (await healingLocator(tc372.drawEditorStatusBadge).textContent()).trim();
         expect(status, 'Draw editor status badge must read "Draft"').toBe('Draft');
 
         await this.assertKpiValue('Total Budget', '$0.00');
@@ -412,43 +429,43 @@ exports.DrawReportingJob = class DrawReportingJob {
         await this.assertKpiValue('Pending Invoices', '$0.00');
         await this.assertKpiValue('Budget Used', '0%');
 
-        const warningsText = (await this.page.getByText('0 Warnings', { exact: true }).textContent()).trim();
+        const warningsText = (await healingLocator(tc372.zeroWarningsText).textContent()).trim();
         expect(warningsText, 'Warnings summary text must match').toBe('0 Warnings');
-        const itemsToReviewText = (await this.page.getByText('0 items to review', { exact: true }).textContent()).trim();
+        const itemsToReviewText = (await healingLocator(tc372.zeroItemsToReviewText).textContent()).trim();
         expect(itemsToReviewText, 'Items-to-review summary text must match').toBe('0 items to review');
 
-        const disbursementHeading = (await draw.drawDisbursementHeading.textContent()).trim();
+        const disbursementHeading = (await healingLocator(tc372.drawDisbursementHeading).textContent()).trim();
         expect(disbursementHeading, 'Disbursement schedule heading must match').toBe('Draw disbursement schedule');
-        const disbursementEmpty = (await draw.drawDisbursementEmptyMessage.textContent()).trim();
+        const disbursementEmpty = (await healingLocator(tc372.drawDisbursementEmptyMessage).textContent()).trim();
         expect(disbursementEmpty, 'Disbursement schedule empty message must match').toBe('No budget categories found for this property.');
 
-        const invoicesHeading = (await draw.drawInvoicesHeading.textContent()).trim();
+        const invoicesHeading = (await healingLocator(tc372.drawInvoicesHeading).textContent()).trim();
         expect(invoicesHeading, 'Invoices heading must match').toBe('Invoices (0)');
-        const invoicesEmpty = (await draw.drawInvoicesEmptyMessage.textContent()).trim();
+        const invoicesEmpty = (await healingLocator(tc372.drawInvoicesEmptyMessage).textContent()).trim();
         expect(invoicesEmpty, 'Invoices empty message must match').toBe('No invoices match the current search/filter.');
 
-        await expect(draw.drawEditorContinueButton, 'Continue button must be disabled with no budget items or invoices').toBeDisabled({ timeout: 45000 });
+        await expect(healingLocator(tc372.drawEditorContinueButton), 'Continue button must be disabled with no budget items or invoices').toBeDisabled({ timeout: 45000 });
 
         Logger.success('Verified Draw editor (Step 2): name, Draft status, KPIs, empty disbursement schedule, empty invoices list, disabled Continue');
     }
 
     async closeDrawEditor() {
-        await draw.drawEditorCloseButton.click();
-        await expect(draw.drawEditorDialog, 'Draw editor must close').not.toBeVisible({ timeout: 45000 });
+        await healingLocator(tc372.drawEditorCloseButton).click();
+        await expect(healingLocator(tc372.drawEditorDialog), 'Draw editor must close').not.toBeVisible({ timeout: 45000 });
         Logger.success('Closed draw editor (draft preserved, not discarded)');
     }
 
     async verifyActiveDrawImpact(expectedName) {
-        await expect(draw.createDrawButton, 'Create Draw button must become disabled while a draw is in progress').toBeDisabled({ timeout: 45000 });
+        await expect(healingLocator(tc372.createDrawButton), 'Create Draw button must become disabled while a draw is in progress').toBeDisabled({ timeout: 45000 });
 
         await this.assertKpiValue('Active Draw (Draw in progress)', '$0.00');
 
-        const cardName = (await this.page.getByText(expectedName, { exact: true }).first().textContent()).trim();
+        const cardName = (await healingLocator(tc372.activeDrawCardName(expectedName)).textContent()).trim();
         expect(cardName, 'Active Draw card must show the created draw name').toBe(expectedName);
-        const cardStatus = (await draw.activeDrawCardStatus.textContent()).trim();
+        const cardStatus = (await healingLocator(tc372.activeDrawCardStatus).textContent()).trim();
         expect(cardStatus, 'Active Draw card status must read "Draw in Progress"').toBe('Draw in Progress');
 
-        await expect(draw.activeDrawContinueEditingButton, '"Continue Editing" button must be visible on the Active Draw card').toBeVisible({ timeout: 45000 });
+        await expect(healingLocator(tc372.activeDrawContinueEditingButton), '"Continue Editing" button must be visible on the Active Draw card').toBeVisible({ timeout: 45000 });
 
         Logger.success(`Verified Active Draw impact on Overview tab for "${expectedName}": 5th KPI, card name/status, Continue Editing button, Create Draw disabled`);
     }
@@ -482,8 +499,8 @@ exports.DrawReportingJob = class DrawReportingJob {
     }
 
     async reopenActiveDraw() {
-        await draw.activeDrawContinueEditingButton.click();
-        await expect(draw.drawEditorDialog, 'Draw editor must reopen via "Continue Editing"').toBeVisible({ timeout: 45000 });
+        await healingLocator(tc372.activeDrawContinueEditingButton).click();
+        await expect(healingLocator(tc372.drawEditorDialog), 'Draw editor must reopen via "Continue Editing"').toBeVisible({ timeout: 45000 });
         Logger.success('Reopened the in-progress draw via "Continue Editing"');
     }
 
@@ -491,21 +508,21 @@ exports.DrawReportingJob = class DrawReportingJob {
     // used to restore a shared/pre-existing property to its original, re-testable state.
     async discardDraw() {
         this.page.once('dialog', (dialog) => dialog.accept());
-        await draw.drawEditorDiscardButton.click();
-        await expect(draw.drawEditorDialog, 'Draw editor must close after discarding').not.toBeVisible({ timeout: 45000 });
-        await expect(draw.createDrawButton, 'Create Draw button must re-enable once the only in-progress draw is discarded').toBeEnabled({ timeout: 45000 });
+        await healingLocator(tc372.drawEditorDiscardButton).click();
+        await expect(healingLocator(tc372.drawEditorDialog), 'Draw editor must close after discarding').not.toBeVisible({ timeout: 45000 });
+        await expect(healingLocator(tc372.createDrawButton), 'Create Draw button must re-enable once the only in-progress draw is discarded').toBeEnabled({ timeout: 45000 });
         Logger.success('Discarded the draft draw — property restored to its original, re-testable state');
     }
 
     async verifyBudgetOverviewUnaffectedByDraft() {
-        const emptyTitle = (await draw.budgetOverviewEmptyTitle.textContent()).trim();
+        const emptyTitle = (await healingLocator(tc372.budgetOverviewEmptyTitle).textContent()).trim();
         expect(emptyTitle, 'Budget Overview must remain empty — the draft draw has no budget items').toBe('No draw budget overviews added yet');
         Logger.success('Confirmed Budget Overview grid is unaffected by the draft draw (still empty)');
     }
 
     async verifyHistoricalDrawsUnaffectedByDraft() {
         await this.openHistoricalDrawsTab();
-        const emptyTitle = (await draw.historicalDrawsEmptyTitle.textContent()).trim();
+        const emptyTitle = (await healingLocator(tc372.historicalDrawsEmptyTitle).textContent()).trim();
         expect(emptyTitle, 'Historical Draws must remain empty — draft draws are not listed there').toBe('No draws added yet');
         await this.openOverviewTab();
         Logger.success('Confirmed Historical Draws tab is unaffected by the draft draw (still empty — drafts are not historical)');
@@ -889,9 +906,9 @@ exports.DrawReportingJob = class DrawReportingJob {
         let ready = false;
         for (let attempt = 0; attempt < 3 && !ready; attempt++) {
             await this.page.goto('/approvals/all-approvals', { waitUntil: 'load' });
-            ready = await draw.templatesListSearchInput.isVisible({ timeout: 45000 }).catch(() => false);
+            ready = await healingLocator(tc372.templatesListSearchInput).isVisible({ timeout: 45000 }).catch(() => false);
         }
-        await expect(draw.templatesListSearchInput, 'All Approvals search box must be visible').toBeVisible({ timeout: 45000 });
+        await expect(healingLocator(tc372.templatesListSearchInput), 'All Approvals search box must be visible').toBeVisible({ timeout: 45000 });
         Logger.success('Navigated to All Approvals tab');
     }
 
@@ -947,7 +964,8 @@ exports.DrawReportingJob = class DrawReportingJob {
             if (!box) return null;
             const targetY = box.y + box.height / 2;
             try {
-                const index = await draw.allViewDetailsButtons.evaluateAll((buttons, y) => {
+                const allViewDetailsButtons = healingLocator(tc372.allViewDetailsButtons);
+                const index = await allViewDetailsButtons.evaluateAll((buttons, y) => {
                     let bestIndex = -1;
                     let bestDelta = Infinity;
                     buttons.forEach((btn, i) => {
@@ -962,7 +980,7 @@ exports.DrawReportingJob = class DrawReportingJob {
                     // tolerance comfortably between ~13px and ~27px is unambiguous.
                     return bestDelta <= 20 ? bestIndex : -1;
                 }, targetY);
-                if (index !== -1) return draw.allViewDetailsButtons.nth(index);
+                if (index !== -1) return allViewDetailsButtons.nth(index);
                 if (attempt === 2) return null;
             } catch (err) {
                 if (!/frame.*detach/i.test(err.message || '') || attempt === 2) throw err;
@@ -987,8 +1005,8 @@ exports.DrawReportingJob = class DrawReportingJob {
      */
     async openApprovalDetailsForDraw(propertyName, drawName, { tab = 'all' } = {}) {
         const row = tab === 'mine'
-            ? draw.myApprovalsPendingDrawRowForProperty(propertyName)
-            : draw.allApprovalsPendingDrawRowForProperty(propertyName);
+            ? healingLocator(tc372.myApprovalsPendingDrawRowForProperty(propertyName))
+            : healingLocator(tc372.allApprovalsPendingDrawRowForProperty(propertyName));
 
         // Root cause #1 (trace.zip inspection): Locator.isVisible({timeout}) is a ONE-SHOT
         // check — it does not poll/wait despite taking a timeout option. Right after navigating
@@ -1012,7 +1030,7 @@ exports.DrawReportingJob = class DrawReportingJob {
         // the grid via its own search box first (property name works, even though the code
         // above already established draw name does not) so the target row is guaranteed to be
         // in the rendered window.
-        const approvalsSearchInput = this.page.locator('input[placeholder="Search..."]').first();
+        const approvalsSearchInput = healingLocator(tc372.templatesListSearchInput);
         let opened = false;
         for (let attempt = 0; attempt < 4 && !opened; attempt++) {
             if (attempt > 0) {
@@ -1032,12 +1050,13 @@ exports.DrawReportingJob = class DrawReportingJob {
             const viewDetailsButton = await this.resolveViewDetailsButtonForRow(row.first());
             if (!viewDetailsButton) continue;
 
+            const approvalDetailsDialog = healingLocator(tc372.approvalDetailsDialog);
             opened = await viewDetailsButton.click({ timeout: 45000 })
-                .then(() => draw.approvalDetailsDialog.waitFor({ state: 'visible', timeout: 45000 }))
+                .then(() => approvalDetailsDialog.waitFor({ state: 'visible', timeout: 45000 }))
                 .then(() => true)
                 .catch(() => false);
         }
-        await expect(draw.approvalDetailsDialog, `Approval Details dialog must open for property "${propertyName}"`).toBeVisible({ timeout: 45000 });
+        await expect(healingLocator(tc372.approvalDetailsDialog), `Approval Details dialog must open for property "${propertyName}"`).toBeVisible({ timeout: 45000 });
 
         // drawName is optional: callers doing best-effort cleanup of "whichever draw is
         // blocking this property" (rather than acting on one specific, already-known draw)
@@ -1053,11 +1072,11 @@ exports.DrawReportingJob = class DrawReportingJob {
         // the whole approve/reject flow (caught by callers' try/catch, so no button ever got
         // clicked). expect(...).toContainText() polls until the real content lands instead.
         if (drawName) {
-            await expect(draw.approvalDetailsDialog, `Opened Approval Details must be for draw "${drawName}"`).toContainText(drawName, { timeout: 45000 });
+            await expect(healingLocator(tc372.approvalDetailsDialog), `Opened Approval Details must be for draw "${drawName}"`).toContainText(drawName, { timeout: 45000 });
         }
 
         Logger.success(`Opened Approval Details for draw "${drawName || '(unspecified — cleanup mode)'}" on property "${propertyName}"`);
-        return draw.approvalDetailsDialog;
+        return healingLocator(tc372.approvalDetailsDialog);
     }
 
     /**

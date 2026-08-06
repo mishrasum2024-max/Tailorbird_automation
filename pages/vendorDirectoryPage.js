@@ -2,7 +2,8 @@ const path = require('path');
 const fs = require('fs');
 const { expect } = require('@playwright/test');
 const { Logger } = require('../utils/logger');
-const { vendorLocators } = require('../locators/vendorLocator');
+const { vendorLocators, vendorElementStrategies, vendorRowByNameStrategies } = require('../locators/vendorLocator');
+const { healingLocator } = require('../utils/locatorHealer');
 
 const VENDORS_DIRECTORY_URL = '/vendors/directory';
 
@@ -10,6 +11,7 @@ class VendorDirectoryPage {
     constructor(page) {
         this.page = page;
         this.locators = vendorLocators(page);
+        this.strategies = vendorElementStrategies(page);
     }
 
     async goToDirectory() {
@@ -33,7 +35,7 @@ class VendorDirectoryPage {
         try {
             Logger.step('Verifying breadcrumb and no console errors');
             await expect(this.page).toHaveURL(/vendors\/directory/);
-            const breadcrumb = this.page.locator('.mantine-Breadcrumbs-root');
+            const breadcrumb = healingLocator(this.strategies.breadcrumb);
             const text = await breadcrumb.textContent();
             expect(text).toMatch(/Directory|Manage Vendors/i);
             const errors = [];
@@ -348,7 +350,7 @@ class VendorDirectoryPage {
             Logger.step('Completing Invite New Vendor flow');
             await this.locators.inviteNewVendorBtn.click();
             await this.page.waitForTimeout(2000);
-            const dialog = this.page.getByRole('dialog');
+            const dialog = healingLocator(this.strategies.inviteVendorDialog);
             await dialog.waitFor({ state: 'visible', timeout: 5000 });
 
             await this.locators.companyNameInput.fill(orgName);
@@ -372,7 +374,7 @@ class VendorDirectoryPage {
                     await this.page.waitForTimeout(300);
                     await searchLoc.fill(searchText).catch(() => {});
                     await this.page.waitForTimeout(waitMs);
-                    const opt = dialog.locator('[role="option"]').first();
+                    const opt = healingLocator(this.strategies.openComboboxOption).first();
                     if (await opt.isVisible({ timeout: 4000 }).catch(() => false)) {
                         await opt.click({ force: true }).catch(() => {});
                         await this.page.waitForTimeout(300);
@@ -383,7 +385,7 @@ class VendorDirectoryPage {
             };
 
             const dismissDropdownIfOpen = async () => {
-                const listboxVisible = await dialog.locator('[role="listbox"]').first().isVisible({ timeout: 600 }).catch(() => false);
+                const listboxVisible = await healingLocator(this.strategies.openComboboxListbox).first().isVisible({ timeout: 600 }).catch(() => false);
                 if (listboxVisible) {
                     await this.page.keyboard.press('Escape').catch(() => {});
                     await this.page.waitForTimeout(250);
@@ -415,11 +417,34 @@ class VendorDirectoryPage {
                     return;
                 }
             }
-            await createBtn.click();
-            await this.waitForDirectoryReady();
-            const hasSuccess = await this.page.locator('.mantine-Notification-root, text=/success|created|invited/i').first().isVisible({ timeout: 5000 }).catch(() => false);
-            expect(hasSuccess).toBeTruthy();
-            const inGrid = await this.page.locator(`text=${orgName}`).first().isVisible({ timeout: 10000 }).catch(() => false);
+            // MCP-confirmed live 2026-08-06: submitting navigates to the new vendor's own
+            // detail page (/vendors/{id}), not back to the directory grid — waitForVendorDetailReady()
+            // already exists for exactly this case. MCP-verified across repeated live runs:
+            // the success toast is genuinely present in the DOM right after creation (its
+            // exact text/markup was captured in a failure snapshot with the vendor's real
+            // data alongside it), but it auto-dismisses too quickly for a reliable
+            // Playwright-side catch even when raced directly against the click — so
+            // creation success is verified primarily via the new vendor's OWN detail page
+            // becoming ready (Vendor ID / company name / Edit button, already a reliable,
+            // pre-existing check), with the toast treated as a best-effort corroborating
+            // signal rather than the sole proof.
+            const toastLocator = healingLocator(this.strategies.vendorCreatedToast).first();
+            const [toastSeen] = await Promise.all([
+                toastLocator.waitFor({ state: 'visible', timeout: 8000 }).then(() => true).catch(() => false),
+                createBtn.click(),
+            ]);
+            await this.waitForVendorDetailReady();
+            const detailPageConfirmsCreation = await this.locators.vendorIdLabel.isVisible().catch(() => false);
+            expect(toastSeen || detailPageConfirmsCreation, 'Neither the success toast nor the vendor detail page confirmed creation').toBeTruthy();
+            await this.goToDirectory();
+            // MCP-confirmed live 2026-08-06: the directory grid holds 1700+ vendors and
+            // revo-grid virtualizes rows out of the DOM — a freshly-created vendor sorted
+            // into the middle of that list is not necessarily mounted without narrowing
+            // the grid first, same as the property/category grids elsewhere in this suite.
+            await this.locators.searchInput.fill(orgName).catch(() => {});
+            await this.page.waitForTimeout(1500);
+            const inGrid = await healingLocator(vendorRowByNameStrategies(this.page, orgName)).first().isVisible({ timeout: 10000 }).catch(() => false);
+            await this.locators.searchInput.fill('').catch(() => {});
             expect(inGrid).toBeTruthy();
             Logger.success('Invite vendor complete verified');
         } catch (e) {
@@ -455,7 +480,7 @@ class VendorDirectoryPage {
      * name (e.g. "Carpentry") even though the filter itself worked correctly server-side.
      */
     async forceGridFullWidth() {
-        const grid = this.page.locator('revo-grid').first();
+        const grid = healingLocator(this.strategies.revoGrid);
         if (await grid.count().catch(() => 0)) {
             await grid.evaluate((g) => {
                 g.style.setProperty('width', '3000px', 'important');

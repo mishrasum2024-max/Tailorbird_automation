@@ -3,7 +3,8 @@ const { test, expect } = require('@playwright/test');
 const { Logger } = require('../utils/logger');
 const { InteractionLogger } = require('../utils/InteractionLogger');
 const { UnitInteriorPage, JOB_NAME, JOB_ID } = require('../pages/unitInteriorPage');
-const { unitInteriorLocators } = require('../locators/unitInteriorLocator');
+const { unitInteriorLocators, unitInteriorElementStrategies } = require('../locators/unitInteriorLocator');
+const { healingLocator } = require('../utils/locatorHealer');
 const fixture = require('../fixture/unitInterior.json');
 const { ensureLeftPanelExpanded } = require('../utils/leftPanelExpander');
 
@@ -23,12 +24,14 @@ test.use({
 let page;
 let po;   // UnitInteriorPage instance
 let loc;  // unitInteriorLocators instance
+let strategies; // unitInteriorElementStrategies instance
 
 // ── beforeEach: full UI navigation, no hardcoded job URL ──────────────────────
 test.beforeEach(async ({ page: testPage }) => {
     page = testPage;
     po   = new UnitInteriorPage(page);
     loc  = unitInteriorLocators(page);
+    strategies = unitInteriorElementStrategies(page);
 
     // Apply zoom for stable visuals
     page.on('domcontentloaded', async () => {
@@ -68,7 +71,7 @@ test.describe('Unit Interior — Contracts > Units tab full E2E suite', () => {
             await test.step('S1: URL confirms Units sub-tab and breadcrumb contains job name', async () => {
                 const url = page.url();
                 expect(url, 'URL must include contractSubTab=units').toMatch(/contractSubTab=units/);
-                const mainText = await page.locator('main').textContent().catch(() => '');
+                const mainText = await healingLocator(strategies.mainContent).textContent().catch(() => '');
                 expect(mainText, `Breadcrumb must contain job name "${fixture.jobSearch.jobName}"`).toContain(fixture.jobSearch.jobName);
                 InteractionLogger.logCheckpoint('Navigation complete', `URL: ${url}`);
                 Logger.success(`[TC_UI_001-S1] URL and breadcrumb confirmed`);
@@ -79,7 +82,7 @@ test.describe('Unit Interior — Contracts > Units tab full E2E suite', () => {
                 for (const label of fixture.contractSubTabs) {
                     await expect(
                         // exact: true prevents "Contract" matching the outer "Contracts" tab
-                        page.getByRole('tab', { name: label, exact: true }),
+                        healingLocator(strategies.contractSubTabByLabel(label)),
                         `Inner sub-tab "${label}" must be visible`,
                     ).toBeVisible({ timeout: 8000 });
                     InteractionLogger.logVisibility(`Inner sub-tab: "${label}"`, true);
@@ -93,8 +96,7 @@ test.describe('Unit Interior — Contracts > Units tab full E2E suite', () => {
                 const overview = loc.contractsTabPanel;
                 for (const [key, label] of Object.entries(fixture.contractOverview)) {
                     if (label === fixture.contractOverview.editButtonCTA) continue; // handled separately
-                    const visible = await overview.getByText(label, { exact: true })
-                        .first()
+                    const visible = await healingLocator(strategies.overviewLabelText(overview, label))
                         .isVisible({ timeout: 5000 })
                         .catch(() => false);
                     InteractionLogger.logVisibility(`Overview field label "${label}"`, visible);
@@ -104,7 +106,7 @@ test.describe('Unit Interior — Contracts > Units tab full E2E suite', () => {
                 // Edit button CTA — use .first() because multiple "Edit" buttons may exist in the panel
                 const editCTA = fixture.contractOverview.editButtonCTA;
                 await expect(
-                    overview.getByRole('button', { name: editCTA }).first(),
+                    healingLocator(strategies.overviewEditButton(overview, editCTA)),
                     `"${editCTA}" button must be visible in contract overview`,
                 ).toBeVisible({ timeout: 8000 });
                 InteractionLogger.logVisibility(`"${editCTA}" CTA`, true);
@@ -127,7 +129,7 @@ test.describe('Unit Interior — Contracts > Units tab full E2E suite', () => {
                 const { editScopes, updateStatus, releaseUnits } = fixture.unitsTab.toolbarButtons;
                 for (const cta of [editScopes, updateStatus, releaseUnits]) {
                     await expect(
-                        page.getByRole('button', { name: cta }),
+                        healingLocator(strategies.toolbarButtonByLabel(cta)),
                         `Toolbar button "${cta}" must be visible`,
                     ).toBeVisible({ timeout: 8000 });
                     InteractionLogger.logVisibility(`Toolbar button "${cta}"`, true);
@@ -200,10 +202,10 @@ test.describe('Unit Interior — Contracts > Units tab full E2E suite', () => {
             // ── S8: Unit Actions button ───────────────────────────────────────
             await test.step('S8: Unit actions button is present per row with correct label', async () => {
                 const label = fixture.unitsTab.unitActionsButtonLabel;
-                const first = page.getByRole('button', { name: label }).first();
+                const first = healingLocator(strategies.unitActionsButtonByLabel(label));
                 await expect(first, `"${label}" button must be visible in Actions column`).toBeVisible({ timeout: 8000 });
                 InteractionLogger.logVisibility(`"${label}" button`, true);
-                const count = await page.getByRole('button', { name: label }).count();
+                const count = await healingLocator(strategies.unitActionsButtonByLabel(label)).count();
                 Logger.info(`[TC_UI_001-S8] "${label}" button count: ${count} (one per data row expected)`);
                 expect(count, 'There must be at least 1 Unit actions button').toBeGreaterThan(0);
                 Logger.success(`[TC_UI_001-S8] "${label}" button confirmed`);

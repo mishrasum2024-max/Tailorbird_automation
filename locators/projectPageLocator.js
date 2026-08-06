@@ -298,4 +298,231 @@ function projectElementStrategies(page) {
     };
 }
 
-module.exports = { projectJobLocators, projectElementStrategies };
+/**
+ * Self-healing strategies for TC81 (tests/TC06_jobs.spec.js — "Add job" modal flow and
+ * job config). All MCP-verified live 2026-08-06 (beta.tailorbird.com/projects/<id>,
+ * job details page, and the Contracts "Edit Contract Overview" dialog). Every field's
+ * dynamic Mantine `id` is unusable; `label[for]` and `placeholder` are two genuinely
+ * independent real attributes confirmed to resolve to the SAME input node for every
+ * field below (verified via direct DOM equality before writing).
+ */
+
+/** "Create Job" toolbar trigger on the project's Jobs tab — original CSS text-match kept as #1. */
+function createJobBtnStrategies(page) {
+    return [
+        { name: "css:button[hasText=Create Job](original)", locator: page.locator('button', { hasText: 'Create Job' }) },
+        { name: 'role:button[name=Create Job](exact)', locator: page.getByRole('button', { name: 'Create Job', exact: true }) },
+    ];
+}
+
+/**
+ * "Add job" modal root — the constructor's own field (`this.modal`, used by
+ * openCreateJobModal()). Original is a simple, unfiltered dialog-role selector.
+ */
+function addJobModalStrategies(page) {
+    return [
+        { name: 'css:dialog[data-modal-content]|role=dialog(original)', locator: page.locator('section[role="dialog"][data-modal-content="true"], [role="dialog"]') },
+        { name: 'role:dialog', locator: page.getByRole('dialog') },
+    ];
+}
+
+/**
+ * "Add job" modal, re-scoped (used locally inside fillJobForm()/submitJob() — a
+ * SEPARATE lookup from `this.modal` above). Mantine can leave stale hidden dialogs in
+ * the DOM (same lesson as the Create-Property/Create-Project modals) — original filters
+ * by "contains the Title input" and takes `.last()`. Fallback uses `getByRole('dialog')`
+ * instead of the raw CSS role-attribute selector (still filtered+last the same way).
+ */
+function addJobModalScopedStrategies(page) {
+    return [
+        { name: 'css:dialog[data-modal-content]|role=dialog, filter(title input), last(original)', locator: page.locator('section[role="dialog"][data-modal-content="true"], [role="dialog"]').filter({ has: page.getByPlaceholder('Enter job title') }).last() },
+        { name: 'role:dialog, filter(title input), last', locator: page.getByRole('dialog').filter({ has: page.getByPlaceholder('Enter job title') }).last() },
+    ];
+}
+
+/** Add-job "Title" field — original placeholder-based; label-based added as an independent mechanism (MCP-verified same node). */
+function jobTitleInputStrategies(scope) {
+    return [
+        { name: 'placeholder:Enter job title(original)', locator: scope.getByPlaceholder('Enter job title') },
+        { name: 'label:Title', locator: scope.getByLabel('Title', { exact: true }) },
+    ];
+}
+
+/** Add-job "Job Type" dropdown. */
+function jobTypeDropdownStrategies(scope) {
+    return [
+        { name: 'placeholder:Select job type(original)', locator: scope.getByPlaceholder('Select job type') },
+        { name: 'label:Job Type', locator: scope.getByLabel('Job Type', { exact: true }) },
+    ];
+}
+
+/** Add-job "Financial Type" dropdown — original 2-mechanism `.or()` union kept intact; label-based fallback added. */
+function jobFinancialTypeDropdownStrategies(scope) {
+    return [
+        { name: 'placeholder:Select Contract or PO(original)', locator: scope.getByPlaceholder('Select Contract or PO') },
+        { name: 'role:combobox[name=/Financial Type/i](original)', locator: scope.getByRole('combobox', { name: /Financial Type/i }) },
+        { name: 'label:Financial Type', locator: scope.getByLabel('Financial Type', { exact: true }) },
+    ];
+}
+
+/**
+ * Add-job "Vendor" dropdown. Two different pre-existing call sites used two different
+ * expressions for this same field (constructor vs. fillJobForm) — both kept verbatim as
+ * originals. MCP-verified this input carries NO `role` attribute (computed accessibility
+ * role defaults to "textbox", not "combobox" — `getByRole('combobox', ...)` never
+ * matches it live, mirroring the same stale-combobox-assumption bug found elsewhere in
+ * this suite), so `getByRole('textbox', {name:'Vendor'})` is the one that actually works;
+ * kept first for that reason even though it originates from the other call site.
+ */
+function jobVendorDropdownStrategies(scope) {
+    return [
+        { name: 'role:textbox[name=Vendor](original, from fillJobForm)', locator: scope.getByRole('textbox', { name: 'Vendor' }) },
+        { name: 'role:combobox[name=/Vendor/i](original, from constructor — MCP-verified this role is never actually present)', locator: scope.getByRole('combobox', { name: /Vendor/i }) },
+        { name: 'placeholder:Select vendor(original, from constructor)', locator: scope.getByPlaceholder('Select vendor') },
+        { name: 'placeholder:Loading vendors...(original, from constructor)', locator: scope.getByPlaceholder('Loading vendors...') },
+    ];
+}
+
+/** Add-job "Description" field. */
+function jobDescriptionInputStrategies(scope) {
+    return [
+        { name: 'placeholder:Enter job description(original)', locator: scope.getByPlaceholder('Enter job description') },
+        { name: 'label:Description', locator: scope.getByLabel('Description', { exact: true }) },
+    ];
+}
+
+/** Add-job "Estimated Budget" field — original 3-mechanism `.or()` union kept intact. */
+function jobEstimatedBudgetInputStrategies(scope) {
+    return [
+        { name: 'role:textbox[name=/Estimated Budget/i](original)', locator: scope.getByRole('textbox', { name: /Estimated Budget/i }) },
+        { name: 'placeholder:/Enter estimated budget/i(original)', locator: scope.getByPlaceholder(/Enter estimated budget/i) },
+        { name: 'css:input[placeholder*=budget i](original)', locator: scope.locator('input[placeholder*="budget" i]') },
+    ];
+}
+
+/** Add-job "Start Date" / "End Date" fields — role+label association already disambiguates them (both fields share no other unique attribute; MCP-verified both render `placeholder="YYYY-MM-DD"`). */
+function jobStartDateInputStrategies(scope) {
+    return [
+        { name: 'role:textbox[name=Start Date](original)', locator: scope.getByRole('textbox', { name: 'Start Date' }) },
+        { name: 'label:Start Date', locator: scope.getByLabel('Start Date', { exact: true }) },
+    ];
+}
+function jobEndDateInputStrategies(scope) {
+    return [
+        { name: 'role:textbox[name=End Date](original)', locator: scope.getByRole('textbox', { name: 'End Date' }) },
+        { name: 'label:End Date', locator: scope.getByLabel('End Date', { exact: true }) },
+    ];
+}
+
+/** Add-job "Budget Category" combobox (selectJobBudgetCategory). */
+function jobBudgetCategoryInputStrategies(scope) {
+    return [
+        { name: 'role:textbox[name=Budget Category](original)', locator: scope.getByRole('textbox', { name: 'Budget Category' }) },
+        { name: 'label:Budget Category', locator: scope.getByLabel('Budget Category', { exact: true }) },
+    ];
+}
+
+/** Add-job modal "Create" submit button — original scoped-to-modal role lookup kept as #1. */
+function jobSubmitBtnStrategies(scope) {
+    return [
+        { name: 'role:button[name=Create](exact,original)', locator: scope.getByRole('button', { name: 'Create', exact: true }) },
+    ];
+}
+
+/** Job-details "Contracts" tab trigger (projectPage.js constructor field, clicked by openContractsTab()). */
+function contractsTabTriggerStrategies(page) {
+    return [
+        { name: 'role:tab[name=Contracts](original,exact)', locator: page.getByRole('tab', { name: 'Contracts' }) },
+    ];
+}
+
+/** Job-details "Contracts" tabpanel and its "Edit" button, and the resulting "Edit Contract/PO Overview" dialog fields — inline locators lifted from tests/TC06_jobs.spec.js. */
+function contractsTabPanelStrategies(page) {
+    return [
+        { name: 'role:tabpanel[name=Contracts](original)', locator: page.getByRole('tabpanel', { name: 'Contracts' }) },
+    ];
+}
+function contractEditButtonStrategies(contractsTabPanel) {
+    return [
+        { name: 'role:button[name=Edit](original,exact)', locator: contractsTabPanel.getByRole('button', { name: /^Edit$/i }) },
+    ];
+}
+function editContractDialogStrategies(page) {
+    return [
+        { name: 'role:dialog[hasText=/Edit (Contract|PO) Overview/i](original)', locator: page.getByRole('dialog').filter({ hasText: /Edit (Contract|PO) Overview/i }) },
+    ];
+}
+function estimatedTotalCostInputStrategies(editContractDialog) {
+    return [
+        { name: 'role:textbox[name=/Estimated total cost/i](original)', locator: editContractDialog.getByRole('textbox', { name: /Estimated total cost/i }) },
+        { name: 'label:/Estimated total cost/i(original)', locator: editContractDialog.getByLabel(/Estimated total cost/i) },
+        /** MCP-verified: real placeholder is "Enter estimated total cost" — a genuinely independent attribute from the label association above. */
+        { name: 'placeholder:Enter estimated total cost', locator: editContractDialog.getByPlaceholder('Enter estimated total cost') },
+    ];
+}
+function saveChangesBtnStrategies(editContractDialog) {
+    return [
+        { name: 'role:button[name=/Save Changes|Save/i](original)', locator: editContractDialog.getByRole('button', { name: /Save Changes|Save/i }) },
+    ];
+}
+
+/** Job-details "Job Summary" tab/tabpanel and label→value field pairs (properties.js validateJobDetails). */
+function jobSummaryTabStrategies(page) {
+    return [
+        { name: 'role:tab[name=/Job Summary/i](original)', locator: page.getByRole('tab', { name: /Job Summary/i }) },
+    ];
+}
+function jobSummaryTabpanelStrategies(page) {
+    return [
+        { name: 'role:tabpanel[name=/Job Summary/i](original)', locator: page.getByRole('tabpanel', { name: /Job Summary/i }) },
+        { name: 'css:tabpanel[first](original)', locator: page.locator('[role="tabpanel"]').first() },
+    ];
+}
+/**
+ * Job Summary label→value pair (e.g. "Job Name" → "Mall in Noida"). Original uses a raw
+ * XPath template (`.//p[normalize-space()="${label}"]/following-sibling::p[1]`), kept as
+ * #1. MCP-verified the DOM structure is a label `<p>` immediately followed by a value
+ * `<p>` sibling — the CSS adjacent-sibling combinator `+` with `:text-is()` expresses the
+ * SAME structural relationship through a different selector engine (CSS vs XPath), so it
+ * is not a fabricated fallback.
+ */
+function jobSummaryFieldValueStrategies(summaryPanel, label) {
+    return [
+        { name: 'xpath:p[label]/following-sibling::p[1](original)', locator: summaryPanel.locator(`xpath=.//p[normalize-space()="${label}"]/following-sibling::p[1]`) },
+        { name: 'css:p:text-is(label)+p', locator: summaryPanel.locator(`p:text-is("${label}") + p`) },
+    ];
+}
+/** Job-details "Edit" button (Overview) — properties.js validateJobDetails and projectPage.js validateOverviewVisible both reference this. */
+function jobOverviewEditButtonStrategies(page) {
+    return [
+        { name: 'role:button[name=Edit](original,exact)', locator: page.getByRole('button', { name: 'Edit' }) },
+    ];
+}
+
+module.exports = {
+    projectJobLocators,
+    projectElementStrategies,
+    createJobBtnStrategies,
+    addJobModalStrategies,
+    addJobModalScopedStrategies,
+    jobTitleInputStrategies,
+    jobTypeDropdownStrategies,
+    jobFinancialTypeDropdownStrategies,
+    jobVendorDropdownStrategies,
+    jobDescriptionInputStrategies,
+    jobEstimatedBudgetInputStrategies,
+    jobStartDateInputStrategies,
+    jobEndDateInputStrategies,
+    jobBudgetCategoryInputStrategies,
+    jobSubmitBtnStrategies,
+    contractsTabTriggerStrategies,
+    contractsTabPanelStrategies,
+    contractEditButtonStrategies,
+    editContractDialogStrategies,
+    estimatedTotalCostInputStrategies,
+    saveChangesBtnStrategies,
+    jobSummaryTabStrategies,
+    jobSummaryTabpanelStrategies,
+    jobSummaryFieldValueStrategies,
+    jobOverviewEditButtonStrategies,
+};

@@ -8,6 +8,14 @@ const path = require('path');
 const PropertiesHelper = require('../pages/properties');
 const { setTabsDisabledState } = require('../utils/tabsDisabledHelper');
 const { ensureLeftPanelExpanded } = require('../utils/leftPanelExpander');
+const { healingLocator } = require('../utils/locatorHealer');
+const {
+    contractsTabPanelStrategies,
+    contractEditButtonStrategies,
+    editContractDialogStrategies,
+    estimatedTotalCostInputStrategies,
+    saveChangesBtnStrategies,
+} = require('../locators/projectPageLocator');
 
 test.use({
     storageState: 'sessionState.json',
@@ -134,22 +142,16 @@ test.describe('Verify Create Project and Add Job flow', () => {
         await page.waitForTimeout(10000);
 
         // Scope to the Contracts tab so .first() cannot click another "Edit" (failure snapshot: wrong dialog was "Edit Job").
-        const contractsTabPanel = page.getByRole('tabpanel', { name: 'Contracts' });
-        const editContractBtn = contractsTabPanel.getByRole('button', { name: /^Edit$/i }).first();
+        const contractsTabPanel = healingLocator(contractsTabPanelStrategies(page));
+        const editContractBtn = healingLocator(contractEditButtonStrategies(contractsTabPanel)).first();
         await expect(editContractBtn).toBeVisible({ timeout: 15000 });
         await editContractBtn.click({ force: true });
 
         // EditContractOverviewDrawer title: `Edit ${instrumentLabels.noun} Overview` → "Edit Contract Overview" | "Edit PO Overview"
-        const editContractDialog = page
-            .getByRole('dialog')
-            .filter({ hasText: /Edit (Contract|PO) Overview/i })
-            .first();
+        const editContractDialog = healingLocator(editContractDialogStrategies(page)).first();
         await expect(editContractDialog).toBeVisible({ timeout: 15000 });
 
-        const estimatedTotalCostInput = editContractDialog
-            .getByRole('textbox', { name: /Estimated total cost/i })
-            .or(editContractDialog.getByLabel(/Estimated total cost/i))
-            .first();
+        const estimatedTotalCostInput = healingLocator(estimatedTotalCostInputStrategies(editContractDialog)).first();
         await expect(estimatedTotalCostInput).toBeVisible({ timeout: 10000 });
         await estimatedTotalCostInput.click({ force: true });
         await estimatedTotalCostInput.press('Control+A');
@@ -157,7 +159,7 @@ test.describe('Verify Create Project and Add Job flow', () => {
         await estimatedTotalCostInput.fill(String(contractEstimatedBudget));
         await estimatedTotalCostInput.press('Tab');
 
-        const saveChangesBtn = editContractDialog.getByRole('button', { name: /Save Changes|Save/i }).first();
+        const saveChangesBtn = healingLocator(saveChangesBtnStrategies(editContractDialog)).first();
         await expect(saveChangesBtn).toBeVisible({ timeout: 10000 });
         await expect(saveChangesBtn).toBeEnabled({ timeout: 10000 });
         await saveChangesBtn.click();

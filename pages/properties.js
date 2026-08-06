@@ -26,7 +26,29 @@ import {
     viewDetailsButtonStrategies,
     matchingCardTitleStrategies,
     firstClickableCardStrategies,
+    takeoffsTabStrategies,
+    interiorTabStrategies,
+    exteriorTabStrategies,
+    takeoffsFilterButtonStrategies,
+    takeoffsResetFiltersStrategies,
+    takeoffsFilterCloseButtonStrategies,
+    takeoffFilterCheckboxLabelStrategies,
+    takeoffVersionInputStrategies,
+    takeoffsTabpanelStrategies,
+    revoGridStrategies,
+    genericTreegridStrategies,
+    agGridStrategies,
+    takeoffSaveInDialogStrategies,
+    takeoffsFilterPanelTitleStrategies,
+    takeoffFilterBadgeStrategies,
+    takeoffClearAllFiltersStrategies,
 } from '../locators/propertyLocator.js';
+const {
+    jobSummaryTabStrategies,
+    jobSummaryTabpanelStrategies,
+    jobSummaryFieldValueStrategies,
+    jobOverviewEditButtonStrategies,
+} = require('../locators/projectPageLocator');
 import testData from '../fixture/property.json';
 const prop = require('../locators/locationLocator');
 const { CapexGridStabilityPage } = require('../pages/capexGridStabilityPage');
@@ -1169,12 +1191,13 @@ class PropertiesHelper {
 
         try {
             console.log("⏳ Step 1: Opening Filter section...");
-            await this.page.locator(".mantine-Paper-root p:has-text('Filter')").first().waitFor({ state: "visible" });
+            await healingLocator(takeoffsFilterPanelTitleStrategies(this.page)).first().waitFor({ state: "visible" });
             console.log("✔ Filter UI loaded\n");
 
             console.log(`⏳ Step 2: Selecting checkbox option "${type}"...`);
-            await this.page.locator(`.mantine-Checkbox-labelWrapper label:has-text("${type}")`).waitFor({ state: "visible" });
-            await this.page.locator(`.mantine-Checkbox-labelWrapper label:has-text("${type}")`).click();
+            const filterCheckboxLabel = healingLocator(takeoffFilterCheckboxLabelStrategies(this.page, type));
+            await filterCheckboxLabel.waitFor({ state: "visible" });
+            await filterCheckboxLabel.click();
             console.log(`✔ "${type}" checkbox clicked\n`);
 
             console.log("⏳ Step 3: Waiting for data refresh...");
@@ -1183,7 +1206,7 @@ class PropertiesHelper {
             console.log("✔ Data loaded successfully\n");
 
             console.log("⏳ Step 4: Checking badge results in table...");
-            const badges = this.page.locator('.ag-center-cols-container div[col-id="floorplan_id"]');
+            const badges = healingLocator(takeoffFilterBadgeStrategies(this.page));
             const count = await badges.count();
             console.log(`📊 Total rows returned after filter = ${count}\n`);
 
@@ -1208,8 +1231,9 @@ class PropertiesHelper {
             console.log("✔ Badge text matches filter ✔\n");
 
             console.log("⏳ Step 6: Clearing applied filters...");
-            await this.page.locator('.mantine-Paper-root a:has-text("Clear All Filters")').waitFor({ state: "visible" });
-            await this.page.locator('.mantine-Paper-root a:has-text("Clear All Filters")').click();
+            const clearAllFilters = healingLocator(takeoffClearAllFiltersStrategies(this.page));
+            await clearAllFilters.waitFor({ state: "visible" });
+            await clearAllFilters.click();
             console.log("✔ Filters cleared successfully\n");
 
         } catch (err) {
@@ -1266,7 +1290,7 @@ class PropertiesHelper {
     async ensureTakeoffVersionSelected() {
         // await this.page.waitForLoadState('networkidle').catch(() => { });
         await this.page.waitForTimeout(14000);
-        const versionInput = this.page.locator('input[placeholder="Select Version"]');
+        const versionInput = healingLocator(takeoffVersionInputStrategies(this.page));
         const visible = await versionInput.isVisible({ timeout: 12000 }).catch(() => false);
         if (!visible) {
             console.log("ℹ️ No Select Version control; continuing");
@@ -1339,11 +1363,11 @@ class PropertiesHelper {
         };
         // Scope grid search to the Takeoffs tabpanel to exclude revo-grids from other
         // tabs (e.g. Locations which can have hundreds of rows and outscore the visible grid).
-        const takeoffsScope = this.page.getByRole('tabpanel', { name: 'Takeoffs' }).first();
+        const takeoffsScope = healingLocator(takeoffsTabpanelStrategies(this.page)).first();
         const scopeEl = (await takeoffsScope.count()) > 0 ? takeoffsScope : this.page;
-        const revo = scopeEl.locator('revo-grid[role="treegrid"]');
-        const tree = scopeEl.locator('[role="treegrid"]');
-        const ag = scopeEl.locator('.ag-root[role="grid"]');
+        const revo = healingLocator(revoGridStrategies(scopeEl));
+        const tree = healingLocator(genericTreegridStrategies(scopeEl));
+        const ag = healingLocator(agGridStrategies(scopeEl));
 
         let winner = null;
         let winScore = -1;
@@ -1392,9 +1416,9 @@ class PropertiesHelper {
             await this.ensureTakeoffVersionSelected();
 
             if (tab === 'interior') {
-                await this.page.locator(propertyLocators.interiorTab).click();
+                await healingLocator(interiorTabStrategies(this.page)).click();
             } else {
-                await this.page.locator(propertyLocators.exteriorTab).click();
+                await healingLocator(exteriorTabStrategies(this.page)).click();
             }
             await this.page.waitForTimeout(18000);
             // await this.page.waitForLoadState('networkidle').catch(() => { });
@@ -1456,7 +1480,7 @@ class PropertiesHelper {
             // await this.page.waitForLoadState('networkidle').catch(() => { });
             await this.page.waitForTimeout(18000);
 
-            const saveInDialog = this.page.locator('[role="dialog"] button:has-text("Save")');
+            const saveInDialog = healingLocator(takeoffSaveInDialogStrategies(this.page));
             if (await saveInDialog.isVisible({ timeout: 2000 }).catch(() => false) && !(await saveInDialog.isDisabled())) {
                 await saveInDialog.click();
             }
@@ -2059,15 +2083,15 @@ class PropertiesHelper {
         console.log(`✔ Building rows verified (${buildingRowCount})`);
     }
     async takeoffOption() {
-        const takeoffsTab = this.page.getByRole("tab", { name: /^Takeoffs$/i }).first();
+        const takeoffsTab = healingLocator(takeoffsTabStrategies(this.page)).first();
         await expect(takeoffsTab).toBeVisible({ timeout: 20_000 });
         await takeoffsTab.click();
         await expect(takeoffsTab).toHaveAttribute("data-active", "true");
         console.log("Takeoffs tab opened");
     }
     async interiorANDexteriorTab() {
-        const interiorTab = this.page.locator(propertyLocators.interiorTab);
-        const exteriorTab = this.page.locator(propertyLocators.exteriorTab);
+        const interiorTab = healingLocator(interiorTabStrategies(this.page));
+        const exteriorTab = healingLocator(exteriorTabStrategies(this.page));
         const tabTimeout = 15000;
 
         await expect(interiorTab).toBeVisible({ timeout: tabTimeout });
@@ -2079,7 +2103,7 @@ class PropertiesHelper {
         await expect(exteriorTab).toHaveAttribute('aria-selected', 'false');
     }
     async filtertab() {
-        const filterButton = this.page.getByRole('button', { name: /^Filter$/i }).first();
+        const filterButton = healingLocator(takeoffsFilterButtonStrategies(this.page)).first();
         await filterButton.waitFor({ state: "visible" });
         await filterButton.click();
         await this.filterPropertyNew('ce-gm');
@@ -2088,19 +2112,20 @@ class PropertiesHelper {
         await this.filterPropertyNew('ce-r');
         await this.filterPropertyNew('ce-t v1');
         // Clear all active filters so the grid is fully restored before closing the panel.
-        const resetFilters = this.page.locator('button:has-text("Reset Filters")').first();
+        const resetFilters = healingLocator(takeoffsResetFiltersStrategies(this.page)).first();
         if (await resetFilters.isVisible({ timeout: 3000 }).catch(() => false)) {
             await resetFilters.click();
             // await this.page.waitForLoadState('networkidle').catch(() => { });
             await this.page.waitForTimeout(8000);
         }
-        await this.page.locator(".mantine-Paper-root .mantine-CloseButton-root").waitFor({ state: "visible" });
-        await this.page.locator(".mantine-Paper-root .mantine-CloseButton-root").click();
+        const filterCloseBtn = healingLocator(takeoffsFilterCloseButtonStrategies(this.page));
+        await filterCloseBtn.waitFor({ state: "visible" });
+        await filterCloseBtn.click();
         // await this.page.waitForLoadState('networkidle').catch(() => { });
         await this.page.waitForTimeout(8000);
     }
     async clickExteriortab() {
-        const exteriorTab = this.page.locator(propertyLocators.exteriorTab);
+        const exteriorTab = healingLocator(exteriorTabStrategies(this.page));
         await exteriorTab.click();
     }
     async searchInvalidProperty(name) {
@@ -2221,13 +2246,12 @@ class PropertiesHelper {
 
     async validateJobDetails(fields) {
         // Job details are rendered in Job Summary as label/value paragraph pairs.
-        const summaryTab = this.page.getByRole('tab', { name: /Job Summary/i });
+        const summaryTab = healingLocator(jobSummaryTabStrategies(this.page));
         if (await summaryTab.isVisible().catch(() => false)) {
             await summaryTab.click().catch(() => { });
         }
 
-        const summaryPanel = this.page.getByRole('tabpanel', { name: /Job Summary/i })
-            .or(this.page.locator('[role="tabpanel"]').first());
+        const summaryPanel = healingLocator(jobSummaryTabpanelStrategies(this.page));
 
         await expect(summaryPanel).toBeVisible({ timeout: 25000 });
 
@@ -2241,9 +2265,7 @@ class PropertiesHelper {
         for (const field of jobFields) {
             console.log(`[ASSERT] ${field.label} → Expected: ${field.value}`);
 
-            const valueEl = summaryPanel.locator(
-                `xpath=.//p[normalize-space()="${field.label}"]/following-sibling::p[1]`
-            ).first();
+            const valueEl = healingLocator(jobSummaryFieldValueStrategies(summaryPanel, field.label)).first();
 
             await expect(valueEl, `Value for "${field.label}" not visible`)
                 .toBeVisible({ timeout: 10000 });
@@ -2251,7 +2273,7 @@ class PropertiesHelper {
                 .toHaveText(String(field.value), { timeout: 10000 });
         }
 
-        const editButton = this.page.getByRole('button', { name: 'Edit' });
+        const editButton = healingLocator(jobOverviewEditButtonStrategies(this.page));
         await expect(editButton, 'Edit button not visible').toBeVisible({ timeout: 10000 });
         await expect(editButton, 'Edit button is disabled').toBeEnabled();
     }
