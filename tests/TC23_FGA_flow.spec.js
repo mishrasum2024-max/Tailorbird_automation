@@ -48,7 +48,7 @@ function saveCreatedUser(record) {
     Logger.info(`[FGA] Saved created user to data/fgaCreatedUsers.json: ${JSON.stringify(record)}`);
 }
 
-test.describe("FEAT-972 FGA User Management", () => {
+test.describe.serial("FEAT-972 FGA User Management", () => {
     test.use({
         storageState: "sessionState.json",
         viewport: { width: 1440, height: 900 },
@@ -349,8 +349,8 @@ test.describe("FEAT-972 FGA User Management", () => {
 });
 
 
-test.describe("FEAT-972 FGA scope validation — activated Member user (single-property access)", () => {
-    test.describe.configure({ mode: "parallel" });
+test.describe.serial("FEAT-972 FGA scope validation — activated Member user (single-property access)", () => {
+    // test.describe.configure({ mode: "parallel" });
 
     /** @type {Awaited<ReturnType<import('@playwright/test').BrowserContext['storageState']>> | null} */
     let sharedStorageState = null;

@@ -3,7 +3,6 @@ const { Logger } = require('../utils/logger');
 const OrganizationHelper = require('./organizationHelper');
 const { ManageTeamRolesHelper } = require('./manageTeamRolesHelper');
 const fgaLocators = require('../locators/fgaLocator');
-const { healingLocator } = require('../utils/locatorHealer');
 
 /**
  * FEAT-972 — FGA (Fine-Grained Access) User Management.
@@ -40,7 +39,7 @@ class FgaUserManagementPage {
 
     async openPropertyAccessTab() {
         Logger.step('Opening Property access tab');
-        await healingLocator(fgaLocators.propertyAccessTabStrategies(this.page)).click();
+        await this.page.getByRole('tab', { name: fgaLocators.propertyAccessTabName }).click();
         await expect(this.propertyAccessSearchInput()).toBeVisible({ timeout: 15000 });
         // Not getByRole('columnheader'): the header row's cell role flips between
         // "columnheader" and "cell" depending on render/hydration state (MCP/live-run
@@ -57,7 +56,7 @@ class FgaUserManagementPage {
     }
 
     propertyAccessSearchInput() {
-        return healingLocator(fgaLocators.propertyAccessSearchInputStrategies(this.propertyAccessTabPanel()));
+        return this.propertyAccessTabPanel().getByRole('textbox', { name: fgaLocators.propertyAccessSearchPlaceholder });
     }
 
     async searchProperty(propertyName) {
@@ -68,11 +67,11 @@ class FgaUserManagementPage {
     }
 
     propertyAccessTable() {
-        return healingLocator(fgaLocators.propertyAccessTableStrategies(this.propertyAccessTabPanel()));
+        return this.propertyAccessTabPanel().getByRole('table');
     }
 
     getPropertyRow(propertyName) {
-        return healingLocator(fgaLocators.propertyRowStrategies(this.propertyAccessTable(), propertyName));
+        return this.propertyAccessTable().getByRole('row').filter({ hasText: propertyName });
     }
 
     /** Header cell role flips between "columnheader"/"cell" (see openPropertyAccessTab) — read the header row's cells directly instead of pinning a role. */
@@ -85,7 +84,7 @@ class FgaUserManagementPage {
     async getAssignedUserCount(propertyName) {
         const row = this.getPropertyRow(propertyName);
         await expect(row).toBeVisible({ timeout: 15000 });
-        const accessCell = healingLocator(fgaLocators.accessCellStrategies(row));
+        const accessCell = row.getByRole('cell').nth(2);
         const text = ((await accessCell.textContent()) || '').trim();
         const leadingNumber = text.split(' ')[0];
         const parsed = Number(leadingNumber);
@@ -121,7 +120,7 @@ class FgaUserManagementPage {
     // ---------------------------------------------------------------------
 
     propertyAccessDialog(propertyName) {
-        return healingLocator(fgaLocators.propertyAccessDialogStrategies(this.page, propertyName));
+        return this.page.getByRole('dialog', { name: `${fgaLocators.dialogTitlePrefix}${propertyName}` });
     }
 
     /**
@@ -141,7 +140,7 @@ class FgaUserManagementPage {
             { timeout: 15000 },
         ).catch(() => null);
 
-        await healingLocator(fgaLocators.propertySettingsButtonStrategies(row)).click();
+        await row.getByRole('button', { name: fgaLocators.settingsButtonName }).click();
 
         const dialog = this.propertyAccessDialog(propertyName);
         await expect(dialog).toBeVisible({ timeout: 15000 });
@@ -156,16 +155,16 @@ class FgaUserManagementPage {
 
     async closePropertySettings(propertyName) {
         const dialog = this.propertyAccessDialog(propertyName);
-        await healingLocator(fgaLocators.propertyAccessDialogCloseButtonStrategies(dialog)).click();
+        await dialog.getByRole('banner').getByRole('button').first().click();
         await expect(dialog).toBeHidden({ timeout: 10000 });
     }
 
     dialogUserRow(dialog, email) {
-        return healingLocator(fgaLocators.dialogUserRowStrategies(dialog, email));
+        return dialog.locator(fgaLocators.dialogUserRowGroup).filter({ hasText: email });
     }
 
     async searchUserInDialog(dialog, query) {
-        const input = healingLocator(fgaLocators.dialogUserSearchInputStrategies(dialog));
+        const input = dialog.getByPlaceholder(fgaLocators.dialogUserSearchPlaceholder);
         await input.fill('');
         await input.fill(query);
     }
@@ -238,7 +237,7 @@ class FgaUserManagementPage {
     }
 
     async expectAccessGrantedToast() {
-        const toast = healingLocator(fgaLocators.accessGrantedToastStrategies(this.page)).first();
+        const toast = this.page.getByText(fgaLocators.accessGrantedToastMessage);
         await expect(toast).toBeVisible({ timeout: 10000 });
     }
 
@@ -293,7 +292,7 @@ class FgaUserManagementPage {
     }
 
     async validateInvitedBadge(email) {
-        const row = healingLocator(fgaLocators.userRowByEmailStrategies(this.page, email));
+        const row = this.page.getByRole('row').filter({ hasText: email });
         await this.organizationHelper.validateInvitedBadge(row, email);
     }
 
