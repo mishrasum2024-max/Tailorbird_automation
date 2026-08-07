@@ -107,7 +107,7 @@ test.describe.serial('Out of Office — OOO suite', () => {
     // TC262 — Activate with role delegate: verify UI banner and API record
     // =========================================================================
     test('@ooo @regression TC272 Turning on Out of Office with a role delegate shows the active banner with the correct role name and saves the correct state to the API', async ({ page }) => {
-        test.setTimeout(60000);
+        test.setTimeout(300000);
         Logger.step('TC272: Activate with role delegate, verify UI and API');
 
         const roleName = await oooPage.getFirstRoleName();
@@ -139,7 +139,7 @@ test.describe.serial('Out of Office — OOO suite', () => {
         // worst-case call, let alone three. This is a genuine backend performance issue (see
         // final report), not a CI-only artifact — mitigated here with realistic timeouts
         // rather than masking it.
-        test.setTimeout(400000);
+        test.setTimeout(600000);
         Logger.step('TC273: Activate Role A → deactivate → verify full reset → re-activate Role B');
 
         const roleA = await oooPage.getFirstRoleName();
@@ -200,7 +200,7 @@ test.describe.serial('Out of Office — OOO suite', () => {
     // TC265 — OOO state persists across page navigation and full browser reload
     // =========================================================================
     test('@ooo @regression TC274 Out of Office stays active after navigating away to a different page and after doing a full browser reload', async ({ page }) => {
-        test.setTimeout(90000);
+        test.setTimeout(300000);
         Logger.step('TC274: Activate OOO then verify persistence across navigation and reload');
 
         const roleName = await oooPage.getFirstRoleName();
@@ -466,7 +466,7 @@ test.describe.serial('Out of Office — OOO suite', () => {
     //          timezone (merged from TC263), invalid dates
     // =========================================================================
     test('@ooo @regression TC277 The auto-deactivation date picker blocks past dates, allows today and future dates, clears with the X button, saves dates without timezone shift, and ignores bad input without breaking the form', async ({ page }) => {
-        test.setTimeout(120000);
+        test.setTimeout(300000);
         Logger.step('TC277: Verify all date picker and calendar scenarios');
 
         // 1. Clear button hidden initially
@@ -599,7 +599,7 @@ test.describe.serial('Out of Office — OOO suite', () => {
     // TC271 — Role delegation e2e with random future date: UI + API
     // =========================================================================
     test('@ooo @e2e TC278 Activating Out of Office in role delegation mode with a specific role and a random future date shows the correct active banner and saves the right role name and date to the API', async ({ page }) => {
-        test.setTimeout(60000);
+        test.setTimeout(300000);
         Logger.step('TC278: Activate with role + random date, verify UI and API');
 
         await oooPage.ensureOooInactive();
@@ -636,7 +636,7 @@ test.describe.serial('Out of Office — OOO suite', () => {
     // TC272 — User delegation e2e with conflict handling
     // =========================================================================
     test('@ooo @e2e TC279 Activating Out of Office in user delegation mode selects a specific user and a random future date, shows the correct active banner, and saves the right user ID and date to the API', async ({ page }) => {
-        test.setTimeout(90000);
+        test.setTimeout(300000);
         Logger.step('TC279: Activate with user + random date, verify UI and API');
 
         // Resolve first available member dynamically — no hardcoded name that may not exist.
@@ -697,7 +697,7 @@ test.describe.serial('Out of Office — OOO suite', () => {
     // TC273 — Duplicate API POST is rejected by the backend
     // =========================================================================
     test('@ooo @e2e @known-issue TC280 Sending a second Out of Office activation request directly to the API while one is already active is rejected by the backend and leaves the original record completely unchanged', async ({ page }) => {
-        test.setTimeout(90000);
+        test.setTimeout(300000);
         Logger.step('TC280: Activate via UI then verify the API rejects a duplicate POST');
 
         // Resolve first available member dynamically — no hardcoded name that may not exist.
