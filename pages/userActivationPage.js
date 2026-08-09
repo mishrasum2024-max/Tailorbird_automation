@@ -87,7 +87,7 @@ class UserActivationPage {
      * one mail past 60s locally. Raised to give real headroom for that queueing delay
      * rather than a blind guess.
      */
-    async waitForMailinatorMessage(subjectPattern, timeoutMs = 150000) {
+    async waitForMailinatorMessage(subjectPattern, timeoutMs = 180000) {
         const deadline = Date.now() + timeoutMs;
         while (Date.now() < deadline) {
             const response = await this.mailCheckPage.request.get(
@@ -102,21 +102,38 @@ class UserActivationPage {
     }
 
     /**
-     * Fetches a Mailinator message's full body (GET /api/v2/domains/public/messages/<id>)
-     * and returns its plain-text part — every Tailorbird transactional email observed
-     * live sends a text/plain alternative alongside the HTML one.
+     * Fetches a Mailinator message's full body (GET /api/v2/domains/public/messages/<id>).
+     * Prefers the text/plain part (Tailorbird's own body, un-redirected links); falls back
+     * to the text/html part when a message arrives without one — observed live on CI
+     * (GitHub Actions), where a message can be stored with only its HTML part even though
+     * the same template usually ships a plain-text alternative alongside it. Also retries
+     * a few times before giving up: mailinator can return a message's metadata (from the
+     * inbox list) slightly before its parts have fully synced server-side, so a part that's
+     * missing on the first read can appear moments later.
      */
-    async fetchMailinatorMessageText(messageId) {
-        const response = await this.mailCheckPage.request.get(
-            `https://api.mailinator.com/api/v2/domains/public/messages/${messageId}`,
-        );
-        const body = await response.json().catch(() => null);
-        const parts = body?.parts || [];
-        const plainPart = parts.find((p) => (p.headers?.['content-type'] || '').includes('text/plain'));
-        if (!plainPart) {
-            throw new Error(`[Activation] Message ${messageId} has no text/plain part to read`);
+    async fetchMailinatorMessageText(messageId, { retries = 4, retryDelayMs = 2500 } = {}) {
+        let lastError;
+        for (let attempt = 1; attempt <= retries; attempt++) {
+            const response = await this.mailCheckPage.request.get(
+                `https://api.mailinator.com/api/v2/domains/public/messages/${messageId}`,
+            );
+            const body = await response.json().catch(() => null);
+            const parts = body?.parts || [];
+            const plainPart = parts.find((p) => (p.headers?.['content-type'] || '').includes('text/plain'));
+            if (plainPart?.body) {
+                return plainPart.body;
+            }
+            const htmlPart = parts.find((p) => (p.headers?.['content-type'] || '').includes('text/html'));
+            if (htmlPart?.body) {
+                Logger.info(`[Activation] Message ${messageId} has no text/plain part — falling back to its text/html part`);
+                return htmlPart.body;
+            }
+            lastError = new Error(`[Activation] Message ${messageId} has no text/plain or text/html part to read (attempt ${attempt}/${retries})`);
+            if (attempt < retries) {
+                await this.mailCheckPage.waitForTimeout(retryDelayMs);
+            }
         }
-        return plainPart.body || '';
+        throw lastError;
     }
 
     /**
@@ -132,14 +149,22 @@ class UserActivationPage {
         const inviteMessage = await this.waitForMailinatorMessage(/invited you to Tailorbird/);
         Logger.step('[Activation] Reading invite email body for the activation link');
         const bodyText = await this.fetchMailinatorMessageText(inviteMessage.id);
-        const linkMatch = bodyText.match(/<(https:\/\/[^\s>]+)>/);
+        // Plain-text bodies wrap the un-redirected link in "<...>"; HTML-only bodies (the
+        // text/plain fallback case above) carry it as an <a href="..."> instead — try the
+        // "Open Tailorbird" CTA specifically first (avoids picking a logo/footer link), then
+        // fall back to the first https href in the document.
+        const linkMatch =
+            bodyText.match(/<(https:\/\/[^\s>]+)>/) ||
+            bodyText.match(/<a\b[^>]*href="(https:\/\/[^"]+)"[^>]*>\s*Open Tailorbird\s*<\/a>/is) ||
+            bodyText.match(/href="(https:\/\/[^"]+)"/i);
         if (!linkMatch) {
             throw new Error(`[Activation] Could not find an activation link in invite mail body: "${bodyText}"`);
         }
+        const activationUrl = linkMatch[1].replace(/&amp;/g, '&');
 
         Logger.step('[Activation] Opening the activation link in a new page');
         const activationPage = await this.context.newPage();
-        await activationPage.goto(linkMatch[1], { waitUntil: 'load' });
+        await activationPage.goto(activationUrl, { waitUntil: 'load' });
         this.activationPage = activationPage;
         return activationPage;
     }
@@ -202,7 +227,10 @@ class UserActivationPage {
         Logger.step('[Activation] Fetching email verification code from mailinator');
         const otpMessage = await this.waitForMailinatorMessage(/Verify your email address/);
         const bodyText = await this.fetchMailinatorMessageText(otpMessage.id);
-        const match = bodyText.match(/\b(\d{6})\b/);
+        // Strip any HTML tags before scanning for the code — a no-op on an already-plain
+        // body, but required when fetchMailinatorMessageText fell back to the text/html part.
+        const plainText = bodyText.replace(/<[^>]+>/g, ' ');
+        const match = plainText.match(/\b(\d{6})\b/);
         if (!match) {
             throw new Error(`[Activation] Could not find a 6-digit verification code in mail body: "${bodyText}"`);
         }

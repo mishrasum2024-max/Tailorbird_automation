@@ -302,7 +302,7 @@ test.describe('Unit Interior — Contracts > Units tab full E2E suite', () => {
                 Logger.success(`[TC_UI_003-S2] Release Units and Update Status enabled for unit ${activeToggleUnit}; Edit Scopes=${s.editScopes}`);
             });
 
-            await test.step('S3: Open dropdown and assert all 6 option CTAs match fixture (text + count)', async () => {
+            await test.step('S3: Open dropdown and assert all 5 option CTAs match fixture (text + count)', async () => {
                 const actualOptions = await po.getUpdateStatusOptions();
                 Logger.info(`[TC_UI_003-S3] Dropdown options: ${JSON.stringify(actualOptions)}`);
 
@@ -343,17 +343,17 @@ test.describe('Unit Interior — Contracts > Units tab full E2E suite', () => {
 
     test('TC284 @regression Verify Update Status functionality is working as expected by applying all supported status changes on units and validating updated grid status along with conditional status switching between multiple units',
         async () => {
-            Logger.info('[TC_UI_004] START: Full Update Status E2E for all 6 options');
+            Logger.info('[TC_UI_004] START: Full Update Status E2E for all 5 options');
 
             const allOptions = fixture.unitsTab.updateStatusDropdown.options;
 
-            await test.step('S1: Cycle 5 restorable Update Status options on unit 105 — apply, verify grid, restore to Released between each', async () => {
-                // The 6 dropdown options include "Not in Reno" which the app treats as a one-way
+            await test.step('S1: Cycle 4 restorable Update Status options on unit 105 — apply, verify grid, restore to Released between each', async () => {
+                // The 5 dropdown options include "Not in Reno" which the app treats as a one-way
                 // de-release: it removes all scope associations so the Release Units dialog can no
-                // longer re-release that unit.  We test the 5 options that support the full
+                // longer re-release that unit.  We test the 4 options that support the full
                 // apply → verify → restore cycle.  "Not in Reno" is documented in TC_UI_003 as a
                 // visible option and its presence in the dropdown is already asserted.
-                const cyclableOptions = ['Not Started', 'In Progress', 'Completed', 'Cancelled', 'Released'];
+                const cyclableOptions = ['In Progress', 'Completed', 'Cancelled', 'Released'];
                 // ("Released" triggers the Release Units with Scopes dialog — valid path, keep it)
 
                 // Precondition: start from Released (recover from any previous test state)
@@ -419,19 +419,19 @@ test.describe('Unit Interior — Contracts > Units tab full E2E suite', () => {
                 Logger.success('[TC_UI_004-S2] Unit 105 confirmed Released');
             });
 
-            await test.step('S3: Conditional In Progress ↔ Not Started toggle on units 105 + 106 (2 passes)', async () => {
+            await test.step('S3: Conditional In Progress ↔ Completed toggle on units 105 + 106 (2 passes)', async () => {
                 // First pass — applies whichever of the two is NOT current
-                const target1 = await po.updateStatusConditional([105, 106], 'In Progress', 'Not Started');
+                const target1 = await po.updateStatusConditional([105, 106], 'In Progress', 'Completed');
                 Logger.info(`[TC_UI_004-S3] Pass 1 target: "${target1}"`);
                 const s105a = await po.getUnitStatus(105);
                 const s106a = await po.getUnitStatus(106);
-                expect(['In Progress', 'Not Started'], `Status must be one of the two targets`).toContain(s105a);
+                expect(['In Progress', 'Completed'], `Status must be one of the two targets`).toContain(s105a);
                 expect(s105a, 'Units 105 and 106 must show same status').toBe(s106a);
                 Logger.info(`[TC_UI_004-S3] After pass 1 — 105: "${s105a}", 106: "${s106a}"`);
                 await po.clearAllSelections();
 
                 // Second pass — flips to the other one
-                const target2 = await po.updateStatusConditional([105, 106], 'In Progress', 'Not Started');
+                const target2 = await po.updateStatusConditional([105, 106], 'In Progress', 'Completed');
                 expect(target2, 'Second pass must flip to opposite').not.toBe(target1);
                 const s105b = await po.getUnitStatus(105);
                 InteractionLogger.logAssertion('Conditional', 'Status toggled', `!${target1}`, s105b ?? '', s105b !== target1);
@@ -440,7 +440,7 @@ test.describe('Unit Interior — Contracts > Units tab full E2E suite', () => {
                 await po.clearAllSelections();
             });
 
-            Logger.success('[TC_UI_004] COMPLETE: All 6 Update Status options and conditional toggle tested E2E');
+            Logger.success('[TC_UI_004] COMPLETE: All 5 Update Status options and conditional toggle tested E2E');
         },
     );
 
