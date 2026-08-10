@@ -118,8 +118,13 @@ test.describe.serial('Out of Office — OOO suite', () => {
         const activeText = await oooPage.assertActiveBanner({ roleName, isRole: true });
         Logger.info(`TC272: Active banner: "${activeText}" ✓`);
 
-        // No date → auto-deactivation line must NOT appear
-        const dateVisible = await page.getByText(/Auto-deactivates on/i).isVisible().catch(() => false);
+        // No date → auto-deactivation line must NOT appear.
+        // isVisible() already returns false (without throwing) when the element is simply
+        // absent — a .catch(() => false) here would silently swallow a genuine error (e.g. a
+        // strict-mode violation from the unscoped regex matching more than one element) as a
+        // false "not visible" result, masking it behind an assertion that happens to expect
+        // exactly that value.
+        const dateVisible = await page.getByText(/Auto-deactivates on/i).isVisible();
         expect(dateVisible, 'Auto-deactivation date line must NOT appear when no date was set').toBe(false);
 
         const apiState = await oooPage.assertRoleDelegationApi({ roleName, apiDate: null });
@@ -374,16 +379,34 @@ test.describe.serial('Out of Office — OOO suite', () => {
         Logger.info(`TC275: All Approvals — ${allRows} row(s) for "${propertyName}"`);
         expect(allRows, `OOO approval for "${propertyName}" must appear in All Approvals — template exists so routing must trigger`).toBeGreaterThan(0);
 
-        // Step 6: Assert NOT in My Approvals (routed to delegate role due to OOO)
+        // Step 6: Assert NOT in My Approvals (routed to delegate role due to OOO).
+        // MCP-verified live (2026-08-10): when this user genuinely has zero My Approvals —
+        // exactly the expected outcome here, since OOO routed everything to the delegate
+        // role — the page renders a real empty state ("No approvals added yet") with the
+        // search input present but DISABLED; it never becomes searchable. Waiting only for
+        // "search enabled" (as the All Approvals step above correctly does, since that tab
+        // does have rows) hangs for the full timeout in this legitimate empty state. Both
+        // valid terminal states are raced explicitly — this is NOT a silent default: myRows
+        // is only set to 0 after positively confirming the empty-state text is showing, not
+        // on a timeout/catch, so a genuine page-load failure still fails loud.
         await page.goto(`${origin}/approvals/my-approvals`, { waitUntil: 'domcontentloaded' });
-        await page.waitForSelector('input[placeholder="Search..."]:not([data-disabled="true"])', { timeout: 30000 }).catch(() => { });
-        let myRows = 0;
-        if (await page.$('input[placeholder="Search..."]:not([data-disabled="true"])')) {
+        const myApprovalsSearchEnabled = page.locator('input[placeholder="Search..."]:not([data-disabled="true"])');
+        const myApprovalsEmptyState = page.getByText('No approvals added yet');
+        await expect(
+            myApprovalsSearchEnabled.or(myApprovalsEmptyState),
+            'My Approvals must reach either a searchable grid or the "No approvals added yet" empty state'
+        ).toBeVisible({ timeout: 30000 });
+
+        let myRows;
+        if (await myApprovalsEmptyState.isVisible()) {
+            myRows = 0;
+            Logger.info('TC275: My Approvals shows the "No approvals added yet" empty state — 0 rows (routed away by OOO) ✓');
+        } else {
             await approvalPage.searchApprovals(propertyName);
             await page.waitForTimeout(1500);
             myRows = await approvalPage.getTableRowCount();
+            Logger.info(`TC275: My Approvals — ${myRows} row(s) for "${propertyName}"`);
         }
-        Logger.info(`TC275: My Approvals — ${myRows} row(s) for "${propertyName}"`);
         expect(
             myRows,
             `OOO ROUTING BUG: approval appeared in My Approvals. With OOO active it must route to delegate role "${roleName}", NOT the OOO user.`
@@ -449,7 +472,7 @@ test.describe.serial('Out of Office — OOO suite', () => {
         await oooPage.loc.input_teamMember.fill(currentUserName.split(' ')[0]);
         await page.waitForTimeout(800);
         const selfOption = page.getByRole('option', { name: currentUserName });
-        expect(await selfOption.isVisible().catch(() => false), `"${currentUserName}" must NOT appear in dropdown`).toBe(false);
+        expect(await selfOption.isVisible(), `"${currentUserName}" must NOT appear in dropdown`).toBe(false);
         Logger.info(`TC276: Self-delegation blocked ✓`);
 
         const delegates = await oooPage.getDelegatesApiResponse();
@@ -540,7 +563,7 @@ test.describe.serial('Out of Office — OOO suite', () => {
         await expect(oooPage.loc.btn_clearDate, '× must appear after a date is set').toBeVisible({ timeout: 5000 });
         await oooPage.clearDeactivateDate();
         await expect(oooPage.loc.input_deactivateDate).toHaveValue('', { timeout: 5000 });
-        expect(await oooPage.loc.btn_clearDate.isVisible().catch(() => false), '× must disappear after clearing').toBe(false);
+        expect(await oooPage.loc.btn_clearDate.isVisible(), '× must disappear after clearing').toBe(false);
         await expect(oooPage.loc.btn_activate, 'Activate remains ENABLED — delegate still selected').toBeEnabled({ timeout: 5000 });
         Logger.info('TC277: Clear button works ✓');
 
@@ -667,7 +690,7 @@ test.describe.serial('Out of Office — OOO suite', () => {
         await oooPage.loc.btn_activate.click();
         await page.waitForTimeout(1500);
 
-        const combinationConflict = await page.getByText(/This combination already exists/i).isVisible().catch(() => false);
+        const combinationConflict = await page.getByText(/This combination already exists/i).isVisible();
         let chosenUser = PREFERRED_USER;
 
         if (combinationConflict) {

@@ -1,6 +1,14 @@
 const { expect } = require('@playwright/test');
 const { Logger } = require('../utils/logger');
-const { propertyLocators } = require('../locators/propertyLocator.js');
+const { healingLocator } = require('../utils/locatorHealer');
+const {
+    profileMenuTriggerStrategies,
+    profileMenuStrategies,
+    propertiesGridStrategies,
+    propertyCardStrategies,
+    budgetPropertySelectorButtonStrategies,
+    budgetPropertyDropdownStrategies,
+} = require('../locators/userActivationLocator');
 
 /**
  * Drives the full "accept invite" activation flow for a brand-new invited user:
@@ -277,12 +285,12 @@ class UserActivationPage {
     // ---------------------------------------------------------------------
 
     propertiesGrid() {
-        return this.activationPage.locator('.mantine-SimpleGrid-root');
+        return healingLocator(propertiesGridStrategies(this.activationPage));
     }
 
     /** Each card is a direct child of the SimpleGrid; its first <p> is the property name (MCP-verified DOM: PropertyCard_card__*). */
     propertyCards() {
-        return this.propertiesGrid().locator('> div');
+        return healingLocator(propertyCardStrategies(this.propertiesGrid(), this.activationPage));
     }
 
     /**
@@ -342,8 +350,8 @@ class UserActivationPage {
      */
     async getProfileMenuOptions(userEmail) {
         Logger.step('[Activation] Opening profile menu from the left sidebar');
-        await this.activationPage.getByText(userEmail, { exact: true }).click();
-        const menu = this.activationPage.getByRole('menu').first();
+        await healingLocator(profileMenuTriggerStrategies(this.activationPage, userEmail)).click();
+        const menu = healingLocator(profileMenuStrategies(this.activationPage));
         await expect(menu, 'FAIL: profile menu should open').toBeVisible({ timeout: 10000 });
         const items = (await menu.getByRole('menuitem').allTextContents()).map((t) => t.trim()).filter(Boolean);
         await this.activationPage.keyboard.press('Escape');
@@ -485,8 +493,8 @@ class UserActivationPage {
     /** Opens the Budget page's "Select a Property" dropdown and returns every option's property name. */
     async getBudgetPropertyDropdownOptions() {
         Logger.step('[Activation] Opening Budget page Property dropdown');
-        await this.activationPage.getByRole('button', { name: 'Select a Property' }).click();
-        const menu = this.activationPage.getByRole('menu', { name: 'Select a Property' });
+        await healingLocator(budgetPropertySelectorButtonStrategies(this.activationPage)).click();
+        const menu = healingLocator(budgetPropertyDropdownStrategies(this.activationPage));
         await expect(menu, 'FAIL: Budget Property dropdown should open').toBeVisible({ timeout: 10000 });
 
         const items = menu.getByRole('menuitem');

@@ -19,7 +19,7 @@ test.describe('Tailorbird Login Flow', () => {
   let page;
   let login;
 
-  test('TC01 @sanity @mandatory @login User should be able to submit credentials successfully', async ({ browser }) => {
+  test.only('TC01 @sanity @mandatory @login User should be able to submit credentials successfully', async ({ browser }) => {
     Logger.info('Starting Tailorbird login test...');
 
     context = await browser.newContext();

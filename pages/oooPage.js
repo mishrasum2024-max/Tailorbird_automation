@@ -94,9 +94,14 @@ class OOOPage {
 
     // ── State management ─────────────────────────────────────────────────
 
-    /** Returns true if the active state paragraph is currently visible in the UI. */
+    /**
+     * Returns true if the active state paragraph is currently visible in the UI.
+     * `isVisible()` already returns false (without throwing) when the element simply
+     * isn't present — no catch is needed, and adding one would silently swallow a real
+     * error (e.g. a closed page or a strict-mode violation) as a false "inactive" result.
+     */
     async isOooActiveInUi() {
-        return this.loc.activeStatePara.isVisible().catch(() => false);
+        return this.loc.activeStatePara.isVisible();
     }
 
     /**

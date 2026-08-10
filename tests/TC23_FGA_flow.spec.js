@@ -155,9 +155,8 @@ test.describe.serial("FEAT-972 FGA User Management", () => {
         );
         await expect(fga.propertyAccessTable(), "Grid must remain rendered after clicking a column header").toBeVisible();
 
-        Logger.info(
-            "[TC351] Pagination and filter controls are not present on the Property access tab in the current UI (MCP-verified live) — not applicable, no assertion made.",
-        );
+        Logger.step("[TC351] Asserting no pagination/filter controls render on the Property access tab (MCP-verified live)");
+        await fga.expectNoPaginationOrFilterControls();
 
         Logger.success("[TC351] ✅ Property access page structure validated");
     });
@@ -201,7 +200,7 @@ test.describe.serial("FEAT-972 FGA User Management", () => {
         saveCreatedUser({ email, role: "Member", testCase: "TC353", purpose: "badge/status validation", createdAt: new Date().toISOString() });
 
         Logger.step(`[TC353] Validating row, email display, and Invited badge for ${email}`);
-        const row = page.getByRole("row").filter({ hasText: email });
+        const row = fga.getUserRowByEmail(email);
         await expect(row, "Invited user row must be visible in Users table").toBeVisible({ timeout: 15000 });
         await expect(row, "Email must display correctly in the row").toContainText(email);
         await fga.validateInvitedBadge(email);
