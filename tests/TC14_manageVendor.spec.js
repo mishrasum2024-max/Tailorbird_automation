@@ -224,70 +224,77 @@ test.describe('Vendors Directory - E2E', () => {
         expect(checkboxCount).toBeGreaterThan(0);
         Logger.info(`TC240 step1: ${checkboxCount} trade checkboxes found ✓`);
 
-        // ── 2. Check "Carpentry" → grid row count reduces or stays (filtered) ──
+        // ── 2. Check "Carpentry" → grid narrows to a real, backend-reported count ──
         const dataRows = page.locator('[role="row"]').filter({ has: page.locator('[role="gridcell"]') });
-        // MCP-verified live (2026-07-28): the unfiltered list keeps mounting additional rows
-        // for a bit after waitForDirectoryReady()'s own poll only guarantees ">0" rows — an
-        // early, unsettled read here (e.g. 18) can be smaller than the real baseline (e.g. 39),
-        // making a correctly-filtered afterCount look like an increase. Wait for two
-        // consecutive reads to agree before treating the count as a stable baseline.
-        let _previousDataRowCount = await dataRows.count();
-        for (let _i = 0; _i < 6; _i++) {
-            await page.waitForTimeout(400);
-            const _currentDataRowCount = await dataRows.count();
-            if (_currentDataRowCount === _previousDataRowCount) break;
-            _previousDataRowCount = _currentDataRowCount;
-        }
-        const beforeCount = await dataRows.count();
+        const grid = page.locator('[role="grid"], [role="treegrid"]').first();
+        const noOrgsEmptyState = page.getByText('No organizations added yet');
+        // MCP-verified live (2026-08-10): raw `[role="row"]` DOM element counting on this
+        // grid is fundamentally unreliable for a before/after comparison — revo-grid
+        // renders each logical row as 2-3 SEPARATE `[role="row"]` elements split across
+        // frozen/scrollable column groups (confirmed via `aria-rowindex`: the same index
+        // repeats once per column group), and those groups mount asynchronously, so a raw
+        // count taken mid-mount can read anywhere from ~1x to ~3x the true row count. That
+        // is exactly what produced the CI failure ("before:18 after:30") — neither number
+        // was the true row count, both were partial/full multiples of it, and toggling the
+        // filter can also reset the grid's pagination/sort, so even a "settled" raw count
+        // isn't safely comparable before vs after. The grid's `aria-rowcount` attribute is
+        // the authoritative filtered-total signal instead — MCP-confirmed stable across 8
+        // reads over 4s (10, matching the real count of Carpentry-tagged vendors) once a
+        // real filter is active. Unfiltered, it reports a fixed virtualization placeholder
+        // (confirmed constant at 14242, not a real vendor count) — so it's read only AFTER
+        // checking Carpentry, never compared against an unfiltered "before" number.
         const carpentryBox = page.getByRole('checkbox', { name: 'Carpentry' });
-        const carpentryVisible = await carpentryBox.isVisible({ timeout: 3000 }).catch(() => false);
-        if (carpentryVisible) {
-            await carpentryBox.check();
-            let afterCount = await dataRows.count();
-            await retryUntilPass(async (attempt) => {
-                if (attempt > 1) {
-                    Logger.info(`TC240 step2: retry ${attempt}/3 — grid not yet settled/filtered (before:${beforeCount}, last read after:${afterCount}), waiting and rereading`);
-                }
-                await page.waitForTimeout(1200);
-                afterCount = await dataRows.count();
-                expect(afterCount).toBeLessThanOrEqual(beforeCount);
-            }, { attempts: 3, delayMs: 1500 });
-            Logger.info(`TC240 step2: Carpentry filter — before:${beforeCount} after:${afterCount} ✓`);
-            if (afterCount > 0) {
-                // Row count updates before the "Trades" column's cell content finishes
-                // rendering — poll instead of asserting on a single read.
-                const tradeCells = page.locator('[role="gridcell"]').filter({ hasText: 'Carpentry' });
-                await expect.poll(() => tradeCells.count(), { timeout: 8000 }).toBeGreaterThan(0);
-                Logger.info('TC240 step2: Filtered rows contain Carpentry trade ✓');
-            }
+        await expect(carpentryBox, 'Carpentry trade checkbox must be visible in the Filter panel').toBeVisible({ timeout: 5000 });
+        await carpentryBox.check();
 
-            // ── 3. Uncheck → grid restored ──
-            await carpentryBox.uncheck();
-            await page.waitForTimeout(1200);
-            const restoredCount = await dataRows.count();
-            expect(restoredCount).toBeGreaterThanOrEqual(afterCount);
-            Logger.info(`TC240 step3: Grid restored after uncheck — rows:${restoredCount} ✓`);
-        } else {
-            Logger.info('TC240 step2-3: Carpentry checkbox not visible; skipping trade filter sub-steps');
+        let filteredCount = null;
+        await expect.poll(async () => {
+            if (await noOrgsEmptyState.isVisible()) return 0;
+            const aria = await grid.getAttribute('aria-rowcount');
+            const n = aria !== null ? parseInt(aria, 10) : NaN;
+            filteredCount = Number.isFinite(n) && n < 1000 ? n : null;
+            return filteredCount;
+        }, {
+            timeout: 15000,
+            message: 'Carpentry filter never reported a real (non-placeholder) matched-row count or the empty state',
+        }).not.toBeNull();
+        Logger.info(`TC240 step2: Carpentry filter — backend-reported matched rows: ${filteredCount} ✓`);
+
+        if (filteredCount > 0) {
+            // Row count updates before the "Trades" column's cell content finishes
+            // rendering — poll instead of asserting on a single read.
+            const tradeCells = page.locator('[role="gridcell"]').filter({ hasText: 'Carpentry' });
+            await expect.poll(() => tradeCells.count(), { timeout: 8000 }).toBeGreaterThan(0);
+            Logger.info('TC240 step2: Filtered rows contain Carpentry trade ✓');
         }
+
+        // ── 3. Uncheck → grid restored ──
+        await carpentryBox.uncheck();
+        await page.waitForTimeout(1200);
+        const restoredCount = await dataRows.count();
+        expect(restoredCount, 'Grid must show rows again after clearing the trade filter').toBeGreaterThan(0);
+        Logger.info(`TC240 step3: Grid restored after uncheck — rows:${restoredCount} ✓`);
 
         // close filter panel via Mantine CloseButton
         const filterCloseBtn = page.locator('button.mantine-CloseButton-root').first();
-        if (await filterCloseBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+        if (await filterCloseBtn.isVisible({ timeout: 3000 })) {
             await filterCloseBtn.click();
         } else {
             await vendorPage.locators.filterBtn.click();
         }
         await page.waitForTimeout(600);
 
-        // ── 4. Search zero-result term → empty state (0 or near-0 rows) ──
+        // ── 4. Search zero-result term → empty state ──
+        // MCP-verified live: a genuinely zero-match search renders an explicit
+        // "No organizations added yet" empty state (not just an empty grid) — asserting
+        // that directly is exact, unlike a raw row-count threshold, which the same
+        // column-group DOM duplication described above could inflate for an unrelated
+        // reason (e.g. a lingering loading-skeleton row).
         const searchInput = vendorPage.locators.searchInput;
         await searchInput.fill('ZZZNONONONO_NOTEXIST_99XYZ');
         await page.keyboard.press('Enter');
-        await page.waitForTimeout(1500);
-        const zeroCount = await dataRows.count();
-        expect(zeroCount).toBeLessThanOrEqual(2);
-        Logger.info(`TC240 step4: Zero-result search yielded ${zeroCount} rows ✓`);
+        await expect(noOrgsEmptyState, 'Zero-result search must reach the "No organizations added yet" empty state').toBeVisible({ timeout: 10000 });
+        Logger.info('TC240 step4: Zero-result search reached the empty state ✓');
 
         // ── 5. Special-char search → no red error alert ──
         await searchInput.fill('& < > % "test" \'xss\'');

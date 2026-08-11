@@ -1,3 +1,5 @@
+const { healingLocator } = require('../utils/locatorHealer');
+
 /**
  * Vendors Directory & Vendor Detail page locators
  * URL: vendors/directory, vendors/{id}
@@ -12,7 +14,14 @@ function vendorLocators(page) {
         // --- Directory page ---
         inviteNewVendorBtn: page.getByRole('button', { name: 'Invite New Vendor' }),
         searchInput: page.getByRole('textbox', { name: 'Search...' }),
-        filterBtn: page.locator('button:has(svg.lucide-funnel)').first(),
+        // MCP-verified live (2026-08-10): the icon-CSS selector and the button's own visible
+        // "Filter" text resolve to the exact same <button> node — a genuinely independent
+        // fallback mechanism (accessible-name lookup vs icon-class CSS), not just another
+        // way of finding an ancestor/descendant of it.
+        filterBtn: healingLocator([
+            { name: 'css:button:has(svg.lucide-funnel)[first](original)', locator: page.locator('button:has(svg.lucide-funnel)').first() },
+            { name: 'role:button[name=Filter]', locator: page.getByRole('button', { name: 'Filter', exact: true }) },
+        ]),
         exportBtn: page.locator('button:has(svg.lucide-download)').first(),
         viewDropdownBtn: page.locator('main').getByRole('button').first().or(page.getByRole('tabpanel', { name: 'Overview' }).getByRole('button').first()),
         addColumnBtn: page.getByTestId('bt-add-column').first().or(page.locator('main').locator('[data-testid="bt-add-column"]').first()),

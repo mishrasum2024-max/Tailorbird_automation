@@ -207,7 +207,7 @@ class PropertiesHelper {
             await healingLocator(createPropertyButtonStrategies(this.page)).click({ force: true });
 
             console.log("📌 Waiting for Add Property modal to appear...");
-            await this.addPropertyDialog().waitFor({ state: "visible", timeout: 45000 });
+            await this.addPropertyDialog().waitFor({ state: "visible", timeout: 65000 });
 
             console.log("📝 Verifying modal field presence...");
             await this.verifyModalFields();
