@@ -185,22 +185,51 @@ class VendorDirectoryPage {
                 if (colVisible) Logger.info('Added column visible in grid');
             }
             const mgrCol = this.locators.manageColumnsBtn;
-            if (await mgrCol.isVisible({ timeout: 2000 }).catch(() => false)) {
+            const mgrColPresent = await mgrCol.isVisible({ timeout: 2000 }).catch(() => false);
+            if (mgrColPresent) {
                 await mgrCol.click();
                 await expect(this.locators.manageColumnsDialog).toBeVisible({ timeout: 5000 });
                 await this.page.keyboard.press('Escape');
+            } else {
+                // MCP-verified live 2026-08-11: Vendor Directory currently has no "Manage
+                // Columns" control at all (no settings-icon button anywhere on the page) —
+                // logged explicitly rather than silently skipped, so this gap stays visible
+                // rather than reading as "verified" the next time someone scans the logs.
+                Logger.info('[VendorDirectory] No Manage Columns control present on this page — skipping (not a failure, nothing to interact with)');
             }
+
+            // Export is core, always-present functionality for this test (unlike the
+            // optional View/Add Column/Manage Columns checks above) — assert it rather than
+            // silently skip it. MCP-verified live 2026-08-11: the click itself lands
+            // correctly (confirmed via error-context snapshot showing the button in its
+            // "active" post-click state), but the actual file-generation + download can take
+            // longer than the original 10s budget under real load — raised to 30s and given
+            // one retry click rather than a single unconditional wait, so a slow-but-genuine
+            // download isn't mistaken for a broken Export button.
             const expBtn = this.locators.exportBtn;
-            if (await expBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-                const downloadsPath = path.join(process.cwd(), 'downloads');
-                const [download] = await Promise.all([this.page.waitForEvent('download', { timeout: 10000 }), expBtn.click()]);
-                const savePath = path.join(downloadsPath, await download.suggestedFilename());
-                await download.saveAs(savePath);
-                const content = fs.readFileSync(savePath, 'utf-8');
-                expect(content.length).toBeGreaterThan(50);
-                expect(content).toMatch(/Organization|Name|Location/i);
-                Logger.success('View, Column, Export verified');
+            await expect(expBtn, 'Export button must be visible on the Vendor Directory toolbar').toBeVisible({ timeout: 10000 });
+            await expect(expBtn, 'Export button must be enabled').toBeEnabled({ timeout: 5000 });
+
+            const downloadsPath = path.join(process.cwd(), 'downloads');
+            let download;
+            try {
+                [download] = await Promise.all([
+                    this.page.waitForEvent('download', { timeout: 15000 }),
+                    expBtn.click(),
+                ]);
+            } catch {
+                Logger.info('[VendorDirectory] No download after first Export click within 15s — retrying once');
+                [download] = await Promise.all([
+                    this.page.waitForEvent('download', { timeout: 15000 }),
+                    expBtn.click(),
+                ]);
             }
+            const savePath = path.join(downloadsPath, await download.suggestedFilename());
+            await download.saveAs(savePath);
+            const content = fs.readFileSync(savePath, 'utf-8');
+            expect(content.length).toBeGreaterThan(50);
+            expect(content).toMatch(/Organization|Name|Location/i);
+            Logger.success('View, Column, Export verified');
         } catch (e) {
             Logger.error(`viewColumnExportFlow: ${e.message}`);
             await this.page.keyboard.press('Escape').catch(() => {});

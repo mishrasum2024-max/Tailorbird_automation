@@ -112,6 +112,12 @@ function createPropertyButtonStrategies(page) {
     return [
         { name: 'css:button:has-text(Create Property)(original)', locator: page.locator(propertyLocators.createPropertyButton) },
         { name: 'role:button[name=Create Property](exact)', locator: page.getByRole('button', { name: 'Create Property', exact: true }) },
+        // MCP-verified live 2026-08-11: icon+text combo is a genuinely independent signal
+        // from the two role/text-only strategies above — confirmed exactly 1 match on the
+        // live Properties page. lucide-plus alone is too generic app-wide to use bare, so it
+        // is always combined with the button's own text here, never used standalone.
+        { name: 'css:button:has(svg.lucide-plus)[hasText=Create Property]', locator: page.locator('button:has(svg.lucide-plus)').filter({ hasText: 'Create Property' }).first() },
+        { name: 'css:main>>button[hasText=Create Property][first]', locator: page.locator('main').locator('button').filter({ hasText: 'Create Property' }).first() },
     ];
 }
 
@@ -125,6 +131,14 @@ function addPropertyDialogStrategies(page) {
     return [
         { name: 'role:dialog[hasText=/add property/i](original)', locator: page.getByRole('dialog').filter({ hasText: /add\s+property/i }).last() },
         { name: 'role:dialog[has=heading(Add property)]', locator: page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: 'Add property', level: 2 }) }).last() },
+        // MCP-verified live 2026-08-11: two more independent signals padded on, per the same
+        // "different underlying mechanism, not just another way to find the same ARIA role"
+        // rule already used elsewhere in this file — a DOM class (Mantine's own modal-content
+        // class, unrelated to ARIA at all) and a specific child field's placeholder (this
+        // dialog is the only one on the page containing an "Enter name" input, matching
+        // nameInputStrategies' own placeholder signal below).
+        { name: 'css:.mantine-Modal-content[hasText=/add property/i]', locator: page.locator('.mantine-Modal-content').filter({ hasText: /add\s+property/i }).last() },
+        { name: 'role:dialog[has=placeholder(Enter name)]', locator: page.getByRole('dialog').filter({ has: page.getByPlaceholder('Enter name') }).last() },
     ];
 }
 

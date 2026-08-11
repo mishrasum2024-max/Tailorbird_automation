@@ -19,8 +19,10 @@
  *   Update Status – enabled only when a row with a toggle (Released row) is selected
  *   Release Units – enabled as soon as any row is checked
  *
- * Update Status dropdown options:
- *   Not in Reno | Released | Not Started | In Progress | Completed | Cancelled
+ * Update Status dropdown options (MCP-verified live 2026-08-11 — exactly 5, in this order;
+ * "Not Started" is a possible grid Status *value* a unit can show before any status has
+ * ever been set, but it is not itself a selectable option in this menu):
+ *   Not in Reno | Released | In Progress | Completed | Cancelled
  *
  * Release Units dialog:
  *   Title:    "Release Units with Scopes"
@@ -28,6 +30,8 @@
  *   Table headers: Units | Bid with material | Bid without material
  *   Action: "Release with Scopes"
  */
+
+const { healingLocator } = require('../utils/locatorHealer');
 
 function unitInteriorLocators(page) {
     return {
@@ -145,14 +149,36 @@ function unitInteriorLocators(page) {
         // ── Update Status dropdown menu ───────────────────────────────────────
         updateStatusMenu: page.getByRole('menu', { name: 'Update Status' }),
 
-        // Single menuitem by exact label
-        statusMenuOption: (name) => page.getByRole('menuitem', { name }),
+        // Single menuitem by exact label. MCP-verified live 2026-08-11: the menu's items
+        // carry no stable data-value/testid — only their accessible name/text and their
+        // fixed position distinguish them — so the 4 strategies below combine every
+        // genuinely independent signal available rather than 4 ways of doing the same
+        // role+name lookup: (1) unscoped role+name (original — kept unchanged), (2) the
+        // same role+name but scoped inside the named "Update Status" menu container (guards
+        // against an unrelated menuitem of the same name in some other open menu), (3) a
+        // plain CSS text-content match (a different code path from ARIA accessible-name
+        // resolution), (4) position within the confirmed-live-ordered 5-option list as a
+        // last resort.
+        statusMenuOption: (name) => {
+            const order = ['Not in Reno', 'Released', 'In Progress', 'Completed', 'Cancelled'];
+            const idx = order.indexOf(name);
+            const strategies = [
+                { name: 'role:menuitem[name](original)', locator: page.getByRole('menuitem', { name }) },
+                { name: 'role:menu[name=Update Status]>>menuitem[name]', locator: page.getByRole('menu', { name: 'Update Status' }).getByRole('menuitem', { name }) },
+                { name: 'css:[role=menuitem][hasText=name]', locator: page.locator('[role="menuitem"]').filter({ hasText: name }) },
+            ];
+            if (idx >= 0) {
+                strategies.push({ name: `position:menu[name=Update Status]>>menuitem[${idx}]`, locator: page.getByRole('menu', { name: 'Update Status' }).getByRole('menuitem').nth(idx) });
+            }
+            return healingLocator(strategies);
+        },
 
-        // All expected option labels in order (used for assertions)
+        // All expected option labels in order (used for assertions). MCP-verified live
+        // 2026-08-11 — exactly these 5, in this order; "Not Started" is a grid Status value,
+        // not a selectable option in this menu (see file header comment).
         EXPECTED_STATUS_OPTIONS: [
             'Not in Reno',
             'Released',
-            'Not Started',
             'In Progress',
             'Completed',
             'Cancelled',
