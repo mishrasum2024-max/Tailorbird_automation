@@ -53,6 +53,18 @@ exports.MultiYearBudgetJob = class MultiYearBudgetJob {
         Logger.success('Multi-Year Budget empty state ("Create Your Multi-Year Budget") verified');
     }
 
+    /**
+     * Distinct from the pre-plan empty state (verifyEmptyStateBeforePlan): a plan that was
+     * created with zero budget items selected is a valid, backend-accepted state (MCP-verified
+     * live 2026-08-11 — no client or server validation blocks it) that renders its own
+     * "no details yet" copy instead of the "Create Your Multi-Year Budget" CTA.
+     */
+    async verifyZeroItemPlanEmptyState() {
+        await expect(myb.noDetailsHeading).toBeVisible({ timeout: 15000 });
+        await expect(myb.noDetailsSubtext).toBeVisible();
+        Logger.success('Zero-item multi-year budget plan empty state ("No multi year budget details added yet") verified');
+    }
+
     async openInitializationDialog() {
         await myb.createPlanBtn.click();
         await expect(myb.initDialog).toBeVisible({ timeout: 10000 });
@@ -81,6 +93,22 @@ exports.MultiYearBudgetJob = class MultiYearBudgetJob {
         Logger.success('Multi-year budget plan created — table view now visible');
     }
 
+    /**
+     * Submitting with zero budget items selected is accepted by both client and server
+     * (MCP-verified live 2026-08-11 — the "Create Multi-Year Budget" submit button is never
+     * disabled by an empty selection), but it produces no treegrid at all — only the
+     * "No multi year budget details added yet" empty-content state — so this cannot reuse
+     * submitInitializationDialog()'s wait for myb.treegrid.
+     */
+    async submitInitializationDialogExpectingZeroItems() {
+        await expect(myb.initSubmitBtn).toBeEnabled({ timeout: 10000 });
+        await myb.initSubmitBtn.click();
+        await expect(myb.initDialog).not.toBeVisible({ timeout: 15000 });
+        const createdToast = this.page.getByText('Multi-year budget created');
+        await expect(createdToast).toBeVisible({ timeout: 15000 });
+        Logger.success('Multi-year budget plan created with zero budget items selected');
+    }
+
     // ===================== Plan Table View =====================
 
     async verifyPlanTableStructure(itemName) {
@@ -103,6 +131,56 @@ exports.MultiYearBudgetJob = class MultiYearBudgetJob {
     }
 
     /**
+     * A year several columns past the current one (e.g. 2032 when the visible viewport only
+     * ever showed 2026/2027) isn't merely scrolled off-screen — revo-grid virtualizes it out
+     * of the DOM entirely, so Playwright's scrollIntoViewIfNeeded() has nothing to find and
+     * times out (MCP-verified live 2026-08-11: confirmed via direct DOM inspection that the
+     * grid's own `revogr-scroll-virtual.horizontal` element mounts/unmounts a year's column as
+     * its scrollLeft changes, and that setting scrollLeft directly — not just visually
+     * scrolling — is what drives that mount/unmount, independent of any Playwright API).
+     * Walking scrollLeft in fixed steps and dispatching a 'scroll' event after each one
+     * (the component listens for that, not a Playwright-specific signal) brings the target
+     * year's column into the mounted DOM range so the rest of _headerForYear's existing
+     * precise scrollIntoViewIfNeeded()-based lookup can then find it normally. A no-op when
+     * the year is already mounted (e.g. 2026/2027, reachable without any of this).
+     */
+    async _ensureYearMountedInGrid(year) {
+        const yearLabel = myb.yearGroupHeader(year).first();
+        // A generous wait here (rather than a single-shot isVisible check) matters even for
+        // already-close years like 2026/2027: right after navigation the grid can still be
+        // mid-render, and a single-shot check racing that render was itself the cause of one
+        // regression already (MCP-verified 2026-08-11).
+        const alreadyVisible = await yearLabel.waitFor({ state: 'visible', timeout: 5000 }).then(() => true).catch(() => false);
+        if (alreadyVisible) return;
+
+        const scrollContainer = this.page.locator('revogr-scroll-virtual.horizontal').first();
+        if (await scrollContainer.count() === 0) return;
+
+        // MCP-verified live 2026-08-11 via direct DOM inspection: setting scrollLeft on this
+        // exact element (a Stencil/revo-grid custom element, not a plain overflow container)
+        // and dispatching a plain 'scroll' event after it is what drives which year-column the
+        // grid mounts — a synthetic WheelEvent dispatched at the treegrid has no effect at all
+        // (confirmed: scrollLeft never moved across 8 attempts), so this is not a fallback for
+        // a "nicer" native gesture, it is the only mechanism that works. Runs up to two full
+        // sweeps of the container's scroll range because a single step's post-scroll settle
+        // time can occasionally race the grid's own re-render (MCP-verified: the same target
+        // scrollLeft can take 350-500ms to actually mount its column).
+        const scrollWidth = await scrollContainer.evaluate((el) => el.scrollWidth).catch(() => 0);
+        const step = 200;
+        for (let attempt = 0; attempt < 2; attempt++) {
+            for (let target = 0; target <= scrollWidth; target += step) {
+                await scrollContainer.evaluate((el, left) => {
+                    el.scrollLeft = left;
+                    el.dispatchEvent(new Event('scroll', { bubbles: true }));
+                }, target).catch(() => {});
+                const found = await yearLabel.waitFor({ state: 'visible', timeout: 500 }).then(() => true).catch(() => false);
+                if (found) return;
+            }
+        }
+        Logger.info(`[MultiYearBudgetJob] Could not mount year ${year} in the grid after scanning scrollLeft 0-${scrollWidth} twice; the caller's own lookup will surface the failure.`);
+    }
+
+    /**
      * The plan table is a virtualized revo-grid: columns for years scrolled out of
      * view are not just visually hidden but entirely unmounted from the DOM, and
      * scrolling shifts which "Planned Budget"/"Current Budget"/"Variance" header
@@ -113,6 +191,7 @@ exports.MultiYearBudgetJob = class MultiYearBudgetJob {
      * label into view — is immune to that, unlike a positional nth() index.
      */
     async _headerForYear(headersLocator, year) {
+        await this._ensureYearMountedInGrid(year);
         const yearLabel = myb.yearGroupHeader(year).first();
         await yearLabel.scrollIntoViewIfNeeded();
         await expect(yearLabel).toBeVisible({ timeout: 15000 });
@@ -266,6 +345,75 @@ exports.MultiYearBudgetJob = class MultiYearBudgetJob {
         Logger.success(`Reallocated ${amount} from "${sourceLabelPattern}" (reason: "${reason}")`);
     }
 
+    /**
+     * Attempts a reallocation that is expected to be rejected server-side (e.g. the source
+     * year has insufficient Planned Budget — MCP-verified live: the "Reallocate from" dropdown
+     * does not filter out zero-balance years client-side, so this only surfaces as an error
+     * toast on Save, not a disabled Save button). Leaves the dialog open on failure, matching
+     * live behaviour, and dismisses the error toast via its own alert-scoped button — unlike
+     * the success toasts, error toasts do not auto-dismiss and will intercept clicks on
+     * anything underneath them (MCP-verified) if left alone.
+     */
+    async attemptReallocationExpectingFailure(sourceLabelPattern, amount, reason, expectedErrorText) {
+        await myb.editPlannedBudgetDialog.getByText('Reallocate', { exact: true }).click();
+        await myb.reallocateFromInput.click();
+        await myb.reallocateFromOption(sourceLabelPattern).first().click();
+        await myb.amountToReallocateInput.fill(String(amount));
+        await myb.editReasonInput.fill(reason);
+        await expect(myb.editSaveBtn).toBeEnabled({ timeout: 5000 });
+        await myb.editSaveBtn.click();
+        const errorAlert = this.page.getByRole('alert').filter({ hasText: expectedErrorText });
+        await expect(errorAlert, `Expected error toast containing "${expectedErrorText}"`).toBeVisible({ timeout: 10000 });
+        await expect(myb.editPlannedBudgetDialog, 'Dialog must stay open after a failed save').toBeVisible();
+        await errorAlert.getByRole('button').first().click().catch(() => { });
+        Logger.success(`Reallocation correctly rejected: "${expectedErrorText}"`);
+    }
+
+    /** Opens the "Reallocate from" dropdown and returns every listed option's accessible text. */
+    async getReallocateFromOptionTexts() {
+        await myb.reallocateFromInput.click();
+        await expect(myb.reallocateFromOptionsList.first()).toBeVisible({ timeout: 10000 });
+        return myb.reallocateFromOptionsList.allTextContents();
+    }
+
+    /** Fills the "Set amount" field and returns its displayed value without saving — used to
+     * observe client-side formatting/clamping (e.g. negative input) in isolation. */
+    async fillPlannedBudgetAmountAndReadDisplayed(amount) {
+        await myb.editPlannedBudgetDialog.getByText('Set amount', { exact: true }).click();
+        await myb.plannedBudgetAmountInput.fill(String(amount));
+        // The clamp (e.g. a negative amount -> $0.00) is not applied on the fill/input event
+        // itself — MCP-verified live 2026-08-11: immediately after fill('-5000') the field
+        // still read "-$5,000.00"; it only became "$0.00" once focus moved to the next field.
+        // Blurring here reproduces that same trigger before reading the corrected value back.
+        await myb.plannedBudgetAmountInput.blur();
+        return (await myb.plannedBudgetAmountInput.inputValue()).trim();
+    }
+
+    async assertEditSaveDisabled() {
+        await expect(myb.editSaveBtn).toBeDisabled();
+    }
+
+    /** Fills only the "Set amount" field, leaving Reason empty — used to verify Save stays
+     * disabled until Reason is provided (the amount alone is not sufficient). */
+    async fillSetAmountFieldOnly(amount) {
+        await myb.editPlannedBudgetDialog.getByText('Set amount', { exact: true }).click();
+        await myb.plannedBudgetAmountInput.fill(String(amount));
+    }
+
+    /** Fills only the Reallocate source + amount fields, leaving Reason empty — used to verify
+     * Save stays disabled until Reason is provided. */
+    async fillReallocateFieldsOnly(sourceLabelPattern, amount) {
+        await myb.editPlannedBudgetDialog.getByText('Reallocate', { exact: true }).click();
+        await myb.reallocateFromInput.click();
+        await myb.reallocateFromOption(sourceLabelPattern).first().click();
+        await myb.amountToReallocateInput.fill(String(amount));
+    }
+
+    async cancelEditPlannedBudgetDialog() {
+        await myb.editCancelBtn.click();
+        await expect(myb.editPlannedBudgetDialog).not.toBeVisible({ timeout: 5000 });
+    }
+
     // ===================== Toolbar: CSV Upload / Export =====================
 
     async openUploadCsvDialog() {
@@ -290,6 +438,38 @@ exports.MultiYearBudgetJob = class MultiYearBudgetJob {
     async closeDialog() {
         await this.page.keyboard.press('Escape');
         await this.page.waitForTimeout(500);
+    }
+
+    /**
+     * Uploads a local file through the Upload CSV dialog's Uploadcare "From device" picker.
+     * Uploadcare stages the file first (shows "1 file uploaded" + a Done button) before the
+     * app itself parses/validates it — Done must be clicked to trigger that validation.
+     */
+    async uploadCsvFile(filePath) {
+        const [fileChooser] = await Promise.all([
+            this.page.waitForEvent('filechooser'),
+            myb.uploadCsvFromDeviceBtn.click(),
+        ]);
+        await fileChooser.setFiles(filePath);
+        await expect(myb.uploadCsvDoneBtn).toBeEnabled({ timeout: 15000 });
+        await myb.uploadCsvDoneBtn.click();
+        Logger.success(`Uploaded CSV file: ${filePath}`);
+    }
+
+    /** Asserts the CSV upload dialog rejected the last-uploaded file with an inline error
+     * containing the given text, and that the dialog stayed open (no import happened). */
+    async verifyCsvUploadRejected(expectedErrorText) {
+        await expect(myb.csvErrorsAlert).toBeVisible({ timeout: 10000 });
+        await expect(myb.csvErrorsAlert, `Expected CSV error containing "${expectedErrorText}"`).toContainText(expectedErrorText);
+        await expect(myb.uploadCsvDialog).toBeVisible();
+        Logger.success(`CSV upload correctly rejected: "${expectedErrorText}"`);
+    }
+
+    /** Asserts the CSV upload succeeded and auto-created the given new budget item. */
+    async verifyCsvUploadCreatedNewItem(itemName) {
+        await expect(myb.csvImportCompletedAlert).toBeVisible({ timeout: 10000 });
+        await expect(myb.csvBudgetItemsCreatedAlert, `Expected "Budget items created" to list "${itemName}"`).toContainText(itemName);
+        Logger.success(`CSV upload auto-created new budget item: "${itemName}"`);
     }
 
     async exportCsv(downloadsDir = './downloads') {
@@ -339,6 +519,66 @@ exports.MultiYearBudgetJob = class MultiYearBudgetJob {
     async cancelSettingsDialog() {
         await myb.settingsCancelBtn.click();
         await expect(myb.settingsDialog).not.toBeVisible({ timeout: 5000 });
+    }
+
+    async applySettingsDialog() {
+        await myb.settingsApplyBtn.click();
+        await expect(myb.settingsDialog).not.toBeVisible({ timeout: 10000 });
+        Logger.success('Settings dialog applied');
+    }
+
+    async setHoldPeriodEndYear(value) {
+        await myb.holdPeriodEndYear.fill(String(value));
+    }
+
+    async getHoldPeriodEndYearValue() {
+        return (await myb.holdPeriodEndYear.inputValue()).trim();
+    }
+
+    // ===================== Item selection list (shared by Init + Settings dialogs) =====================
+
+    async searchItemSelectionList(term) {
+        await myb.itemSearchBox.fill(term);
+    }
+
+    async verifyNoItemsMatchSearchMessage() {
+        await expect(myb.noItemsMatchSearchText).toBeVisible({ timeout: 5000 });
+        Logger.success('"No items match your search." message verified for a non-matching search term');
+    }
+
+    async verifySelectAllAndDeselectAllDisabled() {
+        await expect(myb.selectAllItemsBtn).toBeDisabled();
+        await expect(myb.deselectAllItemsBtn).toBeDisabled();
+    }
+
+    async clickSelectAllItems() {
+        await myb.selectAllItemsBtn.click();
+    }
+
+    async clickDeselectAllItems() {
+        await myb.deselectAllItemsBtn.click();
+    }
+
+    async getItemCheckboxSummary() {
+        const total = await myb.allItemCheckboxes.count();
+        let checked = 0;
+        for (let i = 0; i < total; i++) {
+            if (await myb.allItemCheckboxes.nth(i).isChecked()) checked++;
+        }
+        return { total, checked };
+    }
+
+    // ===================== Property switcher search =====================
+
+    async searchPropertySwitcher(term) {
+        await myb.propertySwitcherButton.click();
+        await this.page.waitForTimeout(500);
+        await myb.propertySearchBox.fill(term);
+    }
+
+    async verifyNoPropertiesFoundMessage() {
+        await expect(myb.noPropertiesFoundText).toBeVisible({ timeout: 5000 });
+        Logger.success('"No properties found" message verified for a non-matching property search term');
     }
 
     // ===================== Toolbar: History =====================

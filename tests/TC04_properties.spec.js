@@ -297,7 +297,7 @@ test.describe('PROPERTY FLOW TEST SUITE', () => {
     // await prop.addColumnTakeOff('exterior');
   });
 
-  test('@sanity @regression @property TC59 â€“ asset viewer', async () => {
+  test('@sanity @regression @property TC59 Validate Asset Viewer dropdown options and verify each selection updates the displayed asset image successfully', async () => {
     await prop.goto(tcTakeoffsStartUrl);
     await prop.goToProperties();
     test.setTimeout(480000)

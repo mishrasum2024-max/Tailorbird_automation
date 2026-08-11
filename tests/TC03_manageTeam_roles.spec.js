@@ -59,7 +59,7 @@ test.describe("TC18 Manage Team — Roles (positive / negative / edge)", () => {
       Logger.success("[MT-roles-pos-02] ✅ Menu path to Manage Approvers with benchmark visible passed");
     });
 
-    test("TC38 @regression @manageTeam @roles Role matrix exposes Properties / Location columns", async ({
+    test("TC38 @regression @manageTeam @roles Validate role matrix displays Properties and Location column headers correctly.", async ({
       page,
     }) => {
       Logger.info("[MT-roles-pos-03] Starting: Role matrix column headers check");
@@ -70,7 +70,7 @@ test.describe("TC18 Manage Team — Roles (positive / negative / edge)", () => {
       Logger.success("[MT-roles-pos-03] ✅ Role matrix Properties / Location columns visible passed");
     });
 
-    test("TC39 @regression @manageTeam @roles Add role control is available", async ({ page }) => {
+    test("TC39 @regression @manageTeam @roles Validate role management page displays the Add Role button correctly", async ({ page }) => {
       Logger.info("[MT-roles-pos-04] Starting: Add role button availability check");
       const userRoleManagement = new ManageTeamRolesHelper(page);
       await userRoleManagement.gotoManageTeamRolesViaQuery();
@@ -82,7 +82,7 @@ test.describe("TC18 Manage Team — Roles (positive / negative / edge)", () => {
       Logger.success("[MT-roles-pos-04] ✅ Add role control available passed");
     });
 
-    test("TC40 @regression @manageTeam @roles Built-in or automation roles visible as column headers", async ({
+    test("TC40 @regression @manageTeam @roles Validate role management matrix displays built-in or automation roles as column headers including Editor, View Only, and E2E roles.", async ({
       page,
     }) => {
       Logger.info("[MT-roles-pos-05] Starting: Built-in and automation role column headers check");
@@ -102,7 +102,7 @@ test.describe("TC18 Manage Team — Roles (positive / negative / edge)", () => {
       Logger.success("[MT-roles-pos-05] ✅ Built-in / automation roles visible as column headers passed");
     });
 
-    test("TC41 @regression @manageTeam @roles Organization: Users ↔ Property access tabs switch cleanly", async ({
+    test("TC41 @regression @manageTeam @roles Organization: Validate Organization Users and Property Access tabs switch correctly and maintain the selected state.", async ({
       page,
     }) => {
       Logger.info("[MT-roles-pos-06] Starting: Organization Users ↔ Property access tab switching");

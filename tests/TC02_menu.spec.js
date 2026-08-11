@@ -64,7 +64,7 @@ test.afterAll(async () => {
 test.describe('Tailorbird Left Panel Flow - Modular', () => {
 
     test('TC07 @sanity @regression Verify all left panel menu options are available', async () => {
-       
+
         const actualLabels = await helper.getLeftPanelLabels(page);
 
         if (actualLabels.length === 0)
@@ -76,7 +76,7 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
         }
     });
 
-      test('TC08 @regression Verify each left panel menu item navigates to its correct URL when clicked',
+    test('TC08 @regression Verify each left panel menu item navigates to its correct URL when clicked',
         async () => {
             test.setTimeout(180000);
 
@@ -91,7 +91,7 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
             // ── S1: Direct nav items visible without any section expansion ───────────
             for (const item of [
                 { label: 'Properties', path: '/properties' },
-                { label: 'Approvals',  path: '/approvals'  },
+                { label: 'Approvals', path: '/approvals' },
             ]) {
                 await test.step(`S1: Click "${item.label}" → URL must contain "${item.path}"`, async () => {
                     Logger.info(`[TC22-S1] Clicking "${item.label}"`);
@@ -114,11 +114,11 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
             Logger.info('[TC22] Construction Management expanded — testing CM child routes');
 
             for (const item of [
-                { label: 'Projects',              path: '/projects'       },
-                { label: 'Jobs (Contracts & POs)', path: '/jobs'           },
-                { label: 'Bids',                  path: '/bids'           },
-                { label: 'Change Orders',         path: '/change-orders'  },
-                { label: 'Invoices',              path: '/invoices'       },
+                { label: 'Projects', path: '/projects' },
+                { label: 'Jobs (Contracts & POs)', path: '/jobs' },
+                { label: 'Bids', path: '/bids' },
+                { label: 'Change Orders', path: '/change-orders' },
+                { label: 'Invoices', path: '/invoices' },
             ]) {
                 await test.step(`S2: Click "${item.label}" (Construction Management) → URL must contain "${item.path}"`, async () => {
                     Logger.info(`[TC22-S2] Clicking "${item.label}"`);
@@ -139,8 +139,8 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
 
             for (const item of [
                 { label: 'Category', path: '/financials/category' },
-                { label: 'Budget',   path: '/financials/budget'   },
-                { label: 'CapEx',    path: '/financials/capex'    },
+                { label: 'Budget', path: '/financials/budget' },
+                { label: 'CapEx', path: '/financials/capex' },
             ]) {
                 await test.step(`S3: Click "${item.label}" (Financials nav) → URL must contain "${item.path}"`, async () => {
                     Logger.info(`[TC22-S3] Clicking "${item.label}" from Financials nav section`);
@@ -158,11 +158,11 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
             Logger.info('[TC22] Testing More overflow items — Trackers/Documents/Vendors');
 
             for (const item of [
-                { label: 'Unit Tracker',  path: '/unit-tracker'      },
-                { label: 'Asset Tracker', path: '/asset-tracker'     },
-                { label: 'Files',         path: '/documents/files'   },
-                { label: 'Images',        path: '/documents/images'  },
-                { label: 'Directory',     path: '/vendors/directory' },
+                { label: 'Unit Tracker', path: '/unit-tracker' },
+                { label: 'Asset Tracker', path: '/asset-tracker' },
+                { label: 'Files', path: '/documents/files' },
+                { label: 'Images', path: '/documents/images' },
+                { label: 'Directory', path: '/vendors/directory' },
             ]) {
                 await test.step(`S4: Click "${item.label}" (More menu) → URL must contain "${item.path}"`, async () => {
                     Logger.info(`[TC22-S4] Opening More menu for "${item.label}"`);
@@ -592,7 +592,7 @@ test.describe('TC02 Menu — Text assertions', () => {
             // the same page/session (another test in this file deliberately collapses it
             // as its own starting state) — a suite-order run can inherit that collapsed
             // state even though an isolated run of just this test never sees it.
-            await helper.ensureSectionExpanded(page, 'Construction Management').catch(() => {});
+            await helper.ensureSectionExpanded(page, 'Construction Management').catch(() => { });
             for (const label of [
                 'Properties', 'Approvals', 'Construction Management',
                 'Projects', 'Jobs (Contracts & POs)', 'Bids', 'Change Orders', 'Invoices',

@@ -66,7 +66,7 @@ test.describe('Tailorbird Login Flow', () => {
     });
   });
 
-  test('TC03 @sanity @login Login with another user successfully', async ({ browser }) => {
+  test('TC03 @sanity @login Login with another multiorganization user successfully', async ({ browser }) => {
     Logger.info('Starting Tailorbird login test...');
 
     context = await browser.newContext();
@@ -89,7 +89,7 @@ test.describe('Tailorbird Login Flow', () => {
     });
   });
 
-  test('TC04 @sanity @login Login with existing user which has only one organization', async ({ browser }) => {
+  test('TC04 @sanity @login Validate login with an existing single-organization user successfully', async ({ browser }) => {
     Logger.info('Starting Tailorbird login test...');
 
     context = await browser.newContext();
@@ -114,7 +114,7 @@ test.describe('Tailorbird Login Flow', () => {
 });
 
 test.describe('Regression — login (consolidated)', () => {
-  test('TC05 @regression @login Full login regression — negatives, edges, benchmarks, snapshots', async ({
+  test('TC05 @regression @login Validate login negative, edge, navigation, and visual scenarios.', async ({
     browser,
   }, testInfo) => {
     testInfo.setTimeout(600_000);
@@ -480,7 +480,7 @@ test.describe('TC01 Login — Text assertions', () => {
   const loginUrl = process.env.LOGIN_URL;
   const testEmail = process.env.TEST_EMAIL;
 
-  test('TC06 @login Full login text agent — email step, password step, all error states', async ({ browser }) => {
+  test('TC06 @login Validate login text and error messages for email, password, empty, malformed, and invalid credential scenarios including text visibility, accessibility, and properness checks.', async ({ browser }) => {
     Logger.info('[TEXT AGENT] Starting full login text scan — one context, sequential states');
     const ctx = await browser.newContext();
     const page = await ctx.newPage();
