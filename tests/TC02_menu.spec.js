@@ -500,7 +500,7 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
 
 });
 
-test.describe('TC02 Menu — Single-org user assertions', () => {
+test.describe('Tailorbird Left Panel Flow - Single-org user assertions', () => {
     test.use({ storageState: 'OneOrganizationUserSessionState.json' });
     test.setTimeout(60_000);
 
@@ -551,7 +551,7 @@ test.describe('TC02 Menu — Single-org user assertions', () => {
     });
 });
 
-test.describe('TC02 Menu — Text assertions', () => {
+test.describe('Tailorbird Left Panel Flow - Text assertions', () => {
     test.setTimeout(120_000);
     test.describe.configure({ retries: 1 });
     test('TC22 @menu @sanity Full nav text agent — all CTAs, labels, nav items, profile menu', async ({ page }) => {

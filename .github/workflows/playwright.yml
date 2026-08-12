@@ -45,8 +45,8 @@ jobs:
         run: npx playwright install
 
       # Run mandatory tests first in serial
-      - name: Run @mandatory tests
-        run: npx playwright test --grep "@mandatory" --workers=1
+      - name: Run @login tests
+        run: npx playwright test --grep "@login" --workers=1
 
       # Run all remaining tests except mandatory
       - name: Run remaining tests

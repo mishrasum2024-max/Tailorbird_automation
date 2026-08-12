@@ -113,7 +113,7 @@ test.describe('Tailorbird Login Flow', () => {
   });
 });
 
-test.describe('Regression — login (consolidated)', () => {
+test.describe('Tailorbird Login Flow', () => {
   test('TC05 @regression @login Validate login negative, edge, navigation, and visual scenarios.', async ({
     browser,
   }, testInfo) => {
@@ -474,13 +474,13 @@ test.describe('Regression — login (consolidated)', () => {
   });
 });
 
-test.describe('TC01 Login — Text assertions', () => {
+test.describe('Tailorbird Login Flow', () => {
   test.setTimeout(300_000);
 
   const loginUrl = process.env.LOGIN_URL;
   const testEmail = process.env.TEST_EMAIL;
 
-  test('TC06 @login Validate login text and error messages for email, password, empty, malformed, and invalid credential scenarios including text visibility, accessibility, and properness checks.', async ({ browser }) => {
+  test('TC06 @login Validate login text and error messages for email, password, empty and invalid credential scenarios.', async ({ browser }) => {
     Logger.info('[TEXT AGENT] Starting full login text scan — one context, sequential states');
     const ctx = await browser.newContext();
     const page = await ctx.newPage();
