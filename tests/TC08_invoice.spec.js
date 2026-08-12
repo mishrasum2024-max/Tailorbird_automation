@@ -907,7 +907,7 @@ test.describe('Verify Invoice tab', () => {
         });
     });
 
-    test('TC134 @regression @changeOrderAndinvoice : Surfaces (6 snapshots)', async () => {
+    test('TC134 @regression @changeOrderAndinvoice : UI visual validation (6 snapshots)', async () => {
         const loc = invoicePage.tc08Loc();
         const searchMask =
             (await loc.listSearchInput.isVisible({ timeout: 2000 }).catch(() => false))
@@ -1020,18 +1020,7 @@ test.describe('Verify Invoice tab', () => {
         await page.screenshot({ path: path.join(TC08_SNAPSHOT_DIR, 'invoice_after_confirm.png') });
     });
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // NEW CASE: TC136
-    // Coverage: global (portfolio-wide) Invoices page — reached via the left-nav
-    // "Invoices" link (distinct from the job-scoped Invoice tab used throughout
-    // this file) — export the invoice list and verify the exported CSV's
-    // "Invoice Number" column values are never formatted as dates.
-    // Confirmed via live MCP browser investigation: current data exports Invoice
-    // Number as plain quoted text (e.g. "Invoice #16837"), so this test passes
-    // today — it exists to catch a regression if a future export change causes
-    // Invoice Number values to render in date form.
-    // ─────────────────────────────────────────────────────────────────────────
-    test('TC136 @regression @changeOrderAndinvoice : Should export invoices from the global Invoices page (left nav) and verify every Invoice Number value in the CSV is logged and never formatted as a date', async () => {
+    test('TC136 @regression @changeOrderAndinvoice : Validate Invoices export and verify Invoice Number values are not formatted as dates', async () => {
         Logger.step('TC136: Navigate to global Invoices page via left nav and validate exported CSV Invoice Number formatting');
 
         // ── 1. Go to "Invoices" from the left nav (global, portfolio-wide page) ──

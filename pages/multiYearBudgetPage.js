@@ -445,12 +445,79 @@ exports.MultiYearBudgetJob = class MultiYearBudgetJob {
      * Uploadcare stages the file first (shows "1 file uploaded" + a Done button) before the
      * app itself parses/validates it — Done must be clicked to trigger that validation.
      */
+    /**
+     * page.waitForEvent('filechooser') after clicking "From device" works locally but is
+     * not reliably supported by GitHub Actions' headless CI runner for this Uploadcare
+     * widget (confirmed: TC409/TC410 fail on that exact wait in CI while passing locally).
+     * The same class of problem was already solved for the Budget revision CSV upload
+     * (pages/budgetPage.js's uploadFileInRevision / tryDirectFileInput, exercised by the
+     * @mandatory-tagged TC71, which is green in CI) by bypassing the native file-chooser
+     * dialog entirely and setting the file directly on Uploadcare's own hidden
+     * `<input type="file">`, which it mounts transiently once a "From device"-style trigger
+     * is clicked. Copied here verbatim (candidate list + polling loop, unchanged from
+     * budgetPage.js) and scoped to this dialog instead of budgetPage.js's revision-upload
+     * root, without modifying budgetPage.js itself — that already-passing @mandatory case
+     * is untouched. Two extra candidates are added (uc-file-uploader-inline) because this
+     * dialog's Uploadcare widget runs in "inline" mode rather than the "regular" modal mode
+     * budgetPage.js's own upload uses (MCP-verified live 2026-08-11); every original
+     * candidate is kept.
+     */
     async uploadCsvFile(filePath) {
-        const [fileChooser] = await Promise.all([
-            this.page.waitForEvent('filechooser'),
-            myb.uploadCsvFromDeviceBtn.click(),
-        ]);
-        await fileChooser.setFiles(filePath);
+        const path = require('path');
+        const fullPath = path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath);
+
+        const tryDirectFileInput = async (maxMs = 20000) => {
+            const deadline = Date.now() + maxMs;
+            const buildCandidates = () => [
+                myb.uploadCsvDialog.locator('input[type="file"]'),
+                this.page.locator('uc-file-uploader-regular input[type="file"]'),
+                this.page.locator('uc-file-uploader-regular').locator('input[type="file"]'),
+                this.page.locator('uc-file-uploader-inline input[type="file"]'),
+                this.page.locator('uc-file-uploader-inline').locator('input[type="file"]'),
+                this.page.locator('.mantine-FileButton-root input[type="file"]').first(),
+                this.page.locator('input[type="file"][accept*="csv"]'),
+                this.page.locator('input[type="file"]'),
+            ];
+            while (Date.now() < deadline) {
+                for (const loc of buildCandidates()) {
+                    try {
+                        const n = await loc.count();
+                        if (n === 0) continue;
+                        await loc.first().setInputFiles(fullPath, { timeout: 15000 });
+                        Logger.success('Attached CSV via file input (Uploadcare / hidden input)');
+                        return true;
+                    } catch {
+                        /* try next locator / next poll slice */
+                    }
+                }
+                await this.page.waitForTimeout(450);
+                await this.page.waitForLoadState('networkidle').catch(() => { });
+            }
+            return false;
+        };
+
+        if (!(await tryDirectFileInput(3000))) {
+            const fromDeviceVisible = await myb.uploadCsvFromDeviceBtn.isVisible({ timeout: 5000 }).catch(() => false);
+            if (fromDeviceVisible) {
+                let attachedViaFileChooser = false;
+                try {
+                    const [fileChooser] = await Promise.all([
+                        this.page.waitForEvent('filechooser', { timeout: 15000 }),
+                        myb.uploadCsvFromDeviceBtn.click(),
+                    ]);
+                    await fileChooser.setFiles(fullPath);
+                    attachedViaFileChooser = true;
+                } catch {
+                    Logger.info('[MultiYearBudget] No native filechooser event (expected in some CI environments) — falling back to direct <input type="file">');
+                }
+                if (!attachedViaFileChooser && !(await tryDirectFileInput())) {
+                    throw new Error('Upload CSV: neither the native filechooser event nor a direct <input type="file"> attach succeeded');
+                }
+            } else if (!(await tryDirectFileInput())) {
+                throw new Error('Upload CSV: no file upload control found (no "From device" button and no <input type="file">)');
+            }
+        }
+
         await expect(myb.uploadCsvDoneBtn).toBeEnabled({ timeout: 15000 });
         await myb.uploadCsvDoneBtn.click();
         Logger.success(`Uploaded CSV file: ${filePath}`);

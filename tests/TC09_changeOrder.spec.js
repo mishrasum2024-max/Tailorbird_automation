@@ -110,10 +110,6 @@ async function settleChangeOrderWorkspace(pg, ms = 2500) {
     if (ms > 0) await pg.waitForTimeout(ms);
 }
 
-/** Bird-table list search scoped to the VISIBLE CO tabpanel search input.
- *  `page.locator('main').getByPlaceholder('Search...').first()` picks by DOM order — which may
- *  be a hidden input from an inactive job tab (Job Summary, Bids, etc.). Using :visible ensures
- *  we only match the currently-active tab's search box. */
 function coWorkspaceListSearch(pg) {
     return pg.locator('main input[placeholder="Search..."]:visible').first();
 }
@@ -136,10 +132,6 @@ async function getFirstChangeOrderNumberLabel(pg) {
     return m ? m[0].replace(/\s+/g, ' ').trim() : null;
 }
 
-/** Expand line-item region inside Change Order Details (chevron / BirdTable), same idea as invoice TC08. */
-/**
- * BirdTable / job workspace search is not always `tc08Loc().listSearchInput`; try common fallbacks.
- */
 async function getCoWorkspaceListSearch(pg, loc) {
     const candidates = [
         loc.listSearchInput,
@@ -170,7 +162,7 @@ async function expandChangeOrderLineGridIfCollapsed(pg) {
     for (let i = 0; i < Math.min(n, 12); i++) {
         const btn = toggles.nth(i);
         if (!(await btn.isVisible().catch(() => false))) continue;
-        await btn.click({ force: true }).catch(() => {});
+        await btn.click({ force: true }).catch(() => { });
         await pg.waitForTimeout(220);
         const headerOk = await dlg
             .locator('[role="columnheader"]')
@@ -389,7 +381,7 @@ test.describe('Verify Change order tab', () => {
     test.describe('TC95 - Complete change order with snapshot', () => {
         test.describe.configure({ retries: 1 });
 
-        test('TC145 @regression @changeOrder @changeOrderAndinvoice : Should add complete change order with all fields, verify values, and assert snapshot/Revised Contract Amount', async ({}, testInfo) => {
+        test('TC145 @regression @changeOrder @changeOrderAndinvoice : Validate complete Change Order creation and verify contract and revised amounts', async ({ }, testInfo) => {
             testInfo.setTimeout(180000);
             Logger.step('Creating complete change order with all fields...');
             await page.waitForLoadState('load');
@@ -431,7 +423,7 @@ test.describe('Verify Change order tab', () => {
 
             expect(currentContract).toBeGreaterThan(0);
             expect(revisedContract).toBeGreaterThan(0);
-  
+
             Logger.success(`Snapshot asserted: Current Contract Value, Revised Contract Amount, and Change Order Amount exist.`);
         });
     });
@@ -580,10 +572,10 @@ test.describe('Verify Change order tab', () => {
             test.skip(true, 'Search disabled (empty CO list) — empty workspace verified, search scenario not applicable');
         }
         await search.fill('__CO_NEG_NO_MATCH_Ω__');
-        await page.keyboard.press('Enter').catch(() => {});
+        await page.keyboard.press('Enter').catch(() => { });
         await page.waitForTimeout(2000);
         await search.fill('');
-        await page.keyboard.press('Enter').catch(() => {});
+        await page.keyboard.press('Enter').catch(() => { });
         await page.waitForTimeout(600);
         await expect(coCreateButton(page)).toBeVisible({ timeout: 15000 });
         await expect(page).toHaveURL(/change|order|contract|invoices|jobs/i);
@@ -611,7 +603,7 @@ test.describe('Verify Change order tab', () => {
         await page.waitForTimeout(600);
         const stillOpen = await dlg.isVisible({ timeout: 2000 }).catch(() => false);
         if (stillOpen) {
-            await invoicePage.goBackToChangeOrderList().catch(() => {});
+            await invoicePage.goBackToChangeOrderList().catch(() => { });
         }
         await expect(coCreateButton(page)).toBeVisible({ timeout: 15000 });
     });
@@ -674,7 +666,7 @@ test.describe('Verify Change order tab', () => {
         await search.fill('__PROBE__');
         await page.waitForTimeout(1500);
         await search.fill('');
-        await page.keyboard.press('Enter').catch(() => {});
+        await page.keyboard.press('Enter').catch(() => { });
         await page.waitForTimeout(500);
         await expect(page.locator('main').first()).toBeVisible({ timeout: 10000 });
         await expect(coCreateButton(page)).toBeVisible({ timeout: 15000 });
@@ -756,10 +748,10 @@ test.describe('Verify Change order tab', () => {
             test.skip(true, 'Search disabled (empty CO list) — empty workspace verified, whitespace search scenario not applicable');
         }
         await search.fill('   ');
-        await page.keyboard.press('Enter').catch(() => {});
+        await page.keyboard.press('Enter').catch(() => { });
         await page.waitForTimeout(800);
         await search.fill('');
-        await page.keyboard.press('Enter').catch(() => {});
+        await page.keyboard.press('Enter').catch(() => { });
         await page.waitForTimeout(500);
         await expect(page.locator('main').first()).toBeVisible({ timeout: 10000 });
         await expect(coCreateButton(page)).toBeVisible({ timeout: 15000 });
@@ -835,7 +827,7 @@ test.describe('Verify Change order tab', () => {
         const titleInput = page.getByPlaceholder('Enter title').first();
         await titleInput.waitFor({ state: 'visible', timeout: 15000 });
         await titleInput.fill('      .');
-        await titleInput.blur().catch(() => {});
+        await titleInput.blur().catch(() => { });
         await page.waitForTimeout(500);
 
         // Attempt to progress through the CO confirmation flow (Review Changes → Confirm Changes)
@@ -869,8 +861,8 @@ test.describe('Verify Change order tab', () => {
         ).toBe(false);
 
         // Clean up — go back to CO list
-        await invoicePage.goBackToChangeOrderList().catch(() => page.goBack().catch(() => {}));
-        await expect(page).toHaveURL(/change.order/i, { timeout: 10000 }).catch(() => {});
+        await invoicePage.goBackToChangeOrderList().catch(() => page.goBack().catch(() => { }));
+        await expect(page).toHaveURL(/change.order/i, { timeout: 10000 }).catch(() => { });
     });
 
     test('TC167 @regression @missingCO @changeOrderAndinvoice : Missing — list probe search then clear restores grid chrome', async () => {
@@ -887,7 +879,7 @@ test.describe('Verify Change order tab', () => {
         await search.fill('__CO_PROBE_MIN__');
         await page.waitForTimeout(1200);
         await search.fill('');
-        await page.keyboard.press('Enter').catch(() => {});
+        await page.keyboard.press('Enter').catch(() => { });
         await page.waitForTimeout(800);
         await expect(coCreateButton(page)).toBeVisible({ timeout: 15000 });
 

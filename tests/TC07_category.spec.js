@@ -382,7 +382,7 @@ test.describe('Verify category tab', () => {
     // ─────────────────────────────────────────────────────────────────────────
     // TC297 — Manage Columns (Hide/Restore & Order)
     // ─────────────────────────────────────────────────────────────────────────
-    test('TC106 @regression @capex — Manage Columns: all 9 columns listed, hide removes from grid, restore brings back, all present after multi-toggle', async ({ page }) => {
+    test('TC106 @regression @capex — Manage Columns: Validate CapEx column hide and restore functionality successfully', async ({ page }) => {
         const capex = new CapexPage(page);
 
         await capex.goto();
