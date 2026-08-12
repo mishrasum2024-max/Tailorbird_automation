@@ -43,7 +43,7 @@ async function openJobsWorkspaceFromLeftNav(page) {
     await page.waitForURL(/\/jobs|tab=jobs/i, { timeout: 15000 }).catch(() => { });
 }
 
-test.describe('Verify Create Project and Add Job flow', () => {
+test.describe('Project and Jobs', () => {
 
     test.beforeEach(async ({ page: p }) => {
         page = p;
@@ -777,7 +777,7 @@ test.describe('Verify Create Project and Add Job flow', () => {
         }
     });
 
-    test('TC85 @regression @projectAndJob : Jobs positive user journey assertions', async () => {
+    test('TC85 @regression @projectAndJob : Verify Jobs page search, export, and create job functionality', async () => {
         await test.step('P1: Open target project and Jobs tab successfully', async () => {
             await openJobsWorkspaceFromLeftNav(page);
             await expect(page).toHaveURL(/\/jobs|tab=jobs/i);
@@ -812,7 +812,7 @@ test.describe('Verify Create Project and Add Job flow', () => {
         });
     });
 
-    test('TC86 @regression @projectAndJob : Jobs negative and missing validations', async () => {
+    test('TC86 @regression @projectAndJob : Verify Jobs page validation for invalid and empty inputs', async () => {
         await test.step('N1: Empty Create Job submit should remain guarded', async () => {
             await openJobsWorkspaceFromLeftNav(page);
             await projectPage.openCreateJobModal();
@@ -859,7 +859,7 @@ test.describe('Verify Create Project and Add Job flow', () => {
         });
     });
 
-    test('TC87 @regression @projectAndJob : Jobs edge and stress interactions', async () => {
+    test('TC87 @regression @projectAndJob : Verify Jobs page handles long input and repeated actions', async () => {
         await test.step('E1: Long search strings should be accepted and recover', async () => {
             await openJobsWorkspaceFromLeftNav(page);
             const search = projectPage.tc05Loc().mainSearchInput;
@@ -894,7 +894,7 @@ test.describe('Verify Create Project and Add Job flow', () => {
         });
     });
 
-    test('TC88 @regression @projectAndJob : Jobs visual assurance across states', async () => {
+    test('TC88 @regression @projectAndJob : Jobs visual assertions', async () => {
         const loc = projectPage.tc05Loc();
         const shotMain = { ...JOB_VISUAL_ASSERT, mask: [loc.mainSearchInput] };
 
@@ -947,7 +947,7 @@ test.describe('Verify Create Project and Add Job flow', () => {
         });
     });
 
-    test('@regression @projectAndJob TC89 - Reject job creation with whitespace-only title', async () => {
+    test('TC89 @regression @projectAndJob : Reject job creation with whitespace-only title', async () => {
         await openJobsWorkspaceFromLeftNav(page);
         await projectPage.openCreateJobModal();
 

@@ -83,13 +83,13 @@ test.afterAll(async () => {
   await sharedBrowserContext.close();
 });
 
-test.describe('Manage Organization Flow ', () => {
+test.describe('Manage Organization', () => {
   test.beforeEach(async () => {
     await organizationHelper.gotoOrganizationWorkspace();
     await applyWorkspaceZoom(sharedPage);
   });
 
-  test('@sanity @regression TC23 - Invite new user to organization with Member role', async () => {
+  test('TC22 @sanity @regression - Invite new user to organization with Member role', async () => {
     const invitedEmail = `member_${Date.now()}@yopmail.com`;
     Logger.info(`[TC23] Starting: invite new Member — ${invitedEmail}`);
     await organizationHelper.inviteUser(invitedEmail, 'Member');
@@ -103,7 +103,7 @@ test.describe('Manage Organization Flow ', () => {
     Logger.success(`[TC23] ✅ Member user invited and verified: ${invitedEmail}`);
   });
 
-  test('@sanity @regression TC24 - Invite new user to organization with Admin role', async () => {
+  test('TC23 @sanity @regression - Invite new user to organization with Admin role', async () => {
     const invitedEmail = `admin_${Date.now()}@yopmail.com`;
     Logger.info(`[TC24] Starting: invite new Admin — ${invitedEmail}`);
     await organizationHelper.inviteUser(invitedEmail, 'Admin');
@@ -117,7 +117,7 @@ test.describe('Manage Organization Flow ', () => {
     Logger.success(`[TC24] ✅ Admin user invited and verified: ${invitedEmail}`);
   });
 
-  test('@sanity @regression TC25 - Revoke user invitation to organization', async () => {
+  test('TC24 @sanity @regression - Revoke user invitation to organization', async () => {
     const invitedEmail = `revoke_${Date.now()}@yopmail.com`;
     Logger.info(`[TC25] Starting: invite then revoke — ${invitedEmail}`);
     // MCP-verified live (2026-07-29): an invited Admin's row in the Users grid renders only
@@ -138,7 +138,7 @@ test.describe('Manage Organization Flow ', () => {
     Logger.success(`[TC25] ✅ Invitation revoked — user no longer in list: ${invitedEmail}`);
   });
 
-  test('@sanity @regression TC26 - Resend user invitation to organization', async () => {
+  test('TC25 @sanity @regression - Resend user invitation to organization', async () => {
     const invitedEmail = `resend_${Date.now()}@yopmail.com`;
     Logger.info(`[TC26] Starting: invite then resend — ${invitedEmail}`);
     // MCP-verified live (2026-07-29): same structural constraint as TC25 — an invited Admin's
@@ -160,7 +160,7 @@ test.describe('Manage Organization Flow ', () => {
     Logger.success(`[TC26] ✅ Invitation resent successfully: ${invitedEmail}`);
   });
 
-  test('@sanity @regression TC27 - Edit user role to organization', async () => {
+  test('TC26 @sanity @regression - Edit user role to organization', async () => {
     const existingAdminEmail = 'tailorbird-admin@tailorbird.us';
     Logger.info(`[TC27] Starting: toggle role for ${existingAdminEmail}`);
     await organizationHelper.search(existingAdminEmail);
@@ -175,7 +175,7 @@ test.describe('Manage Organization Flow ', () => {
     Logger.success(`[TC27] ✅ Role toggled and verified for ${existingAdminEmail}: ${toggledRole}`);
   });
 
-  test('@sanity @regression TC36 - Property access users list validation and property assignment increments count by one', async () => {
+  test('TC27 @sanity @regression - Validate property access and users list validation', async () => {
     Logger.info('[TC36] Starting: Property access user-centric list validation + property assignment');
 
     // Steps 1-2: Manage Organization is already loaded (beforeEach, lands on the Users
@@ -388,7 +388,7 @@ async function expectInviteBlockingFeedback(organizationHelperInstance, sharedTe
   }).toPass({ intervals: [200, 500, 1000], timeout: 15_000 });
 }
 
-test.describe('Regression — organization invite validation, search, snapshot', () => {
+test.describe('Manage Organization', () => {
   test.beforeEach(async ({}, testInfo) => {
     await organizationHelper.gotoOrganizationWorkspace();
     await applyWorkspaceZoom(sharedPage);
@@ -407,7 +407,7 @@ test.describe('Regression — organization invite validation, search, snapshot',
     Logger.success('[TC28] ✅ Empty email invite correctly blocked');
   });
 
-  test('TC29 @regression @organization Malformed email: invite blocked or shows validation', async () => {
+  test('TC29 @regression @organization invalid email: invite blocked or shows validation', async () => {
     Logger.info('[TC29] Starting: malformed email invite must be blocked with validation');
     const inviteUserPanel = await organizationHelper.openInvite();
     InteractionLogger.logFormFill('Email', 'not-a-valid-email-string', false);
@@ -463,7 +463,7 @@ test.describe('Regression — organization invite validation, search, snapshot',
     Logger.success('[TC33] ✅ Invite user button visible in workspace');
   });
 
-  test('TC34 @regression @organization Visual snapshot: organization main workspace', async () => {
+  test('TC34 @regression @organization Visual assertions: organization main workspace', async () => {
     Logger.info('[TC34] Starting: visual snapshot of organization main workspace');
     await expect(sharedPage.locator('.mantine-AppShell-main').first()).toHaveScreenshot(
       'organization-main-workspace.png',
@@ -476,10 +476,10 @@ test.describe('Regression — organization invite validation, search, snapshot',
 });
 
 // ─── Text Agent ───────────────────────────────────────────────────────────────
-test.describe('TC03 Manage Organization — Text Agent (live MCP browser scan)', () => {
+test.describe('Manage Organization', () => {
   test.setTimeout(120_000);
 
-  test('TC35 @organization @sanity Full organization workspace text agent — tabs, CTA buttons, table columns, search', async ({ browser }) => {
+  test('TC35 @organization @sanity Verify Organization page tabs, search, and user table', async ({ browser }) => {
     const dashboardBase = process.env.DASHBOARD_URL || organizationFixture.dashboardUrl;
     test.skip(!dashboardBase, 'DASHBOARD_URL or fixture dashboard required');
     const orgUrl = new URL('/organization', new URL(dashboardBase).origin).href;

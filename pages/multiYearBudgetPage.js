@@ -464,6 +464,7 @@ exports.MultiYearBudgetJob = class MultiYearBudgetJob {
      */
     async uploadCsvFile(filePath) {
         const path = require('path');
+        // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- filePath is always a hard-coded test-fixture path passed by our own spec files (e.g. TC26_MultiYearBudget.spec.js), never external/user-controlled input.
         const fullPath = path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath);
 
         const tryDirectFileInput = async (maxMs = 20000) => {

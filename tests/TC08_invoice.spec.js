@@ -75,7 +75,7 @@ async function expandInvoiceDetailsGridIfCollapsed(page) {
         .catch(() => false);
 }
 
-test.describe('Verify Invoice tab', () => {
+test.describe('Invoice tab', () => {
     test.describe.configure({ retries: 1 });
 
     test.beforeEach(async ({ page: p }) => {
@@ -241,7 +241,7 @@ test.describe('Verify Invoice tab', () => {
         Logger.success('TC111: Invoice created with budget category and saved');
     });
 
-    test('TC112 @regression @changeOrderAndinvoice : Should verify invoice stats are displayed', async () => {
+    test('TC112 @regression @changeOrderAndinvoice : Verify Current Contract, Contract Remaining, approved & Pending Invoices are displayed', async () => {
         // Get invoice statistics
         const stats = await invoicePage.getInvoiceStats();
 
@@ -662,7 +662,7 @@ test.describe('Verify Invoice tab', () => {
         Logger.success('Invoice data exported successfully.');
     });
 
-    test('TC127 @regression @changeOrderAndinvoice : Should verify invoice stats update after adding invoice with budget category', async () => {
+    test('TC127 @regression @changeOrderAndinvoice : Should verify invoice stats update after adding invoice', async () => {
         Logger.step('TC127: Verifying invoice stats with budget category...');
         await page.waitForLoadState('load');
         await page.waitForTimeout(2000);
@@ -800,7 +800,7 @@ test.describe('Verify Invoice tab', () => {
         maxDiffPixelRatio: 0.07,
     };
 
-    test('TC131 @regression @changeOrderAndinvoice : List, stats, search resilience', async () => {
+    test('TC131 @regression @changeOrderAndinvoice : Verify Invoice list, stats, and search', async () => {
         const loc = invoicePage.tc08Loc();
 
         await test.step('P1 — Invoice workspace structure (positive)', async () => {
@@ -845,7 +845,7 @@ test.describe('Verify Invoice tab', () => {
         });
     });
 
-    test('TC132 @regression @changeOrderAndinvoice : Junk search + create dismissed', async () => {
+    test('TC132 @regression @changeOrderAndinvoice : Verify invoice search can be cleared and create invoice can be cancelled', async () => {
         const loc = invoicePage.tc08Loc();
 
         await test.step('N1 — Junk search then clear; stay on Invoices', async () => {
@@ -872,7 +872,7 @@ test.describe('Verify Invoice tab', () => {
         });
     });
 
-    test('TC133 @regression @changeOrderAndinvoice : Tabs, long search, grid expand', async () => {
+    test('TC133 @regression @changeOrderAndinvoice : Verify switching between Invoices and Change Orders and opening invoice details', async () => {
         const loc = invoicePage.tc08Loc();
         await expect(page).toHaveURL(/tab=invoices/);
         await invoicePage.waitForInvoiceWorkspaceSettled(5000);
@@ -907,7 +907,7 @@ test.describe('Verify Invoice tab', () => {
         });
     });
 
-    test('TC134 @regression @changeOrderAndinvoice : UI visual validation (6 snapshots)', async () => {
+    test('TC134 @regression @changeOrderAndinvoice : Visual assertions', async () => {
         const loc = invoicePage.tc08Loc();
         const searchMask =
             (await loc.listSearchInput.isVisible({ timeout: 2000 }).catch(() => false))
@@ -967,7 +967,7 @@ test.describe('Verify Invoice tab', () => {
         });
     });
 
-    test('@regression @changeOrderAndinvoice TC135 - Reject invoice confirmation with whitespace-only title', async () => {
+    test('TC135 @regression @changeOrderAndinvoice : Reject invoice confirmation with whitespace-only title', async () => {
         await invoicePage.navigateToInvoiceTab();
 
         // Create the invoice stub — navigates to /invoices/:id
@@ -1020,7 +1020,7 @@ test.describe('Verify Invoice tab', () => {
         await page.screenshot({ path: path.join(TC08_SNAPSHOT_DIR, 'invoice_after_confirm.png') });
     });
 
-    test('TC136 @regression @changeOrderAndinvoice : Validate Invoices export and verify Invoice Number values are not formatted as dates', async () => {
+    test('TC136 @regression @changeOrderAndinvoice : Verify exported Invoice Number values are not formatted as dates', async () => {
         Logger.step('TC136: Navigate to global Invoices page via left nav and validate exported CSV Invoice Number formatting');
 
         // ── 1. Go to "Invoices" from the left nav (global, portfolio-wide page) ──

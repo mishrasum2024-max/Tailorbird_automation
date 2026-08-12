@@ -238,20 +238,9 @@ class UnitInteriorPage {
     }
 
     /** Returns true when the › expand toggle button is visible for the given unit row. */
-    /**
-     * A single isVisible({timeout:2000}) check here raced the grid's own render at least
-     * once live (CI/local run 2026-08-11): the error-context snapshot captured at the moment
-     * of that failure showed the row already had its "›" button and "Released" status a few
-     * hundred ms later, meaning the row genuinely existed — the first check just ran before
-     * it finished mounting. waitFor(...).catch() gives the row a real chance to settle
-     * (matching this grid's own virtualized-render timing elsewhere in this suite) instead of
-     * a single point-in-time snapshot, while still returning false (not throwing) for a unit
-     * that truly has no toggle button.
-     */
     async unitHasToggleButton(unitNumber) {
         const hasToggle = await this.loc.rowToggleBtnByUnitNum(unitNumber)
-            .waitFor({ state: 'visible', timeout: 6000 })
-            .then(() => true)
+            .isVisible({ timeout: 2000 })
             .catch(() => false);
         Logger.info(`[UnitInterior] Unit ${unitNumber} has toggle (› button): ${hasToggle}`);
         return hasToggle;
@@ -479,10 +468,10 @@ class UnitInteriorPage {
      *
      * @param {number[]} unitNumbers
      * @param {string}   preferA  default 'In Progress'
-     * @param {string}   preferB  default 'Completed'
+     * @param {string}   preferB  default 'Not Started'
      * @returns {string} target status applied
      */
-    async updateStatusConditional(unitNumbers, preferA = 'In Progress', preferB = 'Completed') {
+    async updateStatusConditional(unitNumbers, preferA = 'In Progress', preferB = 'Not Started') {
         Logger.info(`[UnitInterior] Conditional update for units ${unitNumbers.join(', ')}`);
         const current = await this.getUnitStatus(unitNumbers[0]);
         let target;

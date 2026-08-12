@@ -61,7 +61,7 @@ test.afterAll(async () => {
 });
 
 
-test.describe('Tailorbird Left Panel Flow - Modular', () => {
+test.describe('Left Panel - Modular', () => {
 
     test('TC07 @sanity @regression Verify all left panel menu options are available', async () => {
 
@@ -500,7 +500,7 @@ test.describe('Tailorbird Left Panel Flow - Modular', () => {
 
 });
 
-test.describe('Tailorbird Left Panel Flow - Single-org user assertions', () => {
+test.describe('Left Panel - Single-org user', () => {
     test.use({ storageState: 'OneOrganizationUserSessionState.json' });
     test.setTimeout(60_000);
 
@@ -551,10 +551,10 @@ test.describe('Tailorbird Left Panel Flow - Single-org user assertions', () => {
     });
 });
 
-test.describe('Tailorbird Left Panel Flow - Text assertions', () => {
+test.describe('Left Panel - Text assertions', () => {
     test.setTimeout(120_000);
     test.describe.configure({ retries: 1 });
-    test('TC22 @menu @sanity Full nav text agent — all CTAs, labels, nav items, profile menu', async ({ page }) => {
+    test('TC21 @menu @sanity Full nav text agent — all CTAs, labels, nav items, profile menu', async ({ page }) => {
         test.skip(!process.env.DASHBOARD_URL, 'DASHBOARD_URL required');
         // beforeEach already navigated to DASHBOARD_URL and set up auth session
         InteractionLogger.logNavigation(process.env.DASHBOARD_URL, 'Dashboard — left nav Text Agent');

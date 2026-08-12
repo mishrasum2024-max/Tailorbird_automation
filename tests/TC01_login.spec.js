@@ -14,7 +14,7 @@ const LOGIN_SCREENSHOT_OPTIONS = {
   maxDiffPixelRatio: 0.3,
 };
 
-test.describe('Tailorbird Login Flow', () => {
+test.describe('Login Flow', () => {
   let context;
   let page;
   let login;
@@ -113,7 +113,7 @@ test.describe('Tailorbird Login Flow', () => {
   });
 });
 
-test.describe('Tailorbird Login Flow', () => {
+test.describe('Login Flow', () => {
   test('TC05 @regression @login Validate login negative, edge, navigation, and visual scenarios.', async ({
     browser,
   }, testInfo) => {
@@ -474,7 +474,7 @@ test.describe('Tailorbird Login Flow', () => {
   });
 });
 
-test.describe('Tailorbird Login Flow', () => {
+test.describe('Login Flow', () => {
   test.setTimeout(300_000);
 
   const loginUrl = process.env.LOGIN_URL;

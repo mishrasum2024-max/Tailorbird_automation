@@ -22,35 +22,8 @@ function vendorLocators(page) {
             { name: 'css:button:has(svg.lucide-funnel)[first](original)', locator: page.locator('button:has(svg.lucide-funnel)').first() },
             { name: 'role:button[name=Filter]', locator: page.getByRole('button', { name: 'Filter', exact: true }) },
         ]),
-        // MCP-verified live 2026-08-11: original icon-class expression kept as primary (it
-        // does resolve correctly), padded with 3 independently-verified fallbacks — accessible
-        // name, the shared `data-table-action` toolbar attribute + text, and position (index 3)
-        // within the same confirmed 4-button toolbar group used for viewDropdownBtn above.
-        exportBtn: healingLocator([
-            { name: 'css:button:has(svg.lucide-download)[first](original)', locator: page.locator('button:has(svg.lucide-download)').first() },
-            { name: 'role:button[name=Export,exact]', locator: page.getByRole('button', { name: 'Export', exact: true }) },
-            { name: 'css:button[data-table-action=true][hasText=Export]', locator: page.locator('button[data-table-action="true"]').filter({ hasText: 'Export' }).first() },
-            { name: 'css:main>>button[data-table-action=true][nth=3]', locator: page.locator('main').locator('button[data-table-action="true"]').nth(3) },
-        ]),
-        // MCP-verified live 2026-08-11: the previous expression — "first button under
-        // <main>" — actually resolves to the sidebar's "Open navigation" hamburger toggle
-        // (confirmed via direct DOM query: the real first `<main> button` has
-        // aria-label="Open navigation" and no visible text at all), not the "View" button.
-        // The `.or()` fallback (a "Overview" tabpanel button) never matches on this page
-        // either, so the whole locator was silently pointing at the wrong control — the
-        // soft `isVisible().catch(() => false)` guard around its one call site
-        // (viewColumnExportFlow) meant this never surfaced as a failure, it just silently
-        // toggled the sidebar instead of exercising the View control at all. Replaced with
-        // 4 independently-verified strategies: accessible name (primary — matches live),
-        // the button's own distinctive lucide icon class, its shared `data-table-action`
-        // toolbar attribute combined with its text, and its position (index 1) within that
-        // same confirmed-live-ordered 4-button toolbar group (Filter, View, Table, Export).
-        viewDropdownBtn: healingLocator([
-            { name: 'role:button[name=View,exact]', locator: page.getByRole('button', { name: 'View', exact: true }) },
-            { name: 'css:button:has(svg.lucide-bookmark-plus)[first]', locator: page.locator('button:has(svg.lucide-bookmark-plus)').first() },
-            { name: 'css:button[data-table-action=true][hasText=View]', locator: page.locator('button[data-table-action="true"]').filter({ hasText: 'View' }).first() },
-            { name: 'css:main>>button[data-table-action=true][nth=1]', locator: page.locator('main').locator('button[data-table-action="true"]').nth(1) },
-        ]),
+        exportBtn: page.locator('button:has(svg.lucide-download)').first(),
+        viewDropdownBtn: page.locator('main').getByRole('button').first().or(page.getByRole('tabpanel', { name: 'Overview' }).getByRole('button').first()),
         addColumnBtn: page.getByTestId('bt-add-column').first().or(page.locator('main').locator('[data-testid="bt-add-column"]').first()),
         manageColumnsBtn: page.locator('button:has(svg.lucide-settings)').first(),
 
