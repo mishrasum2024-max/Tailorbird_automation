@@ -10,6 +10,7 @@ const PropertiesHelper = require('../pages/properties');
 const { CapexPage } = require('../pages/capexPage');
 const { CapexColumnPersistencePage } = require('../pages/capexColumnPersistencePage');
 const { CapexGridStabilityPage } = require('../pages/capexGridStabilityPage');
+const { AddColumnPage } = require('../pages/addColumnPage');
 const { ensureLeftPanelExpanded } = require('../utils/leftPanelExpander');
 
 test.use({
@@ -138,32 +139,10 @@ test.describe('Category tab', () => {
     test('TC99 @regression @category : Verify Add data option is working as expected', async () => {
         await financialsCategoryPage.goToCategory();
         await expect(page).toHaveURL(/\/category/);
-        await page.getByTestId('bt-table-action').click();
-        const addColumnMenuItem = page.getByTestId('bt-table-action-add-column')
-            .or(page.getByRole('menuitem', { name: /Add custom column|Add column/i }))
-            .first();
-        await expect(addColumnMenuItem).toBeVisible({ timeout: 10000 });
-        await addColumnMenuItem.click();
-        const columnNameInput = page.getByRole('textbox', { name: /Enter column name/i })
-            .or(page.getByPlaceholder(/Enter column name/i))
-            .first();
-        const columnDescInput = page.getByRole('textbox', { name: /Enter column description/i })
-            .or(page.getByPlaceholder(/Enter column description/i))
-            .first();
-        await expect(columnNameInput).toBeVisible({ timeout: 10000 });
-        await columnNameInput.fill('Test Column');
-        await columnDescInput.fill('This is a test description.');
-        const addColumnBtn = page.getByRole('button', { name: /^Add column$/i }).last();
-        await expect(addColumnBtn).toBeEnabled({ timeout: 5000 });
-        await addColumnBtn.click();
-        await expect(columnNameInput).toBeHidden({ timeout: 10000 });
-        await page.getByTestId('bt-table-action').click();
-        await page.getByTestId('bt-table-action-hide-show-columns').click();
-        await expect(
-            page.getByRole('dialog', { name: 'Manage Columns' })
-                .or(page.locator('section[role="dialog"]').filter({ hasText: /Manage Columns/i }))
-                .first()
-        ).toBeVisible({ timeout: 10000 });
+        const addColumnPage = new AddColumnPage(page, { scope: page.locator('main') });
+        await addColumnPage.addColumn('Test Column', 'Automation This is a test description.');
+        await addColumnPage.openManageColumns();
+        await expect(addColumnPage.loc.manageColumnsDialog).toBeVisible({ timeout: 10000 });
     });
 
     test('TC100 @regression @category : Verify Add category option is working as expected', async () => {

@@ -1384,8 +1384,44 @@ exports.DrawReportingJob = class DrawReportingJob {
             .filter({ has: this.page.getByRole('link', { name: drawIdText, exact: true }) });
         await expect(row, `All Approvals grid must show a row with ID "${drawIdText}" for property "${propertyName}"`).toBeVisible({ timeout: 45000 });
 
-        const rowText = await row.first().textContent();
-        const match = (rowText || '').match(/Pending Approval|Approved|Rejected/);
+        // MCP-verified live (2026-08-13): the Status column (14 columns total, Status is the
+        // 11th) reliably has real text ("Pending Approval"/"Approved"/"Rejected") once the row
+        // is fully rendered — but the row's own textContent() above is a ONE-SHOT read (same
+        // class of bug already fixed elsewhere in this file for isVisible()/textContent()
+        // calls that don't poll): right after navigateToAllApprovalsTab() this grid can still
+        // be progressively rendering/re-measuring a just-narrowed row's later columns, so a
+        // single read can catch it mid-render and see only the earlier columns (ID, Amount,
+        // Requested By, Submitted On) with Status not yet mounted. Scrolling the Status header
+        // into view (best-effort — a no-op if it's already on-screen) plus polling for the
+        // row's OWN Status gridcell specifically — instead of one-shot-reading the whole row —
+        // waits out that render race the same way getHistoricalDrawRowStatus's proven
+        // gridcell-polling pattern already does above.
+        await draw.allApprovalsStatusColumnHeader.scrollIntoViewIfNeeded().catch(() => {});
+
+        // Second, independent way to find the same cell: MCP-verified live, this grid's
+        // gridcells (like the invoice grid's — see invoiceGridDataCellByColIndex) carry
+        // revo-grid's own `data-rgcol`/`aria-colindex` column-index attributes, with Status's
+        // index read directly off its own header rather than hardcoded (stays correct if a
+        // column is ever added/removed/reordered). Combined via `.or()` (same fallback
+        // convention used across the other *Locator.js files) with the text-based match so
+        // either one resolving is enough — the positional match doesn't depend on the cell's
+        // text having rendered yet, only on the cell itself being mounted.
+        const textStatusCell = row.first().locator('[role="gridcell"]').filter({ hasText: /Pending Approval|Approved|Rejected/ });
+        const statusColIndex = await draw.allApprovalsStatusColumnHeader.getAttribute('data-rgcol', { timeout: 5000 }).catch(() => null);
+        const statusCell = (statusColIndex !== null
+            ? textStatusCell.or(row.first().locator(`[role="gridcell"][data-rgcol="${statusColIndex}"], [role="gridcell"][aria-colindex="${statusColIndex}"]`))
+            : textStatusCell
+        ).first();
+        const statusCellVisible = await statusCell.waitFor({ state: 'visible', timeout: 45000 }).then(() => true).catch(() => false);
+
+        let rowText = statusCellVisible ? await statusCell.textContent() : await row.first().textContent();
+        let match = (rowText || '').match(/Pending Approval|Approved|Rejected/);
+        if (!match) {
+            // Fallback: re-read the whole row in case the grid ever renders Status inline
+            // with no isolated gridcell wrapper — defense in depth, same regex either way.
+            rowText = await row.first().textContent();
+            match = (rowText || '').match(/Pending Approval|Approved|Rejected/);
+        }
         expect(match, `All Approvals row text for draw ID "${drawIdText}" must contain a recognizable status (raw: "${rowText}")`).not.toBeNull();
         return match[0];
     }

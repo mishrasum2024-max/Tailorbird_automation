@@ -210,6 +210,18 @@ function drawReportingLocators(page) {
             .getByRole('row')
             .filter({ hasText: propertyName })
             .filter({ hasText: 'Draw' }),
+        // MCP-verified live (2026-08-13): the Status column is real and renders plain text
+        // ("Pending Approval"/"Approved"/"Rejected") — it sits near the right edge of the
+        // grid, though, so it's the first cell dropped by horizontal column virtualization.
+        // Scrolling this header into view forces the grid's shared horizontal scroll
+        // container to bring Status back into the rendered window for every visible row.
+        // `.or()` fallback (same convention as budgetLocator.js/vendorLocator.js etc.): if the
+        // role/accessible-name ever stops resolving, the header still carries revo-grid's own
+        // `.rgHeaderCell` class (MCP-verified) — filtering that by its text is a second,
+        // independent way to find the same element.
+        allApprovalsStatusColumnHeader: page
+            .getByRole('columnheader', { name: 'Status', exact: true })
+            .or(page.locator('.rgHeaderCell').filter({ hasText: 'Status' })),
         // The grid virtualizes the "Actions" column as a structurally separate column group —
         // its rows are DOM siblings of the data rows, not descendants, and row.getByRole('button',
         // {name:'View Details'}) therefore always matches zero elements (confirmed via direct

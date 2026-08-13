@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const { test, expect } = require('@playwright/test');
 const { VendorDirectoryPage } = require('../pages/vendorDirectoryPage');
+const { AddColumnPage } = require('../pages/addColumnPage');
 const { Logger } = require('../utils/logger');
 const { ensureLeftPanelExpanded } = require('../utils/leftPanelExpander');
 const leftPanel = require('../pages/leftPanel');
@@ -319,19 +320,10 @@ test.describe('Vendors Directory - E2E', () => {
         await vendorPage.waitForDirectoryReady();
 
         // ── 1. Open Table → Hide/Show columns → Manage Columns drawer ──
-        const tableBtn = page.getByRole('button', { name: 'Table' });
-        const tableBtnVisible = await tableBtn.isVisible({ timeout: 5000 }).catch(() => false);
-        if (tableBtnVisible) {
-            await tableBtn.click();
-            await page.waitForTimeout(600);
-            const hideShowBtn = page.locator('[data-testid="bt-table-action-hide-show-columns"]');
-            if (await hideShowBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-                await hideShowBtn.click();
-                await page.waitForTimeout(800);
-            }
-        }
+        const addColumnPage = new AddColumnPage(page, { scope: page.locator('main') });
+        await addColumnPage.openManageColumns();
 
-        const manageColsDrawer = page.getByRole('dialog', { name: /Manage Columns/i });
+        const manageColsDrawer = addColumnPage.loc.manageColumnsDialog;
         const drawerOpen = await manageColsDrawer.isVisible({ timeout: 5000 }).catch(() => false);
         if (drawerOpen) {
             // Verify total column checkboxes ≥ 10
@@ -353,8 +345,7 @@ test.describe('Vendors Directory - E2E', () => {
                 }
             }
             expect(foundHidden).toBeGreaterThanOrEqual(0); // best-effort; drawer may paginate
-            await page.keyboard.press('Escape');
-            await page.waitForTimeout(500);
+            await addColumnPage.closeManageColumns();
         } else {
             Logger.info('TC241: Manage Columns drawer not available; skipping column-count assertions');
         }

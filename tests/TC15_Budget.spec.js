@@ -4,6 +4,7 @@ const fs = require('fs');
 const { test, expect } = require('@playwright/test');
 const { BudgetJob } = require('../pages/budgetPage');
 const { ApprovalJob } = require('../pages/approvalPage');
+const { AddColumnPage } = require('../pages/addColumnPage');
 const { Logger } = require('../utils/logger');
 const { ensureLeftPanelExpanded } = require('../utils/leftPanelExpander');
 
@@ -136,13 +137,15 @@ test.describe('Budget Workflow - E2E Tests', () => {
     test('TC254 @budget @regression : Verify Add Column, Manage Columns and Delete Column functionality', async () => {
         await budgetJob.navigateToBudget();
         await budgetJob.selectBrookProperty();
+        const addColumnPage = new AddColumnPage(page, { scope: page.locator('main') });
         const colName = `TestCol-${Date.now()}`;
-        await budgetJob.addColumn(colName, 'Test column for budget');
-        await budgetJob.openManageColumns();
-        await budgetJob.verifyColumnInManageColumns(colName);
-        await budgetJob.deleteColumnInManageColumns(colName);
-        await budgetJob.verifyColumnNotInManageColumns(colName);
-        await budgetJob.closeManageColumns();
+        await addColumnPage.addColumn(colName, 'Automation Test column for budget');
+        await addColumnPage.openManageColumns();
+        await expect(
+            addColumnPage.loc.manageColumnsDialog.locator('p').filter({ hasText: colName }).first(),
+        ).toBeVisible({ timeout: 8000 });
+        await addColumnPage.deleteColumn(colName);
+        await addColumnPage.closeManageColumns();
         Logger.success('TC254: Add, verify, delete column completed');
     });
 

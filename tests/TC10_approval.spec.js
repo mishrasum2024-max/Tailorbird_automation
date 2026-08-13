@@ -10,6 +10,7 @@ const { ensureLeftPanelExpanded } = require('../utils/leftPanelExpander');
 import { getPropertyName } from '../utils/propertyUtils';
 const { healingLocator } = require('../utils/locatorHealer');
 const { templateRowByNameStrategies, approvalElementStrategies } = require('../locators/approvalLocator');
+const { AddColumnPage } = require('../pages/addColumnPage');
 
 test.use({
     storageState: 'sessionState.json',
@@ -350,11 +351,12 @@ test.describe('Approval Templates', () => {
             Logger.step('TC174: Starting manage columns negative flow');
 
             // Open Manage Columns dialog
-            await approvalJob.clickManageColumnsButton();
+            const addColumnPage = new AddColumnPage(page, { scope: page.locator('main') });
+            await addColumnPage.openManageColumns();
             Logger.info('Manage Columns dialog opened');
 
             // Get all checkboxes
-            const allCheckboxes = await approvalJob.getAllCheckboxes();
+            const allCheckboxes = addColumnPage.loc.manageColumnsDialog.locator('input[type="checkbox"]');
             const checkboxCount = await allCheckboxes.count();
 
             // Test: Uncheck all columns (negative case)
@@ -380,8 +382,7 @@ test.describe('Approval Templates', () => {
             Logger.info('All columns checked back');
 
             // Close dialog
-            await page.keyboard.press('Escape');
-            await page.waitForTimeout(800);
+            await addColumnPage.closeManageColumns();
 
             await approvalJob.expectApprovalTemplatesTableCoreColumnsVisible();
             Logger.success('TC174 passed: Manage Columns negative scenarios tested — columns restored');

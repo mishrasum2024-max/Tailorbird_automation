@@ -992,4 +992,61 @@ test.describe('PROPERTY', () => {
     }
   });
 
+  test('TC69 @property @regression : Verify Add Column functionality on the Property Overview tab (Property Documents grid)', async () => {
+    test.setTimeout(180000);
+    await prop.goto(tcTakeoffsStartUrl);
+    await prop.goToProperties();
+    const propertyName = 'Test Property 1_Cottages on Elm';
+    await test.step('Search and open property', async () => {
+      await prop.changeView('Table View');
+      await prop.searchProperty(propertyName);
+      await prop.viewDetailsButton();
+    });
+    await test.step('Go to Overview tab', async () => {
+      await page.getByRole('tab', { name: 'Overview', exact: true }).click();
+    });
+
+    // MCP-verified live (2026-08-13): the Property Documents grid on the Overview tab does
+    // NOT follow the "View button -> Add custom column" pattern the shared addColumndata()
+    // helper assumes (its "View" button here opens an unrelated "Save current view as"
+    // popover) — its column actions live under "Table" -> "Add custom column" / "Hide / show
+    // columns" instead. Its Manage Columns row buttons are also ordered differently than
+    // deleteCustomColumn() assumes: button[0] toggles inline rename, button[1] opens the real
+    // "Delete Column" confirmation, button[2] opens an unrelated "Add to Filter" menu. Written
+    // self-contained against this grid's actual behavior rather than reusing those helpers.
+    const columnName = `TC69 Add Column ${Date.now()}`;
+    const documentsTableButton = page.getByRole('button', { name: 'Table', exact: true });
+
+    await test.step('Add a custom column on the Property Documents grid', async () => {
+      await documentsTableButton.click();
+      await page.getByTestId('bt-table-action-add-column').click();
+      await page.getByRole('textbox', { name: /Enter column name/i }).fill(columnName);
+      await page.getByRole('textbox', { name: /Enter column description/i }).fill('Added by TC69 automation');
+      await page.getByRole('button', { name: 'Add column', exact: true }).click();
+      await expect(page.getByRole('columnheader', { name: columnName, exact: true })).toBeVisible({ timeout: 10000 });
+    });
+
+    await test.step('Verify the new column in Manage Columns, then delete it', async () => {
+      await documentsTableButton.click();
+      await page.getByTestId('bt-table-action-hide-show-columns').click();
+
+      const drawer = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: 'Manage Columns' }) });
+      await expect(drawer).toBeVisible({ timeout: 10000 });
+      await expect(drawer.getByText('Custom Columns', { exact: true })).toBeVisible();
+
+      const columnNameText = drawer.getByText(columnName, { exact: true });
+      await expect(columnNameText).toBeVisible({ timeout: 10000 });
+
+      const columnRow = columnNameText.locator('xpath=../..');
+      await columnRow.locator('button').nth(1).click();
+
+      const confirmDialog = page.getByRole('dialog').filter({ has: page.getByText('Delete Column', { exact: true }) });
+      await expect(confirmDialog).toBeVisible({ timeout: 5000 });
+      await confirmDialog.getByRole('button', { name: 'Delete', exact: true }).click();
+      await expect(columnNameText).toBeHidden({ timeout: 10000 });
+
+      await page.keyboard.press('Escape');
+    });
+  });
+
 });

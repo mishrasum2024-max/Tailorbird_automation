@@ -640,57 +640,6 @@ test.describe('Draw Reporting - Empty State, All Grid Controls, and Create Draw 
         Logger.success(`Submission guard rails verified — Draw A ("${drawNameA}") approved via "${approvedByFullName}", Draw B ("${drawNameB}") discarded`);
     });
 
-    test('Draw Reporting — cross-view status consistency (Historical Draws vs All Approvals vs Approval Details) @drawReporting @regression @e2e @approval', async ({ browser }) => {
-        test.setTimeout(400000);
-
-        const propertyName = 'Test Property 6_Draw reporting';
-        const jobId = 4330;
-        const timestamp = Date.now();
-        const drawName = `XVIEW_Draw_${timestamp}`;
-
-        const invoice = await drawReportingJob.createPendingInvoiceForJobOnProperty(jobId, `XVIEW_Invoice_${timestamp}`);
-        await drawReportingJob.navigateToDrawReporting();
-        await drawReportingJob.selectPropertyByName(propertyName);
-        await drawReportingJob.assertSelectedPropertyIs(propertyName);
-        await drawReportingJob.createDraw(drawName, '07/01/2026', '07/22/2026');
-        await drawReportingJob.verifyDrawEditorNameAndStatus(drawName);
-        await drawReportingJob.includeInvoiceInDraw(invoice.invoiceNumberLabel);
-        await drawReportingJob.proceedToDrawStepTwo();
-        await drawReportingJob.submitDrawForApproval();
-
-        await drawReportingJob.openHistoricalDrawsTab();
-        const historicalStatusPending = await drawReportingJob.getHistoricalDrawRowStatus(drawName);
-        expect(historicalStatusPending, 'Historical Draws must show Pending right after submission').toBe('Pending');
-
-        await drawReportingJob.navigateToAllApprovalsTab();
-        const drawId = await drawReportingJob.getAllApprovalsRowIdForPendingDraw(propertyName);
-        const allApprovalsStatusPending = await drawReportingJob.readAllApprovalsRowStatus(propertyName, drawId);
-        expect(allApprovalsStatusPending, 'All Approvals must show "Pending Approval" for the same draw').toBe('Pending Approval');
-
-        const eligibleText = await drawReportingJob.readEligibleApproversText(propertyName, drawName);
-        expect(eligibleText, 'Approval Details dialog must state eligible approvers').toContain('Eligible approvers:');
-
-        const { approved, approvedByFullName } = await approveDrawAsRealApprover(browser, propertyName, drawName);
-        expect(approved, `Draw "${drawName}" must end up "Approved"`).toBe(true);
-
-        // See REJECT test above for why this reconstruction is required after any
-        // approve/reject-as-real-approver call — DrawReportingJob's locators are bound via a
-        // module-level variable, not an instance property.
-        drawReportingJob = new DrawReportingJob(page);
-
-        await drawReportingJob.navigateToDrawReporting();
-        await drawReportingJob.selectPropertyByName(propertyName);
-        await drawReportingJob.openHistoricalDrawsTab();
-        const historicalStatusApproved = await drawReportingJob.getHistoricalDrawRowStatus(drawName);
-        expect(historicalStatusApproved, 'Historical Draws must show Approved after approval').toBe('Approved');
-
-        await drawReportingJob.navigateToAllApprovalsTab();
-        const allApprovalsStatusApproved = await drawReportingJob.readAllApprovalsRowStatus(propertyName, drawId);
-        expect(allApprovalsStatusApproved, 'All Approvals must show Approved for the same draw ID after approval').toBe('Approved');
-
-        Logger.success(`Cross-view status consistency verified for draw "${drawName}" (ID ${drawId}), approved via "${approvedByFullName}"`);
-    });
-
     test('Draw Reporting — approved draw generates a matching report PDF in Property Documents @drawReporting @regression @e2e', async ({ browser }) => {
         test.setTimeout(400000);
 

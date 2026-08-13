@@ -5,6 +5,7 @@ const { Logger } = require('../utils/logger');
 const { ensureLeftPanelExpanded } = require('../utils/leftPanelExpander');
 const { healingLocator } = require('../utils/locatorHealer');
 const { simpleApprovalElementStrategies } = require('../locators/simpleApprovalLocator');
+const { AddColumnPage } = require('../pages/addColumnPage');
 
 test.use({
     storageState: 'sessionState.json',
@@ -122,9 +123,14 @@ test.describe('Approval Workflow - My Approvals & All Approvals E2E Tests', () =
             await approvalJob.navigateToMyApprovalsTab();
             await approvalJob.waitForPageLoad();
 
+            // Clean up leftover automation columns from previous runs so the grid
+            // doesn't accumulate columns and slow down/timeout column-header detection
+            const addColumnPage = new AddColumnPage(page, { scope: page.locator('main') });
+            await addColumnPage.deleteAllCustomColumns();
+
             // Add new column
-            const columnAdded = await approvalJob.addColumndata();
-            expect(columnAdded).toBeTruthy();
+            const colName = `ApprCol_${Date.now()}`;
+            await addColumnPage.addColumn(colName, 'Automation custom column');
             Logger.success('New column added successfully');
 
             Logger.success('TC212 passed: Add Column functionality working');
