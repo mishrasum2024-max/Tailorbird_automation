@@ -44,19 +44,32 @@ exports.DrawReportingJob = class DrawReportingJob {
         // the property breadcrumb, not "Select a Property"), so a caller that already selected
         // this property earlier in the same test can hit this again. Treat that as a no-op
         // instead of failing.
-        const alreadySelected = await draw.selectedPropertyBreadcrumbButton(propertyName).isVisible().catch(() => false);
+        //
+        // Robustness fix (2026-08-14): the previous version snapshotted the "already selected"
+        // state with a non-waiting isVisible() before ever waiting for "Select a Property" —
+        // under real CI load (this file's own withExtendedTerminalWait comment above documents
+        // ~59.8s measured backend latency on 4 parallel workers sharing a 2 vCPU runner), the
+        // header can still be re-rendering at that exact instant, so neither locator is present
+        // yet and the snapshot check wrongly concludes "not already selected" a moment too
+        // early. Waiting for EITHER valid header state (already-selected breadcrumb OR the
+        // property-picker button) via `.or()` — with a longer timeout — removes that race
+        // without changing what either branch actually does.
+        const alreadySelectedLocator = draw.selectedPropertyBreadcrumbButton(propertyName);
+        const headerReady = alreadySelectedLocator.or(draw.selectPropertyButton);
+        await expect(headerReady, `Header must show either the already-selected property "${propertyName}" or a property picker`).toBeVisible({ timeout: 90000 });
+
+        const alreadySelected = await alreadySelectedLocator.isVisible().catch(() => false);
         if (alreadySelected) {
             this.currentPropertyName = propertyName;
             Logger.success(`Property "${propertyName}" was already selected in Draw Reporting`);
             return;
         }
 
-        await expect(draw.selectPropertyButton, `Header must show a property picker before selecting "${propertyName}"`).toBeVisible({ timeout: 45000 });
         await draw.selectPropertyButton.click();
         await this.page.waitForTimeout(800);
 
         const option = draw.propertyMenuItems.filter({ hasText: propertyName }).first();
-        await expect(option, `Property "${propertyName}" must appear in the property picker`).toBeVisible({ timeout: 45000 });
+        await expect(option, `Property "${propertyName}" must appear in the property picker`).toBeVisible({ timeout: 90000 });
         await option.click();
         await this.page.waitForTimeout(4000);
         await this.page.waitForLoadState('networkidle').catch(() => { });

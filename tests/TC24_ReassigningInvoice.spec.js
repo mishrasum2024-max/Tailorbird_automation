@@ -2,8 +2,6 @@ require('dotenv').config();
 const { test, expect } = require('@playwright/test');
 const { ReassignInvoicePage } = require('../pages/reassignInvoicePage');
 const { Logger } = require('../utils/logger');
-const fs = require('fs');
-const path = require('path');
 const { ensureLeftPanelExpanded } = require('../utils/leftPanelExpander');
 // Reassign Invoice is only exposed to an approver on the invoice's approval chain
 // (verified live: the invoice creator alone does not see "Reassign Invoice" in the
@@ -17,22 +15,13 @@ test.use({
 });
 
 const PROPERTY_NAME = 'Test Property5_Reassigning_Automation';
-const MODAL_DATA_PATH = path.join(__dirname, '../data/reassignInvoiceModalData.json');
-
-function saveModalData(data) {
-    fs.writeFileSync(MODAL_DATA_PATH, JSON.stringify(data, null, 2), 'utf8');
-}
-
-function loadModalData() {
-    return JSON.parse(fs.readFileSync(MODAL_DATA_PATH, 'utf8'));
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared helpers for Scenarios 1–4 (TC368–TC371) below.
 // Every call inside these is an EXISTING ReassignInvoicePage / InvoicePage method or an
 // EXISTING locator (reassignInvoiceLocators) — nothing new is added to any page object,
 // locator file, JSON file, or utility file. This is pure composition/orchestration local
-// to this spec, in the same spirit as the saveModalData/loadModalData helpers above.
+// to this spec.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Invoice-list grid column order (confirmed live via MCP browser): Invoice Number,
@@ -206,7 +195,6 @@ async function validateModalAndReassign(rip, { invoiceNumber, expectedProject, e
 
     await rip.openReassignModalForInvoice(invoiceNumber);
     const pass1 = await driveModalSelections(rip, { expectedProject, expectedJob, pickProject, pickJob, pickScope });
-    saveModalData(pass1.capture);
     await rip.cancelReassignModal();
 
     await rip.openReassignModalForInvoice(invoiceNumber);
@@ -215,8 +203,12 @@ async function validateModalAndReassign(rip, { invoiceNumber, expectedProject, e
         expectedJob: pass1.capture.currentJob,
         pickProject, pickJob, pickScope,
     });
-    const saved = loadModalData();
-    expect(pass2.capture, 'Re-opened modal (project/job/scope/options) must match the saved JSON snapshot').toEqual(saved);
+    // Compared directly against pass1's own in-memory capture, not a round trip through a
+    // shared JSON file on disk (CI-verified 2026-08-14 with --workers=4: this describe block
+    // has no `mode: 'serial'`, so another scenario test running concurrently in the same file
+    // could overwrite/read that shared file mid-test, producing a mismatch against a different
+    // test's own project/job/scope data — not a real defect in the reassignment flow itself).
+    expect(pass2.capture, "Re-opened modal (project/job/scope/options) must match this test's own first-pass capture").toEqual(pass1.capture);
     expect(pass2.targetProject).toBe(pass1.targetProject);
     expect(pass2.targetJob).toBe(pass1.targetJob);
     expect(pass2.targetScope).toBe(pass1.targetScope);
@@ -315,21 +307,23 @@ test.describe('Reassign Invoice', () => {
         Logger.success(`TC366: New Project options captured: ${JSON.stringify(newProjectOptions)}`);
 
         const capturedData = { ...staticContent, newProjectOptions };
-        saveModalData(capturedData);
-        Logger.success(`TC366: Modal data saved to ${MODAL_DATA_PATH}`);
+        Logger.success(`TC366: Modal data captured: ${JSON.stringify(capturedData)}`);
 
         await reassignInvoicePage.cancelReassignModal();
 
-        // ── Second pass: re-open the same modal, re-capture, compare against JSON ──
+        // ── Second pass: re-open the same modal, re-capture, compare against pass 1 ──
         await reassignInvoicePage.openReassignModalForInvoice(invoiceNumber);
 
         const staticContentAgain = await reassignInvoicePage.captureStaticModalContent();
         const newProjectOptionsAgain = await reassignInvoicePage.getNewProjectOptions();
         const recapturedData = { ...staticContentAgain, newProjectOptions: newProjectOptionsAgain };
 
-        const savedData = loadModalData();
-        expect(recapturedData, 'Re-opened modal content must match the saved JSON snapshot').toEqual(savedData);
-        Logger.success('TC366: Re-opened modal content matches saved JSON snapshot');
+        // Compared directly against this test's own first-pass capture, not a round trip
+        // through a shared JSON file — see validateModalAndReassign's comment for why (this
+        // describe block runs with --workers=4 and no `mode: 'serial'`, so a shared file could
+        // be overwritten by another concurrently-running scenario test mid-comparison).
+        expect(recapturedData, "Re-opened modal content must match this test's own first-pass capture").toEqual(capturedData);
+        Logger.success('TC366: Re-opened modal content matches first-pass capture');
 
         // ── Walk every dropdown to the end (assert-only — pick any project/job/scope) ──
         const otherProject = newProjectOptionsAgain.find((p) => p !== staticContentAgain.currentProject) || newProjectOptionsAgain[0];

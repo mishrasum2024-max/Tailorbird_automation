@@ -797,7 +797,18 @@ class AddColumnPage {
             await confirmBtn.waitFor({ state: 'hidden', timeout: 10000 }).catch(() => {});
         }
 
-        await expect(row).toBeHidden({ timeout: 20000 });
+        try {
+            await expect(row).toBeHidden({ timeout: 20000 });
+        } catch (visibilityError) {
+            // Under concurrent test runs that mutate the same shared custom-columns list at
+            // once, deleting one entry can shift list positions so this row's locator resolves
+            // to a different, still-visible entry that just took the same spot — a false
+            // negative on visibility, not a failed delete (MCP/CI-verified 2026-08-14, same
+            // signature as a real CI failure on TC67). Confirm by name against the live list
+            // before concluding the delete actually failed.
+            const stillPresent = (await this._getCustomColumnNames()).includes(name);
+            if (stillPresent) throw visibilityError;
+        }
         Logger.success(`Deleted column "${name}"`);
         return true;
     }
