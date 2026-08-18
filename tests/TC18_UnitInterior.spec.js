@@ -61,9 +61,9 @@ test.afterAll(() => {
 });
 
 // ── Suite ─────────────────────────────────────────────────────────────────────
-test.describe('Unit Interior — Contracts > Units tab full E2E suite', () => {
+test.describe('Unit Interior', () => {
 
-    test('TC281 @sanity @regression Verify user is able to navigate from Jobs listing to Contracts Units tab and validate complete Units page UI including tabs, labels, CTAs, toolbar buttons, grid headers, unit statuses and action controls against fixture data',
+    test('TC281 @sanity @regression : Verify Units page navigation and UI elements, grid data, and actions',
         async () => {
             Logger.info('[TC_UI_001] START: Full navigation + fixture text assertions');
 
@@ -215,7 +215,7 @@ test.describe('Unit Interior — Contracts > Units tab full E2E suite', () => {
         },
     );
 
-    test('TC282 @regression Verify selecting a non-expandable plain unit enables only Release Units action and keeps Update Status and Edit Scopes disabled, including validation of button reset after deselection',
+    test('TC282 @regression : Verify plain unit selection enables Release Units and resets actions after deselection',
         async () => {
             Logger.info('[TC_UI_002] START');
 
@@ -265,7 +265,7 @@ test.describe('Unit Interior — Contracts > Units tab full E2E suite', () => {
         },
     );
 
-    test('TC283 @regression Verify selecting an expandable unit with scope data enables applicable unit actions and validates Update Status dropdown functionality by verifying all available status options, labels and ordering',
+    test('TC283 @regression : Verify expandable unit selection, available actions, and Update Status options',
         async () => {
             Logger.info('[TC_UI_003] START: Toggle row button states + dropdown option labels');
 
@@ -341,7 +341,7 @@ test.describe('Unit Interior — Contracts > Units tab full E2E suite', () => {
         },
     );
 
-    test('TC284 @regression Verify Update Status functionality is working as expected by applying all supported status changes on units and validating updated grid status along with conditional status switching between multiple units',
+    test('TC284 @regression : Verify Update Status changes, grid updates, and status switching between units',
         async () => {
             Logger.info('[TC_UI_004] START: Full Update Status E2E for all 5 options');
 
@@ -444,7 +444,7 @@ test.describe('Unit Interior — Contracts > Units tab full E2E suite', () => {
         },
     );
 
-    test('TC285 @regression Verify Release Units functionality end-to-end by validating release dialog content, cancel flow, apply same scopes to all units functionality and successful release with updated unit status verification',
+    test('TC285 @regression : Verify Release Units dialog, scope selection, cancel flow, and unit release',
         async () => {
             Logger.info('[TC_UI_005] START: Release Units dialog full E2E');
 
@@ -635,7 +635,7 @@ test.describe('Unit Interior — Contracts > Units tab full E2E suite', () => {
         },
     );
 
-    test('TC286 @regression Verify Units tab negative and edge scenarios including default disabled actions, invalid release attempts, search filtering, no-result handling and button state reset after selection changes',
+    test('TC286 @regression : Verify Units tab search, action states, invalid actions, and selection reset',
         async () => {
             Logger.info('[TC_UI_006] START: Negative and edge cases');
 
@@ -738,7 +738,7 @@ test.describe('Unit Interior — Contracts > Units tab full E2E suite', () => {
         },
     );
 
-    test('TC287 @visual Visual testing scenarios for Units tab including initial load, plain vs toggle row selection states, and Release Units dialog appearance',
+    test('TC287 @visual : Verify Units tab visual states for selection and Release Units dialog',
         async () => {
             Logger.info('[TC_UI_007] START: Visual regression snapshots');
 
@@ -795,7 +795,7 @@ test.describe('Unit Interior — Contracts > Units tab full E2E suite', () => {
         },
     );
 
-    test('TC288 @regression Verify filter functionality on Units tab — Status filter (Released and In Progress hardcoded), FP Type filter and Unit Type filter each reduce grid rows to matching records only, combined filters apply AND logic, and Clear all restores the full grid',
+    test('TC288 @regression : Verify Units tab filters, combined filtering, and Clear all behavior',
         async () => {
             Logger.info('[TC_UI_008] START: Filter functionality E2E');
 
@@ -1031,7 +1031,7 @@ test.describe('Unit Interior — Contracts > Units tab full E2E suite', () => {
         },
     );
 
-    test('TC289 @regression Verify FP type presence correlates with Released tag: unit whose bid has no FP type ("-") must not show Released tag; units whose bids have FP type set must show Released tag',
+    test('TC289 @regression : Verify FP type determines the Released status tag for units',
         async () => {
             Logger.info('[TC289] START — navigating to "FP type testing" job for FP type ↔ Released validation');
             await po.navigateToJobUnitsTab('FP type testing');

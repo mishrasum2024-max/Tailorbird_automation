@@ -33,6 +33,21 @@ class AddColumnPage {
         await this.page.waitForTimeout(300);
     }
 
+    /**
+     * Fallback for _dismissOverlays(): CI-observed 2026-08-18 that Escape does not always
+     * dismiss a still-open Manage Columns dialog between successive column deletions,
+     * leaving it blocking the table menu button underneath and exhausting every retry in
+     * _openTableMenu() until the whole test times out. If a dialog is still visible after
+     * Escape, click its own close ("X") button instead.
+     */
+    async _dismissOverlaysViaCrossButton() {
+        const crossButton = this.loc.openDialogCloseButton;
+        if (await crossButton.isVisible({ timeout: 500 }).catch(() => false)) {
+            await crossButton.click({ force: true }).catch(() => {});
+            await this.page.waitForTimeout(300);
+        }
+    }
+
     async _waitForTableMenuOpen() {
         const portalItemProbe = this.loc.hideShowColumnsMenuItem
             .first()
@@ -50,6 +65,7 @@ class AddColumnPage {
 
     async _openTableMenu(retries = 3) {
         await this._dismissOverlays();
+        await this._dismissOverlaysViaCrossButton();
 
         for (let attempt = 0; attempt < retries; attempt++) {
             const tableBtn = this.loc.tableMenuBtn(this.scope).first();
@@ -69,6 +85,7 @@ class AddColumnPage {
             if (menuOpen) return;
 
             await this._dismissOverlays();
+            await this._dismissOverlaysViaCrossButton();
             await this.page.waitForTimeout(400);
         }
 

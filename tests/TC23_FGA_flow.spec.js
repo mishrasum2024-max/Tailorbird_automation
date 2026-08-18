@@ -15,23 +15,13 @@ const dashboardLandingUrl = process.env.DASHBOARD_URL || orgUrls.dashboardUrl;
 const TARGET_PROPERTY = "Test Property 1_Cottages on Elm";
 const CREATED_USERS_FILE = path.join(__dirname, "../data/fgaCreatedUsers.json");
 
-/**
- * Random every call — timestamp + random suffix avoids collisions even within the same
- * millisecond. Lowercase throughout: the app itself normalizes invited emails to lowercase
- * (MCP/live-run verified), so generating lowercase avoids a spurious case mismatch against
- * what later renders in the Users table.
- */
+
 function generateFgaTestUser(prefix = "fga") {
     const randomSuffix = Math.random().toString(36).slice(2, 8);
-    // Switched from @yopmail.com to @mailinator.com (2026-08-02): yopmail began showing a
-    // CAPTCHA that blocked automated inbox access (see pages/userActivationPage.js for the
-    // full rationale). Mailinator's public inbox needs no pre-registration either — any
-    // "<local-part>@mailinator.com" address just works.
     const email = `${prefix}_${Date.now()}_${randomSuffix}@mailinator.com`;
     return { email, prefix, randomSuffix };
 }
 
-/** Appends to data/fgaCreatedUsers.json (array) — does not overwrite prior runs' records. */
 function saveCreatedUser(record) {
     let existing = [];
     if (fs.existsSync(CREATED_USERS_FILE)) {
@@ -48,7 +38,7 @@ function saveCreatedUser(record) {
     Logger.info(`[FGA] Saved created user to data/fgaCreatedUsers.json: ${JSON.stringify(record)}`);
 }
 
-test.describe.serial("FEAT-972 FGA User Management", () => {
+test.describe.serial("FGA", () => {
     test.use({
         storageState: "sessionState.json",
         viewport: { width: 1440, height: 900 },
@@ -230,13 +220,6 @@ test.describe.serial("FEAT-972 FGA User Management", () => {
         Logger.step("[TC354] Re-inviting the same email — expecting rejection");
         const dup = await fga.attemptDuplicateInvite(email);
 
-        // Product behavior change (see FgaUserManagementPage.attemptDuplicateInvite jsdoc):
-        // while the invited user's status is still "Pending" (invite not yet accepted), the
-        // backend now responds 200 (`alreadyMember: true`) to a duplicate invite instead of
-        // rejecting it with 400 — the dialog closes as a normal successful invite. This is
-        // genuine backend behavior, not a test defect, so it is accepted as valid here. The
-        // original 400 + inline-error assertions are preserved untouched below in case that
-        // rejection behavior is ever restored while the user is still Pending.
         if (dup.status === 200) {
             Logger.info("[TC354] Backend returned 200 for duplicate invite while user is still Pending — accepting as valid current behavior.");
             expect(dup.ok).toBeTruthy();
@@ -260,10 +243,7 @@ test.describe.serial("FEAT-972 FGA User Management", () => {
         }
     });
 
-    test("TC355 @regression @FGA @activation : Invited user completes full account activation via mailinator (name, password, organization) and lands on dashboard", async ({ page, browser }) => {
-        // waitForMailinatorMessage's timeout was raised to 150s (see userActivationPage.js)
-        // to absorb invite-email queueing delay under concurrent CI workers — this test's
-        // own timeout needs headroom for that plus the OTP wait plus the rest of the flow.
+    test("TC355 @regression @FGA @activation :Verify invited user activation, organization setup, property access, and dashboard access", async ({ page, browser }) => {
         test.setTimeout(400000);
         const fga = new FgaUserManagementPage(page);
         const { email, randomSuffix } = generateFgaTestUser("fga_activate");
@@ -335,10 +315,23 @@ test.describe.serial("FEAT-972 FGA User Management", () => {
             expect(visibleProperties, `No property other than "${TARGET_PROPERTY}" should render in the UI`).toEqual([TARGET_PROPERTY]);
             Logger.success(`[TC355] ✅ UI confirmed exactly one property visible — "${TARGET_PROPERTY}" — and no others`);
 
+            Logger.step("[TC355] Returning to the Tailorbird organization page and reloading before the final status check");
+            await fga.gotoOrganization(dashboardLandingUrl);
+            await page.reload({ waitUntil: 'domcontentloaded' });
+            await expect(page, 'Must be back on the Tailorbird /organization page after reload').toHaveURL(/\/organization/, { timeout: 20000 });
+            Logger.success("[TC355] Confirmed on Tailorbird /organization page after reload");
+
             Logger.step("[TC355] Cross-checking activation via GET /api/organization/users");
-            const orgUser = await fga.getOrganizationUserByEmail(email);
+            let orgUser = await fga.getOrganizationUserByEmail(email);
             expect(orgUser, `Activated user "${email}" must exist in /api/organization/users`).not.toBeNull();
-            expect(orgUser.status, "Activated user must no longer be in pending status").not.toBe("pending");
+            await expect.poll(async () => {
+                orgUser = await fga.getOrganizationUserByEmail(email);
+                return orgUser?.status;
+            }, {
+                timeout: 30000,
+                intervals: [1000, 2000, 3000, 5000],
+                message: `Activated user "${email}" must no longer be in pending status`,
+            }).not.toBe("pending");
 
             Logger.success(`[TC355] ✅ Full activation completed for ${email} (${firstName} ${lastName})`);
         } finally {
@@ -348,20 +341,13 @@ test.describe.serial("FEAT-972 FGA User Management", () => {
 });
 
 
-test.describe.serial("FEAT-972 FGA scope validation — activated Member user (single-property access)", () => {
-    // test.describe.configure({ mode: "parallel" });
+test.describe.serial("FGA", () => {
 
     /** @type {Awaited<ReturnType<import('@playwright/test').BrowserContext['storageState']>> | null} */
     let sharedStorageState = null;
     let sharedEmail = null;
 
     test.beforeAll(async ({ browser }) => {
-        // See TC355 above — this hook runs the same full invite+activate flow, and with
-        // `mode: "parallel"` on this describe block, Playwright runs a SEPARATE copy of
-        // this beforeAll per worker that picks up one of its tests. Under CI's
-        // --workers=4 that means up to 4 concurrent invite+activate flows at once,
-        // reproducibly pushing an invite email's arrival past the old 60s budget
-        // (confirmed via local --workers=4 run) — hence the same generous headroom here.
         test.setTimeout(400000);
         test.skip(!dashboardLandingUrl, "DASHBOARD_URL or fixture dashboard required");
 

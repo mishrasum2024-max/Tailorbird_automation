@@ -83,10 +83,7 @@ test.describe('Verify Bids', () => {
         await page.waitForTimeout(3000);
     });
 
-    // ──────────────────────────────────────────────────────────────────────────────
-    // TC_BID_01 — Bid list page layout
-    // ──────────────────────────────────────────────────────────────────────────────
-    test('TC311 TC_BID_01 @regression @bid : Should display Bid list page with correct layout, columns and toolbar', async () => {
+    test('TC311 @regression @bid : Verify Bids list page layout, columns, and toolbar', async () => {
         Logger.step('TC_BID_01: Asserting Bid list page');
 
         await bidPage.assertBidsListPage();
@@ -99,10 +96,7 @@ test.describe('Verify Bids', () => {
         Logger.success('TC_BID_01 passed');
     });
 
-    // ──────────────────────────────────────────────────────────────────────────────
-    // TC_BID_02 — Create AI Bid + Overview tab + Edit due date
-    // ──────────────────────────────────────────────────────────────────────────────
-    test('TC312 TC_BID_02 @regression @bid @createBid : Should open Create Bid modal, assert all fields and dropdown options, create bid, verify Overview tab and edit due date', async () => {
+    test('TC312 @regression @bid : Verify Create Bid form, dropdown options, bid creation, and due date update', async () => {
         const bidData = loadBidData();
         const uniqueBidName = `Auto_Bid_${Date.now()}`;
 
@@ -147,7 +141,7 @@ test.describe('Verify Bids', () => {
         Logger.success(`TC_BID_02 passed — bid created: ${uniqueBidName} (ID: ${bidId})`);
     });
 
-    test('TC313 TC_BID_04 @regression @bid @manageBids : Should assert Manage Bids tab columns and toolbar', async () => {
+    test('TC313 @regression @bid : Verify Manage Bids tab columns and toolbar', async () => {
         const bidData = loadBidData();
         if (!bidData.bidUrl) test.skip(true, 'bidUrl not set — run TC_BID_02 first');
 
@@ -161,11 +155,7 @@ test.describe('Verify Bids', () => {
         Logger.success('TC_BID_04 passed — Manage Bids tab asserted');
     });
 
-    // ──────────────────────────────────────────────────────────────────────────────
-    // TC_BID_05 — Create Bid dialog: full fixture-driven assertion of every
-    //             field label, placeholder, and each dropdown option
-    // ──────────────────────────────────────────────────────────────────────────────
-    test('TC314 TC_BID_05 @regression @bid @dialogAssert : Should assert every field label, placeholder and dropdown option in Create Bid dialog using fixture data from bidData.json', async () => {
+    test('TC314 @regression @bid : Verify Create Bid dialog fields, placeholders, and dropdown options', async () => {
         const bidData = loadBidData();
 
         Logger.step('TC_BID_05: Opening Create Bid dialog for complete fixture assertion');
@@ -176,7 +166,7 @@ test.describe('Verify Bids', () => {
         Logger.success('TC_BID_05 passed — Create Bid dialog completely verified against fixture');
     });
 
-    test('TC315 TC_BID_08 @regression @bid @compareBids @aiPiper : Should send AI Bid Levelling prompt, validate Thinking→Thought→response flow, multi-turn conversation and Reset e2e', async () => {
+    test('TC315 @regression @bid  : Verify AI Bid Levelling conversation, multi-turn responses, and Reset', async () => {
         test.setTimeout(600000);
         const bidData = loadBidData();
         if (!bidData.bidUrl) test.skip(true, 'bidUrl not set — run TC_BID_02 first');
@@ -264,12 +254,7 @@ test.describe('Verify Bids', () => {
         Logger.success('TC_BID_08 passed — prompt flow, multi-turn conversation and Reset e2e verified');
     });
 
-    // ──────────────────────────────────────────────────────────────────────────────
-    // TC_BID_09 — Compare Bids (Piper): external proposal file attach e2e
-    //             Uploads files\Misora_Bid_Leveling_Reference_with data(Aggregate Summary).csv
-    //             via the paperclip attach button, then runs AI Bid Levelling.
-    // ──────────────────────────────────────────────────────────────────────────────
-    test('TC316 TC_BID_09 @regression @bid @compareBids @fileUpload : Should attach external proposal file via Piper paperclip button and run AI Bid Levelling', async () => {
+    test('TC316 @regression @bid : Verify attach external proposal file via Piper paperclip button and run AI Bid Levelling', async () => {
         test.setTimeout(600000);
         const bidData = loadBidData();
         if (!bidData.bidUrl) test.skip(true, 'bidUrl not set — run TC_BID_02 first');
@@ -374,7 +359,7 @@ test.describe('Verify Bids', () => {
         Logger.success('TC_BID_09 passed — file attach and AI Bid Levelling prompt verified');
     });
 
-    test('TC318 TC_BID_11 @regression @bid @compareBids @negative : Should handle negative and edge cases — empty prompt blocked, long/special-char prompts accepted, Reset cancel preserves history', async () => {
+    test('TC317 @regression @bid : Verify AI Bid Levelling empty, long, special-character, and invalid prompts', async () => {
         test.setTimeout(600000);
         const bidData = loadBidData();
         if (!bidData.bidUrl) test.skip(true, 'bidUrl not set — run TC_BID_02 first');
@@ -474,10 +459,7 @@ test.describe('Verify Bids', () => {
         Logger.success('TC_BID_11 passed — all negative and edge cases verified');
     });
 
-    // ──────────────────────────────────────────────────────────────────────────────
-    // TC365 — Left nav → any bid → Overview → Edit due date → success toast
-    // ──────────────────────────────────────────────────────────────────────────────
-    test('TC365 @regression @bid @editBidDate : Should navigate to Bids via left panel, open any bid, edit due date from Overview tab, and verify the date and success toast', async () => {
+    test('TC318 @regression @bid : Verify bid due date update from Overview and success notification', async () => {
         Logger.step('TC365: Navigating to Bids via left panel');
         await page.goto(process.env.BASE_URL, { waitUntil: 'load' });
         await page.waitForTimeout(2000);

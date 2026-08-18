@@ -16,25 +16,10 @@ test.use({
 });
 
 let page, approvalJob, budgetJob, mybJob;
-// Shared across the split-out MYB01-MYB15 tests below — set by MYB01/MYB02/MYB03 and read by
-// every later test in this file, exactly like the shared `page`/`*Job` instances above. Safe
-// only because this describe block runs in `mode: 'serial'` (see below): later tests would
-// otherwise start before these are assigned.
 let propertyName, budgetItemName, startYear, endYear, propertyId, timestamp;
-// A second, throwaway property used only by the zero-item/hold-period/item-list negative tests
-// (MYB26-MYB29), which need a property with NO existing single-year budget items so the item
-// catalog shown in the Init/Settings dialogs has more than one entry to exercise search/select-all
-// against — the main `propertyName` above only ever has the single item created for MYB01-MYB25.
 let negPropertyName;
 
-test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propagation, Cross-Year Reallocation', () => {
-    // ROOT CAUSE (2026-07-31): MYB03 (now MYB15) reads data/multiYearBudgetPropertyData.json,
-    // which MYB02 writes. Splitting the original MYB01 monolith into one test per step (below)
-    // makes every later test in this file depend on state created by an earlier one — the
-    // property itself, its budget item, the plan, and its planned-budget values are all built
-    // up incrementally across MYB01-MYB25. `mode: 'serial'` (combined with the existing
-    // `retries: 1`) guarantees declaration order within this worker, matching the same pattern
-    // already used in TC17_OOO_OutOfOffice.spec.js for its own shared-state race.
+test.describe('Multi-Year Budget', () => {
     test.describe.configure({ mode: 'serial', retries: 1 });
 
     test.beforeEach(async ({ page: p }) => {
@@ -49,16 +34,7 @@ test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propaga
         await ensureLeftPanelExpanded(page);
     });
 
-    // ===================================================================================
-    // MYB01-MYB13: split out of the original MYB01 monolith (one test per capability/step),
-    // so each fails/reports independently instead of one 600s test covering 15 unrelated
-    // assertions. Every test after MYB03 re-navigates to Multi-Year Budget and re-selects
-    // propertyName at its own start, since each test gets a fresh beforeEach navigation to
-    // the CapEx dashboard (the original monolith could rely on already being on the right
-    // page/dialog from its own previous test.step; a standalone test cannot).
-    // ===================================================================================
-
-    test('TC386 @multiYearBudget @sanity @regression @e2e : Multi-Year Budget — create a brand-new property', async () => {
+    test('TC386 @multiYearBudget @sanity @regression @e2e : create a brand-new property', async () => {
         test.setTimeout(120000);
         timestamp = Date.now();
         propertyName = `TC26_MYBProp_${timestamp}`;
@@ -78,10 +54,8 @@ test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propaga
         Logger.success(`TC386: Property created — ${propertyName}`);
     });
 
-    test('TC387 @multiYearBudget @sanity @regression @e2e : Multi-Year Budget — capture propertyId and persist property data for downstream reuse', async () => {
+    test('TC387 @multiYearBudget @sanity @regression @e2e : capture propertyId and persist property data for downstream reuse', async () => {
         test.setTimeout(60000);
-        // createProperty() (MYB01) leaves the app on the Properties list at the end of its own
-        // flow, but that state does not survive into this fresh test — re-navigate directly.
         await page.goto(`${process.env.BASE_URL.replace(/\/$/, '')}/properties`, { waitUntil: 'load' });
         await page.waitForTimeout(3000);
         await page.getByText(propertyName, { exact: true }).first().click();
@@ -98,7 +72,7 @@ test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propaga
         Logger.success(`TC387: Persisted property data (propertyId=${propertyId}) to ${filePath}`);
     });
 
-    test('TC388 @multiYearBudget @sanity @regression @e2e : Multi-Year Budget — create first single-year budget with one budget item ($50,000)', async () => {
+    test('TC388 @multiYearBudget @sanity @regression @e2e : create first single-year budget with one budget item ($50,000)', async () => {
         test.setTimeout(120000);
         Logger.step('TC388: Creating first single-year budget');
         await budgetJob.navigateToBudget();
@@ -109,7 +83,7 @@ test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propaga
         Logger.success(`TC388: Single-year budget submitted with item "${budgetItemName}" ($50,000)`);
     });
 
-    test('TC389 @multiYearBudget @sanity @regression @e2e : Multi-Year Budget — verify empty state before any plan exists', async () => {
+    test('TC389 @multiYearBudget @sanity @regression @e2e : verify empty state before any plan exists', async () => {
         test.setTimeout(90000);
         await mybJob.navigateToMultiYearBudget();
         await mybJob.selectPropertyByName(propertyName);
@@ -117,7 +91,7 @@ test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propaga
         Logger.success('TC389: Empty state ("Create Your Multi-Year Budget") verified for brand-new property');
     });
 
-    test('TC390 @multiYearBudget @sanity @regression @e2e : Multi-Year Budget — initialize plan and verify plan table structure', async () => {
+    test('TC390 @multiYearBudget @sanity @regression @e2e : initialize plan and verify plan table structure', async () => {
         test.setTimeout(120000);
         await mybJob.navigateToMultiYearBudget();
         await mybJob.selectPropertyByName(propertyName);
@@ -133,7 +107,7 @@ test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propaga
         Logger.success('TC390: Plan table structure verified — Category/Budget Item rows, Total row, year columns');
     });
 
-    test('TC391 @multiYearBudget @sanity @regression @e2e : Multi-Year Budget — real-time propagation of single-year budget into Current Budget', async () => {
+    test('TC391 @multiYearBudget @sanity @regression @e2e : real-time propagation of single-year budget into Current Budget', async () => {
         test.setTimeout(150000);
         await mybJob.navigateToMultiYearBudget();
         await mybJob.selectPropertyByName(propertyName);
@@ -154,7 +128,7 @@ test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propaga
         Logger.success('TC391: Multi-Year Budget Current Budget updated to $60,000 after single-year budget revision');
     });
 
-    test('TC392 @multiYearBudget @regression : Multi-Year Budget — health-indicator colouring for negative, zero, and positive variance', async () => {
+    test('TC392 @multiYearBudget @regression : health-indicator colouring for negative, zero, and positive variance', async () => {
         test.setTimeout(120000);
         await mybJob.navigateToMultiYearBudget();
         await mybJob.selectPropertyByName(propertyName);
@@ -180,7 +154,7 @@ test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propaga
         Logger.success('TC392: Health-indicator colours verified for red/orange/green variance states');
     });
 
-    test('TC393 @multiYearBudget @regression : Multi-Year Budget — cross-year reallocation', async () => {
+    test('TC393 @multiYearBudget @regression : cross-year reallocation', async () => {
         test.setTimeout(120000);
         await mybJob.navigateToMultiYearBudget();
         await mybJob.selectPropertyByName(propertyName);
@@ -192,7 +166,7 @@ test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propaga
         Logger.success(`TC393: Cross-year reallocation confirmed — ${startYear + 1} Planned Budget is now $10,000`);
     });
 
-    test('TC394 @multiYearBudget @regression : Multi-Year Budget — Upload CSV dialog and template download', async () => {
+    test('TC394 @multiYearBudget @regression : Upload CSV dialog and template download', async () => {
         test.setTimeout(90000);
         await mybJob.navigateToMultiYearBudget();
         await mybJob.selectPropertyByName(propertyName);
@@ -206,7 +180,7 @@ test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propaga
         Logger.success('TC394: Upload CSV dialog and template download verified');
     });
 
-    test('TC395 @multiYearBudget @regression : Multi-Year Budget — CSV export', async () => {
+    test('TC395 @multiYearBudget @regression : CSV export', async () => {
         test.setTimeout(90000);
         await mybJob.navigateToMultiYearBudget();
         await mybJob.selectPropertyByName(propertyName);
@@ -218,7 +192,7 @@ test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propaga
         Logger.success('TC395: CSV export verified');
     });
 
-    test('TC396 @multiYearBudget @regression : Multi-Year Budget — Reset budget backup gate', async () => {
+    test('TC396 @multiYearBudget @regression : Reset budget backup gate', async () => {
         test.setTimeout(90000);
         await mybJob.navigateToMultiYearBudget();
         await mybJob.selectPropertyByName(propertyName);
@@ -229,7 +203,7 @@ test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propaga
         Logger.success('TC396: Reset budget backup-gate verified (cancelled without resetting)');
     });
 
-    test('TC397 @multiYearBudget @regression : Multi-Year Budget — Settings dialog fields and no Capital Envelope field', async () => {
+    test('TC397 @multiYearBudget @regression : Settings dialog fields and no Capital Envelope field', async () => {
         test.setTimeout(90000);
         await mybJob.navigateToMultiYearBudget();
         await mybJob.selectPropertyByName(propertyName);
@@ -241,7 +215,7 @@ test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propaga
         Logger.success('TC397: Settings dialog verified — no Total Capital Envelope field present (ticket/app gap)');
     });
 
-    test('TC398 @multiYearBudget @regression : Multi-Year Budget — history log records plan creation', async () => {
+    test('TC398 @multiYearBudget @regression : history log records plan creation', async () => {
         test.setTimeout(90000);
         await mybJob.navigateToMultiYearBudget();
         await mybJob.selectPropertyByName(propertyName);
@@ -252,49 +226,23 @@ test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propaga
         Logger.success('TC398: History log entry for plan creation verified');
     });
 
-    // ===================================================================================
-    // TC399-TC400: renumbered, otherwise unchanged, from the original MYB02/MYB03 (which
-    // document AC13/AC14 gaps against the ticket).
-    // ===================================================================================
-
-    test('TC399 @multiYearBudget @regression : Multi-Year Budget — no Portfolio Roll-Up view exists (documents AC13 gap)', async () => {
+    test('TC399 @multiYearBudget @regression : no Portfolio Roll-Up view exists (documents AC13 gap)', async () => {
         test.setTimeout(120000);
         await mybJob.navigateToMultiYearBudget();
-
-        // The only property-switcher entry point available from Multi-Year Budget is the
-        // single-property switcher (breadcrumb dropdown). There is no separate portfolio /
-        // roll-up aggregate view or nav entry anywhere in Financials. This test documents
-        // that gap so it fails loudly (rather than silently) once a Portfolio Roll-Up view
-        // ships and this assertion needs to be replaced with real coverage.
-        const portfolioNavEntry = page.locator('nav').getByText(/portfolio/i);
+       const portfolioNavEntry = page.locator('nav').getByText(/portfolio/i);
         await expect(portfolioNavEntry, 'No "Portfolio" navigation entry should currently exist (AC13 not implemented)').toHaveCount(0);
         Logger.success('TC399: Confirmed no Portfolio Roll-Up navigation entry exists — AC13 remains unimplemented');
     });
 
-    test('TC400 @multiYearBudget @regression : Multi-Year Budget — second test account has full edit access (documents AC14 gap)', async ({ browser }) => {
+    test('TC400 @multiYearBudget @regression : second test account has full edit access (documents AC14 gap)', async ({ browser }) => {
         test.setTimeout(180000);
         const propertyDataPath = path.join(__dirname, '../data/multiYearBudgetPropertyData.json');
         test.skip(!fs.existsSync(propertyDataPath), 'Requires MYB02 to have run first and persisted a property');
         const { propertyId: savedPropertyId, propertyName: savedPropertyName } = JSON.parse(fs.readFileSync(propertyDataPath, 'utf-8'));
-
-        // This documents CURRENT behaviour rather than the ticket's desired behaviour: both
-        // available test accounts (sessionState.json and OtherSessionState.json) are full
-        // Budget-Admin-equivalent users in this environment, so no view-only / restricted role
-        // is available to genuinely exercise AC14. If a lower-privilege role becomes available,
-        // this test should be rewritten to assert the edit controls are disabled/hidden for it.
-        // Navigating directly by propertyId (rather than via the property-switcher UI) keeps
-        // this test independent of the switcher's own behaviour under a second account/session.
         const otherContext = await browser.newContext({ storageState: 'OtherSessionState.json' });
         const otherPage = await otherContext.newPage();
         await otherPage.goto(`${process.env.BASE_URL.replace(/\/$/, '')}/financials/multi-year-budget?propertyId=${savedPropertyId}`, { waitUntil: 'load' });
         await otherPage.waitForTimeout(4000);
-
-        // The second account may belong to a different org/property scope than the primary
-        // test account, in which case a direct deep-link redirects elsewhere (e.g. to the
-        // default CapEx dashboard) rather than showing this property's Multi-Year Budget —
-        // that is a property-visibility difference, not the role-based read-only restriction
-        // AC14 asks for, so it is reported distinctly rather than mis-asserted as a pass/fail
-        // on the edit controls.
         const landedOnProperty = await otherPage.getByText(savedPropertyName, { exact: true }).first().isVisible({ timeout: 10000 }).catch(() => false);
         if (!landedOnProperty) {
             Logger.info(`TC400: Second account (OtherSessionState.json) could not reach property "${savedPropertyName}" directly — likely a separate org/property scope, not a role restriction. AC14 remains unverified rather than confirmed either way.`);
@@ -306,17 +254,7 @@ test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propaga
         Logger.success('TC400: Confirmed second account has full edit access — no role-based read-only restriction is enforced yet (AC14 not implemented)');
     });
 
-    // ===================================================================================
-    // MYB16-MYB30: new negative and edge cases, all MCP-verified live against
-    // beta.tailorbird.com on 2026-08-11 before being written (not guessed) — see
-    // MultiYearBudget_Coverage_Report.md / project memory for the full investigation.
-    // MYB16-MYB25 reuse the property/item built up by MYB01-MYB13 above; MYB26-MYB29 use a
-    // second, dedicated throwaway property (created fresh, never reusing an existing one) that
-    // deliberately has no single-year budget items, so its item catalog has the multiple
-    // generic entries needed to exercise select-all/search meaningfully.
-    // ===================================================================================
-
-    test('TC401 @multiYearBudget @regression : Multi-Year Budget — Save stays disabled without Reason in "Set amount" mode', async () => {
+    test('TC401 @multiYearBudget @regression : Save stays disabled without Reason in "Set amount" mode', async () => {
         test.setTimeout(90000);
         await mybJob.navigateToMultiYearBudget();
         await mybJob.selectPropertyByName(propertyName);
@@ -328,7 +266,7 @@ test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propaga
         Logger.success('TC401: Save correctly stayed disabled with a valid amount but no Reason ("Set amount" mode)');
     });
 
-    test('TC402 @multiYearBudget @regression : Multi-Year Budget — Save stays disabled without Reason in "Reallocate" mode', async () => {
+    test('TC402 @multiYearBudget @regression : Save stays disabled without Reason in "Reallocate" mode', async () => {
         test.setTimeout(90000);
         await mybJob.navigateToMultiYearBudget();
         await mybJob.selectPropertyByName(propertyName);
@@ -340,7 +278,7 @@ test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propaga
         Logger.success('TC402: Save correctly stayed disabled with a valid source + amount but no Reason ("Reallocate" mode)');
     });
 
-    test('TC403 @multiYearBudget @regression : Multi-Year Budget — Cancel on Edit Planned Budget dialog discards changes', async () => {
+    test('TC403 @multiYearBudget @regression : Cancel on Edit Planned Budget dialog discards changes', async () => {
         test.setTimeout(90000);
         await mybJob.navigateToMultiYearBudget();
         await mybJob.selectPropertyByName(propertyName);
@@ -354,7 +292,7 @@ test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propaga
         Logger.success(`TC403: Confirmed Cancel discarded the typed amount — year 2034 Planned Budget still "${after}"`);
     });
 
-    test('TC404 @multiYearBudget @regression : Multi-Year Budget — negative "Set amount" input is silently clamped to $0.00', async () => {
+    test('TC404 @multiYearBudget @regression : negative "Set amount" input is silently clamped to $0.00', async () => {
         test.setTimeout(90000);
         await mybJob.navigateToMultiYearBudget();
         await mybJob.selectPropertyByName(propertyName);
@@ -366,25 +304,20 @@ test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propaga
         Logger.success('TC404: Confirmed negative amount input is silently clamped to $0.00 (no validation error shown)');
     });
 
-    test('TC405 @multiYearBudget @regression : Multi-Year Budget — clearing the Planned Budget field clears the cell', async () => {
+    test('TC405 @multiYearBudget @regression : clearing the Planned Budget field clears the cell', async () => {
         test.setTimeout(90000);
         await mybJob.navigateToMultiYearBudget();
         await mybJob.selectPropertyByName(propertyName);
-
-        // year 2027 currently holds the $10,000 reallocated into it by MYB08.
         await mybJob.openEditPlannedBudgetDialog(budgetItemName, startYear + 1);
         await mybJob.setPlannedBudgetAmount('', 'TC405 automation - clear planned budget check');
         const itemValue = await mybJob.getFutureYearPlannedValue(budgetItemName, startYear + 1);
         expect(itemValue, 'Leaving the amount empty must clear the planned budget for that cell, per the dialog\'s own hint text').toBe('—');
-        // With only one budget item on this plan, the Total row for the same year is that
-        // item's sum — but unlike the item's own untouched-cell "—" placeholder, the Total
-        // row is a computed aggregate that renders a zero sum as "$0" (MCP-verified live).
         const totalValue = await mybJob.getFutureYearPlannedValue('Total', startYear + 1);
         expect(totalValue, 'The Total row must recalculate to $0 after the item\'s planned budget is cleared').toBe('$0');
         Logger.success(`TC405: Confirmed clearing the field cleared year ${startYear + 1}'s Planned Budget to "—" and the Total row recalculated to $0`);
     });
 
-    test('TC406 @multiYearBudget @regression : Multi-Year Budget — "Reallocate from" excludes the year being edited', async () => {
+    test('TC406 @multiYearBudget @regression : "Reallocate from" excludes the year being edited', async () => {
         test.setTimeout(90000);
         await mybJob.navigateToMultiYearBudget();
         await mybJob.selectPropertyByName(propertyName);
@@ -399,7 +332,7 @@ test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propaga
         Logger.success(`TC406: Confirmed year ${targetYear} does not appear as its own reallocation source`);
     });
 
-    test('TC407 @multiYearBudget @regression : Multi-Year Budget — "Reallocate from" lists zero-balance years as valid options', async () => {
+    test('TC407 @multiYearBudget @regression : "Reallocate from" lists zero-balance years as valid options', async () => {
         test.setTimeout(90000);
         await mybJob.navigateToMultiYearBudget();
         await mybJob.selectPropertyByName(propertyName);
@@ -414,7 +347,7 @@ test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propaga
         Logger.success(`TC407: Confirmed zero-balance year 2028 is listed as a selectable option: "${zeroBalanceOption}"`);
     });
 
-    test('TC408 @multiYearBudget @regression : Multi-Year Budget — reallocating more than the source year\'s balance is rejected', async () => {
+    test('TC408 @multiYearBudget @regression : reallocating more than the source year\'s balance is rejected', async () => {
         test.setTimeout(90000);
         await mybJob.navigateToMultiYearBudget();
         await mybJob.selectPropertyByName(propertyName);
@@ -434,7 +367,7 @@ test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propaga
         Logger.success(`TC408: Confirmed over-allocation from a zero-balance source year was rejected and year ${targetYear} stayed at "${afterValue}"`);
     });
 
-    test('TC409 @multiYearBudget @regression : Multi-Year Budget — CSV upload missing required columns is rejected', async () => {
+    test('TC409 @multiYearBudget @regression : CSV upload missing required columns is rejected', async () => {
         test.setTimeout(90000);
         await mybJob.navigateToMultiYearBudget();
         await mybJob.selectPropertyByName(propertyName);
@@ -449,7 +382,7 @@ test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propaga
         Logger.success('TC409: Confirmed a CSV missing the required Category/Budget Item columns is rejected with an inline error');
     });
 
-    test('TC410 @multiYearBudget @regression : Multi-Year Budget — CSV upload auto-creates a new budget item', async () => {
+    test('TC410 @multiYearBudget @regression : CSV upload auto-creates a new budget item', async () => {
         test.setTimeout(90000);
         await mybJob.navigateToMultiYearBudget();
         await mybJob.selectPropertyByName(propertyName);
@@ -468,7 +401,7 @@ test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propaga
         Logger.success(`TC410: Confirmed CSV upload auto-created budget item "${newItemName}" with ${startYear} Planned Budget of $5,000`);
     });
 
-    test('TC411 @multiYearBudget @regression : Multi-Year Budget — a plan created with zero budget items shows a distinct empty state', async () => {
+    test('TC411 @multiYearBudget @regression : a plan created with zero budget items shows a distinct empty state', async () => {
         test.setTimeout(150000);
         negPropertyName = `TC411_NegProp_${Date.now()}`;
         await approvalJob.createProperty(
@@ -490,7 +423,7 @@ test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propaga
         Logger.success(`TC411: Confirmed a zero-item plan is accepted and renders "No multi year budget details added yet" (property: ${negPropertyName})`);
     });
 
-    test('TC412 @multiYearBudget @regression : Multi-Year Budget — an invalid hold period (End Year < Start Year) is silently rejected', async () => {
+    test('TC412 @multiYearBudget @regression : an invalid hold period (End Year < Start Year) is silently rejected', async () => {
         test.setTimeout(90000);
         await mybJob.navigateToMultiYearBudget();
         await mybJob.selectPropertyByName(negPropertyName);
@@ -506,16 +439,8 @@ test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propaga
         Logger.success('TC412: Confirmed an invalid hold period (End Year < Start Year) is silently rejected with no user-facing error (UX gap)');
     });
 
-    test('TC413 @multiYearBudget @regression : Multi-Year Budget — Select all / Deselect all toggle the full item list', async () => {
+    test('TC413 @multiYearBudget @regression : Select all / Deselect all toggle the full item list', async () => {
         test.setTimeout(150000);
-        // MCP-verified live 2026-08-11: a genuinely brand-new property (never given a
-        // single-year budget) shows "No budget items found for this property." in the
-        // Init/Settings item list — zero items, not a generic org-wide catalog. An earlier
-        // property explored during investigation (Test Property5_Reassigning_Automation)
-        // showed 12 generic items, but that turned out to be years of accumulated state from
-        // other test suites reusing it, not default behaviour for a fresh property. Select
-        // all/Deselect all is only a meaningful check with more than one real item, so this
-        // gives negPropertyName two single-year budget items first.
         await budgetJob.navigateToBudget();
         await budgetJob.selectPropertyByName(negPropertyName);
         await budgetJob.openRevisionEditor();
@@ -525,11 +450,6 @@ test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propaga
 
         await mybJob.navigateToMultiYearBudget();
         await mybJob.selectPropertyByName(negPropertyName);
-
-        // The two items just submitted on the Budget side can take a few seconds to reach the
-        // Multi-Year Budget item catalog (MCP/CI-verified real backend propagation delay
-        // elsewhere in this app — see feedback_ci_stability memory) — a fresh navigation alone
-        // isn't enough, so poll by reopening Settings rather than checking only once.
         await mybJob.openSettingsDialog();
         let summary;
         await expect.poll(async () => {
@@ -554,7 +474,7 @@ test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propaga
         Logger.success(`TC413: Confirmed Select all / Deselect all correctly toggled all ${summary.total} items`);
     });
 
-    test('TC414 @multiYearBudget @regression : Multi-Year Budget — item search with no match shows an empty-result message', async () => {
+    test('TC414 @multiYearBudget @regression : item search with no match shows an empty-result message', async () => {
         test.setTimeout(90000);
         await mybJob.navigateToMultiYearBudget();
         await mybJob.selectPropertyByName(negPropertyName);
@@ -567,7 +487,7 @@ test.describe('Multi-Year Budget - Initialization, Plan Table, Real-Time Propaga
         Logger.success('TC414: Confirmed a non-matching item search shows "No items match your search." and disables Select all/Deselect all');
     });
 
-    test('TC415 @multiYearBudget @regression : Multi-Year Budget — property switcher search with no match shows an empty-result message', async () => {
+    test('TC415 @multiYearBudget @regression : property switcher search with no match shows an empty-result message', async () => {
         test.setTimeout(90000);
         await mybJob.navigateToMultiYearBudget();
         await mybJob.searchPropertySwitcher('nonexistent_property_zzz_123');

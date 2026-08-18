@@ -568,4 +568,81 @@ test.describe('Vendors Directory', () => {
         Logger.success(`TC241 passed: vendor Website "${randomWebsite}" saved successfully and persists in the Edit Vendor modal`);
     });
 
+    test('TC242 @vendor @regression : Verify POC (Primary Contact) can be selected via dropdown for any vendor', async () => {
+        // NOTE: The app does not expose POC as a literal checkbox — it is a searchable
+        // single-select combobox (dialog.getByRole('textbox', { name: 'POC' }) + a
+        // role="option" listbox), same control used in TC241 step 4. This test verifies
+        // the equivalent capability — selecting a POC value — across multiple vendors,
+        // not just one. Per vendor test safety rules, only the "Sumit corp" test vendor
+        // may ever be Saved/mutated, so every iteration here Cancels instead of Saving.
+        Logger.step('TC242: Verify POC dropdown is selectable across multiple vendors (Cancel-only, no Save)');
+
+        await vendorPage.goToDirectory();
+        await vendorPage.waitForDirectoryReady();
+
+        const rowCount = await vendorPage.locators.dataRows.count();
+        const vendorsToCheck = Math.min(rowCount, 3);
+        expect(vendorsToCheck, 'Directory should list at least one vendor to verify POC selection against').toBeGreaterThan(0);
+        Logger.info(`TC242: checking POC selection on ${vendorsToCheck} vendor(s) ✓`);
+
+        for (let i = 0; i < vendorsToCheck; i++) {
+            if (i > 0) {
+                await vendorPage.goToDirectory();
+                await vendorPage.waitForDirectoryReady();
+            }
+
+            await vendorPage.locators.viewDetailsBtns.nth(i).click();
+            await page.waitForURL(/vendors\/\d+/, { timeout: 10000 });
+            await vendorPage.waitForVendorDetailReady();
+
+            await vendorPage.locators.editBtn.click();
+            await page.waitForTimeout(1500);
+            const dialog = vendorPage.locators.editDialog;
+            await expect(dialog, `Vendor #${i + 1}: Edit Vendor dialog should open`).toBeVisible({ timeout: 8000 });
+
+            const pocInput = dialog.getByRole('textbox', { name: 'POC' });
+            const pocVisible = await pocInput.isVisible({ timeout: 3000 }).catch(() => false);
+            if (pocVisible) {
+                await pocInput.click();
+                await page.waitForTimeout(1000);
+                const pocOptions = page.getByRole('option');
+                const optionCount = await pocOptions.count();
+                if (optionCount > 0) {
+                    await expect(pocOptions.first(), `Vendor #${i + 1}: POC dropdown should offer at least one selectable option`).toBeVisible({ timeout: 3000 });
+                    await pocOptions.first().click();
+                    await page.waitForTimeout(400);
+                    const pocValue = await pocInput.inputValue().catch(() => '');
+                    expect(pocValue, `Vendor #${i + 1}: POC field should reflect a selected value after choosing an option`).not.toBe('');
+                    Logger.info(`TC242: Vendor #${i + 1} — POC selected successfully: "${pocValue}" ✓`);
+                } else {
+                    Logger.info(`TC242: Vendor #${i + 1} — POC dropdown had no options to select (e.g. "No users found for this vendor"); skipping selection assertion`);
+                }
+            } else {
+                Logger.info(`TC242: Vendor #${i + 1} — POC field not visible on this vendor; skipping`);
+            }
+
+            // MCP-observed live: when a vendor has no assignable users, the POC dropdown
+            // stays open showing a "No users found for this vendor" empty state, which
+            // overlays and blocks the Cancel button. Clicking the dialog heading dismisses
+            // just the dropdown (Escape here closes the whole Edit Vendor dialog instead —
+            // same distinction TC241 step 4 documents for the Trade field).
+            const openPocDropdown = page.locator('.mantine-Select-dropdown:visible, [role="listbox"]:visible').first();
+            if (await openPocDropdown.isVisible({ timeout: 500 }).catch(() => false)) {
+                await dialog.getByRole('heading', { name: 'Edit Vendor' }).click();
+                await page.waitForTimeout(400);
+            }
+
+            // Never Save here — only the designated "Sumit corp" test vendor (TC241) may be saved.
+            const cancelBtn = dialog.getByRole('button', { name: 'Cancel' });
+            if (await cancelBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+                await cancelBtn.click();
+            } else {
+                await page.keyboard.press('Escape');
+            }
+            await expect(dialog, `Vendor #${i + 1}: Edit Vendor dialog should close after Cancel`).toBeHidden({ timeout: 5000 });
+        }
+
+        Logger.success('TC242 passed: POC dropdown selection verified across multiple vendors (Cancel-only, no Save)');
+    });
+
 });

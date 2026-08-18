@@ -14,7 +14,7 @@ test.use({
 
 let page, multiApprover;
 
-test.describe('Multi Approver Invoice Approval Flow', () => {
+test.describe('Multi Approver Flow', () => {
     test.beforeEach(async ({ page: p }) => {
         page = p;
         multiApprover = new MultiApproverPage(page);
@@ -24,7 +24,7 @@ test.describe('Multi Approver Invoice Approval Flow', () => {
         await ensureLeftPanelExpanded(page);
     });
 
-    test('TC320 @approval @multiApprover : Two invoices route through multi-approver approval end-to-end', async () => {
+    test('TC319 @approval @multiApprover : Two invoices route through multi-approver approval end-to-end', async () => {
         const { jobName, approverEmails, approvalNotes, invoiceAmount, approvalStatus } = fixture;
 
         // Step 1: Go to Jobs tab
@@ -75,19 +75,9 @@ test.describe('Multi Approver Invoice Approval Flow', () => {
         await multiApprover.navigateToAllApprovals();
         await multiApprover.searchApprovals(firstInvoice.invoiceNumber);
 
-        // Step 7 (removed 2026-07-28): previously asserted the All Approvals grid's
-        // "Approver" column contained both configured approver emails at once. MCP-verified
-        // live: that grid cell only ever shows the single currently-assigned approver, not
-        // the full eligible-approvers list — this was a redundant/outdated check anyway,
-        // since Step 9 below already validates the full "Eligible approvers: X, Y" text via
-        // the View Details dialog, the actual UI surface for that information.
-
-        // Step 8: Click View Details
         Logger.step('Step 8: Opening approval View Details');
         await multiApprover.openApprovalViewDetails();
 
-        // Step 9: Assert approval status text piece by piece (not one giant
-        // combined string comparison), against fixture-defined expected values.
         Logger.step('Step 9: Verifying pending approval status');
         const pendingStatus = await multiApprover.getApprovalStatusDetails();
         multiApprover.assertEquals('Approval Status label', pendingStatus.approvalStatusLabel, approvalStatus.approvalStatusLabel);
@@ -101,11 +91,6 @@ test.describe('Multi Approver Invoice Approval Flow', () => {
         await multiApprover.fillApprovalNotes(approvalNotes);
         await multiApprover.clickApproveOnBehalf();
 
-        // The signed-in user approving "on behalf" is not himself one of the two
-        // eligible approvers, so this invoice will not surface under "My
-        // Approvals" for this session (verified live: searching there returns no
-        // rows). The final approved state is verified back in All Approvals,
-        // which is the reliable, reachable source of truth for this account.
         Logger.step('Step 11: Re-searching and verifying final approved status');
         await multiApprover.searchApprovals(firstInvoice.invoiceNumber);
         await multiApprover.openApprovalViewDetails();
