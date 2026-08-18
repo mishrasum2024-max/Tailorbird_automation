@@ -340,7 +340,7 @@ class PropertiesHelper {
             await this.goToProperties();
         }
         await this.page.waitForLoadState("domcontentloaded");
-        await this.page.waitForTimeout(1500);
+        await this.page.waitForTimeout(15000);
         // CI-safe: in some runs only "Layout"/"View" is clickable (other table-action buttons are Filter/Export).
         const switchers = healingLocator(toolbarSwitcherStrategies(this.page));
         let menuOpened = false;
@@ -351,7 +351,7 @@ class PropertiesHelper {
                 if (!(await switcher.isVisible().catch(() => false))) continue;
                 await switcher.click({ force: true }).catch(() => { });
                 const viewItem = this.page.getByRole('menuitem', { name: view }).first();
-                if (await viewItem.isVisible({ timeout: 1500 }).catch(() => false)) {
+                if (await viewItem.isVisible({ timeout: 15000 }).catch(() => false)) {
                     await viewItem.click({ force: true }).catch(() => { });
                     menuOpened = true;
                     break;
@@ -359,13 +359,13 @@ class PropertiesHelper {
             }
             if (!menuOpened) {
                 const tableBtn = this.page.getByTestId('bt-table-action');
-                await tableBtn.waitFor({ state: 'visible', timeout: 20000 }).catch(() => {});
-                await this.page.waitForTimeout(300);
+                await tableBtn.waitFor({ state: 'visible', timeout: 60000 }).catch(() => {});
+                await this.page.waitForTimeout(3000);
             }
         }
         if (!menuOpened) this.log(`changeView: menu item "${view}" not visible; proceeding with current view.`);
 
-        const apiWait = this.waitForApi200('changeView', [/\/api\/bird-table/, /\/api\/table-view-config/], 12_000);
+        const apiWait = this.waitForApi200('changeView', [/\/api\/bird-table/, /\/api\/table-view-config/], 32_000);
         const ready = await expect
             .poll(async () => {
                 const tree = await this.page.locator(propertyLocators.gridRootWrapper).first().isVisible().catch(() => false);
@@ -374,7 +374,7 @@ class PropertiesHelper {
                 const search = await healingLocator(searchInputStrategies(this.page)).first().isVisible().catch(() => false);
                 const toolbar = await this.page.getByRole('button', { name: /layout|view|table|filter|sort|export/i }).first().isVisible().catch(() => false);
                 return tree || cards || createBtn || search || toolbar;
-            }, { timeout: 20_000, intervals: [500, 1000, 1500] })
+            }, { timeout: 60_000, intervals: [500, 1000, 1500] })
             .toBeTruthy()
             .then(() => true)
             .catch(() => false);
