@@ -36,6 +36,8 @@
     "@types/node": "^24.10.1"
   },
   "dependencies": {
+    "@notionhq/client": "^5.25.2",
+    "@slack/bolt": "^5.0.0",
     "dotenv": "^17.2.3"
   }
 }
