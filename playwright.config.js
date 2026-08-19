@@ -12,7 +12,7 @@ dotenv.config({ path: path.resolve(__dirname, '.env') });
 export default defineConfig({
   testDir: './tests',
   timeout: 280 * 1000,
- 
+
   /* Run tests in files in parallel */
   fullyParallel: true,
 
@@ -23,7 +23,7 @@ export default defineConfig({
   retries: process.env.CI ? 0 : 0,
 
   /* Opt out of parallel tests on CI */
-  workers:1,
+  workers: 1,
 
   /*
    * CI: write blob reports per run, then merge into one HTML report (see workflow).
@@ -32,13 +32,15 @@ export default defineConfig({
   reporter:
     process.env.CI === 'true' && process.env.PLAYWRIGHT_BLOB_REPORT === '1'
       ? [
-          ['list'],
-          ['blob', { outputDir: 'blob-report' }],
-        ]
+        ['list'],
+        ['blob', { outputDir: 'blob-report' }],
+        ['json', { outputFile: 'test-results/test-results.json' }],
+      ]
       : [
-          ['list'],
-          ['html', { open: 'never' }],
-        ],
+        ['list'],
+        ['html', { open: 'never' }],
+        ['json', { outputFile: 'test-results/test-results.json' }],
+      ],
 
   updateSnapshots: 'missing',
 
@@ -56,7 +58,7 @@ export default defineConfig({
     actionTimeout: 55 * 1000,
 
     /* Base URL from .env */
-    baseURL: process.env.BASE_URL ,
+    baseURL: process.env.BASE_URL,
 
     /* Save video for each test */
     video: 'on',
