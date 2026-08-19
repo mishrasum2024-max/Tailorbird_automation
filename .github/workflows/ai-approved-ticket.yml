@@ -1,0 +1,42 @@
+name: AI Approved Ticket
+
+on:
+  workflow_dispatch:
+    inputs:
+      ticket_id:
+        description: "Approved Notion ticket ID"
+        required: true
+        type: string
+
+jobs:
+  process-approved-ticket:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Show approved ticket
+        run: |
+          echo "======================================"
+          echo "AI TICKET APPROVED"
+          echo "======================================"
+          echo "Ticket ID: ${{ inputs.ticket_id }}"
+          echo "======================================"
+
+      - name: Process approved ticket
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_DATA_SOURCE_ID: ${{ secrets.NOTION_DATA_SOURCE_ID }}
+          TICKET_ID: ${{ inputs.ticket_id }}
+        run: |
+          node scripts/ai-agent/process-approved-ticket.js
