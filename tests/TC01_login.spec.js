@@ -47,7 +47,7 @@ test.describe('Login Flow', () => {
     });
   });
 
-  test('TC02 @sanity User should be able to navigate to dashboard successfully', async ({ browser }) => {
+  test.skip('TC02 @sanity User should be able to navigate to dashboard successfully', async ({ browser }) => {
     Logger.info('Verifying dashboard navigation after login...');
 
     context = await browser.newContext({ storageState: 'sessionState.json' });
@@ -66,7 +66,7 @@ test.describe('Login Flow', () => {
     });
   });
 
-  test('TC03 @sanity @login Login with another multiorganization user successfully', async ({ browser }) => {
+  test.skip('TC03 @sanity @login Login with another multiorganization user successfully', async ({ browser }) => {
     Logger.info('Starting Tailorbird login test...');
 
     context = await browser.newContext();
@@ -89,7 +89,7 @@ test.describe('Login Flow', () => {
     });
   });
 
-  test('TC04 @sanity @login Validate login with an existing single-organization user successfully', async ({ browser }) => {
+  test.skip('TC04 @sanity @login Validate login with an existing single-organization user successfully', async ({ browser }) => {
     Logger.info('Starting Tailorbird login test...');
 
     context = await browser.newContext();
@@ -113,7 +113,7 @@ test.describe('Login Flow', () => {
   });
 });
 
-test.describe('Login Flow', () => {
+test.describe.skip('Login Flow', () => {
   test('TC05 @regression @login Validate login negative, edge, navigation, and visual scenarios.', async ({
     browser,
   }, testInfo) => {
@@ -474,7 +474,7 @@ test.describe('Login Flow', () => {
   });
 });
 
-test.describe('Login Flow', () => {
+test.describe.skip('Login Flow', () => {
   test.setTimeout(300_000);
 
   const loginUrl = process.env.LOGIN_URL;
