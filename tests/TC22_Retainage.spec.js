@@ -391,6 +391,94 @@ test.describe('Retainage flow', () => {
         expect(parseFloat(releasedInMessage.replace(/,/g, ''))).toBeGreaterThanOrEqual(fixture.overDrawScenario.releasedAmount);
         Logger.success(`Over-draw guard confirmed: approval rejected with "${result.errorMessage}" — released ($${releasedInMessage}) correctly exceeds withheld ($${withheldInMessage}) for the contract line.`);
     });
+
+    test('TC349 @regression @retainage : Clearing invoice-level Retainage % (leaving it blank) saves as an explicit 0% override, not the contract default', async () => {
+        await retainagePage.gotoInvoiceList(fixture.jobId);
+        await retainagePage.createDraftInvoice();
+
+        const inheritedBadge = await retainagePage.getInvoiceRetainageBadgeText();
+        Logger.info(`Invoice-level Retainage % badge before any change -> actual: "${inheritedBadge}" | expected pattern: ${fixture.patterns.invoiceRetainageBadgeInherited}`);
+        expect(inheritedBadge).toMatch(new RegExp(fixture.patterns.invoiceRetainageBadgeInherited));
+
+        await retainagePage.clearRetainagePercent();
+
+        const badgeAfterClear = await retainagePage.getInvoiceRetainageBadgeText();
+        Logger.info(`Invoice-level Retainage % badge after clearing the field and tabbing away -> actual: "${badgeAfterClear}" | expected: "${fixture.zeroOverrideScenario.expectedBadgeAfterClear}" (must NOT revert to "From contract (...)")`);
+        expect(badgeAfterClear).toBe(fixture.zeroOverrideScenario.expectedBadgeAfterClear);
+
+        const percentValueAfterClear = await loc.retainagePercentInput.inputValue();
+        Logger.info(`Retainage % input value after clearing -> actual: "${percentValueAfterClear}" | expected: "${fixture.zeroOverrideScenario.expectedPercentAfterClear}" (saved value must match the displayed value; the bug saved the contract default instead)`);
+        expect(percentValueAfterClear).toBe(fixture.zeroOverrideScenario.expectedPercentAfterClear);
+
+        const row = retainagePage.getInvoiceLineItemRow(fixture.lineItem.scope, fixture.lineItem.scheduleOfValue);
+        const values = await retainagePage.getInvoiceLineItemRowValues(row);
+        Logger.info(`Line Retainage % after invoice-level clear cascaded down -> actual: "${values.retainagePercent}" | expected: "0"`);
+        expect(values.retainagePercent).toBe('0');
+        expect(values.retainageAmount).toBe('$0');
+        Logger.success('Clearing the Retainage % field and tabbing away persisted as an explicit 0% override — badge shows "Override", the input reads "0" (not the contract default), and 0% cascaded to the line.');
+    });
+
+    test('TC350 @regression @retainage : Outstanding Retainage persists correctly across a withhold-then-release invoice sequence and never goes negative', async () => {
+        const { withholdInvoiceAmount, withholdInvoicePercent, releaseInvoiceAmount, releaseInvoicePercent, releasedAmount } = fixture.sequenceScenario;
+
+        await retainagePage.gotoInvoiceList(fixture.jobId);
+
+        // Invoice 1: read the cumulative Outstanding Retainage baseline (all prior approved
+        // invoices on this line) before this invoice's own edits are saved, then withhold a new
+        // $10 on this line and approve — a pure "withholding event".
+        await retainagePage.createDraftInvoice();
+        const row1 = retainagePage.getInvoiceLineItemRow(fixture.lineItem.scope, fixture.lineItem.scheduleOfValue);
+        const baselineValues = await retainagePage.getInvoiceLineItemRowValues(row1);
+        const baselineOutstanding = RetainagePage.parseCurrency(baselineValues.outstandingRetainage);
+        Logger.info(`Baseline cumulative Outstanding Retainage before this test's invoices -> $${baselineOutstanding}`);
+        expect(baselineOutstanding).toBeGreaterThanOrEqual(0);
+
+        await retainagePage.setLineInvoiceAmount(row1, withholdInvoiceAmount);
+        await retainagePage.setLineRetainagePercentOverride(row1, withholdInvoicePercent);
+        const withholdValues = await retainagePage.getInvoiceLineItemRowValues(row1);
+        expect(RetainagePage.parseCurrency(withholdValues.retainageAmount)).toBe(fixture.sequenceScenario.expectedWithholdInvoiceRetainageAmount);
+
+        const result1 = await retainagePage.confirmInvoice();
+        expect(result1.approved, `Withholding invoice should approve successfully: ${result1.errorMessage}`).toBe(true);
+        Logger.success(`Invoice 1 approved — withheld $${withholdInvoiceAmount * (withholdInvoicePercent / 100)} on the line with $0 released (a withholding event).`);
+
+        // Invoice 2: read Outstanding again — must now equal baseline + the invoice-1 withheld
+        // amount (nothing released yet) — then release an in-range amount against that cumulative
+        // balance and approve — a "release event" exercising the exact bug from FEAT-1134 (release
+        // <= outstanding balance must be accepted, not just release <= this invoice's own withheld).
+        await retainagePage.gotoInvoiceList(fixture.jobId);
+        await retainagePage.createDraftInvoice();
+        const row2 = retainagePage.getInvoiceLineItemRow(fixture.lineItem.scope, fixture.lineItem.scheduleOfValue);
+        const afterWithholdValues = await retainagePage.getInvoiceLineItemRowValues(row2);
+        const outstandingAfterWithhold = RetainagePage.parseCurrency(afterWithholdValues.outstandingRetainage);
+        Logger.info(`Outstanding Retainage after invoice 1 approved -> actual: $${outstandingAfterWithhold} | expected: baseline ($${baselineOutstanding}) + withheld ($${fixture.sequenceScenario.expectedWithholdInvoiceRetainageAmount}) = $${baselineOutstanding + fixture.sequenceScenario.expectedWithholdInvoiceRetainageAmount}`);
+        expect(outstandingAfterWithhold).toBeGreaterThanOrEqual(0);
+        expect(outstandingAfterWithhold).toBe(baselineOutstanding + fixture.sequenceScenario.expectedWithholdInvoiceRetainageAmount);
+
+        await retainagePage.setLineInvoiceAmount(row2, releaseInvoiceAmount);
+        await retainagePage.setLineRetainagePercentOverride(row2, releaseInvoicePercent);
+        await retainagePage.setLineRetainageReleased(row2, releasedAmount);
+
+        const result2 = await retainagePage.confirmInvoice();
+        Logger.info(`Confirm invoice 2 outcome -> approved: ${result2.approved} (releasing $${releasedAmount} against an outstanding balance of $${outstandingAfterWithhold}, well within range)`);
+        expect(result2.approved, `Release amount ($${releasedAmount}) is within the outstanding balance ($${outstandingAfterWithhold}) and must be accepted: ${result2.errorMessage}`).toBe(true);
+        Logger.success(`Invoice 2 approved — released $${releasedAmount} against the line's outstanding balance (a release event).`);
+
+        // Invoice 3: Outstanding must now reflect BOTH events — equal to baseline + withheld -
+        // released, i.e. exactly $5 higher than baseline (per the ticket's own worked example:
+        // $10 withheld then $5 released on that line leaves $5 outstanding for the next invoice) —
+        // and still never negative.
+        await retainagePage.gotoInvoiceList(fixture.jobId);
+        await retainagePage.createDraftInvoice();
+        const row3 = retainagePage.getInvoiceLineItemRow(fixture.lineItem.scope, fixture.lineItem.scheduleOfValue);
+        const finalValues = await retainagePage.getInvoiceLineItemRowValues(row3);
+        const finalOutstanding = RetainagePage.parseCurrency(finalValues.outstandingRetainage);
+        const expectedFinalOutstanding = baselineOutstanding + fixture.sequenceScenario.expectedWithholdInvoiceRetainageAmount - releasedAmount;
+        Logger.info(`Outstanding Retainage on the next invoice after withhold ($${fixture.sequenceScenario.expectedWithholdInvoiceRetainageAmount}) then release ($${releasedAmount}) -> actual: $${finalOutstanding} | expected: $${expectedFinalOutstanding} (= baseline $${baselineOutstanding} + $${fixture.sequenceScenario.expectedWithholdInvoiceRetainageAmount} - $${releasedAmount})`);
+        expect(finalOutstanding).toBeGreaterThanOrEqual(0);
+        expect(finalOutstanding).toBe(expectedFinalOutstanding);
+        Logger.success(`Cumulative Outstanding Retainage verified across a withhold-then-release invoice sequence: Σwithheld − Σreleased is correct, matches the ticket's own $10-withheld/$5-released/$5-remaining example, and never went negative.`);
+    });
 });
 
 test.describe('retainage Contract', () => {
