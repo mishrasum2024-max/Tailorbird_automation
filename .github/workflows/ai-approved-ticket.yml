@@ -8,6 +8,12 @@ on:
         required: true
         type: string
 
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+  actions: read
+
 jobs:
   process-approved-ticket:
     runs-on: ubuntu-latest
@@ -40,3 +46,40 @@ jobs:
           TICKET_ID: ${{ inputs.ticket_id }}
         run: |
           node scripts/ai-agent/process-approved-ticket.js
+
+      - name: Prepare Claude test-generation prompt
+        run: |
+          node scripts/prepare-claude-test.js
+
+      - name: Generate Playwright tests with Claude Code
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: ./data/claude-test-generation-prompt.md
+          claude_args: '--allowedTools "Bash,Edit,Write,mcp__playwright__*" --max-turns 20'
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+      - name: Commit generated tests and open a PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH="ai/${{ inputs.ticket_id }}-tests"
+
+          git config user.name "tailorbird-ai-agent[bot]"
+          git config user.email "tailorbird-ai-agent[bot]@users.noreply.github.com"
+
+          if [ -z "$(git status --porcelain -- tests/)" ]; then
+            echo "No test file changes were produced by Claude Code. Skipping PR creation."
+            exit 0
+          fi
+
+          git checkout -b "$BRANCH"
+          git add tests/
+          SUMMARY="$(git diff --stat --cached)"
+          git commit -m "AI-generated Playwright tests for ${{ inputs.ticket_id }}"
+          git push origin "$BRANCH"
+
+          gh pr create \
+            --title "AI-generated tests for ${{ inputs.ticket_id }}" \
+            --body "Ticket: ${{ inputs.ticket_id }}"$'\n\n'"Files changed:"$'\n'"$SUMMARY" \
+            --base main \
+            --head "$BRANCH"
