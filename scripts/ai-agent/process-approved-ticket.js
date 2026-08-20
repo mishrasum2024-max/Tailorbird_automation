@@ -1,10 +1,20 @@
 require("dotenv").config();
 
+const fs = require("fs");
+const path = require("path");
 const { Client } = require("@notionhq/client");
 
 const notion = new Client({
   auth: process.env.NOTION_API_KEY,
 });
+
+const CONTEXT_FILE = path.join(
+  __dirname,
+  "..",
+  "..",
+  "data",
+  "current-ticket-context.json"
+);
 
 const DATA_SOURCE_ID =
   process.env.NOTION_DATA_SOURCE_ID ||
@@ -55,6 +65,70 @@ function getUniqueId(property) {
   const number = property.unique_id.number || "";
 
   return `${prefix}-${number}`;
+}
+
+function extractRichText(richText = []) {
+  return richText
+    .map(item => item.plain_text || "")
+    .join("");
+}
+
+function extractBlockText(block) {
+  if (!block) return "";
+
+  const type = block.type;
+  const content = block[type];
+
+  if (!content) return "";
+
+  if (content.rich_text) {
+    return extractRichText(content.rich_text);
+  }
+
+  if (content.text) {
+    return extractRichText(content.text);
+  }
+
+  return "";
+}
+
+async function getNotionPageContent(pageId) {
+  const blocks = [];
+
+  let cursor = undefined;
+
+  do {
+    const response = await notion.blocks.children.list({
+      block_id: pageId,
+      start_cursor: cursor,
+      page_size: 100,
+    });
+
+    blocks.push(...response.results);
+
+    cursor = response.has_more
+      ? response.next_cursor
+      : undefined;
+  } while (cursor);
+
+  return blocks
+    .map(extractBlockText)
+    .filter(Boolean)
+    .join("\n");
+}
+
+function saveTicketContext(ticket) {
+  const outputDir = path.dirname(CONTEXT_FILE);
+
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+
+  fs.writeFileSync(
+    CONTEXT_FILE,
+    JSON.stringify(ticket, null, 2),
+    "utf8"
+  );
 }
 
 async function findTicket() {
@@ -126,6 +200,24 @@ async function main() {
     console.log(`Type:     ${ticket.issueType || "N/A"}`);
     console.log(`URL:      ${ticket.url}`);
     console.log("======================================");
+
+    console.log("");
+    console.log(
+      "📖 Fetching full Notion page content..."
+    );
+
+    const pageContent = await getNotionPageContent(
+      ticket.notionPageId
+    );
+
+    saveTicketContext({
+      ...ticket,
+      pageContent,
+    });
+
+    console.log(
+      `💾 Saved ticket context to: ${CONTEXT_FILE}`
+    );
 
     console.log("");
     console.log(
