@@ -17,18 +17,30 @@ jobs:
       id-token: write
 
     steps:
+      # --------------------------------------------------
+      # 1. Checkout repository
+      # --------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # --------------------------------------------------
+      # 2. Setup Node.js
+      # --------------------------------------------------
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
+      # --------------------------------------------------
+      # 3. Install dependencies
+      # --------------------------------------------------
       - name: Install dependencies
         run: npm ci
 
+      # --------------------------------------------------
+      # 4. Get ticket details from Notion
+      # --------------------------------------------------
       - name: Process approved ticket
         env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
@@ -37,15 +49,24 @@ jobs:
         run: |
           node scripts/ai-agent/process-approved-ticket.js
 
+      # --------------------------------------------------
+      # 5. Install Claude Code
+      # --------------------------------------------------
       - name: Install Claude Code
         run: |
           curl -fsSL https://claude.ai/install.sh | bash
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
+      # --------------------------------------------------
+      # 6. Verify Claude Code
+      # --------------------------------------------------
       - name: Verify Claude Code installation
         run: |
           claude --version
 
+      # --------------------------------------------------
+      # 7. Generate TEST CASES ONLY
+      # --------------------------------------------------
       - name: Generate test cases with Claude Code
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -183,6 +204,9 @@ jobs:
           EOF
           )" --dangerously-skip-permissions
 
+      # --------------------------------------------------
+      # 8. Verify generated files
+      # --------------------------------------------------
       - name: Verify generated test cases
         run: |
           echo "======================================"
@@ -219,6 +243,9 @@ jobs:
 
           cat data/generated-testcases.md
 
+      # --------------------------------------------------
+      # 9. Validate JSON structure
+      # --------------------------------------------------
       - name: Verify JSON structure
         run: |
           node <<'EOF'
@@ -231,13 +258,20 @@ jobs:
           try {
             data = JSON.parse(fs.readFileSync(file, 'utf8'));
           } catch (error) {
-            console.error('ERROR: generated-testcases.json contains invalid JSON.');
+            console.error(
+              'ERROR: generated-testcases.json contains invalid JSON.'
+            );
             console.error(error.message);
             process.exit(1);
           }
 
           if (!data.ticketId) {
             console.error('ERROR: ticketId is missing.');
+            process.exit(1);
+          }
+
+          if (!data.ticketTitle) {
+            console.error('ERROR: ticketTitle is missing.');
             process.exit(1);
           }
 
@@ -288,7 +322,9 @@ jobs:
             }
 
             if (ids.has(testCase.id)) {
-              console.error(`ERROR: Duplicate test case ID: ${testCase.id}`);
+              console.error(
+                `ERROR: Duplicate test case ID: ${testCase.id}`
+              );
               process.exit(1);
             }
 
@@ -331,6 +367,9 @@ jobs:
           );
           EOF
 
+      # --------------------------------------------------
+      # 10. Make sure Claude did NOT modify tests/
+      # --------------------------------------------------
       - name: Verify no test automation was created
         run: |
           echo "======================================"
@@ -345,6 +384,39 @@ jobs:
 
           echo "No files inside tests/ were modified."
 
+      # --------------------------------------------------
+      # 11. SEND TEST CASES TO SLACK
+      # --------------------------------------------------
+      - name: Send generated test cases to Slack
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+        run: |
+          echo "======================================"
+          echo "SENDING TEST CASES TO SLACK"
+          echo "======================================"
+
+          node scripts/ai-agent/send-testcases-to-slack.js
+
+          echo "======================================"
+          echo "TEST CASES SENT TO SLACK"
+          echo "======================================"
+
+      # --------------------------------------------------
+      # 12. Upload generated test cases as artifact
+      # --------------------------------------------------
+      - name: Upload generated test cases
+        uses: actions/upload-artifact@v4
+        with:
+          name: testcases-${{ inputs.ticket_id }}
+          path: |
+            data/generated-testcases.json
+            data/generated-testcases.md
+          retention-days: 7
+
+      # --------------------------------------------------
+      # 13. Final summary
+      # --------------------------------------------------
       - name: Workflow summary
         run: |
           echo "======================================"
@@ -352,6 +424,7 @@ jobs:
           echo "======================================"
           echo "Ticket: ${{ inputs.ticket_id }}"
           echo "Test cases generated successfully."
+          echo "Test cases sent to Slack for human selection."
           echo ""
           echo "Files created:"
           echo "  - data/generated-testcases.json"
@@ -359,4 +432,8 @@ jobs:
           echo ""
           echo "No Playwright automation was generated."
           echo "No PR was created."
+          echo ""
+          echo "NEXT STEP:"
+          echo "User must select the test cases in Slack."
+          echo "Only selected test cases should be sent to the automation agent."
           echo "======================================"
