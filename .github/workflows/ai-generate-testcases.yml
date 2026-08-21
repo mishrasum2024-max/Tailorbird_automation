@@ -50,109 +50,60 @@ jobs:
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
-          claude \
-            --permission-mode acceptEdits \
-            -p "$(cat <<'EOF'
+          mkdir -p data
 
+          claude -p "$(cat <<'EOF'
           Read the ticket context from:
 
           data/current-ticket-context.json
 
-          Your task is to analyze the ticket and generate comprehensive QA TEST CASES ONLY.
+          Generate comprehensive QA test cases for this ticket.
 
-          ==================================================
-          IMPORTANT
-          ==================================================
+          IMPORTANT:
+          Your output MUST be JSON only.
+          Do not use markdown.
+          Do not use code fences.
+          Do not write or modify any files.
 
-          This workflow is ONLY for generating test case documentation.
-
-          DO NOT implement or automate any test cases.
-
-          DO NOT create or modify Playwright automation.
-
-          ==================================================
-          STRICT RESTRICTIONS
-          ==================================================
-
-          DO NOT:
-
+          Do NOT:
           - Create Playwright spec files
-          - Modify any existing files inside tests/
-          - Create JavaScript automation code
-          - Create TypeScript automation code
-          - Write Playwright automation code
+          - Modify files inside tests/
+          - Write automation code
           - Use Playwright MCP
-          - Open or interact with the application using a browser
+          - Open or interact with the application
           - Create a branch
           - Create a commit
           - Create a pull request
-          - Modify existing test automation
-          - Modify package.json
-          - Modify configuration files
 
-          You may ONLY create or update these two files:
-
-          data/generated-testcases.json
-          data/generated-testcases.md
-
-          ==================================================
-          TICKET ANALYSIS
-          ==================================================
-
-          Read and analyze the complete ticket context from:
-
-          data/current-ticket-context.json
-
-          Consider:
-
-          - Ticket ID
+          Analyze the complete ticket context, including:
           - Ticket title
           - Description
           - Requirements
           - Acceptance criteria
           - Expected behavior
-          - UI requirements
-          - Business rules
-          - Validation rules
-          - Error handling
-          - User workflows
-          - Any other relevant information in the ticket
+          - Any other available ticket information
 
-          Do not invent requirements that are not supported by the ticket.
+          Generate practical, ticket-specific test cases covering:
 
-          ==================================================
-          TEST CASE COVERAGE
-          ==================================================
-
-          Generate practical and ticket-specific test cases covering:
-
-          1. Positive scenarios
-          2. Negative scenarios
+          1. Positive test cases
+          2. Negative test cases
           3. Edge cases
-          4. Visual/UI scenarios
-          5. End-to-end scenarios
+          4. Visual/UI test cases
+          5. End-to-end test cases
 
-          Include only scenarios relevant to this ticket.
+          Avoid generic test cases that are not relevant to the ticket.
 
-          Avoid generic test cases.
+          Each test case MUST contain:
 
-          Think like a senior QA engineer reviewing the feature for regression risk.
+          - id
+          - title
+          - type
+          - priority
+          - preconditions
+          - steps
+          - expectedResult
 
-          ==================================================
-          REQUIRED TEST CASE FORMAT
-          ==================================================
-
-          Every test case must contain:
-
-          - Test Case ID
-          - Title
-          - Type
-          - Priority
-          - Preconditions
-          - Test Steps
-          - Expected Result
-
-          Type must be one of:
+          Allowed Type values:
 
           - Positive
           - Negative
@@ -160,24 +111,16 @@ jobs:
           - Visual/UI
           - E2E
 
-          Priority must be one of:
+          Allowed Priority values:
 
           - P0
           - P1
           - P2
           - P3
 
-          Test Case IDs must be unique within the ticket.
+          Test case IDs must be unique within this ticket.
 
-          ==================================================
-          JSON OUTPUT
-          ==================================================
-
-          Save the structured test cases to:
-
-          data/generated-testcases.json
-
-          Use this structure:
+          Return EXACTLY this structure:
 
           {
             "ticketId": "...",
@@ -192,94 +135,210 @@ jobs:
                   "..."
                 ],
                 "steps": [
-                  "...",
-                  "...",
-                  "..."
+                  "Step 1",
+                  "Step 2",
+                  "Step 3"
                 ],
                 "expectedResult": "..."
               }
             ]
           }
 
-          Make sure the JSON is valid.
-
-          ==================================================
-          MARKDOWN OUTPUT
-          ==================================================
-
-          Also create:
-
-          data/generated-testcases.md
-
-          Use this structure:
-
-          # Generated Test Cases
-
-          ## Ticket Information
-
-          - Ticket ID:
-          - Ticket Title:
-
-          ## TC001 - Test Case Title
-
-          - Type:
-          - Priority:
-
-          ### Preconditions
-
-          - ...
-
-          ### Steps
-
-          1. ...
-          2. ...
-          3. ...
-
-          ### Expected Result
-
-          ...
-
-          Repeat the same structure for every test case.
-
-          ==================================================
-          FINAL VALIDATION
-          ==================================================
-
-          Before finishing, verify all of the following:
-
-          1. data/generated-testcases.json exists
-          2. data/generated-testcases.md exists
-          3. generated-testcases.json contains valid JSON
-          4. Both files contain actual test cases
-          5. Every test case has:
-             - ID
-             - Title
-             - Type
-             - Priority
-             - Preconditions
-             - Steps
-             - Expected Result
-          6. Test case IDs are unique
-          7. No Playwright spec file was created
-          8. No file inside tests/ was modified
-          9. No automation code was created
-          10. No branch was created
-          11. No commit was created
-          12. No PR was created
-
-          ==================================================
-          FINAL OUTPUT
-          ==================================================
-
-          The ONLY deliverable from this workflow is:
-
-          data/generated-testcases.json
-          data/generated-testcases.md
-
-          Do not automate anything.
-
+          Return JSON only.
           EOF
-          )"
+          )" > data/claude-output.txt
+
+      - name: Create test case files
+        run: |
+          echo "======================================"
+          echo "CREATING TEST CASE FILES"
+          echo "======================================"
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          output_file = Path("data/claude-output.txt")
+          json_file = Path("data/generated-testcases.json")
+          md_file = Path("data/generated-testcases.md")
+
+          raw = output_file.read_text().strip()
+
+          if not raw:
+              raise SystemExit("ERROR: Claude returned empty output.")
+
+          # Remove accidental markdown code fences if Claude adds them.
+          if raw.startswith("```"):
+              lines = raw.splitlines()
+
+              if lines and lines[0].strip().startswith("```"):
+                  lines = lines[1:]
+
+              if lines and lines[-1].strip() == "```":
+                  lines = lines[:-1]
+
+              raw = "\n".join(lines).strip()
+
+          try:
+              data = json.loads(raw)
+          except json.JSONDecodeError as e:
+              print("Claude output was not valid JSON.")
+              print("Raw output:")
+              print(raw)
+              raise SystemExit(f"ERROR: Invalid JSON: {e}")
+
+          if not isinstance(data, dict):
+              raise SystemExit("ERROR: Claude output must be a JSON object.")
+
+          if "ticketId" not in data:
+              raise SystemExit("ERROR: Missing ticketId.")
+
+          if "ticketTitle" not in data:
+              raise SystemExit("ERROR: Missing ticketTitle.")
+
+          if "testCases" not in data:
+              raise SystemExit("ERROR: Missing testCases.")
+
+          test_cases = data["testCases"]
+
+          if not isinstance(test_cases, list):
+              raise SystemExit("ERROR: testCases must be an array.")
+
+          if len(test_cases) == 0:
+              raise SystemExit("ERROR: No test cases were generated.")
+
+          required_fields = [
+              "id",
+              "title",
+              "type",
+              "priority",
+              "preconditions",
+              "steps",
+              "expectedResult"
+          ]
+
+          allowed_types = {
+              "Positive",
+              "Negative",
+              "Edge",
+              "Visual/UI",
+              "E2E"
+          }
+
+          allowed_priorities = {
+              "P0",
+              "P1",
+              "P2",
+              "P3"
+          }
+
+          ids = set()
+
+          for index, tc in enumerate(test_cases, start=1):
+
+              for field in required_fields:
+                  if field not in tc:
+                      raise SystemExit(
+                          f"ERROR: Test case {index} is missing field '{field}'."
+                      )
+
+              tc_id = tc["id"]
+
+              if tc_id in ids:
+                  raise SystemExit(
+                      f"ERROR: Duplicate test case ID found: {tc_id}"
+                  )
+
+              ids.add(tc_id)
+
+              if tc["type"] not in allowed_types:
+                  raise SystemExit(
+                      f"ERROR: Invalid test type '{tc['type']}' in {tc_id}"
+                  )
+
+              if tc["priority"] not in allowed_priorities:
+                  raise SystemExit(
+                      f"ERROR: Invalid priority '{tc['priority']}' in {tc_id}"
+                  )
+
+              if not isinstance(tc["preconditions"], list):
+                  raise SystemExit(
+                      f"ERROR: Preconditions must be an array in {tc_id}"
+                  )
+
+              if not isinstance(tc["steps"], list):
+                  raise SystemExit(
+                      f"ERROR: Steps must be an array in {tc_id}"
+                  )
+
+              if len(tc["steps"]) == 0:
+                  raise SystemExit(
+                      f"ERROR: No steps provided for {tc_id}"
+                  )
+
+          # Save JSON
+          json_file.write_text(
+              json.dumps(data, indent=2, ensure_ascii=False)
+          )
+
+          # Create Markdown
+          md = []
+
+          md.append("# Generated Test Cases")
+          md.append("")
+          md.append(f"**Ticket ID:** {data['ticketId']}")
+          md.append(f"**Ticket Title:** {data['ticketTitle']}")
+          md.append("")
+          md.append(f"**Total Test Cases:** {len(test_cases)}")
+          md.append("")
+
+          md.append("## Test Case Summary")
+          md.append("")
+          md.append("| ID | Title | Type | Priority |")
+          md.append("|---|---|---|---|")
+
+          for tc in test_cases:
+              title = str(tc["title"]).replace("|", "\\|")
+              md.append(
+                  f"| {tc['id']} | {title} | {tc['type']} | {tc['priority']} |"
+              )
+
+          md.append("")
+
+          for tc in test_cases:
+              md.append(f"## {tc['id']} - {tc['title']}")
+              md.append("")
+              md.append(f"- **Type:** {tc['type']}")
+              md.append(f"- **Priority:** {tc['priority']}")
+              md.append("")
+              md.append("### Preconditions")
+              md.append("")
+
+              if tc["preconditions"]:
+                  for item in tc["preconditions"]:
+                      md.append(f"- {item}")
+              else:
+                  md.append("- None")
+
+              md.append("")
+              md.append("### Steps")
+              md.append("")
+
+              for step_number, step in enumerate(tc["steps"], start=1):
+                  md.append(f"{step_number}. {step}")
+
+              md.append("")
+              md.append("### Expected Result")
+              md.append("")
+              md.append(str(tc["expectedResult"]))
+              md.append("")
+
+          md_file.write_text("\n".join(md), encoding="utf-8")
+
+          print(f"Created {json_file}")
+          print(f"Created {md_file}")
+          print(f"Generated {len(test_cases)} test cases.")
+          PY
 
       - name: Verify generated test cases
         run: |
@@ -288,72 +347,17 @@ jobs:
           echo "======================================"
 
           if [ ! -f "data/generated-testcases.json" ]; then
-            echo "ERROR: data/generated-testcases.json was not created."
+            echo "ERROR: generated-testcases.json was not created."
             exit 1
           fi
 
           if [ ! -f "data/generated-testcases.md" ]; then
-            echo "ERROR: data/generated-testcases.md was not created."
+            echo "ERROR: generated-testcases.md was not created."
             exit 1
           fi
 
-          echo "generated-testcases.json found."
-          echo "generated-testcases.md found."
-
-          echo ""
-          echo "Validating JSON..."
-
-          node -e "
-            const fs = require('fs');
-
-            const file = 'data/generated-testcases.json';
-            const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-
-            if (!data.testCases || !Array.isArray(data.testCases)) {
-              throw new Error('testCases array is missing.');
-            }
-
-            if (data.testCases.length === 0) {
-              throw new Error('No test cases were generated.');
-            }
-
-            for (const tc of data.testCases) {
-              const required = [
-                'id',
-                'title',
-                'type',
-                'priority',
-                'preconditions',
-                'steps',
-                'expectedResult'
-              ];
-
-              for (const field of required) {
-                if (
-                  tc[field] === undefined ||
-                  tc[field] === null ||
-                  tc[field] === ''
-                ) {
-                  throw new Error(
-                    'Missing required field: ' + field + ' in ' + tc.id
-                  );
-                }
-              }
-            }
-
-            const ids = data.testCases.map(tc => tc.id);
-            const uniqueIds = new Set(ids);
-
-            if (ids.length !== uniqueIds.size) {
-              throw new Error('Duplicate test case IDs found.');
-            }
-
-            console.log(
-              'Valid JSON. Generated ' +
-              data.testCases.length +
-              ' test cases.'
-            );
-          "
+          echo "JSON file found."
+          echo "Markdown file found."
 
           echo ""
           echo "======================================"
@@ -365,7 +369,7 @@ jobs:
       - name: Verify no test automation was created
         run: |
           echo "======================================"
-          echo "CHECKING FOR UNEXPECTED TEST CHANGES"
+          echo "CHECKING FOR TEST AUTOMATION CHANGES"
           echo "======================================"
 
           if git status --short -- tests/ | grep -q .; then
@@ -381,19 +385,13 @@ jobs:
           echo "======================================"
           echo "AI TEST CASE GENERATION COMPLETED"
           echo "======================================"
-
           echo "Ticket: ${{ inputs.ticket_id }}"
-
-          echo ""
           echo "Test cases generated successfully."
-
           echo ""
           echo "Files created:"
           echo "  - data/generated-testcases.json"
           echo "  - data/generated-testcases.md"
-
           echo ""
           echo "No Playwright automation was generated."
           echo "No PR was created."
-
           echo "======================================"
