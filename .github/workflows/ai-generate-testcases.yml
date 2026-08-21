@@ -1,0 +1,93 @@
+name: AI Generate Test Cases
+
+on:
+  workflow_dispatch:
+    inputs:
+      ticket_id:
+        description: "Approved Notion ticket ID"
+        required: true
+        type: string
+
+jobs:
+  generate-testcases:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Process approved ticket
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_DATA_SOURCE_ID: ${{ secrets.NOTION_DATA_SOURCE_ID }}
+          TICKET_ID: ${{ inputs.ticket_id }}
+        run: |
+          node scripts/ai-agent/process-approved-ticket.js
+
+      - name: Generate test cases with Claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: |
+            Read the ticket context from:
+            data/current-ticket-context.json
+
+            Your task is to analyze the ticket and generate TEST CASES ONLY.
+
+            DO NOT:
+            - Create Playwright spec files
+            - Modify files inside tests/
+            - Write automation code
+            - Use Playwright MCP
+            - Create a branch
+            - Create a commit
+            - Create a PR
+
+            Generate comprehensive test cases covering:
+
+            1. Positive test cases
+            2. Negative test cases
+            3. Edge cases
+            4. Visual/UI test cases
+            5. End-to-end test cases
+
+            Each test case must contain:
+
+            - Test Case ID
+            - Title
+            - Type
+            - Priority
+            - Preconditions
+            - Test Steps
+            - Expected Result
+
+            Save the final test cases to:
+
+            data/generated-testcases.json
+
+            Also create a human-readable version at:
+
+            data/generated-testcases.md
+
+            IMPORTANT:
+            Only generate test-case documentation.
+            Do not automate any of the test cases.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+      - name: Display generated test cases
+        run: |
+          echo "======================================"
+          echo "GENERATED TEST CASES"
+          echo "======================================"
+          cat data/generated-testcases.md
