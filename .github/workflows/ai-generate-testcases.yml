@@ -17,18 +17,30 @@ jobs:
       id-token: write
 
     steps:
+      # ---------------------------------------------------------
+      # 1. Checkout repository
+      # ---------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # ---------------------------------------------------------
+      # 2. Setup Node.js
+      # ---------------------------------------------------------
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
+      # ---------------------------------------------------------
+      # 3. Install project dependencies
+      # ---------------------------------------------------------
       - name: Install dependencies
         run: npm ci
 
+      # ---------------------------------------------------------
+      # 4. Get ticket information from Notion
+      # ---------------------------------------------------------
       - name: Process approved ticket
         env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
@@ -37,58 +49,117 @@ jobs:
         run: |
           node scripts/ai-agent/process-approved-ticket.js
 
+      # ---------------------------------------------------------
+      # 5. Install Claude Code
+      # ---------------------------------------------------------
       - name: Install Claude Code
         run: |
           curl -fsSL https://claude.ai/install.sh | bash
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
+      # ---------------------------------------------------------
+      # 6. Verify Claude installation
+      # ---------------------------------------------------------
       - name: Verify Claude Code installation
         run: |
           claude --version
 
+      # ---------------------------------------------------------
+      # 7. Generate TEST CASES ONLY
+      # ---------------------------------------------------------
       - name: Generate test cases with Claude Code
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
-          claude -p "$(cat <<'EOF'
+          claude \
+            --dangerously-skip-permissions \
+            -p "$(cat <<'EOF'
+
           Read the ticket context from:
 
           data/current-ticket-context.json
 
-          Your task is to analyze the ticket and generate comprehensive QA TEST CASES ONLY.
+          ============================================================
+          YOUR TASK
+          ============================================================
 
-          IMPORTANT:
-          Do NOT implement or automate any test cases.
+          Analyze the ticket and generate comprehensive QA TEST CASES ONLY.
+
+          The purpose of this workflow is to create test-case
+          documentation for human review.
+
+          DO NOT implement or automate any test cases.
+
+          ============================================================
+          STRICT RESTRICTIONS
+          ============================================================
 
           DO NOT:
+
           - Create Playwright spec files
+          - Create any files inside tests/
           - Modify any existing files inside tests/
           - Write Playwright automation code
           - Write JavaScript automation code
+          - Write Cypress automation code
           - Use Playwright MCP
-          - Open or interact with the application using a browser
+          - Open or interact with the application
+          - Use a browser
           - Create a branch
           - Create a commit
+          - Push code
           - Create a pull request
+          - Modify existing automation code
 
-          Analyze the complete ticket context, including the ticket title, description,
-          requirements, acceptance criteria, expected behavior, and any other available
-          information.
+          You are ONLY generating test-case documentation.
+
+          ============================================================
+          READ THE TICKET
+          ============================================================
+
+          Read:
+
+          data/current-ticket-context.json
+
+          Analyze all available ticket information, including:
+
+          - Ticket ID
+          - Ticket title
+          - Ticket description
+          - Requirements
+          - Acceptance criteria
+          - Expected behavior
+          - Business rules
+          - Any other relevant information contained in the ticket
+
+          Base the test cases specifically on the ticket.
+
+          Do NOT generate generic test cases that are unrelated
+          to the ticket.
+
+          ============================================================
+          TEST CASE COVERAGE
+          ============================================================
 
           Generate comprehensive test cases covering:
 
-          1. Positive test cases
-          2. Negative test cases
+          1. Positive scenarios
+          2. Negative scenarios
           3. Edge cases
-          4. Visual/UI test cases
-          5. End-to-end test cases
+          4. Visual/UI scenarios
+          5. End-to-end scenarios
 
-          Make sure the test cases are practical, specific to the ticket, and suitable
-          for a QA engineer to review and later automate.
+          Make sure the test cases provide good QA coverage of
+          the functionality described in the ticket.
 
-          Avoid generating generic test cases that are not relevant to the ticket.
+          Think like a QA engineer reviewing a feature before
+          automation begins.
 
-          Each test case must contain:
+          ============================================================
+          TEST CASE FORMAT
+          ============================================================
+
+          Every test case MUST contain:
 
           - Test Case ID
           - Title
@@ -98,7 +169,7 @@ jobs:
           - Test Steps
           - Expected Result
 
-          Use the following Type values where appropriate:
+          Allowed Type values:
 
           - Positive
           - Negative
@@ -106,54 +177,73 @@ jobs:
           - Visual/UI
           - E2E
 
-          Priority should be one of:
+          Allowed Priority values:
 
           - P0
           - P1
           - P2
           - P3
 
-          Test case IDs should be unique within this ticket.
+          Test Case IDs must be unique within the ticket.
 
-          Save the final structured test cases to:
+          ============================================================
+          JSON OUTPUT
+          ============================================================
+
+          Save the structured test cases to:
 
           data/generated-testcases.json
 
-          The JSON should contain a clear top-level structure such as:
+          Use this structure:
 
           {
             "ticketId": "...",
             "ticketTitle": "...",
             "testCases": [
               {
-                "id": "...",
+                "id": "TC001",
                 "title": "...",
-                "type": "...",
-                "priority": "...",
-                "preconditions": [],
-                "steps": [],
+                "type": "Positive",
+                "priority": "P1",
+                "preconditions": [
+                  "..."
+                ],
+                "steps": [
+                  "Step 1",
+                  "Step 2",
+                  "Step 3"
+                ],
                 "expectedResult": "..."
               }
             ]
           }
 
-          Also create a human-readable version at:
+          Make sure the JSON is valid JSON.
+
+          ============================================================
+          MARKDOWN OUTPUT
+          ============================================================
+
+          Also create:
 
           data/generated-testcases.md
 
-          The Markdown file should contain:
+          The Markdown file must contain:
 
           # Generated Test Cases
 
           Ticket information followed by all generated test cases.
 
-          For each test case include:
+          For each test case use this format:
 
-          ## TCxxx - Test Case Title
+          ## TC001 - Test Case Title
 
-          - Type:
-          - Priority:
-          - Preconditions:
+          - Type: Positive
+          - Priority: P1
+
+          ### Preconditions
+
+          - ...
 
           ### Steps
 
@@ -165,23 +255,83 @@ jobs:
 
           ...
 
-          Before finishing, verify that:
+          ============================================================
+          QUALITY REQUIREMENTS
+          ============================================================
 
-          1. data/generated-testcases.json exists
-          2. data/generated-testcases.md exists
-          3. Both files contain test cases
-          4. Every test case has all required fields
-          5. No Playwright spec file was created
-          6. No file inside tests/ was modified
-          7. No automation code was generated
+          Test cases must be:
 
-          IMPORTANT:
+          - Specific to the ticket
+          - Clear
+          - Practical
+          - Reviewable by a QA engineer
+          - Suitable for future automation
+          - Non-duplicated
+          - Properly prioritized
+
+          Do not create duplicate scenarios simply to increase the
+          number of test cases.
+
+          Include both happy-path and failure scenarios where
+          applicable.
+
+          Include visual/UI coverage where the ticket affects UI.
+
+          Include E2E coverage when the ticket involves a complete
+          user workflow.
+
+          ============================================================
+          FINAL VALIDATION
+          ============================================================
+
+          Before finishing, verify:
+
+          1. data/generated-testcases.json exists.
+
+          2. data/generated-testcases.md exists.
+
+          3. data/generated-testcases.json contains test cases.
+
+          4. data/generated-testcases.md contains test cases.
+
+          5. Every test case has:
+             - id
+             - title
+             - type
+             - priority
+             - preconditions
+             - steps
+             - expectedResult
+
+          6. Test case IDs are unique.
+
+          7. JSON is valid.
+
+          8. No file inside tests/ was created or modified.
+
+          9. No Playwright spec file was created.
+
+          10. No automation code was generated.
+
+          ============================================================
+          FINAL RULE
+          ============================================================
+
+          ONLY create or modify these two files:
+
+          data/generated-testcases.json
+          data/generated-testcases.md
+
+          Do not modify anything else.
+
           The output of this workflow is TEST CASE DOCUMENTATION ONLY.
 
-          Do not automate the test cases.
           EOF
           )"
 
+      # ---------------------------------------------------------
+      # 8. Verify generated files
+      # ---------------------------------------------------------
       - name: Verify generated test cases
         run: |
           echo "======================================"
@@ -198,6 +348,16 @@ jobs:
             exit 1
           fi
 
+          if [ ! -s "data/generated-testcases.json" ]; then
+            echo "ERROR: data/generated-testcases.json is empty."
+            exit 1
+          fi
+
+          if [ ! -s "data/generated-testcases.md" ]; then
+            echo "ERROR: data/generated-testcases.md is empty."
+            exit 1
+          fi
+
           echo "generated-testcases.json found."
           echo "generated-testcases.md found."
 
@@ -208,6 +368,82 @@ jobs:
 
           cat data/generated-testcases.md
 
+      # ---------------------------------------------------------
+      # 9. Validate JSON
+      # ---------------------------------------------------------
+      - name: Validate generated JSON
+        run: |
+          echo "======================================"
+          echo "VALIDATING JSON"
+          echo "======================================"
+
+          node -e "
+            const fs = require('fs');
+
+            const file = 'data/generated-testcases.json';
+
+            const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+
+            if (!data.ticketId) {
+              throw new Error('Missing ticketId');
+            }
+
+            if (!data.ticketTitle) {
+              throw new Error('Missing ticketTitle');
+            }
+
+            if (!Array.isArray(data.testCases)) {
+              throw new Error('testCases must be an array');
+            }
+
+            if (data.testCases.length === 0) {
+              throw new Error('No test cases generated');
+            }
+
+            const requiredFields = [
+              'id',
+              'title',
+              'type',
+              'priority',
+              'preconditions',
+              'steps',
+              'expectedResult'
+            ];
+
+            const ids = new Set();
+
+            for (const testCase of data.testCases) {
+              for (const field of requiredFields) {
+                if (
+                  testCase[field] === undefined ||
+                  testCase[field] === null
+                ) {
+                  throw new Error(
+                    'Missing field ' + field +
+                    ' in test case ' + testCase.id
+                  );
+                }
+              }
+
+              if (ids.has(testCase.id)) {
+                throw new Error(
+                  'Duplicate test case ID: ' + testCase.id
+                );
+              }
+
+              ids.add(testCase.id);
+            }
+
+            console.log(
+              'Valid JSON. Generated ' +
+              data.testCases.length +
+              ' test cases.'
+            );
+          "
+
+      # ---------------------------------------------------------
+      # 10. Make sure tests/ was not changed
+      # ---------------------------------------------------------
       - name: Verify no test automation was created
         run: |
           echo "======================================"
@@ -215,25 +451,43 @@ jobs:
           echo "======================================"
 
           if git status --short -- tests/ | grep -q .; then
-            echo "ERROR: Claude modified files inside tests/."
+            echo "ERROR: Claude modified files inside tests."
+            echo ""
             git status --short -- tests/
             exit 1
           fi
 
           echo "No files inside tests/ were modified."
 
+      # ---------------------------------------------------------
+      # 11. Final summary
+      # ---------------------------------------------------------
       - name: Workflow summary
         run: |
           echo "======================================"
           echo "AI TEST CASE GENERATION COMPLETED"
           echo "======================================"
+
           echo "Ticket: ${{ inputs.ticket_id }}"
-          echo "Test cases generated successfully."
+
           echo ""
-          echo "Files:"
+          echo "Generated files:"
           echo "  - data/generated-testcases.json"
           echo "  - data/generated-testcases.md"
+
           echo ""
-          echo "No Playwright automation was generated."
-          echo "No PR was created."
+          echo "Output:"
+          echo "  TEST CASE DOCUMENTATION ONLY"
+
+          echo ""
+          echo "Automation:"
+          echo "  No Playwright automation generated"
+
+          echo ""
+          echo "Git:"
+          echo "  No branch created"
+          echo "  No commit created"
+          echo "  No PR created"
+
+          echo ""
           echo "======================================"
