@@ -396,7 +396,7 @@ jobs:
           echo "SENDING TEST CASES TO SLACK"
           echo "======================================"
 
-          node scripts/ai-agent/send-testcases-to-slack.js
+          node scripts/ai-agent/send-testcase-selection.js
 
           echo "======================================"
           echo "TEST CASES SENT TO SLACK"
