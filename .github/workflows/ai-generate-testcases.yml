@@ -50,40 +50,38 @@ jobs:
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
-          mkdir -p data
-
           claude -p "$(cat <<'EOF'
           Read the ticket context from:
 
           data/current-ticket-context.json
 
-          Generate comprehensive QA test cases for this ticket.
+          Your task is to analyze the ticket and generate comprehensive QA TEST CASES ONLY.
 
           IMPORTANT:
-          Your output MUST be JSON only.
-          Do not use markdown.
-          Do not use code fences.
-          Do not write or modify any files.
+          The output of this workflow is TEST CASE DOCUMENTATION ONLY.
 
-          Do NOT:
+          DO NOT implement or automate any test cases.
+
+          DO NOT:
           - Create Playwright spec files
-          - Modify files inside tests/
-          - Write automation code
+          - Modify any existing files inside tests/
+          - Write Playwright automation code
+          - Write JavaScript automation code
           - Use Playwright MCP
-          - Open or interact with the application
+          - Open or interact with the application using a browser
           - Create a branch
           - Create a commit
           - Create a pull request
 
           Analyze the complete ticket context, including:
           - Ticket title
-          - Description
+          - Ticket description
           - Requirements
           - Acceptance criteria
           - Expected behavior
           - Any other available ticket information
 
-          Generate practical, ticket-specific test cases covering:
+          Generate comprehensive and practical test cases covering:
 
           1. Positive test cases
           2. Negative test cases
@@ -91,17 +89,18 @@ jobs:
           4. Visual/UI test cases
           5. End-to-end test cases
 
-          Avoid generic test cases that are not relevant to the ticket.
+          Avoid generic test cases.
+          Every test case must be specific to the ticket.
 
           Each test case MUST contain:
 
-          - id
-          - title
-          - type
-          - priority
-          - preconditions
-          - steps
-          - expectedResult
+          - Test Case ID
+          - Title
+          - Type
+          - Priority
+          - Preconditions
+          - Test Steps
+          - Expected Result
 
           Allowed Type values:
 
@@ -120,225 +119,69 @@ jobs:
 
           Test case IDs must be unique within this ticket.
 
-          Return EXACTLY this structure:
+          Save the structured test cases to:
+
+          data/generated-testcases.json
+
+          JSON structure:
 
           {
             "ticketId": "...",
             "ticketTitle": "...",
             "testCases": [
               {
-                "id": "TC001",
+                "id": "...",
                 "title": "...",
-                "type": "Positive",
-                "priority": "P1",
-                "preconditions": [
-                  "..."
-                ],
-                "steps": [
-                  "Step 1",
-                  "Step 2",
-                  "Step 3"
-                ],
+                "type": "...",
+                "priority": "...",
+                "preconditions": [],
+                "steps": [],
                 "expectedResult": "..."
               }
             ]
           }
 
-          Return JSON only.
+          Also create a human-readable Markdown version at:
+
+          data/generated-testcases.md
+
+          Markdown structure:
+
+          # Generated Test Cases
+
+          Ticket information followed by all generated test cases.
+
+          For every test case use:
+
+          ## TCxxx - Test Case Title
+
+          - Type:
+          - Priority:
+          - Preconditions:
+
+          ### Steps
+
+          1. ...
+          2. ...
+          3. ...
+
+          ### Expected Result
+
+          ...
+
+          Before finishing, verify:
+
+          1. data/generated-testcases.json exists
+          2. data/generated-testcases.md exists
+          3. Both files contain test cases
+          4. Every test case has all required fields
+          5. No Playwright spec file was created
+          6. No file inside tests/ was modified
+          7. No automation code was generated
+
+          Do not automate anything.
           EOF
-          )" > data/claude-output.txt
-
-      - name: Create test case files
-        run: |
-          echo "======================================"
-          echo "CREATING TEST CASE FILES"
-          echo "======================================"
-
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-
-          output_file = Path("data/claude-output.txt")
-          json_file = Path("data/generated-testcases.json")
-          md_file = Path("data/generated-testcases.md")
-
-          raw = output_file.read_text().strip()
-
-          if not raw:
-              raise SystemExit("ERROR: Claude returned empty output.")
-
-          # Remove accidental markdown code fences if Claude adds them.
-          if raw.startswith("```"):
-              lines = raw.splitlines()
-
-              if lines and lines[0].strip().startswith("```"):
-                  lines = lines[1:]
-
-              if lines and lines[-1].strip() == "```":
-                  lines = lines[:-1]
-
-              raw = "\n".join(lines).strip()
-
-          try:
-              data = json.loads(raw)
-          except json.JSONDecodeError as e:
-              print("Claude output was not valid JSON.")
-              print("Raw output:")
-              print(raw)
-              raise SystemExit(f"ERROR: Invalid JSON: {e}")
-
-          if not isinstance(data, dict):
-              raise SystemExit("ERROR: Claude output must be a JSON object.")
-
-          if "ticketId" not in data:
-              raise SystemExit("ERROR: Missing ticketId.")
-
-          if "ticketTitle" not in data:
-              raise SystemExit("ERROR: Missing ticketTitle.")
-
-          if "testCases" not in data:
-              raise SystemExit("ERROR: Missing testCases.")
-
-          test_cases = data["testCases"]
-
-          if not isinstance(test_cases, list):
-              raise SystemExit("ERROR: testCases must be an array.")
-
-          if len(test_cases) == 0:
-              raise SystemExit("ERROR: No test cases were generated.")
-
-          required_fields = [
-              "id",
-              "title",
-              "type",
-              "priority",
-              "preconditions",
-              "steps",
-              "expectedResult"
-          ]
-
-          allowed_types = {
-              "Positive",
-              "Negative",
-              "Edge",
-              "Visual/UI",
-              "E2E"
-          }
-
-          allowed_priorities = {
-              "P0",
-              "P1",
-              "P2",
-              "P3"
-          }
-
-          ids = set()
-
-          for index, tc in enumerate(test_cases, start=1):
-
-              for field in required_fields:
-                  if field not in tc:
-                      raise SystemExit(
-                          f"ERROR: Test case {index} is missing field '{field}'."
-                      )
-
-              tc_id = tc["id"]
-
-              if tc_id in ids:
-                  raise SystemExit(
-                      f"ERROR: Duplicate test case ID found: {tc_id}"
-                  )
-
-              ids.add(tc_id)
-
-              if tc["type"] not in allowed_types:
-                  raise SystemExit(
-                      f"ERROR: Invalid test type '{tc['type']}' in {tc_id}"
-                  )
-
-              if tc["priority"] not in allowed_priorities:
-                  raise SystemExit(
-                      f"ERROR: Invalid priority '{tc['priority']}' in {tc_id}"
-                  )
-
-              if not isinstance(tc["preconditions"], list):
-                  raise SystemExit(
-                      f"ERROR: Preconditions must be an array in {tc_id}"
-                  )
-
-              if not isinstance(tc["steps"], list):
-                  raise SystemExit(
-                      f"ERROR: Steps must be an array in {tc_id}"
-                  )
-
-              if len(tc["steps"]) == 0:
-                  raise SystemExit(
-                      f"ERROR: No steps provided for {tc_id}"
-                  )
-
-          # Save JSON
-          json_file.write_text(
-              json.dumps(data, indent=2, ensure_ascii=False)
-          )
-
-          # Create Markdown
-          md = []
-
-          md.append("# Generated Test Cases")
-          md.append("")
-          md.append(f"**Ticket ID:** {data['ticketId']}")
-          md.append(f"**Ticket Title:** {data['ticketTitle']}")
-          md.append("")
-          md.append(f"**Total Test Cases:** {len(test_cases)}")
-          md.append("")
-
-          md.append("## Test Case Summary")
-          md.append("")
-          md.append("| ID | Title | Type | Priority |")
-          md.append("|---|---|---|---|")
-
-          for tc in test_cases:
-              title = str(tc["title"]).replace("|", "\\|")
-              md.append(
-                  f"| {tc['id']} | {title} | {tc['type']} | {tc['priority']} |"
-              )
-
-          md.append("")
-
-          for tc in test_cases:
-              md.append(f"## {tc['id']} - {tc['title']}")
-              md.append("")
-              md.append(f"- **Type:** {tc['type']}")
-              md.append(f"- **Priority:** {tc['priority']}")
-              md.append("")
-              md.append("### Preconditions")
-              md.append("")
-
-              if tc["preconditions"]:
-                  for item in tc["preconditions"]:
-                      md.append(f"- {item}")
-              else:
-                  md.append("- None")
-
-              md.append("")
-              md.append("### Steps")
-              md.append("")
-
-              for step_number, step in enumerate(tc["steps"], start=1):
-                  md.append(f"{step_number}. {step}")
-
-              md.append("")
-              md.append("### Expected Result")
-              md.append("")
-              md.append(str(tc["expectedResult"]))
-              md.append("")
-
-          md_file.write_text("\n".join(md), encoding="utf-8")
-
-          print(f"Created {json_file}")
-          print(f"Created {md_file}")
-          print(f"Generated {len(test_cases)} test cases.")
-          PY
+          )" --dangerously-skip-permissions
 
       - name: Verify generated test cases
         run: |
@@ -347,17 +190,27 @@ jobs:
           echo "======================================"
 
           if [ ! -f "data/generated-testcases.json" ]; then
-            echo "ERROR: generated-testcases.json was not created."
+            echo "ERROR: data/generated-testcases.json was not created."
             exit 1
           fi
 
           if [ ! -f "data/generated-testcases.md" ]; then
-            echo "ERROR: generated-testcases.md was not created."
+            echo "ERROR: data/generated-testcases.md was not created."
             exit 1
           fi
 
-          echo "JSON file found."
-          echo "Markdown file found."
+          if [ ! -s "data/generated-testcases.json" ]; then
+            echo "ERROR: data/generated-testcases.json is empty."
+            exit 1
+          fi
+
+          if [ ! -s "data/generated-testcases.md" ]; then
+            echo "ERROR: data/generated-testcases.md is empty."
+            exit 1
+          fi
+
+          echo "generated-testcases.json found."
+          echo "generated-testcases.md found."
 
           echo ""
           echo "======================================"
@@ -366,10 +219,122 @@ jobs:
 
           cat data/generated-testcases.md
 
+      - name: Verify JSON structure
+        run: |
+          node <<'EOF'
+          const fs = require('fs');
+
+          const file = 'data/generated-testcases.json';
+
+          let data;
+
+          try {
+            data = JSON.parse(fs.readFileSync(file, 'utf8'));
+          } catch (error) {
+            console.error('ERROR: generated-testcases.json contains invalid JSON.');
+            console.error(error.message);
+            process.exit(1);
+          }
+
+          if (!data.ticketId) {
+            console.error('ERROR: ticketId is missing.');
+            process.exit(1);
+          }
+
+          if (!Array.isArray(data.testCases) || data.testCases.length === 0) {
+            console.error('ERROR: No test cases were generated.');
+            process.exit(1);
+          }
+
+          const requiredFields = [
+            'id',
+            'title',
+            'type',
+            'priority',
+            'preconditions',
+            'steps',
+            'expectedResult'
+          ];
+
+          const allowedTypes = [
+            'Positive',
+            'Negative',
+            'Edge',
+            'Visual/UI',
+            'E2E'
+          ];
+
+          const allowedPriorities = [
+            'P0',
+            'P1',
+            'P2',
+            'P3'
+          ];
+
+          const ids = new Set();
+
+          for (const testCase of data.testCases) {
+
+            for (const field of requiredFields) {
+              if (
+                testCase[field] === undefined ||
+                testCase[field] === null
+              ) {
+                console.error(
+                  `ERROR: Test case ${testCase.id || 'UNKNOWN'} is missing field: ${field}`
+                );
+                process.exit(1);
+              }
+            }
+
+            if (ids.has(testCase.id)) {
+              console.error(`ERROR: Duplicate test case ID: ${testCase.id}`);
+              process.exit(1);
+            }
+
+            ids.add(testCase.id);
+
+            if (!allowedTypes.includes(testCase.type)) {
+              console.error(
+                `ERROR: Invalid test type "${testCase.type}" in ${testCase.id}`
+              );
+              process.exit(1);
+            }
+
+            if (!allowedPriorities.includes(testCase.priority)) {
+              console.error(
+                `ERROR: Invalid priority "${testCase.priority}" in ${testCase.id}`
+              );
+              process.exit(1);
+            }
+
+            if (
+              !Array.isArray(testCase.preconditions) ||
+              !Array.isArray(testCase.steps)
+            ) {
+              console.error(
+                `ERROR: Preconditions and steps must be arrays in ${testCase.id}`
+              );
+              process.exit(1);
+            }
+
+            if (testCase.steps.length === 0) {
+              console.error(
+                `ERROR: Test case ${testCase.id} has no steps.`
+              );
+              process.exit(1);
+            }
+          }
+
+          console.log(
+            `SUCCESS: ${data.testCases.length} valid test cases generated.`
+          );
+          EOF
+
       - name: Verify no test automation was created
         run: |
           echo "======================================"
-          echo "CHECKING FOR TEST AUTOMATION CHANGES"
+          echo "CHECKING FOR UNEXPECTED TEST CHANGES"
           echo "======================================"
 
           if git status --short -- tests/ | grep -q .; then
