@@ -8,6 +8,16 @@ on:
         required: true
         type: string
 
+      selected_test_cases:
+        description: "Selected test case IDs"
+        required: true
+        type: string
+
+      generation_run_id:
+        description: "AI test-case generation workflow run ID"
+        required: true
+        type: string
+
 permissions:
   contents: write
   pull-requests: write
@@ -19,69 +29,137 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # --------------------------------------------------
+      # Checkout repository
+      # --------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # --------------------------------------------------
+      # Setup Node.js
+      # --------------------------------------------------
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
+      # --------------------------------------------------
+      # Install dependencies
+      # --------------------------------------------------
       - name: Install dependencies
         run: npm ci
 
+      # --------------------------------------------------
+      # Show approved ticket information
+      # --------------------------------------------------
       - name: Show approved ticket
         run: |
           echo "======================================"
           echo "AI TICKET APPROVED"
           echo "======================================"
           echo "Ticket ID: ${{ inputs.ticket_id }}"
+          echo "Selected Test Cases: ${{ inputs.selected_test_cases }}"
+          echo "Generation Run ID: ${{ inputs.generation_run_id }}"
           echo "======================================"
 
+      # --------------------------------------------------
+      # Process approved ticket from Notion
+      # --------------------------------------------------
       - name: Process approved ticket
         env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
           NOTION_DATA_SOURCE_ID: ${{ secrets.NOTION_DATA_SOURCE_ID }}
+
           TICKET_ID: ${{ inputs.ticket_id }}
+
+          SELECTED_TEST_CASES: ${{ inputs.selected_test_cases }}
+          GENERATION_RUN_ID: ${{ inputs.generation_run_id }}
+
         run: |
           node scripts/ai-agent/process-approved-ticket.js
 
+      # --------------------------------------------------
+      # Prepare Claude prompt
+      # --------------------------------------------------
       - name: Prepare Claude test-generation prompt
+        env:
+          TICKET_ID: ${{ inputs.ticket_id }}
+          SELECTED_TEST_CASES: ${{ inputs.selected_test_cases }}
+          GENERATION_RUN_ID: ${{ inputs.generation_run_id }}
+
         run: |
           node scripts/prepare-claude-test.js
 
+      # --------------------------------------------------
+      # Generate Playwright tests with Claude Code
+      # --------------------------------------------------
       - name: Generate Playwright tests with Claude Code
         uses: anthropics/claude-code-action@v1
         with:
           prompt: ./data/claude-test-generation-prompt.md
           show_full_output: true
+
           claude_args: '--allowedTools "Bash,Edit,Write,mcp__playwright__*" --mcp-config .mcp.json --max-turns 20'
+
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
+      # --------------------------------------------------
+      # Commit generated tests and open PR
+      # --------------------------------------------------
       - name: Commit generated tests and open a PR
         env:
           GH_TOKEN: ${{ github.token }}
+
         run: |
           BRANCH="ai/${{ inputs.ticket_id }}-tests"
 
           git config user.name "tailorbird-ai-agent[bot]"
           git config user.email "tailorbird-ai-agent[bot]@users.noreply.github.com"
 
+          echo "======================================"
+          echo "CHECKING GENERATED TESTS"
+          echo "======================================"
+
           if [ -z "$(git status --porcelain -- tests/)" ]; then
-            echo "No test file changes were produced by Claude Code. Skipping PR creation."
+            echo "No test file changes were produced by Claude Code."
+            echo "Skipping PR creation."
             exit 0
           fi
 
+          echo "Test changes detected."
+
+          # ------------------------------------------------
+          # Create AI branch
+          # ------------------------------------------------
           git checkout -b "$BRANCH"
+
+          # ------------------------------------------------
+          # Commit generated tests
+          # ------------------------------------------------
           git add tests/
+
           SUMMARY="$(git diff --stat --cached)"
-          git commit -m "AI-generated Playwright tests for ${{ inputs.ticket_id }}"
+
+          git commit \
+            -m "AI-generated Playwright tests for ${{ inputs.ticket_id }}"
+
+          # ------------------------------------------------
+          # Push branch
+          # ------------------------------------------------
           git push origin "$BRANCH"
 
+          # ------------------------------------------------
+          # Create PR
+          # ------------------------------------------------
           gh pr create \
             --title "AI-generated tests for ${{ inputs.ticket_id }}" \
-            --body "Ticket: ${{ inputs.ticket_id }}"$'\n\n'"Files changed:"$'\n'"$SUMMARY" \
+            --body "Ticket: ${{ inputs.ticket_id }}"$'\n\n'"Selected test cases: ${{ inputs.selected_test_cases }}"$'\n\n'"Generation run ID: ${{ inputs.generation_run_id }}"$'\n\n'"Files changed:"$'\n'"$SUMMARY" \
             --base main \
             --head "$BRANCH"
+
+          echo "======================================"
+          echo "PR CREATED SUCCESSFULLY"
+          echo "======================================"
