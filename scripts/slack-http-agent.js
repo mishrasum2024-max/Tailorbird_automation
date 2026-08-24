@@ -17,15 +17,16 @@ const GH_REPO = process.env.GH_REPO;
 const GH_PAT = process.env.GH_PAT;
 
 // IMPORTANT:
-// Set this in Render Environment Variables to the
-// actual filename of your test-case generation workflow.
-//
-// Example:
-// ai-generate-test-cases.yml
-//
+// Actual GitHub workflow filename:
+// .github/workflows/ai-generate-testcases.yml
+
 const TESTCASE_GENERATION_WORKFLOW =
   process.env.TESTCASE_GENERATION_WORKFLOW ||
-  "ai-generate-test-cases.yml";
+  "ai-generate-testcases.yml";
+
+const APPROVED_TICKET_WORKFLOW =
+  process.env.APPROVED_TICKET_WORKFLOW ||
+  "ai-approved-ticket.yml";
 
 // ==================================================
 // VALIDATION
@@ -104,6 +105,15 @@ function dispatchGitHubWorkflow(workflowFile, inputs) {
       },
     };
 
+    console.log("");
+    console.log("======================================");
+    console.log("🚀 GITHUB WORKFLOW DISPATCH");
+    console.log("======================================");
+    console.log(`Workflow: ${workflowFile}`);
+    console.log(`Repository: ${GH_OWNER}/${GH_REPO}`);
+    console.log(`Inputs: ${JSON.stringify(inputs)}`);
+    console.log("======================================");
+
     const request = https.request(options, (response) => {
       let responseBody = "";
 
@@ -116,6 +126,18 @@ function dispatchGitHubWorkflow(workflowFile, inputs) {
           response.statusCode >= 200 &&
           response.statusCode < 300
         ) {
+          console.log(
+            `✅ GitHub workflow dispatched successfully.`
+          );
+
+          console.log(
+            `   Workflow: ${workflowFile}`
+          );
+
+          console.log(
+            `   Status: ${response.statusCode}`
+          );
+
           resolve({
             statusCode: response.statusCode,
             body: responseBody,
@@ -148,10 +170,10 @@ function dispatchGitHubWorkflow(workflowFile, inputs) {
 // EXTRACT CHECKBOX SELECTIONS
 // ==================================================
 
-function getSelectedTestCases(body) {
+function getCheckboxSelections(body) {
   const stateValues = body.state?.values || {};
 
-  const selectedTestCases = [];
+  const selections = [];
 
   for (const blockId of Object.keys(stateValues)) {
     const block = stateValues[blockId];
@@ -165,51 +187,20 @@ function getSelectedTestCases(body) {
       ) {
         for (const option of action.selected_options) {
           if (option.value) {
-            selectedTestCases.push(option.value);
+            selections.push(option.value);
           }
         }
       }
     }
   }
 
-  return [...new Set(selectedTestCases)];
-}
-
-// ==================================================
-// EXTRACT SELECTED TICKETS
-// ==================================================
-
-function getSelectedTickets(body) {
-  const stateValues = body.state?.values || {};
-
-  const selectedTickets = [];
-
-  for (const blockId of Object.keys(stateValues)) {
-    const block = stateValues[blockId];
-
-    for (const actionId of Object.keys(block)) {
-      const action = block[actionId];
-
-      if (
-        action.type === "checkboxes" &&
-        Array.isArray(action.selected_options)
-      ) {
-        for (const option of action.selected_options) {
-          if (option.value) {
-            selectedTickets.push(option.value);
-          }
-        }
-      }
-    }
-  }
-
-  return [...new Set(selectedTickets)];
+  return [...new Set(selections)];
 }
 
 // ==================================================
 // STAGE 1
 //
-// SELECT TICKETS
+// SELECT NOTION TICKETS
 //
 // Slack action_id:
 // approve_tickets
@@ -218,9 +209,8 @@ function getSelectedTickets(body) {
 app.action(
   "approve_tickets",
   async ({ ack, body, client }) => {
-
-    // VERY IMPORTANT:
-    // Acknowledge Slack immediately.
+    // IMPORTANT:
+    // Slack must receive acknowledgement immediately.
     await ack();
 
     console.log("");
@@ -228,8 +218,16 @@ app.action(
     console.log("🎫 TICKET APPROVAL RECEIVED");
     console.log("======================================");
 
-    const selectedTickets =
-      getSelectedTickets(body);
+    console.log(
+      "Raw Slack action:",
+      JSON.stringify(body.actions?.[0] || {}, null, 2)
+    );
+
+    // ----------------------------------------------
+    // Extract selected tickets
+    // ----------------------------------------------
+
+    const selectedTickets = getCheckboxSelections(body);
 
     console.log(
       "Selected tickets:",
@@ -269,9 +267,7 @@ app.action(
     // ----------------------------------------------
 
     for (const ticketId of selectedTickets) {
-
       try {
-
         console.log("");
         console.log(
           `🚀 Starting test-case generation for ${ticketId}...`
@@ -287,9 +283,7 @@ app.action(
         console.log(
           `✅ Test-case generation started for ${ticketId}`
         );
-
       } catch (error) {
-
         console.error(
           `❌ Failed to start generation for ${ticketId}:`,
           error.message
@@ -302,8 +296,6 @@ app.action(
             `❌ *Failed to generate test cases for ${ticketId}*\n\n` +
             `${error.message}`,
         });
-
-        continue;
       }
     }
 
@@ -326,18 +318,11 @@ app.action(
     });
 
     console.log("");
+    console.log("🎉 STAGE 1 COMPLETED");
     console.log(
-      "🎉 STAGE 1 COMPLETED"
+      `Tickets approved: ${selectedTickets.join(", ")}`
     );
-
-    console.log(
-      "Tickets approved:",
-      selectedTickets.join(", ")
-    );
-
-    console.log(
-      "======================================"
-    );
+    console.log("======================================");
   }
 );
 
@@ -353,15 +338,19 @@ app.action(
 app.action(
   "automate_testcases",
   async ({ ack, body, client }) => {
-
-    // VERY IMPORTANT:
-    // Acknowledge Slack immediately.
+    // IMPORTANT:
+    // Slack must receive acknowledgement immediately.
     await ack();
 
     console.log("");
     console.log("======================================");
     console.log("🧪 TEST CASE APPROVAL RECEIVED");
     console.log("======================================");
+
+    console.log(
+      "Raw Slack action:",
+      JSON.stringify(body.actions?.[0] || {}, null, 2)
+    );
 
     // ----------------------------------------------
     // Button value format:
@@ -392,7 +381,7 @@ app.action(
     // ----------------------------------------------
 
     const selectedTestCases =
-      getSelectedTestCases(body);
+      getCheckboxSelections(body);
 
     console.log(
       "Selected test cases:",
@@ -400,11 +389,10 @@ app.action(
     );
 
     // ----------------------------------------------
-    // Validation
+    // Validate ticket
     // ----------------------------------------------
 
     if (!ticketId) {
-
       console.error(
         "❌ Ticket ID is missing."
       );
@@ -419,8 +407,11 @@ app.action(
       return;
     }
 
-    if (!generationRunId) {
+    // ----------------------------------------------
+    // Validate generation run ID
+    // ----------------------------------------------
 
+    if (!generationRunId) {
       console.error(
         "❌ Generation run ID is missing."
       );
@@ -435,8 +426,11 @@ app.action(
       return;
     }
 
-    if (selectedTestCases.length === 0) {
+    // ----------------------------------------------
+    // Validate selected test cases
+    // ----------------------------------------------
 
+    if (selectedTestCases.length === 0) {
       console.error(
         "❌ No test cases selected."
       );
@@ -471,14 +465,13 @@ app.action(
     // ----------------------------------------------
 
     try {
-
       console.log("");
       console.log(
         "🚀 Triggering AI Approved Ticket workflow..."
       );
 
       await dispatchGitHubWorkflow(
-        "ai-approved-ticket.yml",
+        APPROVED_TICKET_WORKFLOW,
         {
           ticket_id: ticketId,
 
@@ -515,9 +508,7 @@ app.action(
       console.log(
         "🎉 STAGE 2 COMPLETED"
       );
-
     } catch (error) {
-
       console.error(
         "❌ Failed to trigger AI Approved Ticket workflow:",
         error.message
@@ -543,9 +534,7 @@ app.action(
 // ==================================================
 
 async function start() {
-
   try {
-
     await app.start(PORT);
 
     console.log(
@@ -569,8 +558,17 @@ async function start() {
       "🧪 Stage 2 listener: automate_testcases"
     );
 
-  } catch (error) {
+    console.log("");
+    console.log(
+      `📋 Test-case generation workflow: ${TESTCASE_GENERATION_WORKFLOW}`
+    );
 
+    console.log(
+      `🤖 Approved-ticket workflow: ${APPROVED_TICKET_WORKFLOW}`
+    );
+
+    console.log("");
+  } catch (error) {
     console.error(
       "❌ Failed to start Slack HTTP Agent:",
       error
