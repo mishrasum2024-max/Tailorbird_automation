@@ -17,15 +17,18 @@ jobs:
       id-token: write
 
     steps:
+
       # --------------------------------------------------
-      # 1. Checkout repository
+      # 1. CHECKOUT
       # --------------------------------------------------
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
       # --------------------------------------------------
-      # 2. Setup Node.js
+      # 2. SETUP NODE
       # --------------------------------------------------
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -33,87 +36,324 @@ jobs:
           cache: npm
 
       # --------------------------------------------------
-      # 3. Install dependencies
+      # 3. INSTALL DEPENDENCIES
       # --------------------------------------------------
+
       - name: Install dependencies
         run: npm ci
 
       # --------------------------------------------------
-      # 4. Get ticket details from Notion
+      # 4. PROCESS APPROVED NOTION TICKET
       # --------------------------------------------------
+
       - name: Process approved ticket
         env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
           NOTION_DATA_SOURCE_ID: ${{ secrets.NOTION_DATA_SOURCE_ID }}
           TICKET_ID: ${{ inputs.ticket_id }}
         run: |
+          echo "======================================"
+          echo "PROCESSING APPROVED TICKET"
+          echo "======================================"
+
           node scripts/ai-agent/process-approved-ticket.js
 
       # --------------------------------------------------
-      # 5. Install Claude Code
+      # 5. INSTALL CLAUDE CODE
       # --------------------------------------------------
+
       - name: Install Claude Code
         run: |
           curl -fsSL https://claude.ai/install.sh | bash
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       # --------------------------------------------------
-      # 6. Verify Claude Code
+      # 6. VERIFY CLAUDE
       # --------------------------------------------------
+
       - name: Verify Claude Code installation
         run: |
           claude --version
 
       # --------------------------------------------------
-      # 7. Generate TEST CASES ONLY
+      # 7. GENERATE TEST CASES
       # --------------------------------------------------
+
       - name: Generate test cases with Claude Code
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
           claude -p "$(cat <<'EOF'
-          Read the ticket context from:
+
+          ==============================================
+          AI QA TEST CASE GENERATION
+          ==============================================
+
+          Read the complete approved ticket context from:
 
           data/current-ticket-context.json
 
-          Your task is to analyze the ticket and generate comprehensive QA TEST CASES ONLY.
+          Your task is to analyze the ticket and generate
+          comprehensive, practical QA TEST CASES ONLY.
 
-          IMPORTANT:
-          The output of this workflow is TEST CASE DOCUMENTATION ONLY.
+          The output of this workflow is TEST CASE
+          DOCUMENTATION ONLY.
 
           DO NOT implement or automate any test cases.
 
+          ==============================================
+          DO NOT AUTOMATE
+          ==============================================
+
           DO NOT:
+
           - Create Playwright spec files
           - Modify any existing files inside tests/
           - Write Playwright automation code
           - Write JavaScript automation code
           - Use Playwright MCP
-          - Open or interact with the application using a browser
+          - Open or interact with the application
           - Create a branch
           - Create a commit
           - Create a pull request
+          - Modify existing automation
+          - Generate automation code
 
-          Analyze the complete ticket context, including:
+          This workflow generates test-case documentation only.
+
+          ==============================================
+          ANALYZE THE COMPLETE TICKET
+          ==============================================
+
+          Analyze all available ticket information, including:
+
+          - Ticket ID
           - Ticket title
           - Ticket description
           - Requirements
           - Acceptance criteria
           - Expected behavior
-          - Any other available ticket information
+          - UI behavior
+          - Business rules
+          - Validation rules
+          - User flows
+          - Error handling
+          - Data behavior
+          - Any other information available in the ticket context
 
-          Generate comprehensive and practical test cases covering:
+          Do not make assumptions when the ticket provides
+          specific behavior.
 
-          1. Positive test cases
-          2. Negative test cases
-          3. Edge cases
-          4. Visual/UI test cases
-          5. End-to-end test cases
+          ==============================================
+          TEST CASE CATEGORIES
+          ==============================================
+
+          Generate test cases across these EXACTLY SIX
+          categories:
+
+          1. E2E
+          2. Edge
+          3. Positive
+          4. Negative
+          5. UI
+          6. Visual Testing
+
+          Every test case MUST belong to exactly ONE category.
+
+          Use these exact values for the "type" field:
+
+          - E2E
+          - Edge
+          - Positive
+          - Negative
+          - UI
+          - Visual Testing
+
+          Do NOT use:
+
+          - Visual/UI
+          - Visual
+          - UI/Visual
+          - End-to-End
+          - Positive Case
+          - Negative Case
+          - Edge Case
+
+          Only use the six allowed values above.
+
+          ==============================================
+          CATEGORY GUIDANCE
+          ==============================================
+
+          E2E:
+
+          Cover complete user journeys that cross multiple
+          screens, components, workflows, or system states.
+
+          Example areas:
+
+          - Complete user workflow
+          - Multi-page flow
+          - Create → save → verify
+          - User action → backend result → UI confirmation
+          - End-to-end business workflow
+
+          ----------------------------------------------
+
+          EDGE:
+
+          Cover boundary conditions and unusual but valid
+          situations.
+
+          Example areas:
+
+          - Empty values
+          - Maximum/minimum values
+          - Very long text
+          - Boundary dates
+          - Duplicate values
+          - Large datasets
+          - Special characters
+          - Rapid repeated actions
+          - Unusual combinations
+          - Pagination boundaries
+          - Timeout/retry scenarios
+
+          ----------------------------------------------
+
+          POSITIVE:
+
+          Cover expected successful behavior using valid
+          inputs and supported workflows.
+
+          Example areas:
+
+          - Valid input
+          - Successful submission
+          - Correct data selection
+          - Expected navigation
+          - Successful save/update/delete
+          - Correct confirmation messages
+
+          ----------------------------------------------
+
+          NEGATIVE:
+
+          Cover invalid inputs, blocked operations, errors,
+          permission failures, validation failures, and
+          unexpected user actions.
+
+          Example areas:
+
+          - Invalid input
+          - Missing required field
+          - Unauthorized action
+          - Incorrect format
+          - Duplicate invalid operation
+          - Failed request
+          - Server/API failure
+          - Validation error
+
+          ----------------------------------------------
+
+          UI:
+
+          Cover functional UI behavior and UI components.
+
+          Example areas:
+
+          - Buttons
+          - Inputs
+          - Dropdowns
+          - Checkboxes
+          - Radio buttons
+          - Tabs
+          - Tables
+          - Filters
+          - Sorting
+          - Pagination
+          - Modals
+          - Tooltips
+          - Labels
+          - Enabled/disabled states
+          - Loading states
+          - Empty states
+
+          UI cases should verify behavior and interaction,
+          not only appearance.
+
+          ----------------------------------------------
+
+          VISUAL TESTING:
+
+          Cover visual appearance and visual consistency.
+
+          Example areas:
+
+          - Layout
+          - Alignment
+          - Spacing
+          - Typography
+          - Colors
+          - Icons
+          - Button appearance
+          - Modal appearance
+          - Responsive layout
+          - Visual state changes
+          - Error-state appearance
+          - Empty-state appearance
+          - Loading-state appearance
+          - Table/grid visual structure
+
+          These cases should focus specifically on visual
+          validation rather than functional interaction.
+
+          ==============================================
+          NUMBER OF TEST CASES
+          ==============================================
+
+          There is NO fixed limit of 30 test cases.
+
+          Generate as many test cases as are genuinely
+          required to provide strong coverage of the ticket.
+
+          A typical target is approximately 40-60 test cases
+          for a substantial feature, but this is NOT a hard
+          limit.
+
+          If the ticket is simple, generate fewer.
+
+          If the ticket is complex, generate more.
+
+          DO NOT create duplicate or artificial test cases
+          simply to increase the count.
+
+          Prioritize meaningful coverage over quantity.
+
+          ==============================================
+          COVERAGE EXPECTATION
+          ==============================================
+
+          Before finishing, mentally review the ticket and
+          make sure meaningful scenarios have been considered
+          across all applicable categories.
+
+          Do not force a category when it is genuinely not
+          applicable to the ticket.
+
+          However, for a substantial UI feature, make a strong
+          effort to provide meaningful coverage across all
+          six categories.
 
           Avoid generic test cases.
+
           Every test case must be specific to the ticket.
 
-          Each test case MUST contain:
+          ==============================================
+          TEST CASE FORMAT
+          ==============================================
+
+          Every test case MUST contain:
 
           - Test Case ID
           - Title
@@ -123,13 +363,9 @@ jobs:
           - Test Steps
           - Expected Result
 
-          Allowed Type values:
-
-          - Positive
-          - Negative
-          - Edge
-          - Visual/UI
-          - E2E
+          ==============================================
+          PRIORITY
+          ==============================================
 
           Allowed Priority values:
 
@@ -138,23 +374,52 @@ jobs:
           - P2
           - P3
 
-          Test case IDs must be unique within this ticket.
+          Assign priority based on business impact and risk.
+
+          ==============================================
+          TEST CASE IDS
+          ==============================================
+
+          Test case IDs must be unique within the ticket.
+
+          Use sequential IDs:
+
+          TC001
+          TC002
+          TC003
+          ...
+
+          Continue sequentially regardless of category.
+
+          Example:
+
+          TC001 -> Positive
+          TC002 -> Positive
+          TC003 -> Edge
+          TC004 -> Negative
+          TC005 -> UI
+          TC006 -> Visual Testing
+          TC007 -> E2E
+
+          ==============================================
+          SAVE JSON
+          ==============================================
 
           Save the structured test cases to:
 
           data/generated-testcases.json
 
-          JSON structure:
+          JSON structure MUST be:
 
           {
             "ticketId": "...",
             "ticketTitle": "...",
             "testCases": [
               {
-                "id": "...",
+                "id": "TC001",
                 "title": "...",
-                "type": "...",
-                "priority": "...",
+                "type": "Positive",
+                "priority": "P1",
                 "preconditions": [],
                 "steps": [],
                 "expectedResult": "..."
@@ -162,7 +427,11 @@ jobs:
             ]
           }
 
-          Also create a human-readable Markdown version at:
+          ==============================================
+          SAVE MARKDOWN
+          ==============================================
+
+          Also create:
 
           data/generated-testcases.md
 
@@ -170,14 +439,16 @@ jobs:
 
           # Generated Test Cases
 
-          Ticket information followed by all generated test cases.
+          ## Ticket Information
 
-          For every test case use:
+          Ticket information here.
 
-          ## TCxxx - Test Case Title
+          ## E2E Test Cases
 
-          - Type:
-          - Priority:
+          ### TCxxx - Test Case Title
+
+          - Type: E2E
+          - Priority: P1
           - Preconditions:
 
           ### Steps
@@ -190,23 +461,56 @@ jobs:
 
           ...
 
-          Before finishing, verify:
+          ## Edge Cases
+
+          ...
+
+          ## Positive Cases
+
+          ...
+
+          ## Negative Cases
+
+          ...
+
+          ## UI Cases
+
+          ...
+
+          ## Visual Testing
+
+          ...
+
+          ==============================================
+          FINAL VALIDATION BEFORE FINISHING
+          ==============================================
+
+          Verify:
 
           1. data/generated-testcases.json exists
           2. data/generated-testcases.md exists
           3. Both files contain test cases
           4. Every test case has all required fields
-          5. No Playwright spec file was created
-          6. No file inside tests/ was modified
-          7. No automation code was generated
+          5. Every test case has a unique ID
+          6. Every test case has one of the six allowed types
+          7. Every test case has a valid priority
+          8. No duplicate test cases exist
+          9. No Playwright spec file was created
+          10. No file inside tests/ was modified
+          11. No automation code was generated
+          12. No branch was created
+          13. No commit was created
+          14. No pull request was created
 
           Do not automate anything.
+
           EOF
           )" --dangerously-skip-permissions
 
       # --------------------------------------------------
-      # 8. Verify generated files
+      # 8. VERIFY GENERATED FILES
       # --------------------------------------------------
+
       - name: Verify generated test cases
         run: |
           echo "======================================"
@@ -244,8 +548,9 @@ jobs:
           cat data/generated-testcases.md
 
       # --------------------------------------------------
-      # 9. Validate JSON structure
+      # 9. VALIDATE JSON STRUCTURE
       # --------------------------------------------------
+
       - name: Verify JSON structure
         run: |
           node <<'EOF'
@@ -256,12 +561,16 @@ jobs:
           let data;
 
           try {
-            data = JSON.parse(fs.readFileSync(file, 'utf8'));
+            data = JSON.parse(
+              fs.readFileSync(file, 'utf8')
+            );
           } catch (error) {
             console.error(
               'ERROR: generated-testcases.json contains invalid JSON.'
             );
+
             console.error(error.message);
+
             process.exit(1);
           }
 
@@ -275,7 +584,10 @@ jobs:
             process.exit(1);
           }
 
-          if (!Array.isArray(data.testCases) || data.testCases.length === 0) {
+          if (
+            !Array.isArray(data.testCases) ||
+            data.testCases.length === 0
+          ) {
             console.error('ERROR: No test cases were generated.');
             process.exit(1);
           }
@@ -291,11 +603,12 @@ jobs:
           ];
 
           const allowedTypes = [
+            'E2E',
+            'Edge',
             'Positive',
             'Negative',
-            'Edge',
-            'Visual/UI',
-            'E2E'
+            'UI',
+            'Visual Testing'
           ];
 
           const allowedPriorities = [
@@ -307,6 +620,15 @@ jobs:
 
           const ids = new Set();
 
+          const typeCounts = {
+            'E2E': 0,
+            'Edge': 0,
+            'Positive': 0,
+            'Negative': 0,
+            'UI': 0,
+            'Visual Testing': 0
+          };
+
           for (const testCase of data.testCases) {
 
             for (const field of requiredFields) {
@@ -315,16 +637,28 @@ jobs:
                 testCase[field] === null
               ) {
                 console.error(
-                  `ERROR: Test case ${testCase.id || 'UNKNOWN'} is missing field: ${field}`
+                  `ERROR: Test case ${
+                    testCase.id || 'UNKNOWN'
+                  } is missing field: ${field}`
                 );
+
                 process.exit(1);
               }
+            }
+
+            if (!testCase.id) {
+              console.error(
+                'ERROR: Test case ID is empty.'
+              );
+
+              process.exit(1);
             }
 
             if (ids.has(testCase.id)) {
               console.error(
                 `ERROR: Duplicate test case ID: ${testCase.id}`
               );
+
               process.exit(1);
             }
 
@@ -334,13 +668,21 @@ jobs:
               console.error(
                 `ERROR: Invalid test type "${testCase.type}" in ${testCase.id}`
               );
+
+              console.error(
+                `Allowed types: ${allowedTypes.join(', ')}`
+              );
+
               process.exit(1);
             }
+
+            typeCounts[testCase.type]++;
 
             if (!allowedPriorities.includes(testCase.priority)) {
               console.error(
                 `ERROR: Invalid priority "${testCase.priority}" in ${testCase.id}`
               );
+
               process.exit(1);
             }
 
@@ -351,6 +693,7 @@ jobs:
               console.error(
                 `ERROR: Preconditions and steps must be arrays in ${testCase.id}`
               );
+
               process.exit(1);
             }
 
@@ -358,6 +701,7 @@ jobs:
               console.error(
                 `ERROR: Test case ${testCase.id} has no steps.`
               );
+
               process.exit(1);
             }
           }
@@ -365,11 +709,25 @@ jobs:
           console.log(
             `SUCCESS: ${data.testCases.length} valid test cases generated.`
           );
+
+          console.log("");
+          console.log("TEST CASE CATEGORY SUMMARY");
+          console.log("--------------------------------------");
+
+          for (const type of allowedTypes) {
+            console.log(
+              `${type}: ${typeCounts[type]}`
+            );
+          }
+
+          console.log("--------------------------------------");
+
           EOF
 
       # --------------------------------------------------
-      # 10. Make sure Claude did NOT modify tests/
+      # 10. MAKE SURE CLAUDE DID NOT MODIFY TESTS
       # --------------------------------------------------
+
       - name: Verify no test automation was created
         run: |
           echo "======================================"
@@ -387,6 +745,7 @@ jobs:
       # --------------------------------------------------
       # 11. SEND TEST CASES TO SLACK
       # --------------------------------------------------
+
       - name: Send generated test cases to Slack
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -403,8 +762,9 @@ jobs:
           echo "======================================"
 
       # --------------------------------------------------
-      # 12. Upload generated test cases as artifact
+      # 12. UPLOAD GENERATED TEST CASES
       # --------------------------------------------------
+
       - name: Upload generated test cases
         uses: actions/upload-artifact@v4
         with:
@@ -415,25 +775,28 @@ jobs:
           retention-days: 7
 
       # --------------------------------------------------
-      # 13. Final summary
+      # 13. FINAL SUMMARY
       # --------------------------------------------------
+
       - name: Workflow summary
         run: |
           echo "======================================"
           echo "AI TEST CASE GENERATION COMPLETED"
           echo "======================================"
+
           echo "Ticket: ${{ inputs.ticket_id }}"
+
           echo "Test cases generated successfully."
-          echo "Test cases sent to Slack for human selection."
+
           echo ""
+
           echo "Files created:"
           echo "  - data/generated-testcases.json"
           echo "  - data/generated-testcases.md"
+
           echo ""
+
           echo "No Playwright automation was generated."
           echo "No PR was created."
-          echo ""
-          echo "NEXT STEP:"
-          echo "User must select the test cases in Slack."
-          echo "Only selected test cases should be sent to the automation agent."
+
           echo "======================================"
