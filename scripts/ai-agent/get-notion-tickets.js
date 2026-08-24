@@ -12,13 +12,15 @@ const DATA_SOURCE_ID =
   process.env.NOTION_DATA_SOURCE_ID ||
   "201aef20-7051-80c9-96fe-000b582249cd";
 
+const TARGET_STATUS = "Complete";
+
 function getText(property) {
   if (!property) return "";
 
   if (property.type === "title") {
     return (
       property.title
-        ?.map(item => item.plain_text)
+        ?.map((item) => item.plain_text)
         .join("") || ""
     );
   }
@@ -26,7 +28,7 @@ function getText(property) {
   if (property.type === "rich_text") {
     return (
       property.rich_text
-        ?.map(item => item.plain_text)
+        ?.map((item) => item.plain_text)
         .join("") || ""
     );
   }
@@ -63,10 +65,11 @@ function getUniqueId(property) {
   return `${prefix}-${number}`;
 }
 
-async function getCompletedTickets() {
-  console.log("🔎 Fetching completed Notion tickets...");
+async function getAvailableTicket() {
+  console.log(
+    `🔎 Looking for the newest Notion ticket with status "${TARGET_STATUS}"...`
+  );
 
-  const results = [];
   let cursor = undefined;
 
   do {
@@ -80,7 +83,7 @@ async function getCompletedTickets() {
       filter: {
         property: "Status",
         status: {
-          equals: "Complete & Archived",
+          equals: TARGET_STATUS,
         },
       },
 
@@ -92,10 +95,18 @@ async function getCompletedTickets() {
       ],
     });
 
-    for (const page of response.results) {
+    /*
+     * We only need ONE ticket.
+     *
+     * Because Notion returns results in descending
+     * Created time order, the first result is the
+     * newest available ticket.
+     */
+    if (response.results.length > 0) {
+      const page = response.results[0];
       const properties = page.properties;
 
-      results.push({
+      return {
         id: getUniqueId(properties["ID"]),
 
         title: getText(properties["Name"]),
@@ -123,7 +134,7 @@ async function getCompletedTickets() {
           page.url,
 
         notionPageId: page.id,
-      });
+      };
     }
 
     cursor = response.has_more
@@ -132,53 +143,59 @@ async function getCompletedTickets() {
 
   } while (cursor);
 
-  return results;
+  return null;
 }
 
 async function main() {
   try {
+    if (!process.env.NOTION_API_KEY) {
+      throw new Error(
+        "NOTION_API_KEY is missing."
+      );
+    }
+
+    console.log(
+      "\n======================================"
+    );
+
+    console.log(
+      "AI TICKET SELECTION"
+    );
+
+    console.log(
+      "======================================"
+    );
+
     /*
-     * STEP 1
-     * Fetch all completed tickets.
+     * Find only ONE available ticket.
      *
-     * Notion already returns them
-     * newest → oldest because of the
-     * Created time descending sort.
+     * Only Status = Complete is allowed.
      */
-    let tickets = await getCompletedTickets();
+    const ticket = await getAvailableTicket();
 
     /*
-     * STEP 2
-     * Keep only the newest 10 tickets.
+     * No ticket available.
      */
-    tickets = tickets.slice(0, 10);
+    if (!ticket) {
+      console.log(
+        "\nℹ️ No tickets with status \"Complete\" are available."
+      );
+
+      console.log(
+        "Nothing will be sent to Slack."
+      );
+
+      /*
+       * This is not an error.
+       *
+       * GitHub Actions should finish successfully
+       * when there is simply no ticket waiting.
+       */
+      process.exit(0);
+    }
 
     /*
-     * STEP 3
-     * Sort those 10 tickets for Slack.
-     *
-     * Required order:
-     * P1 → P2 → P0
-     */
-    const priorityOrder = {
-      P1: 1,
-      P2: 2,
-      P0: 3,
-    };
-
-    tickets.sort((a, b) => {
-      const priorityA =
-        priorityOrder[a.priority] ?? 999;
-
-      const priorityB =
-        priorityOrder[b.priority] ?? 999;
-
-      return priorityA - priorityB;
-    });
-
-    /*
-     * STEP 4
-     * Create data directory if it doesn't exist.
+     * Save the single ticket.
      */
     const outputDir = path.join(
       __dirname,
@@ -193,27 +210,78 @@ async function main() {
       });
     }
 
-    /*
-     * STEP 5
-     * Save the selected tickets.
-     */
     const outputFile = path.join(
       outputDir,
       "notion-completed-tickets.json"
     );
 
+    /*
+     * IMPORTANT:
+     *
+     * Keep the output as an array because the
+     * existing Slack script expects an array.
+     *
+     * But it will ALWAYS contain either:
+     *
+     * []       -> no ticket available
+     *
+     * [ticket] -> exactly one ticket
+     */
     fs.writeFileSync(
       outputFile,
-      JSON.stringify(tickets, null, 2),
+      JSON.stringify([ticket], null, 2),
       "utf8"
     );
 
     /*
-     * STEP 6
-     * Display the selected tickets.
+     * Display result.
      */
     console.log(
-      `\n✅ Completed tickets selected: ${tickets.length}`
+      "\n======================================"
+    );
+
+    console.log(
+      "AVAILABLE TICKET"
+    );
+
+    console.log(
+      "======================================"
+    );
+
+    console.log(
+      `ID:       ${ticket.id}`
+    );
+
+    console.log(
+      `Title:    ${ticket.title}`
+    );
+
+    console.log(
+      `Status:   ${ticket.status}`
+    );
+
+    console.log(
+      `Priority: ${ticket.priority || "N/A"}`
+    );
+
+    console.log(
+      `Type:     ${ticket.issueType || "N/A"}`
+    );
+
+    console.log(
+      `Created:  ${ticket.createdTime}`
+    );
+
+    console.log(
+      `URL:      ${ticket.url}`
+    );
+
+    console.log(
+      "======================================"
+    );
+
+    console.log(
+      `\n✅ Exactly one ticket selected for Slack: ${ticket.id}`
     );
 
     console.log(
@@ -221,45 +289,12 @@ async function main() {
     );
 
     console.log(
-      "\n======================================"
-    );
-
-    console.log("SELECTED TICKETS");
-
-    console.log(
-      "======================================\n"
-    );
-
-    tickets.forEach((ticket, index) => {
-      console.log(
-        `${index + 1}. ` +
-        `${ticket.priority || "NO PRIORITY"} | ` +
-        `${ticket.id} | ` +
-        `${ticket.title}`
-      );
-
-      console.log(
-        `   Status: ${ticket.status}`
-      );
-
-      console.log(
-        `   Created: ${ticket.createdTime}`
-      );
-
-      console.log(
-        `   Type: ${ticket.issueType || "N/A"}`
-      );
-
-      console.log("");
-    });
-
-    console.log(
-      "======================================"
+      "\n➡️ Waiting for human approval in Slack..."
     );
 
   } catch (error) {
     console.error(
-      "\n❌ Failed to fetch Notion tickets."
+      "\n❌ Failed to fetch Notion ticket."
     );
 
     if (error.body) {
