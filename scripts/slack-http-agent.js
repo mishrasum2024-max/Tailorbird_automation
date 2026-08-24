@@ -16,6 +16,10 @@ const GH_OWNER = process.env.GH_OWNER;
 const GH_REPO = process.env.GH_REPO;
 const GH_PAT = process.env.GH_PAT;
 
+// --------------------------------------------------
+// Validate environment variables
+// --------------------------------------------------
+
 if (!SLACK_BOT_TOKEN) {
   throw new Error("SLACK_BOT_TOKEN is missing.");
 }
@@ -189,56 +193,59 @@ app.action(
   async ({ ack, body, client }) => {
     // ------------------------------------------------
     // IMPORTANT:
-    // Acknowledge Slack immediately.
+    // Acknowledge Slack IMMEDIATELY.
     //
-    // Do NOT perform any API calls or processing
-    // before this acknowledgement.
+    // Do not await anything before ack().
     // ------------------------------------------------
 
-    await ack();
-
-    // ------------------------------------------------
-    // Capture everything required from Slack request
-    // before starting background processing.
-    // ------------------------------------------------
-
-    const channelId = body.channel?.id;
-
-    const buttonValue =
-      body.actions?.[0]?.value || "";
-
-    const [ticketId, generationRunId] =
-      buttonValue.split("|");
-
-    const selectedTestCases =
-      getSelectedTestCases(body);
+    ack();
 
     console.log(
       "\n🔔 Automate Selected Test Cases clicked."
     );
 
-    console.log(
-      `Ticket ID: ${ticketId || "UNKNOWN"}`
-    );
-
-    console.log(
-      `Generation Run ID: ${
-        generationRunId || "UNKNOWN"
-      }`
-    );
-
-    console.log(
-      "Selected test cases:",
-      selectedTestCases
-    );
-
     // ------------------------------------------------
-    // Everything below happens AFTER Slack has been
-    // acknowledged.
+    // Process everything after Slack acknowledgement.
+    // This prevents the 3-second Slack timeout.
     // ------------------------------------------------
 
     setImmediate(async () => {
       try {
+        // ------------------------------------------------
+        // Extract ticket ID + generation run ID
+        //
+        // Example:
+        // FEAT-1134|32692036243
+        // ------------------------------------------------
+
+        const buttonValue =
+          body.actions?.[0]?.value || "";
+
+        const [ticketId, generationRunId] =
+          buttonValue.split("|");
+
+        console.log(
+          `Ticket ID: ${ticketId || "UNKNOWN"}`
+        );
+
+        console.log(
+          `Generation Run ID: ${
+            generationRunId || "UNKNOWN"
+          }`
+        );
+
+        // ------------------------------------------------
+        // Get selected test cases
+        // ------------------------------------------------
+
+        const selectedTestCases =
+          getSelectedTestCases(body);
+
+        console.log(
+          "Selected test cases:",
+          selectedTestCases
+        );
+
         // ------------------------------------------------
         // Validate ticket ID
         // ------------------------------------------------
@@ -248,12 +255,18 @@ app.action(
             "❌ Ticket ID is missing."
           );
 
-          if (channelId) {
+          try {
             await client.chat.postMessage({
-              channel: channelId,
+              channel: body.channel.id,
+
               text:
                 "❌ Unable to process the request because the ticket ID is missing.",
             });
+          } catch (slackError) {
+            console.error(
+              "❌ Failed to send Slack error message:",
+              slackError.message || slackError
+            );
           }
 
           return;
@@ -268,20 +281,26 @@ app.action(
             "❌ No test cases selected."
           );
 
-          if (channelId) {
+          try {
             await client.chat.postMessage({
-              channel: channelId,
+              channel: body.channel.id,
+
               text:
                 "⚠️ No test cases were selected.\n\n" +
                 "Please select at least one test case.",
             });
+          } catch (slackError) {
+            console.error(
+              "❌ Failed to send Slack error message:",
+              slackError.message || slackError
+            );
           }
 
           return;
         }
 
         // ------------------------------------------------
-        // Human approval
+        // Log approval
         // ------------------------------------------------
 
         console.log(
@@ -317,12 +336,12 @@ app.action(
         );
 
         console.log(
-          `✅ ${ticketId} sent to GitHub Actions`
+          `\n✅ ${ticketId} sent to GitHub Actions`
         );
 
         console.log(
           `   Selected test cases: ${selectedTestCases.join(
-            ", "
+            ","
           )}`
         );
 
@@ -336,23 +355,22 @@ app.action(
         // Slack confirmation
         // ------------------------------------------------
 
-        if (channelId) {
-          try {
-            await client.chat.postMessage({
-              channel: channelId,
-              text:
-                `✅ *Automation started for ${ticketId}*\n\n` +
-                `Selected test cases: ${selectedTestCases.join(
-                  ", "
-                )}\n\n` +
-                `GitHub Actions workflow has been triggered.`,
-            });
-          } catch (slackError) {
-            console.error(
-              "❌ Failed to send Slack confirmation:",
-              slackError.message
-            );
-          }
+        try {
+          await client.chat.postMessage({
+            channel: body.channel.id,
+
+            text:
+              `✅ *Automation started for ${ticketId}*\n\n` +
+              `Selected test cases: ${selectedTestCases.join(
+                ", "
+              )}\n\n` +
+              `GitHub Actions workflow has been triggered.`,
+          });
+        } catch (slackError) {
+          console.error(
+            "❌ Failed to send Slack confirmation:",
+            slackError.message || slackError
+          );
         }
 
         console.log(
@@ -361,30 +379,34 @@ app.action(
 
       } catch (error) {
         console.error(
-          "❌ Failed to trigger GitHub workflow:",
-          error.message
+          "\n❌ Failed to trigger GitHub workflow:"
+        );
+
+        console.error(
+          error.message || error
         );
 
         // ------------------------------------------------
-        // Send failure notification to Slack
+        // Notify Slack about failure
         // ------------------------------------------------
 
-        if (channelId) {
-          try {
+        try {
+          if (body.channel?.id) {
             await client.chat.postMessage({
-              channel: channelId,
+              channel: body.channel.id,
+
               text:
-                `❌ *Failed to start automation for ${
-                  ticketId || "ticket"
-                }*\n\n` +
-                `Error: ${error.message}`,
+                `❌ *Failed to start automation for ${body.actions?.[0]?.value?.split("|")?.[0] || "ticket"}*\n\n` +
+                `Error: ${
+                  error.message || "Unknown error"
+                }`,
             });
-          } catch (slackError) {
-            console.error(
-              "❌ Failed to send Slack error message:",
-              slackError.message
-            );
           }
+        } catch (slackError) {
+          console.error(
+            "❌ Failed to send Slack error message:",
+            slackError.message || slackError
+          );
         }
       }
     });
