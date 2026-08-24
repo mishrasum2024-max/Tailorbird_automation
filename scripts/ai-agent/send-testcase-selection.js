@@ -47,9 +47,8 @@ async function main() {
     /*
      * GitHub Actions run ID.
      *
-     * This must be provided by the workflow when this script runs.
-     * It allows the next workflow to download the exact test-case
-     * artifact generated for this ticket.
+     * This allows the next workflow to download the exact
+     * test-case artifact generated for this ticket.
      */
     const runId = process.env.GITHUB_RUN_ID;
 
@@ -63,93 +62,151 @@ async function main() {
       `🔗 Test-case generation run ID: ${runId}`
     );
 
-    const options = testCases.map((testCase) => ({
-      text: {
-        type: "plain_text",
-        text: `${testCase.id} | ${testCase.title}`.substring(
-          0,
-          75
-        ),
+    /*
+     * Slack allows a maximum of 10 checkbox options
+     * inside a single checkbox element.
+     *
+     * Split all test cases into groups of 10.
+     */
+    const TEST_CASES_PER_GROUP = 10;
+
+    const testCaseGroups = [];
+
+    for (
+      let i = 0;
+      i < testCases.length;
+      i += TEST_CASES_PER_GROUP
+    ) {
+      testCaseGroups.push(
+        testCases.slice(i, i + TEST_CASES_PER_GROUP)
+      );
+    }
+
+    console.log(
+      `📦 Created ${testCaseGroups.length} Slack checkbox group(s).`
+    );
+
+    /*
+     * Build Slack blocks.
+     */
+    const blocks = [
+      {
+        type: "header",
+        text: {
+          type: "plain_text",
+          text: "🧪 AI Generated Test Cases",
+        },
       },
-      value: testCase.id,
-    }));
+
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text:
+            `*Ticket:* ${ticketId}\n` +
+            `*Title:* ${ticketTitle}\n\n` +
+            `*Total Test Cases:* ${testCases.length}\n\n` +
+            `*Select the test cases you want to automate:*`,
+        },
+      },
+
+      {
+        type: "divider",
+      },
+    ];
+
+    /*
+     * Add one checkbox group for every 10 test cases.
+     */
+    testCaseGroups.forEach((group, groupIndex) => {
+      const options = group.map((testCase) => ({
+        text: {
+          type: "plain_text",
+          text: `${testCase.id} | ${testCase.title}`.substring(
+            0,
+            75
+          ),
+        },
+        value: testCase.id,
+      }));
+
+      blocks.push({
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `*Test Cases ${groupIndex * 10 + 1}-${Math.min(
+            (groupIndex + 1) * 10,
+            testCases.length
+          )}*`,
+        },
+      });
+
+      blocks.push({
+        type: "actions",
+
+        block_id: `testcase_selection_${groupIndex + 1}`,
+
+        elements: [
+          {
+            type: "checkboxes",
+
+            action_id: `selected_testcases_${groupIndex + 1}`,
+
+            options,
+          },
+        ],
+      });
+
+      /*
+       * Add a divider between checkbox groups.
+       */
+      if (groupIndex < testCaseGroups.length - 1) {
+        blocks.push({
+          type: "divider",
+        });
+      }
+    });
+
+    /*
+     * Add automation button at the bottom.
+     */
+    blocks.push({
+      type: "divider",
+    });
+
+    blocks.push({
+      type: "actions",
+
+      elements: [
+        {
+          type: "button",
+
+          text: {
+            type: "plain_text",
+            text: "Automate Selected Test Cases",
+          },
+
+          style: "primary",
+
+          action_id: "automate_testcases",
+
+          /*
+           * Send both ticket ID and GitHub Actions run ID.
+           *
+           * Example:
+           * FEAT-1134|32470304965
+           */
+          value: `${ticketId}|${runId}`,
+        },
+      ],
+    });
 
     const response = await slack.chat.postMessage({
       channel: CHANNEL_ID,
 
       text: `AI Test Cases Ready - ${ticketId}`,
 
-      blocks: [
-        {
-          type: "header",
-          text: {
-            type: "plain_text",
-            text: "🧪 AI Generated Test Cases",
-          },
-        },
-
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text:
-              `*Ticket:* ${ticketId}\n` +
-              `*Title:* ${ticketTitle}\n\n` +
-              `*Select the test cases you want to automate:*`,
-          },
-        },
-
-        {
-          type: "divider",
-        },
-
-        {
-          type: "actions",
-
-          block_id: "testcase_selection",
-
-          elements: [
-            {
-              type: "checkboxes",
-
-              action_id: "selected_testcases",
-
-              options,
-            },
-          ],
-        },
-
-        {
-          type: "actions",
-
-          elements: [
-            {
-              type: "button",
-
-              text: {
-                type: "plain_text",
-                text: "Automate Selected Test Cases",
-              },
-
-              style: "primary",
-
-              action_id: "automate_testcases",
-
-              /*
-               * IMPORTANT:
-               *
-               * We send both the ticket ID and the GitHub
-               * Actions run ID.
-               *
-               * Example:
-               *
-               * FEAT-1134|32454169759
-               */
-              value: `${ticketId}|${runId}`,
-            },
-          ],
-        },
-      ],
+      blocks,
     });
 
     console.log(
@@ -163,6 +220,10 @@ async function main() {
     console.log(`Test cases: ${testCases.length}`);
 
     console.log(`Run ID: ${runId}`);
+
+    console.log(
+      `Checkbox groups: ${testCaseGroups.length}`
+    );
 
   } catch (error) {
     console.error(
