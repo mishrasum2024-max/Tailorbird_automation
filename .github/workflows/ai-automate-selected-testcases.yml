@@ -20,16 +20,27 @@ on:
 
 jobs:
   automate-selected-testcases:
+
     runs-on: ubuntu-latest
 
     permissions:
       contents: write
       pull-requests: write
+      actions: read
       id-token: write
 
     steps:
+
+      # ============================================================
+      # CHECKOUT
+      # ============================================================
+
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      # ============================================================
+      # NODE
+      # ============================================================
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -40,6 +51,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # ============================================================
+      # DOWNLOAD GENERATED TEST CASES
+      # ============================================================
+
       - name: Download generated test cases
         uses: actions/download-artifact@v4
         with:
@@ -49,71 +64,62 @@ jobs:
           repository: ${{ github.repository }}
           run-id: ${{ inputs.testcase_run_id }}
 
-      - name: Verify generated test cases
+      # ============================================================
+      # VERIFY INPUT
+      # ============================================================
+
+      - name: Verify automation input
+        env:
+          SELECTED_TEST_CASES: ${{ inputs.test_case_ids }}
         run: |
           echo "======================================"
-          echo "SELECTED TEST CASE AUTOMATION"
+          echo "AI TEST AUTOMATION"
           echo "======================================"
 
-          echo "Ticket: ${{ inputs.ticket_id }}"
-          echo "Selected test cases: ${{ inputs.test_case_ids }}"
-          echo "Source run: ${{ inputs.testcase_run_id }}"
+          echo "Ticket:"
+          echo "${{ inputs.ticket_id }}"
+
+          echo ""
+          echo "Selected test cases:"
+          echo "$SELECTED_TEST_CASES"
+
+          echo ""
+          echo "Test-case generation run:"
+          echo "${{ inputs.testcase_run_id }}"
+
+          echo ""
 
           if [ ! -f "data/generated-testcases.json" ]; then
             echo "ERROR: generated-testcases.json not found."
             exit 1
           fi
 
-          echo ""
-          echo "Generated test cases:"
-          cat data/generated-testcases.json
+          echo "generated-testcases.json found."
+
+      # ============================================================
+      # FILTER SELECTED TEST CASES
+      # ============================================================
 
       - name: Prepare selected test cases
         env:
           SELECTED_TEST_CASES: ${{ inputs.test_case_ids }}
         run: |
-          node - <<'NODE'
-          const fs = require("fs");
+          echo "======================================"
+          echo "FILTERING SELECTED TEST CASES"
+          echo "======================================"
 
-          const file = "data/generated-testcases.json";
+          node scripts/ai-agent/filter-selected-testcases.js
 
-          const data = JSON.parse(
-            fs.readFileSync(file, "utf8")
-          );
+          echo ""
+          echo "======================================"
+          echo "SELECTED TEST CASES FILE"
+          echo "======================================"
 
-          const selectedIds = process.env.SELECTED_TEST_CASES
-            .split(",")
-            .map(id => id.trim())
-            .filter(Boolean);
+          cat data/selected-testcases.json
 
-          const selected = data.testCases.filter(tc =>
-            selectedIds.includes(tc.id)
-          );
-
-          if (selected.length === 0) {
-            console.error("ERROR: No matching test cases found.");
-            process.exit(1);
-          }
-
-          const output = {
-            ticketId: data.ticketId,
-            ticketTitle: data.ticketTitle,
-            selectedTestCases: selected
-          };
-
-          fs.writeFileSync(
-            "data/selected-testcases.json",
-            JSON.stringify(output, null, 2)
-          );
-
-          console.log(
-            `Selected ${selected.length} test case(s).`
-          );
-
-          selected.forEach(tc => {
-            console.log(`- ${tc.id} | ${tc.title}`);
-          });
-          NODE
+      # ============================================================
+      # INSTALL CLAUDE CODE
+      # ============================================================
 
       - name: Install Claude Code
         run: |
@@ -124,131 +130,366 @@ jobs:
         run: |
           claude --version
 
+      # ============================================================
+      # AUTOMATE SELECTED TEST CASES
+      # ============================================================
+
       - name: Automate selected test cases
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
+
           claude \
             --permission-mode acceptEdits \
             -p "$(cat <<'EOF'
 
-          Read these files:
+          ============================================================
+          AI TEST AUTOMATION AGENT
+          ============================================================
 
-          data/current-ticket-context.json
+          You are responsible for implementing Playwright automation
+          for ONLY the test cases selected by the user.
+
+          ============================================================
+          SOURCE FILES
+          ============================================================
+
+          Read:
+
+          1. data/current-ticket-context.json
+
+          2. data/generated-testcases.json
+
+          3. data/selected-testcases.json
+
+          4. Existing Playwright tests
+
+          5. Existing fixtures
+
+          6. Existing page objects
+
+          7. Existing locators
+
+          8. Existing utilities
+
+          9. Existing committed UI snapshots when visual testing
+             is required.
+
+          ============================================================
+          CRITICAL RULE
+          ============================================================
+
+          AUTOMATE ONLY:
+
           data/selected-testcases.json
 
-          Your task is to AUTOMATE ONLY THE SELECTED TEST CASES.
+          Do NOT automate every test case from the ticket.
+
+          Do NOT automate every generated test case.
+
+          Do NOT choose additional test cases yourself.
+
+          The user has explicitly selected the test cases.
+
+          ============================================================
+          TEST CASE SELECTION
+          ============================================================
+
+          Read:
+
+          data/selected-testcases.json
+
+          It contains the exact test cases that must be automated.
+
+          For example:
+
+          TC001
+          TC007
+          TC029
+
+          means ONLY those three test cases must be implemented.
+
+          ============================================================
+          UNDERSTAND THE EXISTING FRAMEWORK
+          ============================================================
+
+          Before writing code:
+
+          - inspect the repository
+          - inspect existing Playwright tests
+          - inspect fixtures
+          - inspect page objects
+          - inspect locators
+          - inspect helper utilities
+          - inspect authentication/session handling
+          - inspect existing test naming conventions
+          - inspect existing visual testing patterns
+          - inspect existing assertions
+
+          Reuse the existing framework wherever possible.
+
+          Do NOT create a new testing architecture.
+
+          ============================================================
+          PLAYWRIGHT
+          ============================================================
+
+          Use Playwright.
+
+          Use existing repository patterns.
+
+          Use Playwright MCP browser when browser exploration,
+          UI verification or locator discovery is required.
+
+          Do not invent UI behavior.
+
+          Do not invent selectors.
+
+          Do not invent application APIs.
+
+          Verify behavior against the actual application whenever
+          possible.
+
+          ============================================================
+          TEST IMPLEMENTATION
+          ============================================================
+
+          For every selected test case:
+
+          1. Understand the expected behavior.
+
+          2. Find the correct existing test file.
+
+          3. Reuse existing fixtures/helpers/page objects.
+
+          4. Add the test using repository conventions.
+
+          5. Use stable locators.
+
+          6. Add meaningful assertions.
+
+          7. Handle the required setup and cleanup.
+
+          8. Run the test when possible.
+
+          ============================================================
+          CATEGORY HANDLING
+          ============================================================
+
+          If the selected test case is:
+
+          E2E:
+          Implement the complete user journey.
+
+          POSITIVE:
+          Implement the expected successful behavior.
+
+          NEGATIVE:
+          Implement the invalid/error scenario and assertions.
+
+          EDGE:
+          Implement the boundary/unusual condition.
+
+          UI:
+          Verify UI behavior, state and interaction.
+
+          VISUAL:
+          Follow the repository's existing screenshot/
+          visual-regression approach.
+
+          Do not convert a visual test into a normal functional
+          test unless the repository's existing framework requires it.
+
+          ============================================================
+          DO NOT MODIFY UNRELATED CODE
+          ============================================================
+
+          Do NOT:
+
+          - modify unrelated tests
+          - modify application source code
+          - modify package dependencies unnecessarily
+          - modify configuration unnecessarily
+          - modify fixtures unless required
+          - modify locators unrelated to the selected tests
+          - rewrite existing tests unnecessarily
+
+          Only make changes required to automate the selected
+          test cases.
+
+          ============================================================
+          TEST VALIDATION
+          ============================================================
+
+          Before finishing:
+
+          1. Confirm every selected test case has an implementation.
+
+          2. Confirm no unselected test case was implemented.
+
+          3. Confirm test names clearly correspond to the selected IDs.
+
+          4. Run relevant tests.
+
+          5. Fix obvious failures caused by the generated code.
+
+          6. Check that the generated test files are valid.
+
+          7. Check git diff.
+
+          8. Ensure unrelated files are not modified.
 
           ============================================================
           IMPORTANT
           ============================================================
 
-          The user has explicitly selected specific test cases.
+          DO NOT:
 
-          You MUST automate ONLY the test cases contained in:
+          - create a branch
+          - commit
+          - push
+          - create a PR
 
-          data/selected-testcases.json
-
-          DO NOT automate any other test cases from the ticket.
-
-          ============================================================
-          AUTOMATION REQUIREMENTS
-          ============================================================
-
-          1. Inspect the existing Playwright automation framework.
-
-          2. Follow the existing framework structure, naming conventions,
-             fixtures, helpers, locators, login/session handling and patterns.
-
-          3. Use Playwright.
-
-          4. Use the Playwright MCP browser when browser interaction,
-             exploration, verification or locator discovery is required.
-
-          5. Do not invent application behavior.
-
-          6. Use the ticket context and selected test cases as the source
-             of truth.
-
-          7. Implement positive, negative, edge, visual/UI and E2E scenarios
-             only when they are explicitly present in the selected test cases.
-
-          8. Do not implement test cases that were not selected.
-
-          9. Do not modify unrelated existing tests.
-
-          10. Do not modify unrelated application files.
-
-          11. Reuse existing utilities and page objects whenever possible.
-
-          12. Follow the repository's existing Playwright and Semgrep-safe
-              locator practices.
-
-          13. Avoid unnecessary waits.
-
-          14. Prefer proper Playwright waiting mechanisms.
-
-          15. Do not use regex locators if the repository's existing rules
-              prohibit them.
-
-          ============================================================
-          BEFORE FINISHING
-          ============================================================
-
-          Verify:
-
-          - Only selected test cases were automated.
-          - The generated test files are valid.
-          - Existing unrelated tests were not modified.
-          - The implementation follows the existing framework structure.
-          - The tests are actually runnable.
-
-          Run the relevant generated tests if possible.
-
-          Do NOT create a PR yourself.
-          Do NOT create a branch yourself.
-          Do NOT commit anything yourself.
-
-          The GitHub workflow will handle the branch and PR.
+          The GitHub Actions workflow will handle all Git operations.
 
           ============================================================
 
           EOF
           )"
 
-      - name: Create branch and PR
-        env:
-          BRANCH: ai/${{ inputs.ticket_id }}-selected-tests
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # ============================================================
+      # VERIFY GENERATED AUTOMATION
+      # ============================================================
+
+      - name: Verify generated automation
         run: |
+          echo "======================================"
+          echo "VERIFYING GENERATED AUTOMATION"
+          echo "======================================"
+
+          git status --short
+
+          echo ""
+
           if [ -z "$(git status --porcelain -- tests/)" ]; then
             echo "ERROR: No test automation was generated."
             exit 1
           fi
+
+          echo "Test automation changes detected."
+
+      # ============================================================
+      # CREATE BRANCH
+      # ============================================================
+
+      - name: Create automation branch
+        env:
+          TICKET_ID: ${{ inputs.ticket_id }}
+        run: |
+
+          BRANCH="ai/${TICKET_ID}-selected-tests"
+
+          echo "Creating branch:"
+          echo "$BRANCH"
 
           git config user.name "tailorbird-ai-agent[bot]"
           git config user.email "tailorbird-ai-agent[bot]@users.noreply.github.com"
 
           git checkout -b "$BRANCH"
 
+          echo "BRANCH=$BRANCH" >> "$GITHUB_ENV"
+
+      # ============================================================
+      # COMMIT TEST AUTOMATION
+      # ============================================================
+
+      - name: Commit generated automation
+        env:
+          TICKET_ID: ${{ inputs.ticket_id }}
+        run: |
+
           git add tests/
 
-          SUMMARY="$(git diff --stat --cached)"
+          git diff --cached --stat
 
           git commit \
-            -m "AI-generated selected tests for ${{ inputs.ticket_id }}"
+            -m "AI-generated selected tests for ${TICKET_ID}"
+
+      # ============================================================
+      # PUSH BRANCH
+      # ============================================================
+
+      - name: Push automation branch
+        run: |
 
           git push origin "$BRANCH"
 
-          gh pr create \
-            --title "AI-generated selected tests for ${{ inputs.ticket_id }}" \
-            --body "Ticket: ${{ inputs.ticket_id }}
+      # ============================================================
+      # CREATE PR
+      # ============================================================
 
-          Selected test cases:
-          ${{ inputs.test_case_ids }}
+      - name: Create pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TICKET_ID: ${{ inputs.ticket_id }}
+          SELECTED_TEST_CASES: ${{ inputs.test_case_ids }}
+        run: |
 
-          Files changed:
+          echo "======================================"
+          echo "CREATING PULL REQUEST"
+          echo "======================================"
 
-          $SUMMARY" \
+          PR_URL=$(gh pr create \
+            --title "AI-generated selected tests for ${TICKET_ID}" \
+            --body "## AI Test Automation
+
+          Ticket: ${TICKET_ID}
+
+          ### Selected Test Cases
+
+          ${SELECTED_TEST_CASES}
+
+          ### Automation
+
+          Only the test cases explicitly selected in Slack were automated.
+
+          Generated by the AI automation agent." \
             --base main \
-            --head "$BRANCH"
+            --head "$BRANCH")
+
+          echo ""
+          echo "PR created:"
+          echo "$PR_URL"
+
+          echo "PR_URL=$PR_URL" >> "$GITHUB_ENV"
+
+      # ============================================================
+      # SUMMARY
+      # ============================================================
+
+      - name: Workflow summary
+        env:
+          TICKET_ID: ${{ inputs.ticket_id }}
+          SELECTED_TEST_CASES: ${{ inputs.test_case_ids }}
+        run: |
+
+          echo "======================================"
+          echo "🎉 AI AUTOMATION COMPLETED"
+          echo "======================================"
+
+          echo "Ticket:"
+          echo "$TICKET_ID"
+
+          echo ""
+          echo "Selected test cases:"
+          echo "$SELECTED_TEST_CASES"
+
+          echo ""
+          echo "Branch:"
+          echo "$BRANCH"
+
+          echo ""
+          echo "Pull Request:"
+          echo "$PR_URL"
+
+          echo "======================================"
