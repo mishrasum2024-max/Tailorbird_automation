@@ -20,26 +20,29 @@ on:
 
 jobs:
   automate-selected-testcases:
-
     runs-on: ubuntu-latest
 
     permissions:
       contents: write
       pull-requests: write
-      actions: read
       id-token: write
 
-    steps:
+    env:
+      TICKET_ID: ${{ inputs.ticket_id }}
+      SELECTED_TEST_CASES: ${{ inputs.test_case_ids }}
 
+    steps:
       # ============================================================
-      # CHECKOUT
+      # 1. CHECKOUT
       # ============================================================
 
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       # ============================================================
-      # NODE
+      # 2. NODE
       # ============================================================
 
       - name: Setup Node.js
@@ -48,11 +51,15 @@ jobs:
           node-version: 22
           cache: npm
 
+      # ============================================================
+      # 3. INSTALL DEPENDENCIES
+      # ============================================================
+
       - name: Install dependencies
         run: npm ci
 
       # ============================================================
-      # DOWNLOAD GENERATED TEST CASES
+      # 4. DOWNLOAD GENERATED TEST CASES
       # ============================================================
 
       - name: Download generated test cases
@@ -65,60 +72,120 @@ jobs:
           run-id: ${{ inputs.testcase_run_id }}
 
       # ============================================================
-      # VERIFY INPUT
+      # 5. VERIFY GENERATED TEST CASES
       # ============================================================
 
-      - name: Verify automation input
-        env:
-          SELECTED_TEST_CASES: ${{ inputs.test_case_ids }}
+      - name: Verify generated test cases
         run: |
           echo "======================================"
-          echo "AI TEST AUTOMATION"
+          echo "SELECTED TEST CASE AUTOMATION"
           echo "======================================"
 
-          echo "Ticket:"
-          echo "${{ inputs.ticket_id }}"
+          echo "Ticket: $TICKET_ID"
+          echo "Selected test cases: $SELECTED_TEST_CASES"
+          echo "Source generation run: ${{ inputs.testcase_run_id }}"
 
           echo ""
-          echo "Selected test cases:"
-          echo "$SELECTED_TEST_CASES"
+          echo "Repository:"
+          pwd
 
           echo ""
-          echo "Test-case generation run:"
-          echo "${{ inputs.testcase_run_id }}"
-
-          echo ""
+          echo "Generated testcase files:"
+          find data -maxdepth 2 -type f -print || true
 
           if [ ! -f "data/generated-testcases.json" ]; then
+            echo ""
             echo "ERROR: generated-testcases.json not found."
             exit 1
           fi
 
+          echo ""
           echo "generated-testcases.json found."
 
       # ============================================================
-      # FILTER SELECTED TEST CASES
+      # 6. PREPARE ONLY SELECTED TEST CASES
       # ============================================================
 
       - name: Prepare selected test cases
-        env:
-          SELECTED_TEST_CASES: ${{ inputs.test_case_ids }}
         run: |
-          echo "======================================"
-          echo "FILTERING SELECTED TEST CASES"
-          echo "======================================"
+          node - <<'NODE'
+          const fs = require("fs");
 
-          node scripts/ai-agent/filter-selected-testcases.js
+          const sourceFile = "data/generated-testcases.json";
+          const outputFile = "data/selected-testcases.json";
 
-          echo ""
-          echo "======================================"
-          echo "SELECTED TEST CASES FILE"
-          echo "======================================"
+          const data = JSON.parse(
+            fs.readFileSync(sourceFile, "utf8")
+          );
 
-          cat data/selected-testcases.json
+          if (!Array.isArray(data.testCases)) {
+            console.error(
+              "ERROR: generated-testcases.json does not contain testCases[]."
+            );
+            process.exit(1);
+          }
+
+          const selectedIds = process.env.SELECTED_TEST_CASES
+            .split(",")
+            .map(id => id.trim().toUpperCase())
+            .filter(Boolean);
+
+          if (selectedIds.length === 0) {
+            console.error("ERROR: No selected test case IDs were provided.");
+            process.exit(1);
+          }
+
+          const selected = data.testCases.filter(tc =>
+            selectedIds.includes(String(tc.id).trim().toUpperCase())
+          );
+
+          const foundIds = new Set(
+            selected.map(tc => String(tc.id).trim().toUpperCase())
+          );
+
+          const missingIds = selectedIds.filter(
+            id => !foundIds.has(id)
+          );
+
+          if (missingIds.length > 0) {
+            console.error(
+              `ERROR: These selected test cases were not found: ${missingIds.join(", ")}`
+            );
+            process.exit(1);
+          }
+
+          const output = {
+            ticketId: data.ticketId,
+            ticketTitle: data.ticketTitle,
+            selectedTestCases: selected
+          };
+
+          fs.writeFileSync(
+            outputFile,
+            JSON.stringify(output, null, 2)
+          );
+
+          console.log("");
+          console.log("======================================");
+          console.log("SELECTED TEST CASES");
+          console.log("======================================");
+
+          console.log(
+            `Selected ${selected.length} test case(s).`
+          );
+
+          selected.forEach(tc => {
+            console.log(
+              `${tc.id} | ${tc.category || "UNCATEGORIZED"} | ${tc.title}`
+            );
+          });
+
+          console.log("");
+          console.log(`Created ${outputFile}`);
+          NODE
 
       # ============================================================
-      # INSTALL CLAUDE CODE
+      # 7. INSTALL CLAUDE CODE
       # ============================================================
 
       - name: Install Claude Code
@@ -126,370 +193,760 @@ jobs:
           curl -fsSL https://claude.ai/install.sh | bash
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
+      # ============================================================
+      # 8. VERIFY CLAUDE CODE
+      # ============================================================
+
       - name: Verify Claude Code
         run: |
           claude --version
 
       # ============================================================
-      # AUTOMATE SELECTED TEST CASES
+      # 9. SAVE BASELINE
+      #
+      # This lets us identify exactly what Claude changed.
       # ============================================================
 
-      - name: Automate selected test cases
+      - name: Save repository baseline
+        run: |
+          git status --short > /tmp/baseline-status.txt
+
+          git diff -- \
+            tests \
+            pages \
+            locators \
+            utils \
+            fixture \
+            data \
+            playwright.config.js \
+            package.json \
+            > /tmp/baseline-diff.txt || true
+
+          echo "Baseline captured."
+
+      # ============================================================
+      # 10. CLAUDE IMPLEMENTATION
+      #
+      # Claude ONLY writes the selected automation.
+      # It does not own Git or PR creation.
+      # ============================================================
+
+      - name: Claude - implement selected test cases
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
+          set +e
 
-          claude \
-            --permission-mode acceptEdits \
-            -p "$(cat <<'EOF'
+          cat > /tmp/claude-implementation-prompt.txt <<'PROMPT'
+          You are the implementation agent for an existing Playwright automation repository.
+
+          Your job is to AUTOMATE ONLY the test cases contained in:
+
+          data/selected-testcases.json
+
+          Do not automate anything else.
 
           ============================================================
-          AI TEST AUTOMATION AGENT
-          ============================================================
-
-          You are responsible for implementing Playwright automation
-          for ONLY the test cases selected by the user.
-
-          ============================================================
-          SOURCE FILES
+          SOURCE OF TRUTH
           ============================================================
 
           Read:
 
           1. data/current-ticket-context.json
+          2. data/selected-testcases.json
 
-          2. data/generated-testcases.json
-
-          3. data/selected-testcases.json
-
-          4. Existing Playwright tests
-
-          5. Existing fixtures
-
-          6. Existing page objects
-
-          7. Existing locators
-
-          8. Existing utilities
-
-          9. Existing committed UI snapshots when visual testing
-             is required.
+          The selected test cases are the ONLY tests you are authorized
+          to implement.
 
           ============================================================
-          CRITICAL RULE
+          REPOSITORY FIRST
           ============================================================
 
-          AUTOMATE ONLY:
+          Before writing code, inspect the existing automation framework.
 
-          data/selected-testcases.json
+          Identify and reuse:
 
-          Do NOT automate every test case from the ticket.
+          - existing tests
+          - page objects
+          - locator files
+          - utilities
+          - fixtures
+          - data files
+          - authentication/session handling
+          - existing Draw Reporting automation
+          - existing naming conventions
+          - existing assertion patterns
+          - existing logging patterns
+          - existing self-healing locator patterns
 
-          Do NOT automate every generated test case.
+          Do not redesign the framework.
 
-          Do NOT choose additional test cases yourself.
+          Do not introduce a new testing architecture.
 
-          The user has explicitly selected the test cases.
+          Do not create duplicate page objects or utilities when an
+          existing implementation can be reused.
 
           ============================================================
-          TEST CASE SELECTION
+          AUTOMATION RULES
           ============================================================
 
-          Read:
+          1. Implement ONLY the selected test case IDs.
 
-          data/selected-testcases.json
+          2. Do not implement unselected test cases.
 
-          It contains the exact test cases that must be automated.
+          3. Do not generate additional tests just because they appear useful.
 
-          For example:
+          4. Use Playwright.
+
+          5. Use the Playwright MCP/browser when browser exploration,
+             locator discovery or application verification is necessary.
+
+          6. Do not invent application behavior.
+
+          7. Use the ticket context and selected testcase descriptions
+             as the functional source of truth.
+
+          8. Reuse existing page objects and locators wherever possible.
+
+          9. If a new page object is genuinely required, follow the
+             repository's existing page-object structure.
+
+          10. If a new locator file is genuinely required, follow the
+              repository's existing locator structure.
+
+          11. Follow the repository's existing healingLocator patterns.
+
+          12. Use existing Logger/test.step patterns.
+
+          13. Use existing authentication/session state mechanisms.
+
+          14. Avoid arbitrary waits and unnecessary timeouts.
+
+          15. Prefer Playwright's built-in waiting mechanisms.
+
+          16. Do not modify unrelated existing tests.
+
+          17. Do not modify application/source code unless the selected
+              testcase genuinely requires it and the repository already
+              follows that practice.
+
+          18. Do not delete existing tests.
+
+          19. Do not rename unrelated files.
+
+          ============================================================
+          IMPORTANT: TEST ID MAPPING
+          ============================================================
+
+          Preserve the selected testcase IDs in the generated test names
+          or comments so that the implementation can be traced back to
+          the selected testcase.
+
+          Example:
 
           TC001
-          TC007
-          TC029
+          TC002
 
-          means ONLY those three test cases must be implemented.
-
-          ============================================================
-          UNDERSTAND THE EXISTING FRAMEWORK
-          ============================================================
-
-          Before writing code:
-
-          - inspect the repository
-          - inspect existing Playwright tests
-          - inspect fixtures
-          - inspect page objects
-          - inspect locators
-          - inspect helper utilities
-          - inspect authentication/session handling
-          - inspect existing test naming conventions
-          - inspect existing visual testing patterns
-          - inspect existing assertions
-
-          Reuse the existing framework wherever possible.
-
-          Do NOT create a new testing architecture.
+          must remain clearly identifiable.
 
           ============================================================
-          PLAYWRIGHT
+          IMPLEMENTATION STRATEGY
           ============================================================
 
-          Use Playwright.
+          Work on the selected test cases one at a time.
 
-          Use existing repository patterns.
-
-          Use Playwright MCP browser when browser exploration,
-          UI verification or locator discovery is required.
-
-          Do not invent UI behavior.
-
-          Do not invent selectors.
-
-          Do not invent application APIs.
-
-          Verify behavior against the actual application whenever
-          possible.
-
-          ============================================================
-          TEST IMPLEMENTATION
-          ============================================================
-
-          For every selected test case:
+          For each selected testcase:
 
           1. Understand the expected behavior.
+          2. Find existing automation covering related functionality.
+          3. Reuse existing code.
+          4. Explore the application only where necessary.
+          5. Implement the testcase.
+          6. Check the generated code for syntax/structure problems.
+          7. Move to the next selected testcase.
 
-          2. Find the correct existing test file.
-
-          3. Reuse existing fixtures/helpers/page objects.
-
-          4. Add the test using repository conventions.
-
-          5. Use stable locators.
-
-          6. Add meaningful assertions.
-
-          7. Handle the required setup and cleanup.
-
-          8. Run the test when possible.
+          Do not spend time implementing unrelated functionality.
 
           ============================================================
-          CATEGORY HANDLING
-          ============================================================
-
-          If the selected test case is:
-
-          E2E:
-          Implement the complete user journey.
-
-          POSITIVE:
-          Implement the expected successful behavior.
-
-          NEGATIVE:
-          Implement the invalid/error scenario and assertions.
-
-          EDGE:
-          Implement the boundary/unusual condition.
-
-          UI:
-          Verify UI behavior, state and interaction.
-
-          VISUAL:
-          Follow the repository's existing screenshot/
-          visual-regression approach.
-
-          Do not convert a visual test into a normal functional
-          test unless the repository's existing framework requires it.
-
-          ============================================================
-          DO NOT MODIFY UNRELATED CODE
-          ============================================================
-
-          Do NOT:
-
-          - modify unrelated tests
-          - modify application source code
-          - modify package dependencies unnecessarily
-          - modify configuration unnecessarily
-          - modify fixtures unless required
-          - modify locators unrelated to the selected tests
-          - rewrite existing tests unnecessarily
-
-          Only make changes required to automate the selected
-          test cases.
-
-          ============================================================
-          TEST VALIDATION
+          VALIDATION
           ============================================================
 
           Before finishing:
 
-          1. Confirm every selected test case has an implementation.
+          - Confirm every selected testcase has an implementation.
+          - Confirm no unselected testcase was implemented.
+          - Confirm generated JavaScript is syntactically valid.
+          - Confirm imports point to real files.
+          - Confirm referenced page objects and locators exist.
+          - Confirm the implementation follows existing patterns.
 
-          2. Confirm no unselected test case was implemented.
+          Run only the relevant generated tests if you can determine
+          the correct Playwright commands safely.
 
-          3. Confirm test names clearly correspond to the selected IDs.
+          If a test fails, investigate the failure and fix the generated
+          automation when the failure is caused by the implementation.
 
-          4. Run relevant tests.
-
-          5. Fix obvious failures caused by the generated code.
-
-          6. Check that the generated test files are valid.
-
-          7. Check git diff.
-
-          8. Ensure unrelated files are not modified.
+          Do not make unrelated changes.
 
           ============================================================
-          IMPORTANT
+          GIT
           ============================================================
 
           DO NOT:
 
           - create a branch
-          - commit
-          - push
-          - create a PR
+          - git add
+          - git commit
+          - git push
+          - create a pull request
 
-          The GitHub Actions workflow will handle all Git operations.
+          GitHub Actions handles all Git operations.
 
           ============================================================
+          FINAL RESPONSE
+          ============================================================
 
-          EOF
-          )"
+          At the end, provide a concise summary containing:
+
+          - selected testcase IDs implemented
+          - files created/modified
+          - tests run
+          - test results
+          - any remaining issue
+
+          PROMPT
+
+          claude \
+            --permission-mode acceptEdits \
+            -p "$(cat /tmp/claude-implementation-prompt.txt)" \
+            2>&1 | tee /tmp/claude-implementation.log
+
+          CLAUDE_EXIT=${PIPESTATUS[0]}
+
+          echo ""
+          echo "Claude implementation exit code: $CLAUDE_EXIT"
+
+          if [ "$CLAUDE_EXIT" -ne 0 ]; then
+            echo "WARNING: Claude implementation returned non-zero."
+            echo "We will inspect the repository before deciding whether"
+            echo "the implementation is actually unusable."
+          fi
+
+          exit 0
 
       # ============================================================
-      # VERIFY GENERATED AUTOMATION
+      # 11. SHOW CLAUDE OUTPUT
       # ============================================================
 
-      - name: Verify generated automation
+      - name: Show Claude implementation result
+        if: always()
         run: |
           echo "======================================"
-          echo "VERIFYING GENERATED AUTOMATION"
+          echo "CLAUDE IMPLEMENTATION LOG"
+          echo "======================================"
+
+          if [ -f /tmp/claude-implementation.log ]; then
+            cat /tmp/claude-implementation.log
+          else
+            echo "No Claude log was generated."
+          fi
+
+      # ============================================================
+      # 12. DETECT GENERATED CHANGES
+      # ============================================================
+
+      - name: Inspect generated automation changes
+        run: |
+          echo "======================================"
+          echo "AUTOMATION CHANGES"
           echo "======================================"
 
           git status --short
 
           echo ""
+          echo "Changed files:"
+          git diff --name-only
 
-          if [ -z "$(git status --porcelain -- tests/)" ]; then
-            echo "ERROR: No test automation was generated."
+          echo ""
+          echo "Untracked files:"
+          git ls-files --others --exclude-standard
+
+          if [ -z "$(git status --porcelain -- \
+            tests \
+            pages \
+            locators \
+            utils \
+            fixture \
+            data \
+            playwright.config.js \
+            package.json)" ]; then
+
+            echo ""
+            echo "ERROR: Claude did not generate any automation changes."
+            echo ""
+            echo "Last Claude output:"
+            tail -n 100 /tmp/claude-implementation.log || true
+
             exit 1
           fi
 
-          echo "Test automation changes detected."
-
       # ============================================================
-      # CREATE BRANCH
+      # 13. SYNTAX VALIDATION
       # ============================================================
 
-      - name: Create automation branch
-        env:
-          TICKET_ID: ${{ inputs.ticket_id }}
+      - name: Validate generated JavaScript
         run: |
+          set -e
 
-          BRANCH="ai/${TICKET_ID}-selected-tests"
+          echo "======================================"
+          echo "VALIDATING JAVASCRIPT"
+          echo "======================================"
 
-          echo "Creating branch:"
-          echo "$BRANCH"
+          CHANGED_JS_FILES="$(
+            {
+              git diff --name-only -- '*.js'
+              git ls-files --others --exclude-standard -- '*.js'
+            } | sort -u
+          )"
+
+          if [ -z "$CHANGED_JS_FILES" ]; then
+            echo "No changed JavaScript files found."
+            exit 0
+          fi
+
+          echo "$CHANGED_JS_FILES"
+
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+
+            echo ""
+            echo "Checking: $file"
+
+            node --check "$file"
+          done <<< "$CHANGED_JS_FILES"
+
+          echo ""
+          echo "JavaScript syntax validation passed."
+
+      # ============================================================
+      # 14. IDENTIFY SELECTED TEST FILES
+      # ============================================================
+
+      - name: Identify selected Playwright test files
+        run: |
+          node - <<'NODE'
+          const fs = require("fs");
+
+          const data = JSON.parse(
+            fs.readFileSync("data/selected-testcases.json", "utf8")
+          );
+
+          const ids = data.selectedTestCases.map(tc => tc.id);
+
+          console.log("Selected testcase IDs:");
+          console.log(ids.join(", "));
+
+          /*
+           * Store IDs for later steps.
+           */
+          fs.writeFileSync(
+            "/tmp/selected-testcase-ids.txt",
+            ids.join("\n")
+          );
+          NODE
+
+          echo ""
+          echo "Potential test files:"
+          find tests -maxdepth 1 -type f -name "*.spec.js" -print | sort
+
+      # ============================================================
+      # 15. RUN PLAYWRIGHT
+      #
+      # We deliberately don't let this step immediately kill the job.
+      # The failure output is needed by the repair agent.
+      # ============================================================
+
+      - name: Run generated Playwright tests
+        id: playwright_initial
+        continue-on-error: true
+        run: |
+          echo "======================================"
+          echo "RUNNING GENERATED TEST AUTOMATION"
+          echo "======================================"
+
+          echo "Selected test cases:"
+          cat /tmp/selected-testcase-ids.txt
+
+          echo ""
+          echo "NOTE:"
+          echo "The workflow will determine the relevant generated test"
+          echo "files from the repository implementation."
+
+          echo ""
+
+          set +e
+
+          npx playwright test \
+            --workers=1 \
+            2>&1 | tee /tmp/playwright-initial.log
+
+          PLAYWRIGHT_EXIT=${PIPESTATUS[0]}
+
+          echo "$PLAYWRIGHT_EXIT" > /tmp/playwright-initial-exit-code.txt
+
+          echo ""
+          echo "Playwright exit code: $PLAYWRIGHT_EXIT"
+
+          exit "$PLAYWRIGHT_EXIT"
+
+      # ============================================================
+      # 16. CLAUDE TARGETED REPAIR
+      #
+      # Only runs if Playwright failed.
+      # ============================================================
+
+      - name: Claude - repair failed automation
+        if: steps.playwright_initial.outcome == 'failure'
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          echo "======================================"
+          echo "CLAUDE TARGETED REPAIR"
+          echo "======================================"
+
+          echo "Playwright failure output:"
+          tail -n 250 /tmp/playwright-initial.log || true
+
+          cat > /tmp/claude-repair-prompt.txt <<'PROMPT'
+          You are a targeted Playwright repair agent.
+
+          The repository contains automation generated for selected
+          test cases.
+
+          Read:
+
+          data/current-ticket-context.json
+          data/selected-testcases.json
+
+          The Playwright test run failed.
+
+          The failure output is available at:
+
+          /tmp/playwright-initial.log
+
+          ============================================================
+          YOUR JOB
+          ============================================================
+
+          Fix ONLY the automation necessary to resolve the Playwright
+          failures for the selected test cases.
+
+          Do not redesign the framework.
+
+          Do not implement additional test cases.
+
+          Do not modify unrelated tests.
+
+          Do not modify unrelated application files.
+
+          Do not create a new testing architecture.
+
+          ============================================================
+          DEBUGGING
+          ============================================================
+
+          1. Read the Playwright failure output.
+          2. Identify the actual failing test.
+          3. Map it back to the selected testcase.
+          4. Inspect the relevant existing page object/locator/utilities.
+          5. Fix the automation.
+          6. Preserve the repository's existing patterns.
+          7. Run the relevant failed test again if possible.
+
+          Do not guess application behavior.
+
+          Use the existing framework.
+
+          ============================================================
+          IMPORTANT
+          ============================================================
+
+          A Playwright failure caused by environment/application
+          availability should NOT result in broad unrelated code changes.
+
+          Only modify code when the failure is caused by the generated
+          automation.
+
+          ============================================================
+          GIT
+          ============================================================
+
+          Do not create branches.
+
+          Do not commit.
+
+          Do not push.
+
+          Do not create a PR.
+
+          GitHub Actions handles Git operations.
+
+          ============================================================
+          FINAL RESPONSE
+          ============================================================
+
+          Report:
+
+          - root cause
+          - files changed
+          - selected testcase affected
+          - validation performed
+          - remaining issue, if any
+
+          PROMPT
+
+          claude \
+            --permission-mode acceptEdits \
+            -p "$(cat /tmp/claude-repair-prompt.txt)" \
+            2>&1 | tee /tmp/claude-repair.log
+
+          REPAIR_EXIT=${PIPESTATUS[0]}
+
+          echo ""
+          echo "Claude repair exit code: $REPAIR_EXIT"
+
+          if [ "$REPAIR_EXIT" -ne 0 ]; then
+            echo "WARNING: Claude repair returned non-zero."
+          fi
+
+      # ============================================================
+      # 17. SECOND PLAYWRIGHT VALIDATION
+      #
+      # Only run after a repair attempt.
+      # ============================================================
+
+      - name: Run Playwright after repair
+        if: steps.playwright_initial.outcome == 'failure'
+        id: playwright_repair
+        continue-on-error: true
+        run: |
+          echo "======================================"
+          echo "PLAYWRIGHT VALIDATION AFTER REPAIR"
+          echo "======================================"
+
+          set +e
+
+          npx playwright test \
+            --workers=1 \
+            2>&1 | tee /tmp/playwright-repair.log
+
+          PLAYWRIGHT_EXIT=${PIPESTATUS[0]}
+
+          echo "$PLAYWRIGHT_EXIT" > /tmp/playwright-repair-exit-code.txt
+
+          echo ""
+          echo "Playwright repair validation exit code: $PLAYWRIGHT_EXIT"
+
+          exit "$PLAYWRIGHT_EXIT"
+
+      # ============================================================
+      # 18. FINAL AUTOMATION VALIDATION
+      # ============================================================
+
+      - name: Final automation validation
+        run: |
+          INITIAL_RESULT="${{ steps.playwright_initial.outcome }}"
+          REPAIR_RESULT="${{ steps.playwright_repair.outcome }}"
+
+          echo "======================================"
+          echo "FINAL AUTOMATION RESULT"
+          echo "======================================"
+
+          echo "Initial Playwright result: $INITIAL_RESULT"
+          echo "Repair Playwright result: $REPAIR_RESULT"
+
+          if [ "$INITIAL_RESULT" = "success" ]; then
+            echo ""
+            echo "Playwright passed on the initial implementation."
+            exit 0
+          fi
+
+          if [ "$REPAIR_RESULT" = "success" ]; then
+            echo ""
+            echo "Playwright passed after targeted Claude repair."
+            exit 0
+          fi
+
+          echo ""
+          echo "ERROR: Generated automation still fails after repair."
+
+          echo ""
+          echo "======================================"
+          echo "INITIAL PLAYWRIGHT FAILURE"
+          echo "======================================"
+
+          tail -n 200 /tmp/playwright-initial.log || true
+
+          echo ""
+          echo "======================================"
+          echo "REPAIR PLAYWRIGHT FAILURE"
+          echo "======================================"
+
+          tail -n 200 /tmp/playwright-repair.log || true
+
+          exit 1
+
+      # ============================================================
+      # 19. SHOW FINAL DIFF
+      # ============================================================
+
+      - name: Show final automation diff
+        run: |
+          echo "======================================"
+          echo "FINAL AUTOMATION DIFF"
+          echo "======================================"
+
+          git status --short
+
+          echo ""
+          echo "Modified tracked files:"
+          git diff --name-only
+
+          echo ""
+          echo "Untracked files:"
+          git ls-files --others --exclude-standard
+
+          echo ""
+          echo "Diff statistics:"
+          git diff --stat
+
+      # ============================================================
+      # 20. CREATE BRANCH AND PR
+      # ============================================================
+
+      - name: Create branch and PR
+        env:
+          BRANCH: ai/${{ inputs.ticket_id }}-selected-tests
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+
+          echo "======================================"
+          echo "CREATING AUTOMATION PR"
+          echo "======================================"
+
+          if [ -z "$(git status --porcelain -- \
+            tests \
+            pages \
+            locators \
+            utils \
+            fixture \
+            data \
+            playwright.config.js \
+            package.json)" ]; then
+
+            echo "ERROR: No automation changes were generated."
+            exit 1
+          fi
 
           git config user.name "tailorbird-ai-agent[bot]"
           git config user.email "tailorbird-ai-agent[bot]@users.noreply.github.com"
 
+          if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
+            git branch -D "$BRANCH"
+          fi
+
           git checkout -b "$BRANCH"
 
-          echo "BRANCH=$BRANCH" >> "$GITHUB_ENV"
+          # Only add automation-related changes.
+          #
+          # This prevents unrelated local/generated repository changes
+          # from being included in the PR.
 
-      # ============================================================
-      # COMMIT TEST AUTOMATION
-      # ============================================================
+          git add \
+            tests/ \
+            pages/ \
+            locators/ \
+            utils/ \
+            fixture/ \
+            data/ \
+            playwright.config.js \
+            package.json \
+            package-lock.json
 
-      - name: Commit generated automation
-        env:
-          TICKET_ID: ${{ inputs.ticket_id }}
-        run: |
+          if git diff --cached --quiet; then
+            echo "ERROR: Nothing to commit after staging automation files."
+            exit 1
+          fi
 
-          git add tests/
+          echo ""
+          echo "Staged files:"
+          git diff --cached --name-only
 
-          git diff --cached --stat
+          SUMMARY="$(git diff --cached --stat)"
 
           git commit \
-            -m "AI-generated selected tests for ${TICKET_ID}"
+            -m "AI-generated selected tests for ${{ inputs.ticket_id }}"
 
-      # ============================================================
-      # PUSH BRANCH
-      # ============================================================
+          git push --force-with-lease origin "$BRANCH"
 
-      - name: Push automation branch
-        run: |
+          # If the branch already has an open PR, update it instead
+          # of creating another one.
 
-          git push origin "$BRANCH"
+          EXISTING_PR="$(
+            gh pr list \
+              --repo "${{ github.repository }}" \
+              --head "$BRANCH" \
+              --state open \
+              --json number \
+              --jq '.[0].number'
+          )"
 
-      # ============================================================
-      # CREATE PR
-      # ============================================================
+          if [ -n "$EXISTING_PR" ]; then
+            echo ""
+            echo "Existing PR found: #$EXISTING_PR"
+            echo "Branch updated successfully."
+            exit 0
+          fi
 
-      - name: Create pull request
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TICKET_ID: ${{ inputs.ticket_id }}
-          SELECTED_TEST_CASES: ${{ inputs.test_case_ids }}
-        run: |
-
-          echo "======================================"
-          echo "CREATING PULL REQUEST"
-          echo "======================================"
-
-          PR_URL=$(gh pr create \
-            --title "AI-generated selected tests for ${TICKET_ID}" \
+          gh pr create \
+            --repo "${{ github.repository }}" \
+            --title "AI-generated selected tests for ${{ inputs.ticket_id }}" \
             --body "## AI Test Automation
 
-          Ticket: ${TICKET_ID}
+          **Ticket:** ${{ inputs.ticket_id }}
 
-          ### Selected Test Cases
+          **Selected test cases:**
+          ${{ inputs.test_case_ids }}
 
-          ${SELECTED_TEST_CASES}
+          **Generation run:**
+          ${{ inputs.testcase_run_id }}
 
-          ### Automation
+          ## Validation
 
-          Only the test cases explicitly selected in Slack were automated.
+          Playwright automation was generated and validated by the AI automation workflow.
 
-          Generated by the AI automation agent." \
+          ## Files changed
+
+          $SUMMARY" \
             --base main \
-            --head "$BRANCH")
-
-          echo ""
-          echo "PR created:"
-          echo "$PR_URL"
-
-          echo "PR_URL=$PR_URL" >> "$GITHUB_ENV"
+            --head "$BRANCH"
 
       # ============================================================
-      # SUMMARY
+      # 21. UPLOAD DEBUG ARTIFACTS
+      #
+      # Useful if Claude/Playwright fails.
       # ============================================================
 
-      - name: Workflow summary
-        env:
-          TICKET_ID: ${{ inputs.ticket_id }}
-          SELECTED_TEST_CASES: ${{ inputs.test_case_ids }}
-        run: |
-
-          echo "======================================"
-          echo "🎉 AI AUTOMATION COMPLETED"
-          echo "======================================"
-
-          echo "Ticket:"
-          echo "$TICKET_ID"
-
-          echo ""
-          echo "Selected test cases:"
-          echo "$SELECTED_TEST_CASES"
-
-          echo ""
-          echo "Branch:"
-          echo "$BRANCH"
-
-          echo ""
-          echo "Pull Request:"
-          echo "$PR_URL"
-
-          echo "======================================"
+      - name: Upload automation debug logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-automation-debug-${{ inputs.ticket_id }}
+          if-no-files-found: ignore
+          path: |
+            /tmp/claude-implementation.log
+            /tmp/claude-repair.log
+            /tmp/playwright-initial.log
+            /tmp/playwright-repair.log
+            data/selected-testcases.json
