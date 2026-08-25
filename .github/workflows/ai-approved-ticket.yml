@@ -36,6 +36,8 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       # --------------------------------------------------
       # 2. Node.js
@@ -318,20 +320,104 @@ jobs:
           node scripts/prepare-claude-test.js
 
       # --------------------------------------------------
-      # 11. Generate Playwright tests using Claude Code
+      # 11. Install Claude Code
+      #
+      # We call the CLI directly instead of claude-code-action@v1.
+      # claude-code-action is built around PR/issue-comment triggers
+      # and posts results back as review comments ("buffered inline
+      # comments") rather than reliably writing files in a
+      # workflow_dispatch context. The direct CLI with
+      # --permission-mode acceptEdits is what actually lets Claude
+      # write files unattended in a headless run.
+      # --------------------------------------------------
+
+      - name: Install Claude Code
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # --------------------------------------------------
+      # 12. Verify Claude Code
+      # --------------------------------------------------
+
+      - name: Verify Claude Code
+        run: |
+          claude --version
+
+      # --------------------------------------------------
+      # 13. Save repository baseline
+      #
+      # Lets us positively confirm what Claude changed,
+      # independent of the later git status check.
+      # --------------------------------------------------
+
+      - name: Save repository baseline
+        run: |
+          git status --short > /tmp/baseline-status.txt
+
+          git diff -- \
+            tests \
+            pages \
+            locators \
+            utils \
+            fixture \
+            data \
+            playwright.config.js \
+            package.json \
+            > /tmp/baseline-diff.txt || true
+
+          echo "Baseline captured."
+
+      # --------------------------------------------------
+      # 14. Generate Playwright tests using Claude Code
       # --------------------------------------------------
 
       - name: Generate Playwright tests with Claude Code
-        uses: anthropics/claude-code-action@v1
-        with:
-          prompt: ./data/claude-test-generation-prompt.md
-          show_full_output: true
-          claude_args: '--allowedTools "Bash,Edit,Write,mcp__playwright__*" --mcp-config .mcp.json --max-turns 20'
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          set +e
+
+          claude \
+            --permission-mode acceptEdits \
+            --max-turns 50 \
+            --allowedTools "Bash,Edit,Write,mcp__playwright__*" \
+            --mcp-config .mcp.json \
+            -p "$(cat data/claude-test-generation-prompt.md)" \
+            2>&1 | tee /tmp/claude-test-generation.log
+
+          CLAUDE_EXIT=${PIPESTATUS[0]}
+
+          echo ""
+          echo "Claude test-generation exit code: $CLAUDE_EXIT"
+
+          if [ "$CLAUDE_EXIT" -ne 0 ]; then
+            echo "WARNING: Claude test generation returned non-zero."
+            echo "We will inspect the repository before deciding whether"
+            echo "the run actually failed to produce anything usable."
+          fi
+
+          exit 0
 
       # --------------------------------------------------
-      # 12. Create PR
+      # 15. Show Claude output
+      # --------------------------------------------------
+
+      - name: Show Claude test-generation log
+        if: always()
+        run: |
+          echo "======================================"
+          echo "CLAUDE TEST-GENERATION LOG"
+          echo "======================================"
+
+          if [ -f /tmp/claude-test-generation.log ]; then
+            cat /tmp/claude-test-generation.log
+          else
+            echo "No Claude log was generated."
+          fi
+
+      # --------------------------------------------------
+      # 16. Create PR
       # --------------------------------------------------
 
       - name: Commit generated tests and open a PR
@@ -347,8 +433,20 @@ jobs:
           git config user.name "tailorbird-ai-agent[bot]"
           git config user.email "tailorbird-ai-agent[bot]@users.noreply.github.com"
 
+          echo "Full working-tree status:"
+          git status --short
+
+          echo ""
+          echo "Untracked files:"
+          git ls-files --others --exclude-standard
+
           if [ -z "$(git status --porcelain -- tests/)" ]; then
+            echo ""
             echo "No test file changes were produced by Claude Code."
+            echo ""
+            echo "Last Claude output:"
+            tail -n 100 /tmp/claude-test-generation.log || true
+            echo ""
             echo "Skipping PR creation."
             exit 0
           fi
@@ -363,6 +461,10 @@ jobs:
           echo "CREATING AI TEST AUTOMATION BRANCH"
           echo "======================================"
 
+          if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
+            git branch -D "$BRANCH"
+          fi
+
           git checkout -b "$BRANCH"
 
           git add tests/
@@ -376,12 +478,28 @@ jobs:
           git commit \
             -m "AI-generated Playwright tests for ${{ inputs.ticket_id }}"
 
-          git push origin "$BRANCH"
+          git push --force-with-lease origin "$BRANCH"
 
           echo ""
           echo "======================================"
           echo "CREATING PULL REQUEST"
           echo "======================================"
+
+          EXISTING_PR="$(
+            gh pr list \
+              --repo "${{ github.repository }}" \
+              --head "$BRANCH" \
+              --state open \
+              --json number \
+              --jq '.[0].number'
+          )"
+
+          if [ -n "$EXISTING_PR" ]; then
+            echo ""
+            echo "Existing PR found: #$EXISTING_PR"
+            echo "Branch updated successfully."
+            exit 0
+          fi
 
           gh pr create \
             --title "AI-generated tests for ${{ inputs.ticket_id }}" \
@@ -391,3 +509,23 @@ jobs:
 
           echo ""
           echo "✅ Pull request created."
+
+      # --------------------------------------------------
+      # 17. Upload debug artifacts
+      #
+      # Always upload, even on failure/skip, so we can see
+      # exactly what Claude did without re-running.
+      # --------------------------------------------------
+
+      - name: Upload automation debug logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-approved-ticket-debug-${{ inputs.ticket_id }}
+          if-no-files-found: ignore
+          path: |
+            /tmp/claude-test-generation.log
+            /tmp/baseline-status.txt
+            /tmp/baseline-diff.txt
+            data/claude-test-generation-prompt.md
+            data/selected-testcases.json
