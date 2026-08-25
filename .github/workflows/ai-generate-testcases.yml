@@ -632,6 +632,7 @@ jobs:
           for (const testCase of data.testCases) {
 
             for (const field of requiredFields) {
+
               if (
                 testCase[field] === undefined ||
                 testCase[field] === null
@@ -721,7 +722,6 @@ jobs:
           }
 
           console.log("--------------------------------------");
-
           EOF
 
       # --------------------------------------------------
@@ -768,7 +768,7 @@ jobs:
       - name: Upload generated test cases
         uses: actions/upload-artifact@v4
         with:
-          name: testcases-${{ inputs.ticket_id }}
+          name: generated-testcases
           path: |
             data/generated-testcases.json
             data/generated-testcases.md
@@ -793,6 +793,11 @@ jobs:
           echo "Files created:"
           echo "  - data/generated-testcases.json"
           echo "  - data/generated-testcases.md"
+
+          echo ""
+
+          echo "Artifact:"
+          echo "  - generated-testcases"
 
           echo ""
 
