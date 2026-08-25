@@ -29,15 +29,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       # --------------------------------------------------
-      # Checkout
+      # 1. Checkout
       # --------------------------------------------------
 
       - name: Checkout repository
         uses: actions/checkout@v4
 
       # --------------------------------------------------
-      # Node.js
+      # 2. Node.js
       # --------------------------------------------------
 
       - name: Setup Node.js
@@ -47,14 +48,14 @@ jobs:
           cache: npm
 
       # --------------------------------------------------
-      # Dependencies
+      # 3. Dependencies
       # --------------------------------------------------
 
       - name: Install dependencies
         run: npm ci
 
       # --------------------------------------------------
-      # Show approval information
+      # 4. Show approval information
       # --------------------------------------------------
 
       - name: Show approved selection
@@ -62,38 +63,87 @@ jobs:
           echo "======================================"
           echo "AI TEST CASES APPROVED"
           echo "======================================"
-          echo "Ticket ID: ${{ inputs.ticket_id }}"
-          echo "Selected Test Cases: ${{ inputs.selected_test_cases }}"
-          echo "Generation Run ID: ${{ inputs.generation_run_id }}"
+
+          echo "Ticket ID:"
+          echo "${{ inputs.ticket_id }}"
+
+          echo ""
+          echo "Selected Test Cases:"
+          echo "${{ inputs.selected_test_cases }}"
+
+          echo ""
+          echo "Generation Run ID:"
+          echo "${{ inputs.generation_run_id }}"
+
+          echo ""
+          echo "Expected Artifact:"
+          echo "testcases-${{ inputs.ticket_id }}"
+
           echo "======================================"
 
       # --------------------------------------------------
-      # Download generated test cases from the original
-      # AI Generate Test Cases workflow
+      # 5. Download generated test cases
+      #
+      # IMPORTANT:
+      # ai-generate-testcases.yml uploads the artifact as:
+      #
+      # testcases-${ticket_id}
+      #
+      # Example:
+      # testcases-FEAT-1191
       # --------------------------------------------------
 
       - name: Download generated test cases
         env:
           GH_TOKEN: ${{ github.token }}
           GENERATION_RUN_ID: ${{ inputs.generation_run_id }}
+          TICKET_ID: ${{ inputs.ticket_id }}
         run: |
           echo "======================================"
           echo "DOWNLOADING GENERATED TEST CASES"
           echo "======================================"
 
+          ARTIFACT_NAME="testcases-${TICKET_ID}"
+
+          echo "Generation Run ID:"
+          echo "$GENERATION_RUN_ID"
+
+          echo ""
+          echo "Artifact Name:"
+          echo "$ARTIFACT_NAME"
+
+          echo ""
+
           mkdir -p data/generated-testcases-artifact
 
           gh run download "$GENERATION_RUN_ID" \
             --repo "${{ github.repository }}" \
-            --name "generated-testcases" \
+            --name "$ARTIFACT_NAME" \
             --dir data/generated-testcases-artifact
 
           echo ""
           echo "Downloaded files:"
-          find data/generated-testcases-artifact -type f -maxdepth 3 -print
+          find data/generated-testcases-artifact \
+            -maxdepth 3 \
+            -type f \
+            -print
+
+          echo ""
 
           if [ ! -f "data/generated-testcases-artifact/generated-testcases.json" ]; then
             echo "ERROR: generated-testcases.json was not found in the artifact."
+            echo ""
+            echo "Expected artifact:"
+            echo "$ARTIFACT_NAME"
+            echo ""
+            echo "Generation run:"
+            echo "$GENERATION_RUN_ID"
+            echo ""
+            echo "Downloaded files:"
+            find data/generated-testcases-artifact \
+              -maxdepth 3 \
+              -type f \
+              -print
             exit 1
           fi
 
@@ -105,7 +155,57 @@ jobs:
           echo "✅ generated-testcases.json ready."
 
       # --------------------------------------------------
-      # Filter ONLY the test cases selected in Slack
+      # 6. Verify generated test cases
+      # --------------------------------------------------
+
+      - name: Verify generated test cases
+        run: |
+          echo "======================================"
+          echo "VERIFYING GENERATED TEST CASES"
+          echo "======================================"
+
+          if [ ! -f "data/generated-testcases.json" ]; then
+            echo "ERROR: generated-testcases.json not found."
+            exit 1
+          fi
+
+          echo "Generated test cases file found."
+
+          echo ""
+          echo "Ticket:"
+          node -e "
+            const data = require('./data/generated-testcases.json');
+            console.log(data.ticketId);
+          "
+
+          echo ""
+          echo "Total generated test cases:"
+          node -e "
+            const data = require('./data/generated-testcases.json');
+            console.log(data.testCases?.length || 0);
+          "
+
+          echo ""
+          echo "======================================"
+          echo "GENERATED TEST CASES"
+          echo "======================================"
+
+          node -e "
+            const data = require('./data/generated-testcases.json');
+
+            for (const tc of data.testCases || []) {
+              console.log(
+                tc.id +
+                ' | ' +
+                (tc.category || tc.testType || 'UNCATEGORIZED') +
+                ' | ' +
+                tc.title
+              );
+            }
+          "
+
+      # --------------------------------------------------
+      # 7. Filter ONLY selected test cases
       # --------------------------------------------------
 
       - name: Filter selected test cases
@@ -116,14 +216,71 @@ jobs:
           echo "FILTERING SELECTED TEST CASES"
           echo "======================================"
 
+          echo "Selected IDs:"
+          echo "$SELECTED_TEST_CASES"
+
+          echo ""
+
           node scripts/ai-agent/filter-selected-testcases.js
 
           echo ""
-          echo "Selected test cases file:"
+          echo "======================================"
+          echo "SELECTED TEST CASES FILE"
+          echo "======================================"
+
           cat data/selected-testcases.json
 
       # --------------------------------------------------
-      # Process approved Notion ticket
+      # 8. Verify selection
+      # --------------------------------------------------
+
+      - name: Verify selected test cases
+        run: |
+          echo "======================================"
+          echo "VERIFYING SELECTED TEST CASES"
+          echo "======================================"
+
+          node - <<'NODE'
+          const fs = require("fs");
+
+          const file = "data/selected-testcases.json";
+
+          if (!fs.existsSync(file)) {
+            console.error("ERROR: selected-testcases.json was not created.");
+            process.exit(1);
+          }
+
+          const data = JSON.parse(
+            fs.readFileSync(file, "utf8")
+          );
+
+          const selected = data.selectedTestCases || [];
+
+          console.log(`Selected count: ${selected.length}`);
+
+          if (!selected.length) {
+            console.error("ERROR: No test cases were selected.");
+            process.exit(1);
+          }
+
+          console.log("");
+
+          selected.forEach((tc) => {
+            console.log(
+              `${tc.id} | ${
+                tc.category ||
+                tc.testType ||
+                "UNCATEGORIZED"
+              } | ${tc.title}`
+            );
+          });
+
+          console.log("");
+          console.log("✅ Selected test cases verified.");
+          NODE
+
+      # --------------------------------------------------
+      # 9. Process approved Notion ticket
       # --------------------------------------------------
 
       - name: Process approved ticket
@@ -137,7 +294,7 @@ jobs:
           node scripts/ai-agent/process-approved-ticket.js
 
       # --------------------------------------------------
-      # Prepare Claude prompt
+      # 10. Prepare Claude automation prompt
       # --------------------------------------------------
 
       - name: Prepare Claude test-generation prompt
@@ -148,7 +305,7 @@ jobs:
           node scripts/prepare-claude-test.js
 
       # --------------------------------------------------
-      # Generate Playwright tests using Claude Code
+      # 11. Generate Playwright tests using Claude Code
       # --------------------------------------------------
 
       - name: Generate Playwright tests with Claude Code
@@ -161,7 +318,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       # --------------------------------------------------
-      # Create PR
+      # 12. Create PR
       # --------------------------------------------------
 
       - name: Commit generated tests and open a PR
@@ -169,6 +326,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           BRANCH="ai/${{ inputs.ticket_id }}-tests"
+
+          echo "======================================"
+          echo "CHECKING GENERATED PLAYWRIGHT TESTS"
+          echo "======================================"
 
           git config user.name "tailorbird-ai-agent[bot]"
           git config user.email "tailorbird-ai-agent[bot]@users.noreply.github.com"
@@ -179,19 +340,40 @@ jobs:
             exit 0
           fi
 
+          echo ""
+          echo "Test files changed:"
+          git status --short -- tests/
+
+          echo ""
+          echo "======================================"
+          echo "CREATING AI TEST AUTOMATION BRANCH"
+          echo "======================================"
+
           git checkout -b "$BRANCH"
 
           git add tests/
 
           SUMMARY="$(git diff --stat --cached)"
 
+          echo ""
+          echo "Changes:"
+          echo "$SUMMARY"
+
           git commit \
             -m "AI-generated Playwright tests for ${{ inputs.ticket_id }}"
 
           git push origin "$BRANCH"
+
+          echo ""
+          echo "======================================"
+          echo "CREATING PULL REQUEST"
+          echo "======================================"
 
           gh pr create \
             --title "AI-generated tests for ${{ inputs.ticket_id }}" \
             --body "Ticket: ${{ inputs.ticket_id }}"$'\n\n'"Selected test cases: ${{ inputs.selected_test_cases }}"$'\n\n'"Generation run ID: ${{ inputs.generation_run_id }}"$'\n\n'"Files changed:"$'\n'"$SUMMARY" \
             --base main \
             --head "$BRANCH"
+
+          echo ""
+          echo "✅ Pull request created."
