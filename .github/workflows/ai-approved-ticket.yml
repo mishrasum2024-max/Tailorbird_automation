@@ -59,27 +59,26 @@ jobs:
       # --------------------------------------------------
 
       - name: Show approved selection
-        env:
-          TICKET_ID: ${{ inputs.ticket_id }}
-          SELECTED_TEST_CASES: ${{ inputs.selected_test_cases }}
-          GENERATION_RUN_ID: ${{ inputs.generation_run_id }}
         run: |
           echo "======================================"
           echo "AI TEST CASES APPROVED"
           echo "======================================"
 
           echo "Ticket ID:"
-          echo "$TICKET_ID"
+          echo "${{ inputs.ticket_id }}"
 
           echo ""
+
           echo "Selected Test Cases:"
-          echo "$SELECTED_TEST_CASES"
+          echo "${{ inputs.selected_test_cases }}"
 
           echo ""
+
           echo "Generation Run ID:"
-          echo "$GENERATION_RUN_ID"
+          echo "${{ inputs.generation_run_id }}"
 
           echo ""
+
           echo "Expected Artifact:"
           echo "generated-testcases"
 
@@ -88,11 +87,12 @@ jobs:
       # --------------------------------------------------
       # 5. Download generated test cases
       #
-      # ai-generate-testcases.yml uploads:
+      # IMPORTANT:
+      # ai-generate-testcases.yml uploads the artifact as:
       #
       # generated-testcases
       #
-      # Do NOT change this to testcases-${TICKET_ID}.
+      # DO NOT change this to testcases-${ticket_id}
       # --------------------------------------------------
 
       - name: Download generated test cases
@@ -110,6 +110,7 @@ jobs:
           echo "$GENERATION_RUN_ID"
 
           echo ""
+
           echo "Artifact Name:"
           echo "$ARTIFACT_NAME"
 
@@ -124,6 +125,7 @@ jobs:
 
           echo ""
           echo "Downloaded files:"
+
           find data/generated-testcases-artifact \
             -maxdepth 3 \
             -type f \
@@ -134,17 +136,23 @@ jobs:
           if [ ! -f "data/generated-testcases-artifact/generated-testcases.json" ]; then
             echo "ERROR: generated-testcases.json was not found in the artifact."
             echo ""
+
             echo "Expected artifact:"
             echo "$ARTIFACT_NAME"
+
             echo ""
+
             echo "Generation run:"
             echo "$GENERATION_RUN_ID"
+
             echo ""
+
             echo "Downloaded files:"
             find data/generated-testcases-artifact \
               -maxdepth 3 \
               -type f \
               -print
+
             exit 1
           fi
 
@@ -173,6 +181,7 @@ jobs:
           echo "Generated test cases file found."
 
           echo ""
+
           echo "Ticket:"
           node -e "
             const data = require('./data/generated-testcases.json');
@@ -180,6 +189,7 @@ jobs:
           "
 
           echo ""
+
           echo "Total generated test cases:"
           node -e "
             const data = require('./data/generated-testcases.json');
@@ -187,6 +197,7 @@ jobs:
           "
 
           echo ""
+
           echo "======================================"
           echo "GENERATED TEST CASES"
           echo "======================================"
@@ -225,6 +236,7 @@ jobs:
           node scripts/ai-agent/filter-selected-testcases.js
 
           echo ""
+
           echo "======================================"
           echo "SELECTED TEST CASES FILE"
           echo "======================================"
@@ -325,11 +337,8 @@ jobs:
       - name: Commit generated tests and open a PR
         env:
           GH_TOKEN: ${{ github.token }}
-          TICKET_ID: ${{ inputs.ticket_id }}
-          SELECTED_TEST_CASES: ${{ inputs.selected_test_cases }}
-          GENERATION_RUN_ID: ${{ inputs.generation_run_id }}
         run: |
-          BRANCH="ai/${TICKET_ID}-tests"
+          BRANCH="ai/${{ inputs.ticket_id }}-tests"
 
           echo "======================================"
           echo "CHECKING GENERATED PLAYWRIGHT TESTS"
@@ -349,6 +358,7 @@ jobs:
           git status --short -- tests/
 
           echo ""
+
           echo "======================================"
           echo "CREATING AI TEST AUTOMATION BRANCH"
           echo "======================================"
@@ -364,7 +374,7 @@ jobs:
           echo "$SUMMARY"
 
           git commit \
-            -m "AI-generated Playwright tests for $TICKET_ID"
+            -m "AI-generated Playwright tests for ${{ inputs.ticket_id }}"
 
           git push origin "$BRANCH"
 
@@ -373,17 +383,11 @@ jobs:
           echo "CREATING PULL REQUEST"
           echo "======================================"
 
-          PR_URL="$(gh pr create \
-            --title "AI-generated tests for $TICKET_ID" \
-            --body "Ticket: $TICKET_ID"$'\n\n'"Selected test cases: $SELECTED_TEST_CASES"$'\n\n'"Generation run ID: $GENERATION_RUN_ID"$'\n\n'"Files changed:"$'\n'"$SUMMARY" \
+          gh pr create \
+            --title "AI-generated tests for ${{ inputs.ticket_id }}" \
+            --body "Ticket: ${{ inputs.ticket_id }}"$'\n\n'"Selected test cases: ${{ inputs.selected_test_cases }}"$'\n\n'"Generation run ID: ${{ inputs.generation_run_id }}"$'\n\n'"Files changed:"$'\n'"$SUMMARY" \
             --base main \
-            --head "$BRANCH")"
+            --head "$BRANCH"
 
           echo ""
-          echo "Pull Request:"
-          echo "$PR_URL"
-
-          echo ""
-          echo "======================================"
-          echo "✅ AI TEST AUTOMATION COMPLETED"
-          echo "======================================"
+          echo "✅ Pull request created."
