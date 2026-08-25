@@ -59,51 +59,52 @@ jobs:
       # --------------------------------------------------
 
       - name: Show approved selection
+        env:
+          TICKET_ID: ${{ inputs.ticket_id }}
+          SELECTED_TEST_CASES: ${{ inputs.selected_test_cases }}
+          GENERATION_RUN_ID: ${{ inputs.generation_run_id }}
         run: |
           echo "======================================"
           echo "AI TEST CASES APPROVED"
           echo "======================================"
 
           echo "Ticket ID:"
-          echo "${{ inputs.ticket_id }}"
+          echo "$TICKET_ID"
 
           echo ""
           echo "Selected Test Cases:"
-          echo "${{ inputs.selected_test_cases }}"
+          echo "$SELECTED_TEST_CASES"
 
           echo ""
           echo "Generation Run ID:"
-          echo "${{ inputs.generation_run_id }}"
+          echo "$GENERATION_RUN_ID"
 
           echo ""
           echo "Expected Artifact:"
-          echo "testcases-${{ inputs.ticket_id }}"
+          echo "generated-testcases"
 
           echo "======================================"
 
       # --------------------------------------------------
       # 5. Download generated test cases
       #
-      # IMPORTANT:
-      # ai-generate-testcases.yml uploads the artifact as:
+      # ai-generate-testcases.yml uploads:
       #
-      # testcases-${ticket_id}
+      # generated-testcases
       #
-      # Example:
-      # testcases-FEAT-1191
+      # Do NOT change this to testcases-${TICKET_ID}.
       # --------------------------------------------------
 
       - name: Download generated test cases
         env:
           GH_TOKEN: ${{ github.token }}
           GENERATION_RUN_ID: ${{ inputs.generation_run_id }}
-          TICKET_ID: ${{ inputs.ticket_id }}
         run: |
           echo "======================================"
           echo "DOWNLOADING GENERATED TEST CASES"
           echo "======================================"
 
-          ARTIFACT_NAME="testcases-${TICKET_ID}"
+          ARTIFACT_NAME="generated-testcases"
 
           echo "Generation Run ID:"
           echo "$GENERATION_RUN_ID"
@@ -324,8 +325,11 @@ jobs:
       - name: Commit generated tests and open a PR
         env:
           GH_TOKEN: ${{ github.token }}
+          TICKET_ID: ${{ inputs.ticket_id }}
+          SELECTED_TEST_CASES: ${{ inputs.selected_test_cases }}
+          GENERATION_RUN_ID: ${{ inputs.generation_run_id }}
         run: |
-          BRANCH="ai/${{ inputs.ticket_id }}-tests"
+          BRANCH="ai/${TICKET_ID}-tests"
 
           echo "======================================"
           echo "CHECKING GENERATED PLAYWRIGHT TESTS"
@@ -360,7 +364,7 @@ jobs:
           echo "$SUMMARY"
 
           git commit \
-            -m "AI-generated Playwright tests for ${{ inputs.ticket_id }}"
+            -m "AI-generated Playwright tests for $TICKET_ID"
 
           git push origin "$BRANCH"
 
@@ -369,11 +373,17 @@ jobs:
           echo "CREATING PULL REQUEST"
           echo "======================================"
 
-          gh pr create \
-            --title "AI-generated tests for ${{ inputs.ticket_id }}" \
-            --body "Ticket: ${{ inputs.ticket_id }}"$'\n\n'"Selected test cases: ${{ inputs.selected_test_cases }}"$'\n\n'"Generation run ID: ${{ inputs.generation_run_id }}"$'\n\n'"Files changed:"$'\n'"$SUMMARY" \
+          PR_URL="$(gh pr create \
+            --title "AI-generated tests for $TICKET_ID" \
+            --body "Ticket: $TICKET_ID"$'\n\n'"Selected test cases: $SELECTED_TEST_CASES"$'\n\n'"Generation run ID: $GENERATION_RUN_ID"$'\n\n'"Files changed:"$'\n'"$SUMMARY" \
             --base main \
-            --head "$BRANCH"
+            --head "$BRANCH")"
 
           echo ""
-          echo "✅ Pull request created."
+          echo "Pull Request:"
+          echo "$PR_URL"
+
+          echo ""
+          echo "======================================"
+          echo "✅ AI TEST AUTOMATION COMPLETED"
+          echo "======================================"
