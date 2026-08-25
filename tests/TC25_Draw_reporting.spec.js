@@ -559,4 +559,40 @@ test.describe('Draw Reporting', () => {
 
         Logger.success(`Eligible approver configuration verified for draw "${drawName}" ("${eligibleText}"), approved via "${approvedByFullName}"`);
     });
+
+    // FEAT-1191 — [Draw Reporting] Contract Line-Item Allocation for Manually Added Invoices.
+    // TC021 (human-approved via Slack): Allocate full invoice amount to a single line item.
+    test('TC021 @drawReporting @regression : Allocate full invoice amount to a single line item', async () => {
+        test.setTimeout(300000);
+
+        const propertyName = 'Test Property 6_Draw reporting';
+        const timestamp = Date.now();
+        const drawName = `TC021_Draw_${timestamp}`;
+        const invoiceAmount = 3000;
+
+        Logger.step('TC021 Step 1: Navigating to Draw Reporting and creating a draw to open the Invoices panel');
+        await drawReportingJob.navigateToDrawReporting();
+        await drawReportingJob.selectPropertyByName(propertyName);
+        await drawReportingJob.assertSelectedPropertyIs(propertyName);
+        await drawReportingJob.createDraw(drawName, '07/01/2026', '07/22/2026');
+        await drawReportingJob.verifyDrawEditorNameAndStatus(drawName);
+        Logger.success(`TC021 Step 1: Draw "${drawName}" created — Invoices panel available`);
+
+        Logger.step('TC021 Precondition: Opening "Add Invoice to Draw" modal with Project, Job, and Invoice Amount ($3,000) entered');
+        await drawReportingJob.openAddInvoiceModal();
+        await drawReportingJob.selectFirstAvailableProject();
+        await drawReportingJob.selectFirstAvailableJob();
+        await drawReportingJob.fillAddInvoiceAmountAndAwaitLineItems(invoiceAmount);
+        Logger.success('TC021 Precondition: Add Invoice modal open with Project, Job, and $3,000 Invoice Amount entered');
+
+        Logger.step('TC021 Step 1: Selecting one line item and entering $3,000 as the allocation amount');
+        const { lineItemName } = await drawReportingJob.allocateFullAmountToFirstLineItem(invoiceAmount);
+        Logger.success(`TC021 Step 1: Full $3,000 allocated to line item "${lineItemName}"`);
+
+        Logger.step('TC021 Step 2: Clicking Save');
+        await drawReportingJob.saveAddInvoiceModal();
+        Logger.success('TC021 Step 2: Invoice saved successfully with the full amount attributed to the single selected line item');
+
+        await drawReportingJob.discardDraw();
+    });
 });
