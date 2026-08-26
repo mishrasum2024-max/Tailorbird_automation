@@ -623,4 +623,92 @@ test.describe('Budget Workflow', () => {
         Logger.success('TC270: Budget Reallocation revision submitted for approval — TC270 PASSED');
     });
 
+    test('TC019 @budget @approval @regression : Approve Budget Revision within budget succeeds', async () => {
+        test.setTimeout(360000); // full E2E lifecycle: property + template + 2 revision approvals
+
+        const timestamp = Date.now();
+        const propertyName = `TC019_BudgetProp_${timestamp}`;
+        const templateName = `TC019_BudgetTemplate_${timestamp}`;
+        const ITEM_NAME = `TC019_WithinBudgetItem_${timestamp}`;
+
+        const approvalJob = new ApprovalJob(page);
+
+        // ===== PRECONDITION SETUP: property + Budget Approval template =====
+        Logger.step('TC019 Step 1: Creating new property');
+        await approvalJob.createProperty(
+            propertyName,
+            'Domestic Terminal, College Park, GA 30337, USA',
+            'College Park',
+            'GA',
+            '30337',
+            'Garden Style'
+        );
+        Logger.success(`TC019 Step 1: Property created — ${propertyName}`);
+
+        Logger.step('TC019 Step 2: Creating Budget Approval template');
+        await approvalJob.navigateToApprovalTab();
+        await approvalJob.createBudgetApprovalTemplateForTest(templateName, propertyName);
+        Logger.success(`TC019 Step 2: Template created — ${templateName}`);
+
+        // ===== PRECONDITION: line item with $20,000 remaining budget (approved) =====
+        Logger.step('TC019 Step 3: Building initial budget — line item with $20,000 original budget');
+        await budgetJob.navigateToBudget();
+        await page.waitForTimeout(5000);
+        await budgetJob.selectPropertyByName(propertyName);
+        await page.waitForTimeout(5000);
+        await budgetJob.openRevisionEditor();
+        await budgetJob.addBudgetItemInRevision('301 - INT_Appliances', ITEM_NAME,
+            'Line item used to verify a within-budget approval succeeds (TC019)', '20000');
+        await budgetJob.clickSubmitForApproval();
+        Logger.success('TC019 Step 3: Initial budget (line item remaining $20,000) submitted for approval');
+
+        Logger.step('TC019 Step 4: Approving initial budget in All Approvals');
+        await approvalJob.navigateToAllApprovalsTab();
+        await approvalJob.approveRevisionOnBehalfByPropertyInAllApprovals(propertyName);
+        Logger.success('TC019 Step 4: Initial budget approved — line item remaining is now $20,000');
+
+        // ===== STEP: pending Budget Revision requesting $12,000 against the line item =====
+        Logger.step('TC019 Step 5: Creating pending Budget Revision requesting $12,000');
+        await budgetJob.navigateToBudget();
+        await page.waitForTimeout(5000);
+        await budgetJob.selectPropertyByName(propertyName);
+        await page.waitForTimeout(5000);
+        await budgetJob.openRevisionEditor();
+        await budgetJob.enterRevisionAdjustmentByItemNameV2(ITEM_NAME, -12000);
+        await budgetJob.clickSubmitForApproval();
+        Logger.success('TC019 Step 5: Budget Revision requesting $12,000 submitted for approval');
+
+        // ===== ACTION: approve the pending Budget Revision (within budget) =====
+        Logger.step('TC019 Step 6: Approving the pending Budget Revision');
+        await approvalJob.navigateToAllApprovalsTab();
+        const responseStatus = await approvalJob.approveRevisionOnBehalfAndCaptureResponse(propertyName);
+        if (responseStatus !== null) {
+            expect(responseStatus, 'Approval API must return a 2xx success status for a within-budget approval').toBeGreaterThanOrEqual(200);
+            expect(responseStatus, 'Approval API must return a 2xx success status for a within-budget approval').toBeLessThan(300);
+        } else {
+            Logger.info('TC019: Approval API response was not captured directly — verifying success via UI status instead');
+        }
+        Logger.success('TC019 Step 6: Approval submitted');
+
+        // ===== EXPECTED RESULT: status becomes Approved =====
+        Logger.step('TC019 Step 7: Asserting both revisions show Approved status');
+        await approvalJob.assertRevisionsByPropertyHaveStatus(propertyName, 'Approved', 2);
+        Logger.success('TC019 Step 7: Both revisions confirmed Approved');
+
+        // ===== EXPECTED RESULT: remaining budget updates to $8,000 =====
+        Logger.step('TC019 Step 8: Asserting line item remaining budget updated to $8,000');
+        await budgetJob.navigateToBudget();
+        await page.waitForTimeout(5000);
+        await budgetJob.selectPropertyByName(propertyName);
+        await page.waitForTimeout(5000);
+        const rowText = await budgetJob.getMainGridRowTextByItemName(ITEM_NAME);
+        expect(rowText, `Line item row must show updated remaining budget of $8,000: "${rowText}"`).toContain('$8,000');
+        Logger.success('TC019 Step 8: Remaining budget confirmed at $8,000');
+
+        // ===== EXPECTED RESULT: no toast is shown =====
+        Logger.step('TC019 Step 9: Asserting no over-budget error toast was shown');
+        await approvalJob.assertNoOverBudgetToastVisible();
+        Logger.success('TC019: Within-budget Budget Revision approval verified end-to-end — TC019 PASSED');
+    });
+
 });
