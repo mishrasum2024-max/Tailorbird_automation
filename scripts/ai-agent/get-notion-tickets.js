@@ -15,6 +15,15 @@ const DATA_SOURCE_ID =
 const TARGET_STATUS = "Complete";
 
 /*
+ * Only pull tickets at this priority.
+ *
+ * Was not filtered by priority at all before — whatever priority the
+ * newest tickets happened to have (often P0) is what got picked.
+ * Now explicitly restricted to P1, configurable via env var.
+ */
+const TARGET_PRIORITY = process.env.TARGET_PRIORITY || "P1";
+
+/*
  * How many tickets to pull per run.
  *
  * Was hard-coded to exactly 1. Now configurable, defaulting to 5.
@@ -111,7 +120,7 @@ function mapTicket(page) {
 
 async function getAvailableTickets() {
   console.log(
-    `🔎 Looking for up to ${MAX_TICKETS} newest Notion tickets with status "${TARGET_STATUS}"...`
+    `🔎 Looking for up to ${MAX_TICKETS} newest Notion tickets with status "${TARGET_STATUS}" and priority "${TARGET_PRIORITY}"...`
   );
 
   const tickets = [];
@@ -127,10 +136,20 @@ async function getAvailableTickets() {
       page_size: 100,
 
       filter: {
-        property: "Status",
-        status: {
-          equals: TARGET_STATUS,
-        },
+        and: [
+          {
+            property: "Status",
+            status: {
+              equals: TARGET_STATUS,
+            },
+          },
+          {
+            property: "Priority",
+            select: {
+              equals: TARGET_PRIORITY,
+            },
+          },
+        ],
       },
 
       sorts: [
@@ -197,7 +216,7 @@ async function main() {
      */
     if (!tickets.length) {
       console.log(
-        "\nℹ️ No tickets with status \"Complete\" are available."
+        `\nℹ️ No tickets with status "${TARGET_STATUS}" and priority "${TARGET_PRIORITY}" are available.`
       );
 
       console.log(
