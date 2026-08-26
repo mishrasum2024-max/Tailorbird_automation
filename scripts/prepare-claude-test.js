@@ -229,7 +229,80 @@ are available.
 
 ---
 
-# AUTOMATION RULES
+# AUTHENTICATION — SAVE TURNS
+
+A browser session MAY already be pre-authenticated for you via the
+Playwright MCP server's --storage-state configuration.
+
+Before attempting any login flow:
+
+1. Navigate directly to the dashboard/target URL first.
+2. Check whether you are already logged in (look for dashboard
+   elements, not a login form).
+3. Only perform a manual login if you are NOT already authenticated.
+
+Do not re-login "just to be safe" if the page already shows an
+authenticated dashboard. Every unnecessary action consumes turns from
+your limited budget — spend them on understanding and building the
+feature, not on re-verifying things that are already true.
+
+---
+
+# CODE ARCHITECTURE — STRICT SEPARATION OF CONCERNS
+
+This repository follows a strict three-layer pattern. You MUST follow
+it exactly, with no exceptions:
+
+## 1. Locators layer — locators/*.js
+
+- EVERY selector used anywhere in the new code must be defined here,
+  not inline in a page object or spec file.
+- For any element belonging to UI that has NOT been previously
+  automated in this repo (i.e. no existing verified locator to reuse),
+  define it as a MULTI-LOCATOR: a primary locator combined with at
+  least one fallback locator using Playwright's .or() chaining, e.g.:
+
+  Example (multi-locator with fallback):
+
+  const saveButton = (page) =>
+    page.getByRole("button", { name: "Save" })
+      .or(page.getByTestId("save-invoice-button"))
+      .or(page.locator("button:has-text('Save')"));
+
+  This is required specifically because you cannot fully verify new,
+  unautomated UI without a live authenticated pass — a multi-locator
+  gives the test a real chance of still finding the element if your
+  primary guess about the DOM is wrong.
+- Do not define the same logical locator twice in different files.
+
+## 2. Page object layer — pages/*.js
+
+- ALL interactions (click, fill, select, read text, wait, assert
+  element state) must be implemented as methods here.
+- Page object methods use ONLY locators imported from locators/*.js.
+  Never construct a new locator inline inside a page object method.
+- Method names should describe the action or capability, not the
+  underlying selector (e.g. saveAddInvoiceModal(), not
+  clickSaveButton()).
+
+## 3. Spec layer — tests/*.js
+
+- Spec files MUST ONLY call page-object methods.
+- A spec file must NEVER contain: page.locator(, page.getByRole(,
+  page.getByText(, page.getByLabel(, page.getByTestId(,
+  page.getByPlaceholder(, page.click(, page.fill(, page.check(,
+  page.selectOption(, or any other direct interaction with the raw
+  page object for the feature under test.
+- The ONLY acceptable direct use of page in a spec is for
+  test.use({ storageState: ... }), top-level navigation via an
+  existing page-object goto()-style method, or final expect(...)
+  assertions that read state already retrieved through a page-object
+  method.
+
+This structure will be automatically checked after you finish. Code
+that puts raw locators or raw page interactions inside a spec file
+will be flagged and the resulting PR will be marked as needing manual
+review, even if the test itself passes. Follow the pattern exactly.
 
 Follow these rules strictly:
 

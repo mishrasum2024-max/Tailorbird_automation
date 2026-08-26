@@ -355,6 +355,85 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       # --------------------------------------------------
+      # 12c. Pre-authenticate before Claude runs
+      #
+      # This is the real fix for max-turns exhaustion:
+      # Claude was burning a large share of its 50-turn
+      # budget logging in manually via the MCP browser.
+      # We log in once here using the existing login spec
+      # and hand Claude an already-authenticated session.
+      # continue-on-error: true — if login fails here for
+      # any reason, Claude falls back to logging in itself
+      # via the instruction already in the prompt.
+      # --------------------------------------------------
+
+      - name: Generate authenticated session for Claude
+        id: generate_session
+        continue-on-error: true
+        env:
+          TEST_EMAIL: ${{ secrets.TEST_EMAIL }}
+          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+          VENDOR_EMAIL: ${{ secrets.VENDOR_EMAIL }}
+          VENDOR_PASSWORD: ${{ secrets.VENDOR_PASSWORD }}
+          NEW_TEST_EMAIL: ${{ secrets.NEW_TEST_EMAIL }}
+          NEW_TEST_PASSWORD: ${{ secrets.NEW_TEST_PASSWORD }}
+          ONE_ORG_TEST_EMAIL: ${{ secrets.ONE_ORG_TEST_EMAIL }}
+          LOGIN_URL: ${{ secrets.LOGIN_URL }}
+          DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
+          BASE_URL: ${{ secrets.BASE_URL }}
+        run: |
+          echo "======================================"
+          echo "GENERATING AUTHENTICATED SESSION"
+          echo "======================================"
+
+          npx playwright test tests/TC01_login.spec.js \
+            --workers=1 --reporter=list
+
+          if [ -f sessionState.json ]; then
+            echo "✅ sessionState.json created."
+          else
+            echo "⚠️ sessionState.json was not created. Claude will log in manually."
+          fi
+
+      # --------------------------------------------------
+      # 12d. Configure Playwright MCP for this run
+      #
+      # If a session was generated above, point the MCP
+      # Playwright server at it so Claude's browser opens
+      # already logged in.
+      # --------------------------------------------------
+
+      - name: Configure Playwright MCP for this run
+        run: |
+          if [ -f sessionState.json ]; then
+            cat > .mcp.json << 'EOF'
+          {
+            "mcpServers": {
+              "playwright": {
+                "command": "npx",
+                "args": ["-y", "@playwright/mcp@latest", "--headless", "--storage-state", "sessionState.json"]
+              }
+            }
+          }
+          EOF
+            echo "Configured Playwright MCP with pre-authenticated session."
+          else
+            cat > .mcp.json << 'EOF'
+          {
+            "mcpServers": {
+              "playwright": {
+                "command": "npx",
+                "args": ["-y", "@playwright/mcp@latest", "--headless"]
+              }
+            }
+          }
+          EOF
+            echo "Configured Playwright MCP without pre-authenticated session."
+          fi
+
+          cat .mcp.json
+
+      # --------------------------------------------------
       # 13. Save repository baseline
       #
       # Lets us positively confirm what Claude changed,
@@ -400,7 +479,7 @@ jobs:
 
           claude \
             --permission-mode acceptEdits \
-            --max-turns 50 \
+            --max-turns 80 \
             --allowedTools "Bash,Edit,Write,mcp__playwright__*" \
             --mcp-config .mcp.json \
             -p "$(cat data/claude-test-generation-prompt.md)" \
@@ -437,12 +516,134 @@ jobs:
           fi
 
       # --------------------------------------------------
+      # 15b. Run the generated tests for real
+      #
+      # This is the accuracy check. Claude reporting
+      # "Automated" is not proof the test passes — actually
+      # running it against the live app is.
+      # --------------------------------------------------
+
+      - name: Run mandatory tests, then newly added test case(s)
+        id: run_generated_tests
+        env:
+          TEST_EMAIL: ${{ secrets.TEST_EMAIL }}
+          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+          VENDOR_EMAIL: ${{ secrets.VENDOR_EMAIL }}
+          VENDOR_PASSWORD: ${{ secrets.VENDOR_PASSWORD }}
+          NEW_TEST_EMAIL: ${{ secrets.NEW_TEST_EMAIL }}
+          NEW_TEST_PASSWORD: ${{ secrets.NEW_TEST_PASSWORD }}
+          ONE_ORG_TEST_EMAIL: ${{ secrets.ONE_ORG_TEST_EMAIL }}
+          LOGIN_URL: ${{ secrets.LOGIN_URL }}
+          DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
+          BASE_URL: ${{ secrets.BASE_URL }}
+          SELECTED_TEST_CASES: ${{ inputs.selected_test_cases }}
+        run: |
+          set +e
+
+          echo "======================================"
+          echo "STEP A: MANDATORY TESTS (regression check)"
+          echo "======================================"
+
+          npx playwright test --grep "@mandatory" --workers=1 --reporter=list \
+            2>&1 | tee /tmp/mandatory-tests-result.log
+
+          MANDATORY_EXIT=${PIPESTATUS[0]}
+
+          echo ""
+          echo "Mandatory tests exit code: $MANDATORY_EXIT"
+
+          echo ""
+          echo "======================================"
+          echo "STEP B: NEWLY ADDED TEST CASE(S) ONLY"
+          echo "======================================"
+
+          CHANGED_SPECS="$(git status --porcelain -- tests/ | awk '{print $2}')"
+
+          if [ -z "$CHANGED_SPECS" ]; then
+            echo "No spec files changed. Nothing new to run."
+            NEW_EXIT=1
+            NEW_STATUS="skipped"
+          else
+            echo "Changed spec files:"
+            echo "$CHANGED_SPECS"
+
+            # Build a grep pattern from the approved test-case IDs,
+            # e.g. "TC021" or "TC021|TC022", so we run ONLY the
+            # newly added case(s) — not every pre-existing test
+            # that happens to live in the same shared spec file.
+            GREP_PATTERN="$(echo "$SELECTED_TEST_CASES" | sed 's/,/|/g')"
+
+            echo ""
+            echo "Running only: $GREP_PATTERN"
+            echo ""
+
+            npx playwright test $CHANGED_SPECS --grep "$GREP_PATTERN" \
+              --workers=1 --reporter=list \
+              2>&1 | tee /tmp/new-tests-result.log
+
+            NEW_EXIT=${PIPESTATUS[0]}
+            NEW_STATUS="ran"
+          fi
+
+          echo ""
+          echo "New test case(s) exit code: $NEW_EXIT"
+
+          if [ "$MANDATORY_EXIT" -ne 0 ]; then
+            echo "test_status=mandatory_failed" >> "$GITHUB_OUTPUT"
+          elif [ "$NEW_STATUS" = "skipped" ]; then
+            echo "test_status=skipped" >> "$GITHUB_OUTPUT"
+          elif [ "$NEW_EXIT" -eq 0 ]; then
+            echo "test_status=passed" >> "$GITHUB_OUTPUT"
+          else
+            echo "test_status=failed" >> "$GITHUB_OUTPUT"
+          fi
+
+          exit 0
+
+      - name: Upload generated-test run report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-approved-ticket-playwright-report-${{ inputs.ticket_id }}
+          if-no-files-found: ignore
+          path: |
+            playwright-report/
+            test-results/
+            /tmp/mandatory-tests-result.log
+            /tmp/new-tests-result.log
+
+      # --------------------------------------------------
+      # 15c. Verify test architecture compliance
+      #
+      # Checks that spec files only call page-object methods,
+      # per the strict layering rules given to Claude in the
+      # prompt (locators/, pages/, tests/).
+      # --------------------------------------------------
+
+      - name: Verify test architecture compliance
+        id: verify_architecture
+        run: |
+          node scripts/ai-agent/verify-test-architecture.js \
+            2>&1 | tee /tmp/architecture-check.log
+
+          STATUS_LINE="$(grep -o 'architecture_status=[a-z]*' /tmp/architecture-check.log | tail -n 1)"
+
+          if [ -n "$STATUS_LINE" ]; then
+            echo "$STATUS_LINE" >> "$GITHUB_OUTPUT"
+          else
+            echo "architecture_status=unknown" >> "$GITHUB_OUTPUT"
+          fi
+
+      # --------------------------------------------------
       # 16. Create PR
       # --------------------------------------------------
 
       - name: Commit generated tests and open a PR
+        id: create_pr
         env:
           GH_TOKEN: ${{ github.token }}
+          TEST_STATUS: ${{ steps.run_generated_tests.outputs.test_status }}
+          ARCHITECTURE_STATUS: ${{ steps.verify_architecture.outputs.architecture_status }}
         run: |
           BRANCH="ai/${{ inputs.ticket_id }}-tests"
 
@@ -468,6 +669,8 @@ jobs:
             tail -n 100 /tmp/claude-test-generation.log || true
             echo ""
             echo "Skipping PR creation."
+            echo "pr_status=skipped" >> "$GITHUB_OUTPUT"
+            echo "pr_url=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -505,30 +708,104 @@ jobs:
           echo "CREATING PULL REQUEST"
           echo "======================================"
 
-          EXISTING_PR="$(
+          EXISTING_PR_URL="$(
             gh pr list \
               --repo "${{ github.repository }}" \
               --head "$BRANCH" \
               --state open \
-              --json number \
-              --jq '.[0].number'
+              --json url \
+              --jq '.[0].url'
           )"
 
-          if [ -n "$EXISTING_PR" ]; then
+          if [ -n "$EXISTING_PR_URL" ]; then
             echo ""
-            echo "Existing PR found: #$EXISTING_PR"
+            echo "Existing PR found: $EXISTING_PR_URL"
             echo "Branch updated successfully."
+            echo "pr_status=updated" >> "$GITHUB_OUTPUT"
+            echo "pr_url=$EXISTING_PR_URL" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          gh pr create \
-            --title "AI-generated tests for ${{ inputs.ticket_id }}" \
-            --body "Ticket: ${{ inputs.ticket_id }}"$'\n\n'"Selected test cases: ${{ inputs.selected_test_cases }}"$'\n\n'"Generation run ID: ${{ inputs.generation_run_id }}"$'\n\n'"Files changed:"$'\n'"$SUMMARY" \
-            --base main \
-            --head "$BRANCH"
+          # ----------------------------------------------
+          # Decide draft/ready and title based on both the
+          # test run AND the architecture check.
+          # ----------------------------------------------
+
+          NEEDS_REVIEW=""
+
+          case "$TEST_STATUS" in
+            passed)
+              TEST_LINE="✅ Mandatory tests + new test case(s) PASSED against the live app."
+              ;;
+            mandatory_failed)
+              TEST_LINE="🚨 MANDATORY (regression) tests FAILED. This change may have broken existing functionality."
+              NEEDS_REVIEW="yes"
+              ;;
+            failed)
+              TEST_LINE="❌ New test case(s) FAILED against the live app."
+              NEEDS_REVIEW="yes"
+              ;;
+            *)
+              TEST_LINE="⚠️ Tests were not run (skipped)."
+              NEEDS_REVIEW="yes"
+              ;;
+          esac
+
+          case "$ARCHITECTURE_STATUS" in
+            clean)
+              ARCH_LINE="✅ No raw locator/page usage found in spec files."
+              ;;
+            violations)
+              ARCH_LINE="⚠️ Spec file(s) appear to bypass page objects — see workflow log for details."
+              NEEDS_REVIEW="yes"
+              ;;
+            *)
+              ARCH_LINE="⚠️ Architecture check did not run or was inconclusive."
+              NEEDS_REVIEW="yes"
+              ;;
+          esac
+
+          if [ -n "$NEEDS_REVIEW" ]; then
+            DRAFT_FLAG="--draft"
+            TITLE_PREFIX="[NEEDS REVIEW]"
+          else
+            DRAFT_FLAG=""
+            TITLE_PREFIX="[Verified]"
+          fi
+
+          PR_URL="$(
+            gh pr create \
+              --title "$TITLE_PREFIX AI-generated tests for ${{ inputs.ticket_id }}" \
+              --body "Ticket: ${{ inputs.ticket_id }}"$'\n\n'"$TEST_LINE"$'\n'"$ARCH_LINE"$'\n\n'"Selected test cases: ${{ inputs.selected_test_cases }}"$'\n\n'"Generation run ID: ${{ inputs.generation_run_id }}"$'\n\n'"Files changed:"$'\n'"$SUMMARY" \
+              --base main \
+              --head "$BRANCH" \
+              $DRAFT_FLAG
+          )"
 
           echo ""
-          echo "✅ Pull request created."
+          echo "✅ Pull request created: $PR_URL"
+
+          echo "pr_status=created" >> "$GITHUB_OUTPUT"
+          echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+
+      # --------------------------------------------------
+      # 16b. Notify Slack about the PR outcome
+      # --------------------------------------------------
+
+      - name: Notify Slack about PR status
+        if: always()
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+          TICKET_ID: ${{ inputs.ticket_id }}
+          SELECTED_TEST_CASES: ${{ inputs.selected_test_cases }}
+          PR_STATUS: ${{ steps.create_pr.outputs.pr_status }}
+          PR_URL: ${{ steps.create_pr.outputs.pr_url }}
+          TEST_STATUS: ${{ steps.run_generated_tests.outputs.test_status }}
+          ARCHITECTURE_STATUS: ${{ steps.verify_architecture.outputs.architecture_status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          node scripts/ai-agent/notify-slack-pr-status.js
 
       # --------------------------------------------------
       # 17. Upload debug artifacts
@@ -547,5 +824,6 @@ jobs:
             /tmp/claude-test-generation.log
             /tmp/baseline-status.txt
             /tmp/baseline-diff.txt
+            /tmp/architecture-check.log
             data/claude-test-generation-prompt.md
             data/selected-testcases.json
