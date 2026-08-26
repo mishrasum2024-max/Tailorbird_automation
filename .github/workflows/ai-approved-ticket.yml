@@ -370,6 +370,7 @@ jobs:
       - name: Generate authenticated session for Claude
         id: generate_session
         continue-on-error: true
+        timeout-minutes: 3
         env:
           TEST_EMAIL: ${{ secrets.TEST_EMAIL }}
           TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
@@ -387,6 +388,7 @@ jobs:
           echo "======================================"
 
           npx playwright test tests/TC01_login.spec.js \
+            --grep "TC01 |TC03 |TC04 " \
             --workers=1 --reporter=list
 
           if [ -f sessionState.json ]; then
@@ -462,6 +464,7 @@ jobs:
       # --------------------------------------------------
 
       - name: Generate Playwright tests with Claude Code
+        timeout-minutes: 15
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           TEST_EMAIL: ${{ secrets.TEST_EMAIL }}
