@@ -562,6 +562,7 @@ jobs:
           DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
           BASE_URL: ${{ secrets.BASE_URL }}
           SELECTED_TEST_CASES: ${{ inputs.selected_test_cases }}
+          PLAYWRIGHT_JSON_OUTPUT_NAME: /tmp/new-tests-result.json
         run: |
           set +e
 
@@ -603,11 +604,18 @@ jobs:
             echo ""
 
             npx playwright test $CHANGED_SPECS --grep "$GREP_PATTERN" \
-              --workers=1 --reporter=list \
+              --workers=1 --reporter=list,json \
               2>&1 | tee /tmp/new-tests-result.log
 
             NEW_EXIT=${PIPESTATUS[0]}
             NEW_STATUS="ran"
+
+            echo ""
+            echo "Summarizing per-test-case results..."
+
+            RESULTS_FILE=/tmp/new-tests-result.json \
+            SELECTED_TEST_CASES="$SELECTED_TEST_CASES" \
+              node scripts/ai-agent/summarize-test-results.js
           fi
 
           echo ""
@@ -624,6 +632,107 @@ jobs:
           fi
 
           exit 0
+      # --------------------------------------------------
+      # 15b2. Repair failing new test case(s) via live browser
+      #
+      # Only fires when at least one NEW test case failed but
+      # mandatory tests passed (a real regression is a different,
+      # more serious problem -- that stays flagged for human
+      # review, not auto-patched here).
+      #
+      # Targets ONLY the specific failing test-case ID(s) each
+      # attempt, with their individual error output -- not the
+      # whole approved batch -- so Claude doesn't risk touching
+      # cases that already pass. After each attempt, ALL selected
+      # cases are re-run (not just the ones being repaired) to
+      # catch any regression the fix might introduce elsewhere.
+      #
+      # Up to 4 attempts. Stops early as soon as everything passes.
+      # --------------------------------------------------
+
+      - name: Repair failing new test case(s) via live browser
+        id: repair_tests
+        if: steps.check_changes.outputs.has_changes == 'true' && steps.run_generated_tests.outputs.test_status == 'failed'
+        timeout-minutes: 35
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          TEST_EMAIL: ${{ secrets.TEST_EMAIL }}
+          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+          VENDOR_EMAIL: ${{ secrets.VENDOR_EMAIL }}
+          VENDOR_PASSWORD: ${{ secrets.VENDOR_PASSWORD }}
+          NEW_TEST_EMAIL: ${{ secrets.NEW_TEST_EMAIL }}
+          NEW_TEST_PASSWORD: ${{ secrets.NEW_TEST_PASSWORD }}
+          ONE_ORG_TEST_EMAIL: ${{ secrets.ONE_ORG_TEST_EMAIL }}
+          LOGIN_URL: ${{ secrets.LOGIN_URL }}
+          DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
+          BASE_URL: ${{ secrets.BASE_URL }}
+          SELECTED_TEST_CASES: ${{ inputs.selected_test_cases }}
+          TICKET_ID: ${{ inputs.ticket_id }}
+          PLAYWRIGHT_JSON_OUTPUT_NAME: /tmp/new-tests-result.json
+          INITIAL_PASSED_IDS: ${{ steps.run_generated_tests.outputs.passed_ids }}
+          INITIAL_FAILED_IDS: ${{ steps.run_generated_tests.outputs.failed_ids }}
+        run: |
+          set +e
+
+          MAX_REPAIR_ATTEMPTS=4
+          ATTEMPTS_USED=0
+
+          PASSED_IDS="$INITIAL_PASSED_IDS"
+          FAILED_IDS="$INITIAL_FAILED_IDS"
+          ALL_PASSED="false"
+
+          CHANGED_SPECS="$(git status --porcelain -- tests/ | awk '{print $2}')"
+          FULL_GREP_PATTERN="$(echo "$SELECTED_TEST_CASES" | sed 's/,/|/g')"
+
+          echo "Starting repair loop."
+          echo "Initially passing: $PASSED_IDS"
+          echo "Initially failing: $FAILED_IDS"
+
+          for ATTEMPT in $(seq 1 "$MAX_REPAIR_ATTEMPTS"); do
+            ATTEMPTS_USED=$ATTEMPT
+
+            if [ -z "$FAILED_IDS" ]; then
+              echo "No failing test case IDs to target — stopping early."
+              break
+            fi
+
+            echo "======================================"
+            echo "REPAIR ATTEMPT $ATTEMPT / $MAX_REPAIR_ATTEMPTS"
+            echo "Targeting: $FAILED_IDS"
+            echo "======================================"
+
+            ATTEMPT="$ATTEMPT" MAX_REPAIR_ATTEMPTS="$MAX_REPAIR_ATTEMPTS"               FAILED_TEST_CASES="$FAILED_IDS" PASSED_TEST_CASES="$PASSED_IDS"               TICKET_ID="$TICKET_ID"               node scripts/ai-agent/prepare-repair-prompt.js
+
+            claude               --permission-mode acceptEdits               --max-turns 40               --allowedTools "Bash,Edit,Write,mcp__playwright__*"               --mcp-config .mcp.json               -p "$(cat data/claude-repair-prompt.md)"               2>&1 | tee -a "/tmp/repair-attempt-$ATTEMPT.log"
+
+            echo ""
+            echo "Re-running ALL selected test case(s) after repair attempt $ATTEMPT (also checking for regressions)..."
+
+            npx playwright test $CHANGED_SPECS --grep "$FULL_GREP_PATTERN"               --workers=1 --reporter=list,json               2>&1 | tee /tmp/new-tests-result.log
+
+            RESULTS_FILE=/tmp/new-tests-result.json             SELECTED_TEST_CASES="$SELECTED_TEST_CASES"               node scripts/ai-agent/summarize-test-results.js
+
+            source /tmp/test-summary.env
+
+            if [ "$ALL_PASSED" = "true" ]; then
+              echo "✅ All selected test case(s) passing after repair attempt $ATTEMPT."
+              break
+            fi
+
+            echo "❌ Still failing after repair attempt $ATTEMPT: $FAILED_IDS"
+          done
+
+          if [ "$ALL_PASSED" = "true" ]; then
+            echo "final_test_status=passed" >> "$GITHUB_OUTPUT"
+          else
+            echo "final_test_status=failed" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "repair_attempts=$ATTEMPTS_USED" >> "$GITHUB_OUTPUT"
+          echo "final_passed_ids=$PASSED_IDS" >> "$GITHUB_OUTPUT"
+          echo "final_failed_ids=$FAILED_IDS" >> "$GITHUB_OUTPUT"
+
+          exit 0
 
       - name: Upload generated-test run report
         if: always()
@@ -636,6 +745,7 @@ jobs:
             test-results/
             /tmp/mandatory-tests-result.log
             /tmp/new-tests-result.log
+            /tmp/repair-attempt-*.log
 
       # --------------------------------------------------
       # 15c. Verify test architecture compliance
@@ -668,7 +778,10 @@ jobs:
         id: create_pr
         env:
           GH_TOKEN: ${{ github.token }}
-          TEST_STATUS: ${{ steps.run_generated_tests.outputs.test_status }}
+          TEST_STATUS: ${{ steps.repair_tests.outputs.final_test_status || steps.run_generated_tests.outputs.test_status }}
+          REPAIR_ATTEMPTS: ${{ steps.repair_tests.outputs.repair_attempts }}
+          PASSED_TEST_CASES: ${{ steps.repair_tests.outputs.final_passed_ids || steps.run_generated_tests.outputs.passed_ids }}
+          FAILED_TEST_CASES: ${{ steps.repair_tests.outputs.final_failed_ids || steps.run_generated_tests.outputs.failed_ids }}
           ARCHITECTURE_STATUS: ${{ steps.verify_architecture.outputs.architecture_status }}
         run: |
           BRANCH="ai/${{ inputs.ticket_id }}-tests"
@@ -761,14 +874,22 @@ jobs:
 
           case "$TEST_STATUS" in
             passed)
-              TEST_LINE="✅ Mandatory tests + new test case(s) PASSED against the live app."
+              if [ -n "$REPAIR_ATTEMPTS" ] && [ "$REPAIR_ATTEMPTS" -gt 0 ] 2>/dev/null; then
+                TEST_LINE="✅ Mandatory tests passed. New test case FAILED initially but was auto-fixed and PASSED after $REPAIR_ATTEMPTS live-browser repair attempt(s)."
+              else
+                TEST_LINE="✅ Mandatory tests + new test case(s) PASSED against the live app."
+              fi
               ;;
             mandatory_failed)
               TEST_LINE="🚨 MANDATORY (regression) tests FAILED. This change may have broken existing functionality."
               NEEDS_REVIEW="yes"
               ;;
             failed)
-              TEST_LINE="❌ New test case(s) FAILED against the live app."
+              if [ -n "$REPAIR_ATTEMPTS" ] && [ "$REPAIR_ATTEMPTS" -gt 0 ] 2>/dev/null; then
+                TEST_LINE="❌ New test case still FAILED after $REPAIR_ATTEMPTS automatic live-browser repair attempt(s). Needs manual investigation."
+              else
+                TEST_LINE="❌ New test case(s) FAILED against the live app."
+              fi
               NEEDS_REVIEW="yes"
               ;;
             *)
@@ -791,6 +912,14 @@ jobs:
               ;;
           esac
 
+          RESULTS_LINE=""
+          if [ -n "$PASSED_TEST_CASES" ]; then
+            RESULTS_LINE="${RESULTS_LINE}✅ Passed: ${PASSED_TEST_CASES}"$'\n'
+          fi
+          if [ -n "$FAILED_TEST_CASES" ]; then
+            RESULTS_LINE="${RESULTS_LINE}❌ Failed: ${FAILED_TEST_CASES}"$'\n'
+          fi
+
           if [ -n "$NEEDS_REVIEW" ]; then
             DRAFT_FLAG="--draft"
             TITLE_PREFIX="[NEEDS REVIEW]"
@@ -802,7 +931,7 @@ jobs:
           PR_URL="$(
             gh pr create \
               --title "$TITLE_PREFIX AI-generated tests for ${{ inputs.ticket_id }}" \
-              --body "Ticket: ${{ inputs.ticket_id }}"$'\n\n'"$TEST_LINE"$'\n'"$ARCH_LINE"$'\n\n'"Selected test cases: ${{ inputs.selected_test_cases }}"$'\n\n'"Generation run ID: ${{ inputs.generation_run_id }}"$'\n\n'"Files changed:"$'\n'"$SUMMARY" \
+              --body "Ticket: ${{ inputs.ticket_id }}"$'\n\n'"$TEST_LINE"$'\n'"$ARCH_LINE"$'\n\n'"$RESULTS_LINE"$'\n'"Selected test cases: ${{ inputs.selected_test_cases }}"$'\n\n'"Generation run ID: ${{ inputs.generation_run_id }}"$'\n\n'"Files changed:"$'\n'"$SUMMARY" \
               --base main \
               --head "$BRANCH" \
               $DRAFT_FLAG
@@ -827,7 +956,10 @@ jobs:
           SELECTED_TEST_CASES: ${{ inputs.selected_test_cases }}
           PR_STATUS: ${{ steps.create_pr.outputs.pr_status }}
           PR_URL: ${{ steps.create_pr.outputs.pr_url }}
-          TEST_STATUS: ${{ steps.run_generated_tests.outputs.test_status }}
+          TEST_STATUS: ${{ steps.repair_tests.outputs.final_test_status || steps.run_generated_tests.outputs.test_status }}
+          REPAIR_ATTEMPTS: ${{ steps.repair_tests.outputs.repair_attempts }}
+          PASSED_TEST_CASES: ${{ steps.repair_tests.outputs.final_passed_ids || steps.run_generated_tests.outputs.passed_ids }}
+          FAILED_TEST_CASES: ${{ steps.repair_tests.outputs.final_failed_ids || steps.run_generated_tests.outputs.failed_ids }}
           ARCHITECTURE_STATUS: ${{ steps.verify_architecture.outputs.architecture_status }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
@@ -851,5 +983,9 @@ jobs:
             /tmp/baseline-status.txt
             /tmp/baseline-diff.txt
             /tmp/architecture-check.log
+            /tmp/repair-attempt-*.log
+            /tmp/new-tests-result.json
+            data/test-failure-details.json
             data/claude-test-generation-prompt.md
+            data/claude-repair-prompt.md
             data/selected-testcases.json

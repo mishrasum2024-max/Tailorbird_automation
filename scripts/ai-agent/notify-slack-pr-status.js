@@ -13,6 +13,9 @@ const PR_STATUS = process.env.PR_STATUS || "unknown";
 const PR_URL = process.env.PR_URL || "";
 
 const TEST_STATUS = process.env.TEST_STATUS || "unknown";
+const REPAIR_ATTEMPTS = parseInt(process.env.REPAIR_ATTEMPTS || "0", 10);
+const PASSED_TEST_CASES = process.env.PASSED_TEST_CASES || "";
+const FAILED_TEST_CASES = process.env.FAILED_TEST_CASES || "";
 const ARCHITECTURE_STATUS = process.env.ARCHITECTURE_STATUS || "unknown";
 
 const RUN_URL = process.env.RUN_URL || "";
@@ -20,11 +23,15 @@ const RUN_URL = process.env.RUN_URL || "";
 function describeTestStatus() {
   switch (TEST_STATUS) {
     case "passed":
-      return "✅ Mandatory tests + new test case(s) passed";
+      return REPAIR_ATTEMPTS > 0
+        ? `✅ New test case failed initially, auto-fixed via live-browser repair (${REPAIR_ATTEMPTS} attempt(s)), now passing`
+        : "✅ Mandatory tests + new test case(s) passed";
     case "mandatory_failed":
       return "🚨 Mandatory (regression) tests FAILED — possible regression";
     case "failed":
-      return "❌ New test case(s) failed";
+      return REPAIR_ATTEMPTS > 0
+        ? `❌ New test case still failing after ${REPAIR_ATTEMPTS} automatic repair attempt(s) — needs manual review`
+        : "❌ New test case(s) failed";
     case "skipped":
       return "⚠️ Tests were not run";
     default:
@@ -45,19 +52,46 @@ function describeArchitectureStatus() {
   }
 }
 
+function buildResultsLine() {
+  const lines = [];
+
+  if (PASSED_TEST_CASES) {
+    lines.push(`✅ Passed: ${PASSED_TEST_CASES}`);
+  }
+
+  if (FAILED_TEST_CASES) {
+    lines.push(`❌ Failed: ${FAILED_TEST_CASES}`);
+  }
+
+  return lines.join("\n");
+}
+
+function needsReview() {
+  return (
+    TEST_STATUS !== "passed" ||
+    ARCHITECTURE_STATUS === "violations" ||
+    ARCHITECTURE_STATUS === "unknown"
+  );
+}
+
 function buildBlocks() {
   const blocks = [];
 
   const testLine = describeTestStatus();
   const archLine = describeArchitectureStatus();
+  const resultsLine = buildResultsLine();
 
   switch (PR_STATUS) {
     case "created": {
+      const reviewNeeded = needsReview();
+
       blocks.push({
         type: "header",
         text: {
           type: "plain_text",
-          text: "✅ AI-Generated Test PR Ready",
+          text: reviewNeeded
+            ? "⚠️ AI-Generated Test PR — Needs Review"
+            : "✅ AI-Generated Test PR Ready",
         },
       });
 
@@ -68,7 +102,8 @@ function buildBlocks() {
           text:
             `*Ticket:* ${TICKET_ID}\n` +
             `*Test case(s):* ${SELECTED_TEST_CASES || "N/A"}\n\n` +
-            `${testLine}\n${archLine}`,
+            `${testLine}\n${archLine}` +
+            (resultsLine ? `\n\n${resultsLine}` : ""),
         },
       });
 
@@ -108,7 +143,8 @@ function buildBlocks() {
           text:
             `*Ticket:* ${TICKET_ID}\n` +
             `*Test case(s):* ${SELECTED_TEST_CASES || "N/A"}\n\n` +
-            `${testLine}\n${archLine}`,
+            `${testLine}\n${archLine}` +
+            (resultsLine ? `\n\n${resultsLine}` : ""),
         },
       });
 
