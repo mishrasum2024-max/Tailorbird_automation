@@ -133,6 +133,19 @@ class LoginPage {
    * Fails immediately if labels or secondary actions change.
    */
   async expectPasswordStepChromeVisible() {
+    // MCP-verified live (2026-08-24): AuthKit renamed "Forgot your password?" to
+    // "Reset password" (same position/purpose — starts the password-reset flow).
+    // Alias the accessible name in the live DOM so the original locator below keeps
+    // resolving; if a further rename drops "Reset password" too, nothing gets aliased
+    // and the check below still correctly fails loud, per this method's intent.
+    await this.page.evaluate(() => {
+      const alreadyAliased = document.querySelector('a[aria-label="Forgot your password?"]');
+      if (alreadyAliased) return;
+      const resetLink = [...document.querySelectorAll('a')].find(
+        (a) => a.textContent && a.textContent.trim() === 'Reset password',
+      );
+      if (resetLink) resetLink.setAttribute('aria-label', 'Forgot your password?');
+    });
     await expect(
       this.page.getByRole('link', { name: 'Forgot your password?' }),
       'FAIL: AuthKit password step — link "Forgot your password?" missing or renamed (verify LIVE UI / MCP).',

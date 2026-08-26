@@ -151,7 +151,14 @@ test.describe('Documents - Images', () => {
     });
 
     test('TC430 @images @regression : Add all column types', async () => {
-        test.setTimeout(900000);
+        // 13 column types x (add + Manage-Columns verify + delete + re-verify) is ~39 Manage
+        // Columns open/close cycles, each with its own retry/settle waits — under 4-worker CI
+        // parallel load (and as this grid's shared custom-column list grows over time from past
+        // runs, which makes each Manage Columns render/scan slower) this routinely brushes up
+        // against the previous 900000ms budget, hitting the outer test timeout mid-run and
+        // tearing the page down under addAndVerifyAllColumnTypesLite() rather than failing on an
+        // actual assertion. Bumped for headroom, same rationale as TC130 in TC08_invoice.spec.js.
+        test.setTimeout(1500000);
         const createdColumns = await images.addAndVerifyAllColumnTypesLite();
         expect(createdColumns.length, 'All 13 column types must be created and verified').toBe(13);
         Logger.success(`TC430: All ${createdColumns.length} column types created, verified, and cleaned up`);

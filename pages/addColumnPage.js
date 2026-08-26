@@ -169,6 +169,12 @@ class AddColumnPage {
     async _waitForColumnHeader(columnName) {
         const header = this.page.locator('[role="columnheader"]').filter({ hasText: columnName }).first();
 
+        // MCP-verified live (2026-08-25): grids that accumulate many custom columns over repeated
+        // runs (e.g. Images/Property Documents, both shared org-wide state) push a freshly-added
+        // column far enough right that _scrollGridRight()'s real hover+mouse-wheel step (on top of
+        // the direct scrollLeft write) can take noticeably longer than the 250ms poll interval per
+        // iteration, so 25000ms's nominal ~100 iterations doesn't reliably translate into that many
+        // real scroll steps. Bumped for headroom rather than changing the scroll mechanism itself.
         await expect
             .poll(
                 async () => {
@@ -176,7 +182,7 @@ class AddColumnPage {
                     await this._scrollGridRight();
                     return (await header.count()) > 0;
                 },
-                { timeout: 25000, intervals: [250] },
+                { timeout: 60000, intervals: [250] },
             )
             .toBe(true);
 
@@ -669,7 +675,11 @@ class AddColumnPage {
     }
 
     async closeManageColumns() {
-        await this.page.keyboard.press('Escape');
+        // Guarded like the wait below: if the outer test's own timeout tears the page down mid-run
+        // (long multi-column flows can brush up against it under CI load — see TC430), this would
+        // otherwise throw "Target page, context or browser has been closed" here instead of letting
+        // the real test-timeout error surface.
+        await this.page.keyboard.press('Escape').catch(() => {});
         await this.loc.manageColumnsDialog.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {});
         await this.page.waitForTimeout(300);
     }

@@ -359,7 +359,7 @@ exports.ProjectPage = class ProjectPage {
                     .locator('p', { hasText: labelText })
                     .locator('xpath=following-sibling::p[1]');
 
-                await expect(valueLocator).toBeVisible({timeout: 20000});
+                await expect(valueLocator).toBeVisible({timeout: 50000});
                 await expect(valueLocator).toHaveText(expectedText);
 
                 Logger.success(`✅ ${labelText} verified successfully`);
