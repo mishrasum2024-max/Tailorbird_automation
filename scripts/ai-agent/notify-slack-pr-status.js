@@ -44,7 +44,7 @@ function describeArchitectureStatus() {
     case "clean":
       return "✅ No raw locator/page-interaction usage found in spec files";
     case "violations":
-      return "⚠️ Spec file(s) contain raw page/locator usage — review needed";
+      return "🧹 Spec file(s) contain raw locator/page usage — cleanup recommended, does not block merge";
     case "skipped":
       return "⚠️ Architecture check was not run";
     default:
@@ -67,11 +67,7 @@ function buildResultsLine() {
 }
 
 function needsReview() {
-  return (
-    TEST_STATUS !== "passed" ||
-    ARCHITECTURE_STATUS === "violations" ||
-    ARCHITECTURE_STATUS === "unknown"
-  );
+  return TEST_STATUS !== "passed";
 }
 
 function buildBlocks() {

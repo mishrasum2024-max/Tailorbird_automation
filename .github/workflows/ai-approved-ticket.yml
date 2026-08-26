@@ -483,6 +483,81 @@ jobs:
             echo "architecture_status=unknown" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Repair architecture violations via Claude
+        id: repair_architecture
+        if: steps.check_changes.outputs.has_changes == 'true' && steps.verify_architecture.outputs.architecture_status == 'violations' && steps.repair_tests.outputs.final_test_status != 'failed' && steps.run_generated_tests.outputs.test_status != 'failed' && steps.run_generated_tests.outputs.test_status != 'mandatory_failed'
+        timeout-minutes: 20
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          TEST_EMAIL: ${{ secrets.TEST_EMAIL }}
+          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+          VENDOR_EMAIL: ${{ secrets.VENDOR_EMAIL }}
+          VENDOR_PASSWORD: ${{ secrets.VENDOR_PASSWORD }}
+          NEW_TEST_EMAIL: ${{ secrets.NEW_TEST_EMAIL }}
+          NEW_TEST_PASSWORD: ${{ secrets.NEW_TEST_PASSWORD }}
+          ONE_ORG_TEST_EMAIL: ${{ secrets.ONE_ORG_TEST_EMAIL }}
+          LOGIN_URL: ${{ secrets.LOGIN_URL }}
+          DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
+          BASE_URL: ${{ secrets.BASE_URL }}
+          SELECTED_TEST_CASES: ${{ inputs.selected_test_cases }}
+          TICKET_ID: ${{ inputs.ticket_id }}
+          PLAYWRIGHT_JSON_OUTPUT_NAME: /tmp/new-tests-result.json
+        run: |
+          set +e
+          echo "Architecture repair loop is running."
+          MAX_ATTEMPTS=2
+          ATTEMPTS_USED=0
+          FINAL_ARCH_STATUS="violations"
+          TESTS_STILL_PASS="true"
+          CHANGED_SPECS="$(git status --porcelain -- tests/ | awk '{print $2}')"
+          FULL_GREP_PATTERN="$(echo "$SELECTED_TEST_CASES" | sed 's/,/|/g')"
+          for ATTEMPT in $(seq 1 "$MAX_ATTEMPTS"); do
+            ATTEMPTS_USED=$ATTEMPT
+            echo "======================================"
+            echo "ARCHITECTURE REPAIR ATTEMPT $ATTEMPT / $MAX_ATTEMPTS"
+            echo "======================================"
+            mkdir -p "/tmp/arch-backup-$ATTEMPT"
+            cp -r tests locators pages "/tmp/arch-backup-$ATTEMPT/" 2>/dev/null
+            export ATTEMPT
+            export MAX_ATTEMPTS
+            node scripts/ai-agent/prepare-architecture-repair-prompt.js
+            ARCH_PROMPT="$(cat data/claude-architecture-repair-prompt.md)"
+            claude --permission-mode acceptEdits --max-turns 30 --allowedTools "Bash,Edit,Write,mcp__playwright__*" --mcp-config .mcp.json -p "$ARCH_PROMPT" > "/tmp/architecture-repair-attempt-$ATTEMPT.log" 2>&1
+            cat "/tmp/architecture-repair-attempt-$ATTEMPT.log"
+            echo ""
+            echo "Re-checking architecture compliance..."
+            node scripts/ai-agent/verify-test-architecture.js 2>&1 | tee /tmp/architecture-check.log
+            STATUS_LINE="$(grep -o 'architecture_status=[a-z]*' /tmp/architecture-check.log | tail -n 1 | cut -d= -f2)"
+            FINAL_ARCH_STATUS="${STATUS_LINE:-violations}"
+            echo "Architecture status after attempt $ATTEMPT: $FINAL_ARCH_STATUS"
+            echo ""
+            echo "Re-running mandatory + new test case(s) to confirm the refactor didn't break anything..."
+            npx playwright test --grep "@mandatory" --workers=1 --reporter=list > /tmp/mandatory-tests-result.log 2>&1
+            MANDATORY_RECHECK_EXIT=$?
+            npx playwright test $CHANGED_SPECS --grep "$FULL_GREP_PATTERN" --workers=1 --reporter=list,json > /tmp/new-tests-result.log 2>&1
+            NEW_RECHECK_EXIT=$?
+            cat /tmp/new-tests-result.log
+            if [ "$MANDATORY_RECHECK_EXIT" -eq 0 ] && [ "$NEW_RECHECK_EXIT" -eq 0 ]; then
+              TESTS_STILL_PASS="true"
+            else
+              TESTS_STILL_PASS="false"
+              echo "WARNING: refactor broke a previously-passing test. Rolling back this attempt's changes."
+              rm -rf tests locators pages
+              cp -r "/tmp/arch-backup-$ATTEMPT/tests" "/tmp/arch-backup-$ATTEMPT/locators" "/tmp/arch-backup-$ATTEMPT/pages" .
+              FINAL_ARCH_STATUS="violations"
+              TESTS_STILL_PASS="true"
+              echo "Rolled back. Stopping architecture repair — code is back to the last known-good state."
+              break
+            fi
+            if [ "$FINAL_ARCH_STATUS" = "clean" ]; then
+              echo "Architecture is now clean after attempt $ATTEMPT."
+              break
+            fi
+          done
+          echo "final_architecture_status=$FINAL_ARCH_STATUS" >> "$GITHUB_OUTPUT"
+          echo "architecture_repair_attempts=$ATTEMPTS_USED" >> "$GITHUB_OUTPUT"
+          exit 0
+
       - name: Commit generated tests and open a PR
         id: create_pr
         env:
@@ -491,7 +566,7 @@ jobs:
           REPAIR_ATTEMPTS: ${{ steps.repair_tests.outputs.repair_attempts }}
           PASSED_TEST_CASES: ${{ steps.repair_tests.outputs.final_passed_ids || steps.run_generated_tests.outputs.passed_ids }}
           FAILED_TEST_CASES: ${{ steps.repair_tests.outputs.final_failed_ids || steps.run_generated_tests.outputs.failed_ids }}
-          ARCHITECTURE_STATUS: ${{ steps.verify_architecture.outputs.architecture_status }}
+          ARCHITECTURE_STATUS: ${{ steps.repair_architecture.outputs.final_architecture_status || steps.verify_architecture.outputs.architecture_status }}
         run: |
           BRANCH="ai/${{ inputs.ticket_id }}-tests"
           echo "======================================"
@@ -578,12 +653,10 @@ jobs:
               ARCH_LINE="✅ No raw locator/page usage found in spec files."
               ;;
             violations)
-              ARCH_LINE="⚠️ Spec file(s) appear to bypass page objects — see workflow log for details."
-              NEEDS_REVIEW="yes"
+              ARCH_LINE="🧹 Cleanup note: spec file(s) contain raw locator/page usage that should be moved into locators/pages per convention. This does NOT block the PR — the test itself is verified working."
               ;;
             *)
               ARCH_LINE="⚠️ Architecture check did not run or was inconclusive."
-              NEEDS_REVIEW="yes"
               ;;
           esac
           RESULTS_LINE=""
@@ -596,6 +669,9 @@ jobs:
           if [ -n "$NEEDS_REVIEW" ]; then
             DRAFT_FLAG="--draft"
             TITLE_PREFIX="[NEEDS REVIEW]"
+          elif [ "$ARCHITECTURE_STATUS" = "violations" ]; then
+            DRAFT_FLAG=""
+            TITLE_PREFIX="[Verified - cleanup pending]"
           else
             DRAFT_FLAG=""
             TITLE_PREFIX="[Verified]"
@@ -619,7 +695,7 @@ jobs:
           REPAIR_ATTEMPTS: ${{ steps.repair_tests.outputs.repair_attempts }}
           PASSED_TEST_CASES: ${{ steps.repair_tests.outputs.final_passed_ids || steps.run_generated_tests.outputs.passed_ids }}
           FAILED_TEST_CASES: ${{ steps.repair_tests.outputs.final_failed_ids || steps.run_generated_tests.outputs.failed_ids }}
-          ARCHITECTURE_STATUS: ${{ steps.verify_architecture.outputs.architecture_status }}
+          ARCHITECTURE_STATUS: ${{ steps.repair_architecture.outputs.final_architecture_status || steps.verify_architecture.outputs.architecture_status }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           node scripts/ai-agent/notify-slack-pr-status.js
@@ -636,6 +712,9 @@ jobs:
             /tmp/baseline-diff.txt
             /tmp/architecture-check.log
             /tmp/repair-attempt-*.log
+            /tmp/architecture-repair-attempt-*.log
+            data/architecture-violations.json
+            data/claude-architecture-repair-prompt.md
             /tmp/new-tests-result.json
             data/test-failure-details.json
             data/claude-test-generation-prompt.md

@@ -1,5 +1,14 @@
-const { execSync } = require("child_process");
 const fs = require("fs");
+const path = require("path");
+const { execSync } = require("child_process");
+
+const VIOLATIONS_FILE = path.join(
+  __dirname,
+  "..",
+  "..",
+  "data",
+  "architecture-violations.json"
+);
 
 /*
  * ============================================================
@@ -131,6 +140,11 @@ function main() {
     console.log("All interactions appear to go through page-object methods.");
     console.log("");
     console.log("architecture_status=clean");
+
+    if (fs.existsSync(VIOLATIONS_FILE)) {
+      fs.unlinkSync(VIOLATIONS_FILE);
+    }
+
     return;
   }
 
@@ -156,6 +170,12 @@ function main() {
   console.log("");
   console.log("architecture_status=violations");
   console.log(`architecture_violation_count=${allViolations.length}`);
+
+  fs.writeFileSync(
+    VIOLATIONS_FILE,
+    JSON.stringify(allViolations, null, 2),
+    "utf8"
+  );
 }
 
 main();
