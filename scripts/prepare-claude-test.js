@@ -229,7 +229,35 @@ are available.
 
 ---
 
-# AUTHENTICATION — SAVE TURNS
+# TOP PRIORITY — A WORKING PR IS THE GOAL
+
+You have a limited number of turns. Producing a committed, working test
+file is the primary deliverable — more valuable than exhaustive
+exploration that runs out of budget before anything is written.
+
+Follow this order strictly:
+
+1. Do the MINIMUM exploration needed to understand the target UI
+   (check authentication state, locate the feature, identify the
+   relevant existing patterns). Do not exhaustively map every element
+   on the page before writing anything.
+2. Write the locator(s), page-object method(s), and spec file EARLY —
+   as soon as you have enough information to make a reasonable
+   best-effort attempt, not after you have verified every detail.
+3. Only after the file exists, use remaining turns to verify and
+   refine it (run the test, fix failures, tighten locators).
+4. If you are running low on turns and the implementation is not yet
+   perfect, a committed best-effort file with a clear, honest note in
+   the final report about what remains unverified is FAR better than
+   no file at all. Do not let the pursuit of a fully-verified,
+   multi-locator-hardened implementation cause you to run out of turns
+   with nothing written.
+5. Never spend turns re-confirming something you have already
+   confirmed. Move forward once you have enough information to act.
+
+If you reach roughly 70% of your turn budget and have not yet written
+the spec file, stop exploring immediately and write your best-effort
+implementation with whatever information you currently have.
 
 A browser session MAY already be pre-authenticated for you via the
 Playwright MCP server's --storage-state configuration.

@@ -519,6 +519,27 @@ jobs:
           fi
 
       # --------------------------------------------------
+      # 15a2. Check whether Claude produced any changes
+      #
+      # If not, running the mandatory test suite is pure
+      # waste — there is nothing to gate, and no PR will be
+      # created either way. Skip straight to notifying Slack
+      # and end the workflow.
+      # --------------------------------------------------
+
+      - name: Check for generated test changes
+        id: check_changes
+        run: |
+          if [ -z "$(git status --porcelain -- tests/)" ]; then
+            echo "No test file changes were produced by Claude Code."
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Test file changes found:"
+            git status --short -- tests/
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # --------------------------------------------------
       # 15b. Run the generated tests for real
       #
       # This is the accuracy check. Claude reporting
@@ -528,6 +549,7 @@ jobs:
 
       - name: Run mandatory tests, then newly added test case(s)
         id: run_generated_tests
+        if: steps.check_changes.outputs.has_changes == 'true'
         env:
           TEST_EMAIL: ${{ secrets.TEST_EMAIL }}
           TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
@@ -625,6 +647,7 @@ jobs:
 
       - name: Verify test architecture compliance
         id: verify_architecture
+        if: steps.check_changes.outputs.has_changes == 'true'
         run: |
           node scripts/ai-agent/verify-test-architecture.js \
             2>&1 | tee /tmp/architecture-check.log
