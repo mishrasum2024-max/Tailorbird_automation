@@ -198,16 +198,47 @@ function getCheckboxSelections(body) {
 }
 
 // ==================================================
+// EXTRACT RADIO BUTTON SELECTION (single ticket)
+// ==================================================
+//
+// Slack's radio_buttons element sends a single
+// selected_option object under action.selected_option,
+// NOT an array like checkboxes.
+// ==================================================
+
+function getRadioSelection(body) {
+  const stateValues = body.state?.values || {};
+
+  for (const blockId of Object.keys(stateValues)) {
+    const block = stateValues[blockId];
+
+    for (const actionId of Object.keys(block)) {
+      const action = block[actionId];
+
+      if (
+        action.type === "radio_buttons" &&
+        action.selected_option &&
+        action.selected_option.value
+      ) {
+        return action.selected_option.value;
+      }
+    }
+  }
+
+  return null;
+}
+
+// ==================================================
 // STAGE 1
 //
-// SELECT NOTION TICKETS
+// SELECT ONE NOTION TICKET (radio buttons)
 //
 // Slack action_id:
-// approve_tickets
+// approve_ticket
 // ==================================================
 
 app.action(
-  "approve_tickets",
+  "approve_ticket",
   async ({ ack, body, client }) => {
     // IMPORTANT:
     // Slack must receive acknowledgement immediately.
@@ -224,105 +255,95 @@ app.action(
     );
 
     // ----------------------------------------------
-    // Extract selected tickets
+    // Extract the single selected ticket
     // ----------------------------------------------
 
-    const selectedTickets = getCheckboxSelections(body);
+    const selectedTicket = getRadioSelection(body);
 
     console.log(
-      "Selected tickets:",
-      selectedTickets
+      "Selected ticket:",
+      selectedTicket
     );
 
     // ----------------------------------------------
     // Validate
     // ----------------------------------------------
 
-    if (selectedTickets.length === 0) {
+    if (!selectedTicket) {
       console.error(
-        "❌ No tickets selected."
+        "❌ No ticket selected."
       );
 
       await client.chat.postMessage({
         channel: body.channel.id,
 
         text:
-          "⚠️ No tickets were selected.\n\n" +
-          "Please select at least one ticket.",
+          "⚠️ No ticket was selected.\n\n" +
+          "Please select exactly one ticket before clicking " +
+          "'Start Automation for Selected Ticket'.",
       });
 
       return;
     }
 
     console.log(
-      `✅ ${selectedTickets.length} ticket(s) approved.`
+      `✅ Ticket approved: ${selectedTicket}`
     );
-
-    selectedTickets.forEach((ticketId) => {
-      console.log(`   - ${ticketId}`);
-    });
 
     // ----------------------------------------------
     // Trigger test-case generation
     // ----------------------------------------------
 
-    for (const ticketId of selectedTickets) {
-      try {
-        console.log("");
-        console.log(
-          `🚀 Starting test-case generation for ${ticketId}...`
-        );
+    try {
+      console.log("");
+      console.log(
+        `🚀 Starting test-case generation for ${selectedTicket}...`
+      );
 
-        await dispatchGitHubWorkflow(
-          TESTCASE_GENERATION_WORKFLOW,
-          {
-            ticket_id: ticketId,
-          }
-        );
+      await dispatchGitHubWorkflow(
+        TESTCASE_GENERATION_WORKFLOW,
+        {
+          ticket_id: selectedTicket,
+        }
+      );
 
-        console.log(
-          `✅ Test-case generation started for ${ticketId}`
-        );
-      } catch (error) {
-        console.error(
-          `❌ Failed to start generation for ${ticketId}:`,
-          error.message
-        );
+      console.log(
+        `✅ Test-case generation started for ${selectedTicket}`
+      );
 
-        await client.chat.postMessage({
-          channel: body.channel.id,
+      // --------------------------------------------
+      // Slack confirmation
+      // --------------------------------------------
 
-          text:
-            `❌ *Failed to generate test cases for ${ticketId}*\n\n` +
-            `${error.message}`,
-        });
-      }
+      await client.chat.postMessage({
+        channel: body.channel.id,
+
+        text:
+          `✅ *Ticket approved: ${selectedTicket}*\n\n` +
+          `🤖 Test-case generation has been started.\n\n` +
+          `Once the test cases are generated, a second approval ` +
+          `message will appear where you can select which test ` +
+          `cases should actually be automated.`,
+      });
+
+      console.log("");
+      console.log("🎉 STAGE 1 COMPLETED");
+      console.log(`Ticket approved: ${selectedTicket}`);
+      console.log("======================================");
+    } catch (error) {
+      console.error(
+        `❌ Failed to start generation for ${selectedTicket}:`,
+        error.message
+      );
+
+      await client.chat.postMessage({
+        channel: body.channel.id,
+
+        text:
+          `❌ *Failed to generate test cases for ${selectedTicket}*\n\n` +
+          `${error.message}`,
+      });
     }
-
-    // ----------------------------------------------
-    // Slack confirmation
-    // ----------------------------------------------
-
-    await client.chat.postMessage({
-      channel: body.channel.id,
-
-      text:
-        `✅ *Ticket approval received*\n\n` +
-        `Selected tickets:\n` +
-        selectedTickets
-          .map((ticket) => `• ${ticket}`)
-          .join("\n") +
-        `\n\n` +
-        `🤖 Test-case generation has been started for the selected tickets.\n\n` +
-        `Once the test cases are generated, a second approval message will appear where you can select which test cases should actually be automated.`,
-    });
-
-    console.log("");
-    console.log("🎉 STAGE 1 COMPLETED");
-    console.log(
-      `Tickets approved: ${selectedTickets.join(", ")}`
-    );
-    console.log("======================================");
   }
 );
 
@@ -551,7 +572,7 @@ async function start() {
 
     console.log("");
     console.log(
-      "🎫 Stage 1 listener: approve_tickets"
+      "🎫 Stage 1 listener: approve_ticket"
     );
 
     console.log(

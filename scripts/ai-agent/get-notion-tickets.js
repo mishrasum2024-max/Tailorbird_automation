@@ -14,6 +14,16 @@ const DATA_SOURCE_ID =
 
 const TARGET_STATUS = "Complete";
 
+/*
+ * How many tickets to pull per run.
+ *
+ * Was hard-coded to exactly 1. Now configurable, defaulting to 5.
+ */
+const MAX_TICKETS = parseInt(
+  process.env.MAX_TICKETS || "5",
+  10
+);
+
 function getText(property) {
   if (!property) return "";
 
@@ -65,10 +75,46 @@ function getUniqueId(property) {
   return `${prefix}-${number}`;
 }
 
-async function getAvailableTicket() {
+function mapTicket(page) {
+  const properties = page.properties;
+
+  return {
+    id: getUniqueId(properties["ID"]),
+
+    title: getText(properties["Name"]),
+
+    status: getStatus(properties["Status"]),
+
+    issueType: getSelect(
+      properties["Issue Type"]
+    ),
+
+    priority: getSelect(
+      properties["Priority"]
+    ),
+
+    testType: getText(
+      properties["Test_TYPE"]
+    ),
+
+    createdTime:
+      properties["Created time"]
+        ?.created_time || "",
+
+    url:
+      getUrl(properties["URL"]) ||
+      page.url,
+
+    notionPageId: page.id,
+  };
+}
+
+async function getAvailableTickets() {
   console.log(
-    `🔎 Looking for the newest Notion ticket with status "${TARGET_STATUS}"...`
+    `🔎 Looking for up to ${MAX_TICKETS} newest Notion tickets with status "${TARGET_STATUS}"...`
   );
+
+  const tickets = [];
 
   let cursor = undefined;
 
@@ -95,46 +141,19 @@ async function getAvailableTicket() {
       ],
     });
 
-    /*
-     * We only need ONE ticket.
-     *
-     * Because Notion returns results in descending
-     * Created time order, the first result is the
-     * newest available ticket.
-     */
-    if (response.results.length > 0) {
-      const page = response.results[0];
-      const properties = page.properties;
+    for (const page of response.results) {
+      tickets.push(mapTicket(page));
 
-      return {
-        id: getUniqueId(properties["ID"]),
-
-        title: getText(properties["Name"]),
-
-        status: getStatus(properties["Status"]),
-
-        issueType: getSelect(
-          properties["Issue Type"]
-        ),
-
-        priority: getSelect(
-          properties["Priority"]
-        ),
-
-        testType: getText(
-          properties["Test_TYPE"]
-        ),
-
-        createdTime:
-          properties["Created time"]
-            ?.created_time || "",
-
-        url:
-          getUrl(properties["URL"]) ||
-          page.url,
-
-        notionPageId: page.id,
-      };
+      /*
+       * Stop as soon as we have enough.
+       *
+       * Because Notion returns results in descending
+       * Created time order, these are always the
+       * MAX_TICKETS newest available tickets.
+       */
+      if (tickets.length >= MAX_TICKETS) {
+        return tickets;
+      }
     }
 
     cursor = response.has_more
@@ -143,7 +162,7 @@ async function getAvailableTicket() {
 
   } while (cursor);
 
-  return null;
+  return tickets;
 }
 
 async function main() {
@@ -167,16 +186,16 @@ async function main() {
     );
 
     /*
-     * Find only ONE available ticket.
+     * Find up to MAX_TICKETS available tickets.
      *
      * Only Status = Complete is allowed.
      */
-    const ticket = await getAvailableTicket();
+    const tickets = await getAvailableTickets();
 
     /*
-     * No ticket available.
+     * No tickets available.
      */
-    if (!ticket) {
+    if (!tickets.length) {
       console.log(
         "\nℹ️ No tickets with status \"Complete\" are available."
       );
@@ -195,7 +214,7 @@ async function main() {
     }
 
     /*
-     * Save the single ticket.
+     * Save the tickets.
      */
     const outputDir = path.join(
       __dirname,
@@ -216,20 +235,21 @@ async function main() {
     );
 
     /*
-     * IMPORTANT:
+     * Output format is unchanged: an array of tickets.
      *
-     * Keep the output as an array because the
-     * existing Slack script expects an array.
+     * send-ticket-approval.js already loops over this
+     * array to build the Slack checkboxes, so no changes
+     * are needed there.
      *
-     * But it will ALWAYS contain either:
+     * It will contain:
      *
-     * []       -> no ticket available
-     *
-     * [ticket] -> exactly one ticket
+     * []                    -> no tickets available
+     * [ticket]               -> 1 ticket (fewer than MAX_TICKETS were found)
+     * [ticket, ticket, ...]  -> up to MAX_TICKETS tickets
      */
     fs.writeFileSync(
       outputFile,
-      JSON.stringify([ticket], null, 2),
+      JSON.stringify(tickets, null, 2),
       "utf8"
     );
 
@@ -241,47 +261,49 @@ async function main() {
     );
 
     console.log(
-      "AVAILABLE TICKET"
+      `AVAILABLE TICKETS (${tickets.length})`
     );
 
     console.log(
       "======================================"
     );
 
+    tickets.forEach((ticket, index) => {
+      console.log(
+        `\n[${index + 1}] ID:       ${ticket.id}`
+      );
+
+      console.log(
+        `    Title:    ${ticket.title}`
+      );
+
+      console.log(
+        `    Status:   ${ticket.status}`
+      );
+
+      console.log(
+        `    Priority: ${ticket.priority || "N/A"}`
+      );
+
+      console.log(
+        `    Type:     ${ticket.issueType || "N/A"}`
+      );
+
+      console.log(
+        `    Created:  ${ticket.createdTime}`
+      );
+
+      console.log(
+        `    URL:      ${ticket.url}`
+      );
+    });
+
     console.log(
-      `ID:       ${ticket.id}`
+      "\n======================================"
     );
 
     console.log(
-      `Title:    ${ticket.title}`
-    );
-
-    console.log(
-      `Status:   ${ticket.status}`
-    );
-
-    console.log(
-      `Priority: ${ticket.priority || "N/A"}`
-    );
-
-    console.log(
-      `Type:     ${ticket.issueType || "N/A"}`
-    );
-
-    console.log(
-      `Created:  ${ticket.createdTime}`
-    );
-
-    console.log(
-      `URL:      ${ticket.url}`
-    );
-
-    console.log(
-      "======================================"
-    );
-
-    console.log(
-      `\n✅ Exactly one ticket selected for Slack: ${ticket.id}`
+      `\n✅ ${tickets.length} ticket(s) selected for Slack.`
     );
 
     console.log(
