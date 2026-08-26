@@ -30,18 +30,10 @@ jobs:
 
     steps:
 
-      # --------------------------------------------------
-      # 1. Checkout
-      # --------------------------------------------------
-
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      # --------------------------------------------------
-      # 2. Node.js
-      # --------------------------------------------------
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -49,53 +41,26 @@ jobs:
           node-version: 22
           cache: npm
 
-      # --------------------------------------------------
-      # 3. Dependencies
-      # --------------------------------------------------
-
       - name: Install dependencies
         run: npm ci
-
-      # --------------------------------------------------
-      # 4. Show approval information
-      # --------------------------------------------------
 
       - name: Show approved selection
         run: |
           echo "======================================"
           echo "AI TEST CASES APPROVED"
           echo "======================================"
-
           echo "Ticket ID:"
           echo "${{ inputs.ticket_id }}"
-
           echo ""
-
           echo "Selected Test Cases:"
           echo "${{ inputs.selected_test_cases }}"
-
           echo ""
-
           echo "Generation Run ID:"
           echo "${{ inputs.generation_run_id }}"
-
           echo ""
-
           echo "Expected Artifact:"
           echo "generated-testcases"
-
           echo "======================================"
-
-      # --------------------------------------------------
-      # 5. Download generated test cases
-      #
-      # IMPORTANT:
-      # ai-generate-testcases.yml uploads the artifact as:
-      #
-      # generated-testcases
-      #
-      # DO NOT change this to testcases-${ticket_id}
-      # --------------------------------------------------
 
       - name: Download generated test cases
         env:
@@ -105,122 +70,62 @@ jobs:
           echo "======================================"
           echo "DOWNLOADING GENERATED TEST CASES"
           echo "======================================"
-
           ARTIFACT_NAME="generated-testcases"
-
           echo "Generation Run ID:"
           echo "$GENERATION_RUN_ID"
-
           echo ""
-
           echo "Artifact Name:"
           echo "$ARTIFACT_NAME"
-
           echo ""
-
           mkdir -p data/generated-testcases-artifact
-
-          gh run download "$GENERATION_RUN_ID" \
-            --repo "${{ github.repository }}" \
-            --name "$ARTIFACT_NAME" \
-            --dir data/generated-testcases-artifact
-
+          gh run download "$GENERATION_RUN_ID" --repo "${{ github.repository }}" --name "$ARTIFACT_NAME" --dir data/generated-testcases-artifact
           echo ""
           echo "Downloaded files:"
-
-          find data/generated-testcases-artifact \
-            -maxdepth 3 \
-            -type f \
-            -print
-
+          find data/generated-testcases-artifact -maxdepth 3 -type f -print
           echo ""
-
           if [ ! -f "data/generated-testcases-artifact/generated-testcases.json" ]; then
             echo "ERROR: generated-testcases.json was not found in the artifact."
             echo ""
-
             echo "Expected artifact:"
             echo "$ARTIFACT_NAME"
-
             echo ""
-
             echo "Generation run:"
             echo "$GENERATION_RUN_ID"
-
             echo ""
-
             echo "Downloaded files:"
-            find data/generated-testcases-artifact \
-              -maxdepth 3 \
-              -type f \
-              -print
-
+            find data/generated-testcases-artifact -maxdepth 3 -type f -print
             exit 1
           fi
-
-          cp \
-            data/generated-testcases-artifact/generated-testcases.json \
-            data/generated-testcases.json
-
+          cp data/generated-testcases-artifact/generated-testcases.json data/generated-testcases.json
           echo ""
           echo "✅ generated-testcases.json ready."
-
-      # --------------------------------------------------
-      # 6. Verify generated test cases
-      # --------------------------------------------------
 
       - name: Verify generated test cases
         run: |
           echo "======================================"
           echo "VERIFYING GENERATED TEST CASES"
           echo "======================================"
-
           if [ ! -f "data/generated-testcases.json" ]; then
             echo "ERROR: generated-testcases.json not found."
             exit 1
           fi
-
           echo "Generated test cases file found."
-
           echo ""
-
           echo "Ticket:"
-          node -e "
-            const data = require('./data/generated-testcases.json');
-            console.log(data.ticketId);
-          "
-
+          node -e "const data = require('./data/generated-testcases.json'); console.log(data.ticketId);"
           echo ""
-
           echo "Total generated test cases:"
-          node -e "
-            const data = require('./data/generated-testcases.json');
-            console.log(data.testCases?.length || 0);
-          "
-
+          node -e "const data = require('./data/generated-testcases.json'); console.log(data.testCases?.length || 0);"
           echo ""
-
           echo "======================================"
           echo "GENERATED TEST CASES"
           echo "======================================"
-
           node -e "
             const data = require('./data/generated-testcases.json');
-
             for (const tc of data.testCases || []) {
-              console.log(
-                tc.id +
-                ' | ' +
-                (tc.category || tc.testType || 'UNCATEGORIZED') +
-                ' | ' +
-                tc.title
-              );
+              console.log(tc.id + ' | ' + (tc.category || tc.testType || 'UNCATEGORIZED') + ' | ' + tc.title);
             }
           "
-
-      # --------------------------------------------------
-      # 7. Filter ONLY selected test cases
-      # --------------------------------------------------
 
       - name: Filter selected test cases
         env:
@@ -229,74 +134,42 @@ jobs:
           echo "======================================"
           echo "FILTERING SELECTED TEST CASES"
           echo "======================================"
-
           echo "Selected IDs:"
           echo "$SELECTED_TEST_CASES"
-
           echo ""
-
           node scripts/ai-agent/filter-selected-testcases.js
-
           echo ""
-
           echo "======================================"
           echo "SELECTED TEST CASES FILE"
           echo "======================================"
-
           cat data/selected-testcases.json
-
-      # --------------------------------------------------
-      # 8. Verify selection
-      # --------------------------------------------------
 
       - name: Verify selected test cases
         run: |
           echo "======================================"
           echo "VERIFYING SELECTED TEST CASES"
           echo "======================================"
-
           node - <<'NODE'
           const fs = require("fs");
-
           const file = "data/selected-testcases.json";
-
           if (!fs.existsSync(file)) {
             console.error("ERROR: selected-testcases.json was not created.");
             process.exit(1);
           }
-
-          const data = JSON.parse(
-            fs.readFileSync(file, "utf8")
-          );
-
+          const data = JSON.parse(fs.readFileSync(file, "utf8"));
           const selected = data.selectedTestCases || [];
-
           console.log(`Selected count: ${selected.length}`);
-
           if (!selected.length) {
             console.error("ERROR: No test cases were selected.");
             process.exit(1);
           }
-
           console.log("");
-
           selected.forEach((tc) => {
-            console.log(
-              `${tc.id} | ${
-                tc.category ||
-                tc.testType ||
-                "UNCATEGORIZED"
-              } | ${tc.title}`
-            );
+            console.log(`${tc.id} | ${tc.category || tc.testType || "UNCATEGORIZED"} | ${tc.title}`);
           });
-
           console.log("");
           console.log("✅ Selected test cases verified.");
           NODE
-
-      # --------------------------------------------------
-      # 9. Process approved Notion ticket
-      # --------------------------------------------------
 
       - name: Process approved ticket
         env:
@@ -308,10 +181,6 @@ jobs:
         run: |
           node scripts/ai-agent/process-approved-ticket.js
 
-      # --------------------------------------------------
-      # 10. Prepare Claude automation prompt
-      # --------------------------------------------------
-
       - name: Prepare Claude test-generation prompt
         env:
           SELECTED_TEST_CASES: ${{ inputs.selected_test_cases }}
@@ -319,53 +188,17 @@ jobs:
         run: |
           node scripts/prepare-claude-test.js
 
-      # --------------------------------------------------
-      # 11. Install Claude Code
-      #
-      # We call the CLI directly instead of claude-code-action@v1.
-      # claude-code-action is built around PR/issue-comment triggers
-      # and posts results back as review comments ("buffered inline
-      # comments") rather than reliably writing files in a
-      # workflow_dispatch context. The direct CLI with
-      # --permission-mode acceptEdits is what actually lets Claude
-      # write files unattended in a headless run.
-      # --------------------------------------------------
-
       - name: Install Claude Code
         run: |
           curl -fsSL https://claude.ai/install.sh | bash
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      # --------------------------------------------------
-      # 12. Verify Claude Code
-      # --------------------------------------------------
-
       - name: Verify Claude Code
         run: |
           claude --version
 
-      # --------------------------------------------------
-      # 12b. Install Playwright browser
-      #
-      # Required so the Playwright MCP server has a browser
-      # binary to launch when Claude explores the live app.
-      # --------------------------------------------------
-
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
-
-      # --------------------------------------------------
-      # 12c. Pre-authenticate before Claude runs
-      #
-      # This is the real fix for max-turns exhaustion:
-      # Claude was burning a large share of its 50-turn
-      # budget logging in manually via the MCP browser.
-      # We log in once here using the existing login spec
-      # and hand Claude an already-authenticated session.
-      # continue-on-error: true — if login fails here for
-      # any reason, Claude falls back to logging in itself
-      # via the instruction already in the prompt.
-      # --------------------------------------------------
 
       - name: Generate authenticated session for Claude
         id: generate_session
@@ -386,24 +219,12 @@ jobs:
           echo "======================================"
           echo "GENERATING AUTHENTICATED SESSION"
           echo "======================================"
-
-          npx playwright test tests/TC01_login.spec.js \
-            --grep "TC01 |TC03 |TC04 " \
-            --workers=1 --reporter=list
-
+          npx playwright test tests/TC01_login.spec.js --grep "TC01 |TC03 |TC04 " --workers=1 --reporter=list
           if [ -f sessionState.json ]; then
             echo "✅ sessionState.json created."
           else
             echo "⚠️ sessionState.json was not created. Claude will log in manually."
           fi
-
-      # --------------------------------------------------
-      # 12d. Configure Playwright MCP for this run
-      #
-      # If a session was generated above, point the MCP
-      # Playwright server at it so Claude's browser opens
-      # already logged in.
-      # --------------------------------------------------
 
       - name: Configure Playwright MCP for this run
         run: |
@@ -432,36 +253,13 @@ jobs:
           EOF
             echo "Configured Playwright MCP without pre-authenticated session."
           fi
-
           cat .mcp.json
-
-      # --------------------------------------------------
-      # 13. Save repository baseline
-      #
-      # Lets us positively confirm what Claude changed,
-      # independent of the later git status check.
-      # --------------------------------------------------
 
       - name: Save repository baseline
         run: |
           git status --short > /tmp/baseline-status.txt
-
-          git diff -- \
-            tests \
-            pages \
-            locators \
-            utils \
-            fixture \
-            data \
-            playwright.config.js \
-            package.json \
-            > /tmp/baseline-diff.txt || true
-
+          git diff -- tests pages locators utils fixture data playwright.config.js package.json > /tmp/baseline-diff.txt || true
           echo "Baseline captured."
-
-      # --------------------------------------------------
-      # 14. Generate Playwright tests using Claude Code
-      # --------------------------------------------------
 
       - name: Generate Playwright tests with Claude Code
         timeout-minutes: 15
@@ -479,31 +277,16 @@ jobs:
           BASE_URL: ${{ secrets.BASE_URL }}
         run: |
           set +e
-
-          claude \
-            --permission-mode acceptEdits \
-            --max-turns 80 \
-            --allowedTools "Bash,Edit,Write,mcp__playwright__*" \
-            --mcp-config .mcp.json \
-            -p "$(cat data/claude-test-generation-prompt.md)" \
-            2>&1 | tee /tmp/claude-test-generation.log
-
+          claude --permission-mode acceptEdits --max-turns 80 --allowedTools "Bash,Edit,Write,mcp__playwright__*" --mcp-config .mcp.json -p "$(cat data/claude-test-generation-prompt.md)" 2>&1 | tee /tmp/claude-test-generation.log
           CLAUDE_EXIT=${PIPESTATUS[0]}
-
           echo ""
           echo "Claude test-generation exit code: $CLAUDE_EXIT"
-
           if [ "$CLAUDE_EXIT" -ne 0 ]; then
             echo "WARNING: Claude test generation returned non-zero."
             echo "We will inspect the repository before deciding whether"
             echo "the run actually failed to produce anything usable."
           fi
-
           exit 0
-
-      # --------------------------------------------------
-      # 15. Show Claude output
-      # --------------------------------------------------
 
       - name: Show Claude test-generation log
         if: always()
@@ -511,21 +294,11 @@ jobs:
           echo "======================================"
           echo "CLAUDE TEST-GENERATION LOG"
           echo "======================================"
-
           if [ -f /tmp/claude-test-generation.log ]; then
             cat /tmp/claude-test-generation.log
           else
             echo "No Claude log was generated."
           fi
-
-      # --------------------------------------------------
-      # 15a2. Check whether Claude produced any changes
-      #
-      # If not, running the mandatory test suite is pure
-      # waste — there is nothing to gate, and no PR will be
-      # created either way. Skip straight to notifying Slack
-      # and end the workflow.
-      # --------------------------------------------------
 
       - name: Check for generated test changes
         id: check_changes
@@ -538,14 +311,6 @@ jobs:
             git status --short -- tests/
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
           fi
-
-      # --------------------------------------------------
-      # 15b. Run the generated tests for real
-      #
-      # This is the accuracy check. Claude reporting
-      # "Automated" is not proof the test passes — actually
-      # running it against the live app is.
-      # --------------------------------------------------
 
       - name: Run mandatory tests, then newly added test case(s)
         id: run_generated_tests
@@ -565,26 +330,18 @@ jobs:
           PLAYWRIGHT_JSON_OUTPUT_NAME: /tmp/new-tests-result.json
         run: |
           set +e
-
           echo "======================================"
           echo "STEP A: MANDATORY TESTS (regression check)"
           echo "======================================"
-
-          npx playwright test --grep "@mandatory" --workers=1 --reporter=list \
-            2>&1 | tee /tmp/mandatory-tests-result.log
-
+          npx playwright test --grep "@mandatory" --workers=1 --reporter=list 2>&1 | tee /tmp/mandatory-tests-result.log
           MANDATORY_EXIT=${PIPESTATUS[0]}
-
           echo ""
           echo "Mandatory tests exit code: $MANDATORY_EXIT"
-
           echo ""
           echo "======================================"
           echo "STEP B: NEWLY ADDED TEST CASE(S) ONLY"
           echo "======================================"
-
           CHANGED_SPECS="$(git status --porcelain -- tests/ | awk '{print $2}')"
-
           if [ -z "$CHANGED_SPECS" ]; then
             echo "No spec files changed. Nothing new to run."
             NEW_EXIT=1
@@ -592,63 +349,41 @@ jobs:
           else
             echo "Changed spec files:"
             echo "$CHANGED_SPECS"
-
-            # Build a grep pattern from the approved test-case IDs,
-            # e.g. "TC021" or "TC021|TC022", so we run ONLY the
-            # newly added case(s) — not every pre-existing test
-            # that happens to live in the same shared spec file.
             GREP_PATTERN="$(echo "$SELECTED_TEST_CASES" | sed 's/,/|/g')"
-
             echo ""
             echo "Running only: $GREP_PATTERN"
             echo ""
-
-            npx playwright test $CHANGED_SPECS --grep "$GREP_PATTERN" \
-              --workers=1 --reporter=list,json \
-              2>&1 | tee /tmp/new-tests-result.log
-
+            npx playwright test $CHANGED_SPECS --grep "$GREP_PATTERN" --workers=1 --reporter=list,json 2>&1 | tee /tmp/new-tests-result.log
             NEW_EXIT=${PIPESTATUS[0]}
             NEW_STATUS="ran"
-
             echo ""
             echo "Summarizing per-test-case results..."
-
-            RESULTS_FILE=/tmp/new-tests-result.json \
-            SELECTED_TEST_CASES="$SELECTED_TEST_CASES" \
-              node scripts/ai-agent/summarize-test-results.js
+            RESULTS_FILE=/tmp/new-tests-result.json SELECTED_TEST_CASES="$SELECTED_TEST_CASES" node scripts/ai-agent/summarize-test-results.js
           fi
-
           echo ""
           echo "New test case(s) exit code: $NEW_EXIT"
-
           if [ "$MANDATORY_EXIT" -ne 0 ]; then
-            echo "test_status=mandatory_failed" >> "$GITHUB_OUTPUT"
+            FINAL_TEST_STATUS="mandatory_failed"
           elif [ "$NEW_STATUS" = "skipped" ]; then
-            echo "test_status=skipped" >> "$GITHUB_OUTPUT"
+            FINAL_TEST_STATUS="skipped"
           elif [ "$NEW_EXIT" -eq 0 ]; then
-            echo "test_status=passed" >> "$GITHUB_OUTPUT"
+            FINAL_TEST_STATUS="passed"
           else
-            echo "test_status=failed" >> "$GITHUB_OUTPUT"
+            FINAL_TEST_STATUS="failed"
           fi
-
+          echo ""
+          echo "======================================"
+          echo "RESOLVED test_status = $FINAL_TEST_STATUS"
+          echo "======================================"
+          echo "test_status=$FINAL_TEST_STATUS" >> "$GITHUB_OUTPUT"
           exit 0
-      # --------------------------------------------------
-      # 15b2. Repair failing new test case(s) via live browser
-      #
-      # Only fires when at least one NEW test case failed but
-      # mandatory tests passed (a real regression is a different,
-      # more serious problem -- that stays flagged for human
-      # review, not auto-patched here).
-      #
-      # Targets ONLY the specific failing test-case ID(s) each
-      # attempt, with their individual error output -- not the
-      # whole approved batch -- so Claude doesn't risk touching
-      # cases that already pass. After each attempt, ALL selected
-      # cases are re-run (not just the ones being repaired) to
-      # catch any regression the fix might introduce elsewhere.
-      #
-      # Up to 4 attempts. Stops early as soon as everything passes.
-      # --------------------------------------------------
+
+      - name: Show test_status feeding into repair decision
+        if: always()
+        run: |
+          echo "has_changes  = ${{ steps.check_changes.outputs.has_changes }}"
+          echo "test_status  = ${{ steps.run_generated_tests.outputs.test_status }}"
+          echo "Repair step will run only if has_changes == 'true' AND test_status == 'failed'."
 
       - name: Repair failing new test case(s) via live browser
         id: repair_tests
@@ -673,65 +408,54 @@ jobs:
           INITIAL_FAILED_IDS: ${{ steps.run_generated_tests.outputs.failed_ids }}
         run: |
           set +e
-
+          echo "Repair step is running."
           MAX_REPAIR_ATTEMPTS=4
           ATTEMPTS_USED=0
-
           PASSED_IDS="$INITIAL_PASSED_IDS"
           FAILED_IDS="$INITIAL_FAILED_IDS"
           ALL_PASSED="false"
-
           CHANGED_SPECS="$(git status --porcelain -- tests/ | awk '{print $2}')"
           FULL_GREP_PATTERN="$(echo "$SELECTED_TEST_CASES" | sed 's/,/|/g')"
-
-          echo "Starting repair loop."
           echo "Initially passing: $PASSED_IDS"
           echo "Initially failing: $FAILED_IDS"
-
           for ATTEMPT in $(seq 1 "$MAX_REPAIR_ATTEMPTS"); do
             ATTEMPTS_USED=$ATTEMPT
-
             if [ -z "$FAILED_IDS" ]; then
-              echo "No failing test case IDs to target — stopping early."
+              echo "No failing test case IDs to target - stopping early."
               break
             fi
-
             echo "======================================"
             echo "REPAIR ATTEMPT $ATTEMPT / $MAX_REPAIR_ATTEMPTS"
             echo "Targeting: $FAILED_IDS"
             echo "======================================"
-
-            ATTEMPT="$ATTEMPT" MAX_REPAIR_ATTEMPTS="$MAX_REPAIR_ATTEMPTS"               FAILED_TEST_CASES="$FAILED_IDS" PASSED_TEST_CASES="$PASSED_IDS"               TICKET_ID="$TICKET_ID"               node scripts/ai-agent/prepare-repair-prompt.js
-
-            claude               --permission-mode acceptEdits               --max-turns 40               --allowedTools "Bash,Edit,Write,mcp__playwright__*"               --mcp-config .mcp.json               -p "$(cat data/claude-repair-prompt.md)"               2>&1 | tee -a "/tmp/repair-attempt-$ATTEMPT.log"
-
+            export ATTEMPT
+            export MAX_REPAIR_ATTEMPTS
+            export FAILED_TEST_CASES="$FAILED_IDS"
+            export PASSED_TEST_CASES="$PASSED_IDS"
+            node scripts/ai-agent/prepare-repair-prompt.js
+            REPAIR_PROMPT="$(cat data/claude-repair-prompt.md)"
+            claude --permission-mode acceptEdits --max-turns 40 --allowedTools "Bash,Edit,Write,mcp__playwright__*" --mcp-config .mcp.json -p "$REPAIR_PROMPT" > "/tmp/repair-attempt-$ATTEMPT.log" 2>&1
+            cat "/tmp/repair-attempt-$ATTEMPT.log"
             echo ""
-            echo "Re-running ALL selected test case(s) after repair attempt $ATTEMPT (also checking for regressions)..."
-
-            npx playwright test $CHANGED_SPECS --grep "$FULL_GREP_PATTERN"               --workers=1 --reporter=list,json               2>&1 | tee /tmp/new-tests-result.log
-
-            RESULTS_FILE=/tmp/new-tests-result.json             SELECTED_TEST_CASES="$SELECTED_TEST_CASES"               node scripts/ai-agent/summarize-test-results.js
-
+            echo "Re-running ALL selected test case(s) after repair attempt $ATTEMPT..."
+            npx playwright test $CHANGED_SPECS --grep "$FULL_GREP_PATTERN" --workers=1 --reporter=list,json > /tmp/new-tests-result.log 2>&1
+            cat /tmp/new-tests-result.log
+            RESULTS_FILE=/tmp/new-tests-result.json SELECTED_TEST_CASES="$SELECTED_TEST_CASES" node scripts/ai-agent/summarize-test-results.js
             source /tmp/test-summary.env
-
             if [ "$ALL_PASSED" = "true" ]; then
-              echo "✅ All selected test case(s) passing after repair attempt $ATTEMPT."
+              echo "All selected test case(s) passing after repair attempt $ATTEMPT."
               break
             fi
-
-            echo "❌ Still failing after repair attempt $ATTEMPT: $FAILED_IDS"
+            echo "Still failing after repair attempt $ATTEMPT: $FAILED_IDS"
           done
-
           if [ "$ALL_PASSED" = "true" ]; then
             echo "final_test_status=passed" >> "$GITHUB_OUTPUT"
           else
             echo "final_test_status=failed" >> "$GITHUB_OUTPUT"
           fi
-
           echo "repair_attempts=$ATTEMPTS_USED" >> "$GITHUB_OUTPUT"
           echo "final_passed_ids=$PASSED_IDS" >> "$GITHUB_OUTPUT"
           echo "final_failed_ids=$FAILED_IDS" >> "$GITHUB_OUTPUT"
-
           exit 0
 
       - name: Upload generated-test run report
@@ -747,32 +471,17 @@ jobs:
             /tmp/new-tests-result.log
             /tmp/repair-attempt-*.log
 
-      # --------------------------------------------------
-      # 15c. Verify test architecture compliance
-      #
-      # Checks that spec files only call page-object methods,
-      # per the strict layering rules given to Claude in the
-      # prompt (locators/, pages/, tests/).
-      # --------------------------------------------------
-
       - name: Verify test architecture compliance
         id: verify_architecture
         if: steps.check_changes.outputs.has_changes == 'true'
         run: |
-          node scripts/ai-agent/verify-test-architecture.js \
-            2>&1 | tee /tmp/architecture-check.log
-
+          node scripts/ai-agent/verify-test-architecture.js 2>&1 | tee /tmp/architecture-check.log
           STATUS_LINE="$(grep -o 'architecture_status=[a-z]*' /tmp/architecture-check.log | tail -n 1)"
-
           if [ -n "$STATUS_LINE" ]; then
             echo "$STATUS_LINE" >> "$GITHUB_OUTPUT"
           else
             echo "architecture_status=unknown" >> "$GITHUB_OUTPUT"
           fi
-
-      # --------------------------------------------------
-      # 16. Create PR
-      # --------------------------------------------------
 
       - name: Commit generated tests and open a PR
         id: create_pr
@@ -785,21 +494,16 @@ jobs:
           ARCHITECTURE_STATUS: ${{ steps.verify_architecture.outputs.architecture_status }}
         run: |
           BRANCH="ai/${{ inputs.ticket_id }}-tests"
-
           echo "======================================"
           echo "CHECKING GENERATED PLAYWRIGHT TESTS"
           echo "======================================"
-
           git config user.name "tailorbird-ai-agent[bot]"
           git config user.email "tailorbird-ai-agent[bot]@users.noreply.github.com"
-
           echo "Full working-tree status:"
           git status --short
-
           echo ""
           echo "Untracked files:"
           git ls-files --others --exclude-standard
-
           if [ -z "$(git status --porcelain -- tests/)" ]; then
             echo ""
             echo "No test file changes were produced by Claude Code."
@@ -812,50 +516,29 @@ jobs:
             echo "pr_url=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-
           echo ""
           echo "Test files changed:"
           git status --short -- tests/
-
           echo ""
-
           echo "======================================"
           echo "CREATING AI TEST AUTOMATION BRANCH"
           echo "======================================"
-
           if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
             git branch -D "$BRANCH"
           fi
-
           git checkout -b "$BRANCH"
-
           git add tests/
-
           SUMMARY="$(git diff --stat --cached)"
-
           echo ""
           echo "Changes:"
           echo "$SUMMARY"
-
-          git commit \
-            -m "AI-generated Playwright tests for ${{ inputs.ticket_id }}"
-
+          git commit -m "AI-generated Playwright tests for ${{ inputs.ticket_id }}"
           git push --force-with-lease origin "$BRANCH"
-
           echo ""
           echo "======================================"
           echo "CREATING PULL REQUEST"
           echo "======================================"
-
-          EXISTING_PR_URL="$(
-            gh pr list \
-              --repo "${{ github.repository }}" \
-              --head "$BRANCH" \
-              --state open \
-              --json url \
-              --jq '.[0].url'
-          )"
-
+          EXISTING_PR_URL="$(gh pr list --repo "${{ github.repository }}" --head "$BRANCH" --state open --json url --jq '.[0].url')"
           if [ -n "$EXISTING_PR_URL" ]; then
             echo ""
             echo "Existing PR found: $EXISTING_PR_URL"
@@ -864,14 +547,7 @@ jobs:
             echo "pr_url=$EXISTING_PR_URL" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-
-          # ----------------------------------------------
-          # Decide draft/ready and title based on both the
-          # test run AND the architecture check.
-          # ----------------------------------------------
-
           NEEDS_REVIEW=""
-
           case "$TEST_STATUS" in
             passed)
               if [ -n "$REPAIR_ATTEMPTS" ] && [ "$REPAIR_ATTEMPTS" -gt 0 ] 2>/dev/null; then
@@ -897,7 +573,6 @@ jobs:
               NEEDS_REVIEW="yes"
               ;;
           esac
-
           case "$ARCHITECTURE_STATUS" in
             clean)
               ARCH_LINE="✅ No raw locator/page usage found in spec files."
@@ -911,7 +586,6 @@ jobs:
               NEEDS_REVIEW="yes"
               ;;
           esac
-
           RESULTS_LINE=""
           if [ -n "$PASSED_TEST_CASES" ]; then
             RESULTS_LINE="${RESULTS_LINE}✅ Passed: ${PASSED_TEST_CASES}"$'\n'
@@ -919,7 +593,6 @@ jobs:
           if [ -n "$FAILED_TEST_CASES" ]; then
             RESULTS_LINE="${RESULTS_LINE}❌ Failed: ${FAILED_TEST_CASES}"$'\n'
           fi
-
           if [ -n "$NEEDS_REVIEW" ]; then
             DRAFT_FLAG="--draft"
             TITLE_PREFIX="[NEEDS REVIEW]"
@@ -927,25 +600,11 @@ jobs:
             DRAFT_FLAG=""
             TITLE_PREFIX="[Verified]"
           fi
-
-          PR_URL="$(
-            gh pr create \
-              --title "$TITLE_PREFIX AI-generated tests for ${{ inputs.ticket_id }}" \
-              --body "Ticket: ${{ inputs.ticket_id }}"$'\n\n'"$TEST_LINE"$'\n'"$ARCH_LINE"$'\n\n'"$RESULTS_LINE"$'\n'"Selected test cases: ${{ inputs.selected_test_cases }}"$'\n\n'"Generation run ID: ${{ inputs.generation_run_id }}"$'\n\n'"Files changed:"$'\n'"$SUMMARY" \
-              --base main \
-              --head "$BRANCH" \
-              $DRAFT_FLAG
-          )"
-
+          PR_URL="$(gh pr create --title "$TITLE_PREFIX AI-generated tests for ${{ inputs.ticket_id }}" --body "Ticket: ${{ inputs.ticket_id }}"$'\n\n'"$TEST_LINE"$'\n'"$ARCH_LINE"$'\n\n'"$RESULTS_LINE"$'\n'"Selected test cases: ${{ inputs.selected_test_cases }}"$'\n\n'"Generation run ID: ${{ inputs.generation_run_id }}"$'\n\n'"Files changed:"$'\n'"$SUMMARY" --base main --head "$BRANCH" $DRAFT_FLAG)"
           echo ""
           echo "✅ Pull request created: $PR_URL"
-
           echo "pr_status=created" >> "$GITHUB_OUTPUT"
           echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
-
-      # --------------------------------------------------
-      # 16b. Notify Slack about the PR outcome
-      # --------------------------------------------------
 
       - name: Notify Slack about PR status
         if: always()
@@ -964,13 +623,6 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           node scripts/ai-agent/notify-slack-pr-status.js
-
-      # --------------------------------------------------
-      # 17. Upload debug artifacts
-      #
-      # Always upload, even on failure/skip, so we can see
-      # exactly what Claude did without re-running.
-      # --------------------------------------------------
 
       - name: Upload automation debug logs
         if: always()
