@@ -20,7 +20,7 @@ let propertyName, budgetItemName, startYear, endYear, propertyId, timestamp;
 let negPropertyName;
 
 test.describe('Multi-Year Budget', () => {
-    test.describe.configure({ mode: 'serial', retries: 1 });
+    // test.describe.configure({ mode: 'serial', retries: 1 });
 
     test.beforeEach(async ({ page: p }) => {
         page = p;
