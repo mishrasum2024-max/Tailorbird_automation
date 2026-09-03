@@ -50,7 +50,7 @@ jobs:
 
       # Run all remaining tests except mandatory
       - name: Run remaining tests
-        run: npx playwright test --grep "@multiYearBudget" --workers=4
+        run: npx playwright test --grep "@budget" --workers=4
 
       - name: Upload Playwright report
         if: always()
