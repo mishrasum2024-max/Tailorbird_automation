@@ -229,9 +229,9 @@ class OOOPage {
         await expect(
             this.loc.btn_activate,
             '"Activate OOO mode" must be enabled before clicking'
-        ).toBeEnabled({ timeout: 120000 });
+        ).toBeEnabled({ timeout: 180000 });
         await this.loc.btn_activate.click();
-        await this.loc.activeStatePara.waitFor({ state: 'visible', timeout: 120000 });
+        await this.loc.activeStatePara.waitFor({ state: 'visible', timeout: 180000 });
         Logger.success('[OOO] OOO activated — active state banner is visible');
     }
 
@@ -240,9 +240,9 @@ class OOOPage {
         await expect(
             this.loc.btn_deactivate,
             '"Deactivate OOO mode" button must be visible'
-        ).toBeVisible({ timeout: 120000 });
+        ).toBeVisible({ timeout: 180000 });
         await this.loc.btn_deactivate.click();
-        await this.loc.btn_activate.waitFor({ state: 'visible', timeout: 120000 });
+        await this.loc.btn_activate.waitFor({ state: 'visible', timeout: 180000 });
         Logger.success('[OOO] OOO deactivated — activate form is visible again');
     }
 

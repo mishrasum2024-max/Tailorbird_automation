@@ -20,7 +20,7 @@ test.use({
 let page, cmFeePage;
 let sharedPropertyName, sharedPropertyId;
 
-test.describe('CM Fee Configuration', () => {
+test.describe.serial('CM Fee Configuration', () => {
     test.describe.configure({ retries: 1 });
 
     // ── Suite setup — one shared property + one approved budget, reused by every
