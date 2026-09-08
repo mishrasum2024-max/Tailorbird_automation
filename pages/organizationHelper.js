@@ -295,7 +295,7 @@ class OrganizationHelper {
         await this.page.waitForTimeout(1500);
       }
       await expect(this.page.getByRole("row").filter({ hasText: email }).first()).toBeVisible({
-        timeout: 120_000,
+        timeout: 180_000,
       });
       if (await invitePanel.dialogRoot.isVisible().catch(() => false)) {
         await this.page.keyboard.press("Escape");

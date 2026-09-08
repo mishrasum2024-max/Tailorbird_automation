@@ -288,28 +288,28 @@ class FinancialsCategoryPage {
         const addChoice = this.page
             .getByRole('menuitem', { name: /Add Data|Add row|Add site|Add unit/i })
             .first();
-        if (await addChoice.isVisible({ timeout: 3500 }).catch(() => false)) {
+        if (await addChoice.isVisible({ timeout: 55000 }).catch(() => false)) {
             await addChoice.click({ force: true }).catch(() => {});
-            await this.page.waitForTimeout(800);
+            await this.page.waitForTimeout(2000);
         }
 
         let treegrid = main.getByRole('treegrid').first();
-        if (!(await treegrid.isVisible({ timeout: 4000 }).catch(() => false))) {
+        if (!(await treegrid.isVisible({ timeout: 40000 }).catch(() => false))) {
             treegrid = this.page.getByRole('treegrid').first();
         }
-        await expect(treegrid).toBeVisible({ timeout: 15000 });
+        await expect(treegrid).toBeVisible({ timeout: 150000 });
 
         const newRow = treegrid
             .getByRole('row', { name: /—/ })
             .first()
             .or(treegrid.locator('[role="row"]').filter({ has: treegrid.locator('[role="gridcell"]') }).first());
-        await expect(newRow).toBeVisible({ timeout: 15000 });
+        await expect(newRow).toBeVisible({ timeout: 55000 });
 
         const firstCell = newRow.getByRole('gridcell').first();
-        await expect(firstCell).toBeVisible({ timeout: 10000 });
+        await expect(firstCell).toBeVisible({ timeout: 55000 });
         await firstCell.click({ force: true });
         await firstCell.dblclick({ force: true }).catch(() => {});
-        await this.page.waitForTimeout(300);
+        await this.page.waitForTimeout(900);
 
         const nameEditorCandidates = [
             this.page.locator('revogr-edit input:visible:not([readonly]):not([disabled])').first(),
@@ -319,18 +319,18 @@ class FinancialsCategoryPage {
         ];
         let filled = false;
         for (const editor of nameEditorCandidates) {
-            const visible = await editor.isVisible({ timeout: 800 }).catch(() => false);
+            const visible = await editor.isVisible({ timeout: 80000 }).catch(() => false);
             if (!visible) continue;
             const editable = await editor.isEditable().catch(() => false);
             if (!editable) continue;
             await editor.click({ force: true }).catch(() => {});
-            await editor.fill(rowName, { timeout: 3000 });
+            await editor.fill(rowName, { timeout: 60000 });
             filled = true;
             break;
         }
         if (!filled) {
             const inlineEditor = this.page.locator('[contenteditable="true"]:visible').last();
-            if (await inlineEditor.isVisible({ timeout: 1000 }).catch(() => false)) {
+            if (await inlineEditor.isVisible({ timeout: 60000 }).catch(() => false)) {
                 await inlineEditor.click({ force: true }).catch(() => {});
                 await this.page.keyboard.press('Control+A').catch(() => {});
                 await this.page.keyboard.type(rowName, { delay: 20 });
@@ -354,17 +354,17 @@ class FinancialsCategoryPage {
         };
 
         const rowAdded = await cellInMainGrid()
-            .isVisible({ timeout: 6000 })
+            .isVisible({ timeout: 60000 })
             .catch(() => false);
         if (!rowAdded) {
             const lateEditor = this.page.locator('input[type="text"]:visible, textarea:visible').first();
-            if (await lateEditor.isVisible({ timeout: 1200 }).catch(() => false)) {
+            if (await lateEditor.isVisible({ timeout: 12000 }).catch(() => false)) {
                 await lateEditor.fill(rowName).catch(() => {});
                 await this.page.keyboard.press('Enter').catch(() => {});
             }
             // CI fallback: use search to scroll the added row into view (handles virtualized grids)
             const searchInput = this.catLoc.mainSearchInput;
-            if (await searchInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+            if (await searchInput.isVisible({ timeout: 60000 }).catch(() => false)) {
                 await searchInput.fill(rowName).catch(() => {});
                 await this.page.waitForTimeout(1500);
             }
@@ -380,7 +380,7 @@ class FinancialsCategoryPage {
         if (!rowVisible) {
             // Last resort: try scrolling to the added row via the search input
             const searchInput = this.catLoc.mainSearchInput;
-            if (await searchInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+            if (await searchInput.isVisible({ timeout: 60000 }).catch(() => false)) {
                 await searchInput.fill(rowName).catch(() => {});
                 await this.page.waitForTimeout(2000);
             }

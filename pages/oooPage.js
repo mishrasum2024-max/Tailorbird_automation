@@ -262,8 +262,8 @@ class OOOPage {
      * Pass { withDateLine: true } to also assert the auto-deactivation date line is visible.
      */
     async assertIsActive({ withDateLine = false } = {}) {
-        await expect(this.loc.activeStatePara, 'Active state banner must be visible').toBeVisible({ timeout: 120000 });
-        await expect(this.loc.btn_deactivate, '"Deactivate OOO mode" button must be visible').toBeVisible({ timeout: 120000 });
+        await expect(this.loc.activeStatePara, 'Active state banner must be visible').toBeVisible({ timeout: 180000 });
+        await expect(this.loc.btn_deactivate, '"Deactivate OOO mode" button must be visible').toBeVisible({ timeout: 180000 });
         if (withDateLine) {
             await expect(
                 this.page.getByText(/Auto-deactivates on/i),

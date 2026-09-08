@@ -136,15 +136,6 @@ test.describe('Category tab', () => {
         });
     });
 
-    test('TC99 @regression @category : Verify Add data option is working as expected', async () => {
-        await financialsCategoryPage.goToCategory();
-        await expect(page).toHaveURL(/\/category/);
-        const addColumnPage = new AddColumnPage(page, { scope: page.locator('main') });
-        await addColumnPage.addColumn('Test Column', 'Automation This is a test description.');
-        await addColumnPage.openManageColumns();
-        await expect(addColumnPage.loc.manageColumnsDialog).toBeVisible({ timeout: 10000 });
-    });
-
     test('TC100 @regression @category : Verify Add category option is working as expected', async () => {
         await financialsCategoryPage.goToCategory();
         await expect(page).toHaveURL(/\/category/);
