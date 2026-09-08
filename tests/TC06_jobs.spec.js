@@ -692,6 +692,43 @@ test.describe('Project and Jobs', () => {
             await waitForCellValue(rowGrow, colMap.contractAmount, /(30000|30,000|\$30,000)/i);
             await logRowCells('After contract amount update');
 
+            // 3) Edit the Budget Category cell. Root cause (MCP-verified on the live grid):
+            // the imported contract row no longer auto-populates Budget Category from the
+            // job's Budget Category the way it used to -- the cell stays blank after import,
+            // and Change Order / Invoice tabs stay disabled post-finalize unless it is set
+            // manually. Fix: same zoom-reset, alignment-verified edit as Cost Item above, then
+            // pick the option from the combobox opened by the cell's own double-click.
+            if (colMap.budgetCategory !== null) {
+                let budgetCategoryUpdated = false;
+                for (let attempt = 1; attempt <= 3 && !budgetCategoryUpdated; attempt++) {
+                    await setGridZoom('100%');
+                    const budgetCategoryCell = getCell(rowGrow, colMap.budgetCategory);
+                    await budgetCategoryCell.scrollIntoViewIfNeeded();
+                    await budgetCategoryCell.dblclick({ force: true });
+                    await page.waitForTimeout(600);
+
+                    const budgetCategoryOption = page.getByRole('option', { name: /^Bathroom fixtures install$/i }).first();
+                    const optionVisible = await budgetCategoryOption.isVisible({ timeout: 3000 }).catch(() => false);
+
+                    if (optionVisible) {
+                        await budgetCategoryOption.click({ force: true });
+                        await page.waitForTimeout(800);
+                    } else {
+                        Logger.info(`Budget Category options list did not appear on attempt ${attempt}.`);
+                        await page.keyboard.press('Escape').catch(() => { });
+                    }
+                    await setGridZoom('70%');
+
+                    const currentBudgetCategory = normalize(await getCell(rowGrow, colMap.budgetCategory).textContent());
+                    budgetCategoryUpdated = /bathroom fixtures install/i.test(currentBudgetCategory);
+                    Logger.info(
+                        `BudgetCategory monitor attempt ${attempt}: targetCol=${colMap.budgetCategory}(${colNameByIndex[colMap.budgetCategory]}), value="${currentBudgetCategory}"`
+                    );
+                }
+                await waitForCellValue(rowGrow, colMap.budgetCategory, /bathroom fixtures install/i, 18000);
+                await logRowCells('After budget category update');
+            }
+
             /* ---------- Save Changes ---------- */
 
             const saveBtn = page.getByRole("button", { name: /Save Changes/i });
