@@ -1515,7 +1515,45 @@ exports.ProjectJob = class ProjectJob {
                 await short.click();
             };
     
-            await fillSearchDropdownCell(colMap.scope, CONTRACT_DATA.scope, 'Scope');
+            // Probe the Scope cell's own column before delegating to
+            // fillSearchDropdownCell. MCP-verified live (job 4858, 2026-09-09): the
+            // Contracts grid's bird-table schema now defines Scope as columnName
+            // "scope_name", type "text", options:null — a genuine free-text field with
+            // no autosuggestion dropdown (unlike Budget Category and Cost Item below,
+            // still type "foreign_key" with populated options). When Scope's own
+            // column has no dropdown, fillSearchDropdownCell's neighboring-column retry
+            // heuristic can land on Cost Item's real dropdown instead and silently
+            // write the Scope value into the Cost Item cell without ever throwing —
+            // confirmed via a live headed run — so a try/catch around the call cannot
+            // detect it. Probing first (single dblclick on Scope's own cell only, no
+            // neighbor columns) avoids that cross-column misfire entirely.
+            await page.keyboard.press('Escape').catch(() => {});
+            await page.waitForTimeout(200);
+            const scopeProbeCell = getCell(colMap.scope);
+            await scopeProbeCell.scrollIntoViewIfNeeded();
+            await scopeProbeCell.dblclick({ force: true });
+            await page.waitForTimeout(500);
+            const scopeProbeSearchInput = innerContractPanel
+                .locator('input[placeholder="Search or type to create..."]')
+                .or(innerContractPanel.getByPlaceholder(/search or type to create/i))
+                .or(innerContractPanel.locator('input[placeholder="Search options..."]'))
+                .first();
+            const scopeHasDropdown = await scopeProbeSearchInput.isVisible({ timeout: 2000 }).catch(() => false);
+
+            if (scopeHasDropdown) {
+                await page.keyboard.press('Escape').catch(() => {});
+                await page.waitForTimeout(200);
+                await fillSearchDropdownCell(colMap.scope, CONTRACT_DATA.scope, 'Scope');
+            } else {
+                Logger.info(
+                    'TC47_NEW_UI: Scope has no autosuggestion dropdown (free-text field per bird-table schema) — filling the already-open inline text editor directly.'
+                );
+                const scopeDirectEditor = page.locator('input:visible, textarea:visible').last();
+                await expect(scopeDirectEditor).toBeVisible({ timeout: 7000 });
+                await scopeDirectEditor.fill(CONTRACT_DATA.scope);
+                await scopeDirectEditor.press('Enter');
+                await page.waitForTimeout(600);
+            }
             await fillSearchDropdownCell(colMap.budgetCategory, CONTRACT_DATA.budgetCategory, 'Budget Category');
             if (colMap.costItem !== null) {
                 await fillSearchDropdownCell(colMap.costItem, CONTRACT_DATA.costItem, 'Cost Item');

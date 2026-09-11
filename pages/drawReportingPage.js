@@ -1293,6 +1293,61 @@ exports.DrawReportingJob = class DrawReportingJob {
      * they actually care about.
      */
     async excludeAllInvoicesInDraft() {
+        // Fast path — MCP-verified live (2026-09-11) with a timed reproduction of the exact
+        // scenario below: reading every checkbox's disabled/checked state via separate
+        // Playwright round-trips (.isDisabled()/.isChecked() per element, as the original
+        // per-checkbox loop further down does) is O(n) in browser<->test IPC calls. On the
+        // long-lived shared "Test Property 6_Draw reporting" property, whose Invoices panel
+        // is NOT virtualized (every invoice row is mounted in the DOM at once — confirmed
+        // live: 373 invoices = 373 <input type="checkbox"> elements all present in the DOM
+        // simultaneously, matching the "Invoices (373)" badge exactly), that reading step
+        // alone measured 197.7s in a timed live run against this exact property — 66% of
+        // TC376's entire 300s test budget — before a single click even happened, which is
+        // the real, measured cause of TC376/TC377/TC379's timeouts on this property (NOT
+        // readDisbursementRowValuesInEditor, which measured 0.19s in the same run). Reading
+        // every checkbox's state in a single page.evaluate() round-trip instead, then
+        // driving real Playwright .uncheck() actions only for the ones that actually need
+        // it, collapses that cost to near-zero regardless of how large the invoice list
+        // grows. This fast path leaves the original per-checkbox loop below completely
+        // unmodified — it only runs as a fallback if the fast path can't fully clear the
+        // checkboxes for any reason (e.g. a future markup change).
+        let fastPathSucceeded = false;
+        let fastPathExcluded = 0;
+        try {
+            const dialogHandle = await draw.drawEditorDialog.elementHandle({ timeout: 5000 });
+            if (dialogHandle) {
+                for (let round = 0; round < 10; round++) {
+                    const indicesToUncheck = await this.page.evaluate((dialogEl) => {
+                        const boxes = Array.from(dialogEl.querySelectorAll('input[type="checkbox"]'));
+                        const result = [];
+                        boxes.forEach((el, i) => {
+                            if (!el.disabled && el.checked) result.push(i);
+                        });
+                        return result;
+                    }, dialogHandle);
+                    if (indicesToUncheck.length === 0) break;
+                    const checkboxesFast = draw.drawEditorDialog.locator('input[type="checkbox"]');
+                    for (const i of indicesToUncheck) {
+                        await checkboxesFast.nth(i).uncheck({ force: true, timeout: 5000 }).catch(() => {});
+                        fastPathExcluded++;
+                    }
+                    await this.page.waitForTimeout(300);
+                }
+                const remainingCheckedFast = await this.page.evaluate((dialogEl) => {
+                    return Array.from(dialogEl.querySelectorAll('input[type="checkbox"]')).filter((el) => !el.disabled && el.checked).length;
+                }, dialogHandle);
+                fastPathSucceeded = remainingCheckedFast === 0;
+                await dialogHandle.dispose();
+            }
+        } catch (fastPathErr) {
+            Logger.info(`excludeAllInvoicesInDraft: fast path failed (${fastPathErr.message}) — falling back to original per-checkbox scan`);
+        }
+
+        if (fastPathSucceeded) {
+            Logger.success(`Excluded all ${fastPathExcluded} invoice(s) from the draft via fast bulk scan (only the non-deselectable CM Fee row remains, if present)`);
+            return;
+        }
+
         // MCP/log-verified (2026-07-29): the shared "Test Property 6_Draw reporting" has
         // accumulated over 100 never-consumed invoices across months of repeated test runs
         // (discarding a draft never consumes its invoices, only approving does — confirmed

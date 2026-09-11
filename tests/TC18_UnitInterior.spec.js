@@ -592,6 +592,24 @@ test.describe('Unit Interior', () => {
                     await page.waitForTimeout(500);
                 }
 
+                // Ensure unit 105 (the source row "Apply to all Units" copies from) has at
+                // least one scope checked before applying. MCP-verified live (job 3828,
+                // 2026-09-11): a freshly (re-)opened Release Units dialog starts with EVERY
+                // scope checkbox unchecked for every unit — there is no default/pre-selected
+                // scope. "Apply same Scope to all Units" only propagates whatever unit 105
+                // already has checked; with nothing checked there, it has nothing to
+                // propagate, "Release with Scopes" never becomes enabled, and the click in
+                // S10 hangs until timeout. Seeding unit 105 here (skipped if it's already
+                // checked) makes the propagation meaningful without altering the uncheck
+                // assertion on unit 106 above.
+                const seedScopeLabel = `105 — ${fixture.releaseUnitsDialog.scopeNames[0]}`; // Bid with material
+                const seedAlreadyChecked = await loc.dialogScopeCheckbox(seedScopeLabel).isChecked({ timeout: 5000 }).catch(() => false);
+                Logger.info(`[TC_UI_005-S9] "${seedScopeLabel}" checked before seeding: ${seedAlreadyChecked}`);
+                if (!seedAlreadyChecked) {
+                    await loc.dialogScopeCheckbox(seedScopeLabel).click();
+                    await page.waitForTimeout(500);
+                }
+
                 // Click Apply same Scope to all Units
                 await po.clickApplyToAllUnits();
 

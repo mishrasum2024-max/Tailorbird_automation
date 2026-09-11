@@ -158,7 +158,10 @@ test.describe('Documents - Images', () => {
         // against the previous 900000ms budget, hitting the outer test timeout mid-run and
         // tearing the page down under addAndVerifyAllColumnTypesLite() rather than failing on an
         // actual assertion. Bumped for headroom, same rationale as TC130 in TC08_invoice.spec.js.
-        test.setTimeout(1500000);
+        // 2026-09-11: still hit the 1500000ms (25min) ceiling in CI (25.6m run, torn down mid
+        // closeManageColumns()) as the shared custom-column list has kept growing since the last
+        // bump — raised again for further headroom.
+        test.setTimeout(2400000);
         const createdColumns = await images.addAndVerifyAllColumnTypesLite();
         expect(createdColumns.length, 'All 13 column types must be created and verified').toBe(13);
         Logger.success(`TC430: All ${createdColumns.length} column types created, verified, and cleaned up`);

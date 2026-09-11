@@ -274,7 +274,7 @@ test.describe('Reassign Invoice', () => {
 
     test('TC367 @regression @reassignInvoice : Verify approved invoice reassignment between jobs and removal from original job', async () => {
         test.setTimeout(180000);
-
+        
         Logger.step('TC367: Navigating to property -> first job -> Invoice tab');
         const originalJobName = await reassignInvoicePage.openFirstJobOfProperty(PROPERTY_NAME);
         await reassignInvoicePage.openInvoiceTab();
