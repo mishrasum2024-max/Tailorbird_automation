@@ -251,7 +251,7 @@ test.describe('Left Panel - Modular', () => {
 
         test('TC15 @regression @menu Escape closes More submenu when present', async ({ page }) => {
             const dashboardUrl = process.env.DASHBOARD_URL;
-            test(!dashboardUrl, 'DASHBOARD_URL required');
+            test.skip(!dashboardUrl, 'DASHBOARD_URL required');
 
             await page.setViewportSize({ width: 1280, height: 720 });
             await page.goto(dashboardUrl, { waitUntil: 'load', timeout: 60_000 });
@@ -459,7 +459,7 @@ test.describe('Left Panel - Modular', () => {
         test.use({ storageState: { cookies: [], origins: [] } });
 
         test('TC20 @regression @menu Visiting /properties without session shows Sign in', async ({ page }) => {
-            test(!process.env.DASHBOARD_URL, 'DASHBOARD_URL is required to resolve app origin for this check.');
+            test.skip(!process.env.DASHBOARD_URL, 'DASHBOARD_URL is required to resolve app origin for this check.');
             Logger.info('[TC20] Starting: /properties without session must show Sign in');
             const base = process.env.BASE_URL || new URL(process.env.DASHBOARD_URL).origin;
             const propertiesUrl = new URL('/properties', base).href;
@@ -478,7 +478,7 @@ test.describe('Left Panel - Single-org user', () => {
     test.setTimeout(60_000);
 
     test('TC21 @regression @menu Single-org user: Switch Organization is NOT in user menu', async ({ page }) => {
-        test(!process.env.DASHBOARD_URL, 'DASHBOARD_URL required');
+        test.skip(!process.env.DASHBOARD_URL, 'DASHBOARD_URL required');
         Logger.info('[TC21] Starting: single-org user — open profile menu, assert expected items present, assert Switch Organization absent');
 
         await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'load', timeout: 60_000 });
@@ -528,7 +528,7 @@ test.describe('Left Panel - Text assertions', () => {
     test.setTimeout(120_000);
     test.describe.configure({ retries: 1 });
     test('TC21 @menu @sanity Full nav text agent — all CTAs, labels, nav items, profile menu', async ({ page }) => {
-        test(!process.env.DASHBOARD_URL, 'DASHBOARD_URL required');
+        test.skip(!process.env.DASHBOARD_URL, 'DASHBOARD_URL required');
         // beforeEach already navigated to DASHBOARD_URL and set up auth session
         InteractionLogger.logNavigation(process.env.DASHBOARD_URL, 'Dashboard — left nav Text Agent');
         await page.getByRole('navigation').getByText('Properties', { exact: true }).first().waitFor({ state: 'visible', timeout: 30_000 });
