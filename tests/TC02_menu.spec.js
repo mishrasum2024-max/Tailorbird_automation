@@ -10,10 +10,8 @@ const { ensureLeftPanelExpanded } = require('../utils/leftPanelExpander');
 const data = require('../fixture/leftPanel.json');
 const uiBenchmark = require('../fixture/tailorbirdUiMessages.json');
 
-/** Used by TC02-vis-01 (left nav visual regression). */
 const MENU_SCREENSHOT_OPTIONS = {
     animations: 'disabled',
-    // Left-nav icon/text anti-aliasing varies in headed runs.
     maxDiffPixels: 100000,
     maxDiffPixelRatio: 0.3,
 };
@@ -30,9 +28,6 @@ test.beforeEach(async ({ page: testPage }) => {
     Logger.info(`Navigating to dashboard: ${process.env.DASHBOARD_URL}`);
     await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'load', timeout: 60000 });
     Logger.info('Dashboard loaded successfully.');
-    // "Regression — no session" tests use an empty storageState, so this navigation
-    // redirects to the AuthKit sign-in page (no navbar ever renders there). Only expand
-    // the left panel when we actually landed on the app itself.
     const isAuthenticatedOrigin = new URL(page.url()).origin === new URL(process.env.DASHBOARD_URL).origin;
     if (isAuthenticatedOrigin) {
         await ensureLeftPanelExpanded(page);
@@ -81,14 +76,10 @@ test.describe('Left Panel - Modular', () => {
             test.setTimeout(180000);
 
             const base = process.env.BASE_URL || new URL(process.env.DASHBOARD_URL).origin;
-
-            // Start from /properties for a predictable nav state (CM collapsed, all sections visible).
-            // waitUntil:'load' (not 'domcontentloaded') ensures React has mounted the nav before proceeding.
             await page.goto(`${base}/properties`, { waitUntil: 'load', timeout: 120000 });
             await page.locator('nav .mantine-NavLink-root').filter({ hasText: 'Properties' }).first().waitFor({ state: 'visible', timeout: 30000 });
             Logger.info('[TC22] Start state: /properties — Construction Management collapsed');
 
-            // ── S1: Direct nav items visible without any section expansion ───────────
             for (const item of [
                 { label: 'Properties', path: '/properties' },
                 { label: 'Approvals', path: '/approvals' },
@@ -105,9 +96,6 @@ test.describe('Left Panel - Modular', () => {
                 });
             }
 
-            // ── S2: Construction Management children ──────────────────────────────────
-            // Reload /properties so nav is in its default (CM collapsed) state, then expand CM.
-            // At 1440×900, expanding CM causes Financials/Trackers/Documents/Vendors to move into "More".
             await page.goto(`${base}/properties`, { waitUntil: 'load', timeout: 120000 });
             await page.locator('nav .mantine-NavLink-root').filter({ hasText: 'Properties' }).first().waitFor({ state: 'visible', timeout: 30000 });
             await helper.ensureSectionExpanded(page, 'Construction Management');
@@ -132,9 +120,6 @@ test.describe('Left Panel - Modular', () => {
                 });
             }
 
-            // ── S3: Financials items — still in direct nav (CM expanded but Financials section visible) ──
-            // At 1440×900 with CM expanded: Financials (Category/Budget/CapEx) stay in direct nav.
-            // Only Trackers / Documents / Vendors overflow into the More dropdown.
             Logger.info('[TC22] Testing Financials items — visible in direct nav under Financials section');
 
             for (const item of [
@@ -154,7 +139,6 @@ test.describe('Left Panel - Modular', () => {
                 });
             }
 
-            // ── S4: "More" overflow items — Trackers / Documents / Vendors ─────────────
             Logger.info('[TC22] Testing More overflow items — Trackers/Documents/Vendors');
 
             for (const item of [
@@ -267,13 +251,8 @@ test.describe('Left Panel - Modular', () => {
 
         test('TC15 @regression @menu Escape closes More submenu when present', async ({ page }) => {
             const dashboardUrl = process.env.DASHBOARD_URL;
-            test.skip(!dashboardUrl, 'DASHBOARD_URL required');
+            test(!dashboardUrl, 'DASHBOARD_URL required');
 
-            /**
-             * "More" only renders when ClientWrapper overflow mode is on — often skipped on large viewports.
-             * 1) Short viewport + shrink the tallest overflow column to encourage "More".
-             * 2) If still no "More", use the user avatar menu (same Mantine [role=menu] + Escape behavior).
-             */
             await page.setViewportSize({ width: 1280, height: 720 });
             await page.goto(dashboardUrl, { waitUntil: 'load', timeout: 60_000 });
             await page.locator('nav').waitFor({ state: 'visible', timeout: 15_000 });
@@ -400,16 +379,10 @@ test.describe('Left Panel - Modular', () => {
             await expect(toggle).toBeVisible({ timeout: 10_000 });
             expect(await helper.getMainNavbarWidth(page), 'Start expanded').toBeGreaterThan(150);
             await toggle.click();
-            // The rail only visually narrows once the pointer leaves it (hovering re-expands
-            // it even when unpinned — MCP-verified on beta.tailorbird.com, 2026-07-26).
             await page.locator('main').first().hover();
             await expect.poll(() => helper.getMainNavbarWidth(page), { timeout: 10_000 }).toBeLessThan(120);
             Logger.info(`[TC18] Collapsed width: ${await helper.getMainNavbarWidth(page)}px`);
 
-            /**
-             * Collapsed ClientWrapper nav uses icon-only Mantine NavLinks with onClick + router.push — no /properties href.
-             * (Verified from failure trace snapshot: menu strip is img-only; "More" is link href="#".)
-             */
             const shell = page.locator('.mantine-AppShell-navbar');
             const sideNav = shell.getByRole('navigation').first();
             const byExactHref = shell.locator('a[href="/properties"]').first();
@@ -486,7 +459,7 @@ test.describe('Left Panel - Modular', () => {
         test.use({ storageState: { cookies: [], origins: [] } });
 
         test('TC20 @regression @menu Visiting /properties without session shows Sign in', async ({ page }) => {
-            test.skip(!process.env.DASHBOARD_URL, 'DASHBOARD_URL is required to resolve app origin for this check.');
+            test(!process.env.DASHBOARD_URL, 'DASHBOARD_URL is required to resolve app origin for this check.');
             Logger.info('[TC20] Starting: /properties without session must show Sign in');
             const base = process.env.BASE_URL || new URL(process.env.DASHBOARD_URL).origin;
             const propertiesUrl = new URL('/properties', base).href;
@@ -505,7 +478,7 @@ test.describe('Left Panel - Single-org user', () => {
     test.setTimeout(60_000);
 
     test('TC21 @regression @menu Single-org user: Switch Organization is NOT in user menu', async ({ page }) => {
-        test.skip(!process.env.DASHBOARD_URL, 'DASHBOARD_URL required');
+        test(!process.env.DASHBOARD_URL, 'DASHBOARD_URL required');
         Logger.info('[TC21] Starting: single-org user — open profile menu, assert expected items present, assert Switch Organization absent');
 
         await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'load', timeout: 60_000 });
@@ -555,20 +528,15 @@ test.describe('Left Panel - Text assertions', () => {
     test.setTimeout(120_000);
     test.describe.configure({ retries: 1 });
     test('TC21 @menu @sanity Full nav text agent — all CTAs, labels, nav items, profile menu', async ({ page }) => {
-        test.skip(!process.env.DASHBOARD_URL, 'DASHBOARD_URL required');
+        test(!process.env.DASHBOARD_URL, 'DASHBOARD_URL required');
         // beforeEach already navigated to DASHBOARD_URL and set up auth session
         InteractionLogger.logNavigation(process.env.DASHBOARD_URL, 'Dashboard — left nav Text Agent');
-        // Wait for nav skeleton to resolve: the container becomes visible immediately,
-        // but actual link text (Properties) only appears after JS hydration completes.
         await page.getByRole('navigation').getByText('Properties', { exact: true }).first().waitFor({ state: 'visible', timeout: 30_000 });
 
         await test.step('STATE 1 | Dashboard nav — full scan of all text elements', async () => {
             const snapshot = await LoginPage.scanAllTextElements(page);
             const failures = LoginPage.logAndAssertSnapshot(snapshot, 'dashboard-nav');
 
-            // Nav-specific: all visible buttons WITHIN the left navigation must have text or aria-label.
-            // (snapshot.buttons is page-wide — e.g. it also picks up the CapEx grid's icon-only
-            // column "pin" controls, which are unrelated to the left nav and out of scope here.)
             const navButtonHandles = await page.getByRole('navigation').locator('button,[role="button"]').all();
             for (let i = 0; i < navButtonHandles.length; i++) {
                 const btn = navButtonHandles[i];
@@ -587,11 +555,6 @@ test.describe('Left Panel - Text assertions', () => {
 
         await test.step('STATE 1b | Known nav labels — primary items visible (MCP-verified 2026-05-18)', async () => {
             const nav = page.getByRole('navigation');
-            // Defensive no-op when already expanded: "Construction Management" is a
-            // collapsible section, and its expand state can persist across tests sharing
-            // the same page/session (another test in this file deliberately collapses it
-            // as its own starting state) — a suite-order run can inherit that collapsed
-            // state even though an isolated run of just this test never sees it.
             await helper.ensureSectionExpanded(page, 'Construction Management').catch(() => { });
             for (const label of [
                 'Properties', 'Approvals', 'Construction Management',
@@ -635,8 +598,6 @@ test.describe('Left Panel - Text assertions', () => {
 
         await test.step('STATE 2 | Profile menu — open and assert all action labels', async () => {
             const nav = page.getByRole('navigation');
-            // Healed (locators/leftPanelLocator.js: profileTriggerStrategies) — original
-            // class-partial-match kept as primary, ARIA-based `[aria-haspopup=menu]` as fallback.
             const profileTrigger = healingLocator(locators.profileTriggerStrategies(page));
             if (await profileTrigger.isVisible({ timeout: 3_000 }).catch(() => false)) {
                 InteractionLogger.logButtonClick('Profile avatar', 'S');
@@ -645,13 +606,6 @@ test.describe('Left Panel - Text assertions', () => {
                 InteractionLogger.logButtonClick('Profile name', 'Sumit Mishra');
                 await nav.locator('text=Sumit Mishra').first().click();
             }
-            // MCP-verified live (2026-07-30): a bare `[role="menu"]` locator is a strict-mode
-            // trap here — Mantine's "More" nav dropdown (opened in STATE 1 above) can still
-            // be present in the DOM as its own [role="menu"] node even after Escape/close, and
-            // Playwright's strict mode counts every DOM match regardless of visibility. Anchor
-            // on "Logout" instead — content that only ever renders inside the profile menu,
-            // never in the nav's "More" menu — so this resolves to exactly one element no
-            // matter how many other menu nodes (open, closing, or stale) exist in the DOM.
             const profileMenu = page.getByRole('menu').filter({ has: page.getByText('Logout', { exact: true }) });
             await profileMenu.waitFor({ state: 'visible', timeout: 10_000 });
 

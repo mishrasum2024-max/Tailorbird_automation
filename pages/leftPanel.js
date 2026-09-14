@@ -7,19 +7,15 @@ const { healingLocator, logLocatorHealth } = require('../utils/locatorHealer');
 
 module.exports = {
 
-    /** Strategy definitions live in locators/leftPanelLocator.js (collapseContainerStrategies). */
     _collapseContainerStrategies: function (page, parentLocator, label) {
         return locators.collapseContainerStrategies(page, parentLocator, label);
     },
 
-    /** Healed collapse-container locator for a given section label — same Locator API as before. */
     getCollapseContainer: function (page, parentLocator, label) {
         return healingLocator(this._collapseContainerStrategies(page, parentLocator, label));
     },
 
     /**
-     * Non-blocking diagnostic: logs which collapse-container strategy is currently
-     * live for a given section label. Never throws.
      * @param {import('@playwright/test').Page} page
      * @param {string} label
      * @param {string} [contextLabel]
@@ -29,9 +25,6 @@ module.exports = {
         return logLocatorHealth([{ label: `collapseContainer[${label}]`, strategies: this._collapseContainerStrategies(page, parentLocator, label) }], contextLabel);
     },
 
-    /**
-     * Expand collapsible sections to reveal child items (for label collection)
-     */
     ensureSectionsExpandedForLabels: async function(page) {
         const sections = ['Financials', 'Trackers', 'Documents', 'Construction Management'];
         for (const section of sections) {
@@ -53,10 +46,6 @@ module.exports = {
         }
     },
 
-    /**
-     * Get all left panel menu labels from both visible nav and More menu (if present)
-     * Handles both full-screen (all items visible) and minimized (More menu) scenarios
-     */
     getLeftPanelLabels: async function(page) {
         await this.ensureSectionsExpandedForLabels(page);
         const visibleLabels = await this.getVisibleNavLabels(page);
@@ -86,9 +75,6 @@ module.exports = {
         return allLabels;
     },
 
-    /**
-     * Get labels that are directly visible in nav (not in More menu)
-     */
     getVisibleNavLabels: async function(page) {
         await page.locator('nav').waitFor({ state: 'visible', timeout: 15000 });
         for (let attempt = 0; attempt < 3; attempt++) {
@@ -107,9 +93,6 @@ module.exports = {
         return [];
     },
 
-    /**
-     * Check if More button/link exists in the nav
-     */
     hasMoreMenuButton: async function(page) {
         const moreButton = page.locator('nav .mantine-NavLink-root').filter({ hasText: 'More' });
         if (await moreButton.count() > 0) return true;
@@ -119,9 +102,6 @@ module.exports = {
         return await moreAny.count() > 0;
     },
 
-    /**
-     * Open the More menu and return labels from it
-     */
     getMoreMenuLabels: async function(page) {
         const more = await this.openMoreMenu(page);
         if (!more) return [];
@@ -148,9 +128,6 @@ module.exports = {
         return labels;
     },
 
-    /**
-     * Open the More menu and return the menu element
-     */
     openMoreMenu: async function(page) {
         const moreCandidates = page.locator('nav .mantine-NavLink-root').filter({ hasText: 'More' });
         if ((await moreCandidates.count()) === 0) return null;
@@ -163,21 +140,12 @@ module.exports = {
         return menu;
     },
 
-
-
-    /**
-     * Get locators for a section (parent and its collapse container)
-     */
     getSectionLocators: async function (page, label) {
         const parent = page.locator(locators.leftPanelItem(label)).first();
         const collapse = this.getCollapseContainer(page, parent, label);
         return { parent, collapse };
     },
 
-    /**
-     * Ensure a section is visible and expanded
-     * Handles both direct nav items and items in More menu
-     */
     ensureSectionExpanded: async function (page, sectionLabel) {
         // Check if section exists in direct nav - use filter for reliability.
         // Some UIs render duplicate hidden navlinks; pick the first visible one.
@@ -199,10 +167,6 @@ module.exports = {
             const collapse = this.getCollapseContainer(page, directParent, sectionLabel);
             await directParent.waitFor({ state: 'attached' });
             await directParent.scrollIntoViewIfNeeded();
-            // Sections can take a while to render visible right after the panel is
-            // pinned/hydrated — wait generously, and if it genuinely never shows up,
-            // skip the click instead of blindly waiting out the full action timeout
-            // on a target that was never going to become clickable.
             const becameVisible = await directParent
                 .waitFor({ state: 'visible', timeout: 30000 })
                 .then(() => true)
@@ -239,10 +203,6 @@ module.exports = {
         }
     },
 
-    /**
-     * Get locator for a child menu item under a section
-     * Handles both direct nav child items and items in More menu
-     */
     getChildMenuLocator: async function (page, parentSectionLabel, childLabel) {
         // Check if parent section exists in direct nav - use filter for reliability
         const parentLocator = page.locator('nav a.mantine-NavLink-root').filter({ hasText: parentSectionLabel }).first();
@@ -272,9 +232,6 @@ module.exports = {
         return null;
     },
 
-    /**
-     * List visible sub-options under a collapse container
-     */
     listVisibleSuboptions: async function (collapseLocator) {
         const anchors = collapseLocator.locator(locators.subOptions);
         const n = await anchors.count();
@@ -289,10 +246,6 @@ module.exports = {
         return visibleNames;
     },
 
-    /**
-     * Test expand/collapse functionality for a section
-     * Handles both full screen (direct nav) and minimized (More menu) scenarios
-     */
     runTwoClickTest: async function (page, label) {
         await page.waitForTimeout(30000);
         await page.waitForTimeout(500);
@@ -379,9 +332,6 @@ module.exports = {
         }
     },
 
-    /**
-     * Rounded pixel width of the AppShell navbar (after viewport/zoom transforms).
-     */
     async getMainNavbarWidth(page) {
         const navbar = page.locator(locators.appShellNavbar).first();
         await expect(navbar, 'App shell navbar must be visible').toBeVisible({ timeout: 15000 });
@@ -392,13 +342,6 @@ module.exports = {
         return page.locator(locators.mainNavbarHeaderToggle).first();
     },
 
-    /**
-     * Main sidebar narrow/wide toggle. Collapse/expand is via the hover-revealed Pin/Unpin
-     * button (MCP-verified on beta.tailorbird.com, 2026-07-26) — there is no separate chevron
-     * NavLink anymore. Collapsing only takes visual effect once the pointer leaves the navbar
-     * (the rail re-expands on hover even when unpinned), so we move the pointer away before
-     * asserting the narrowed width.
-     */
     async assertMainSidebarToggle(page) {
         const toggleBtn = this.mainNavbarToggleLocator(page);
         await expect(toggleBtn, 'Main sidebar Pin/Unpin control must be visible while expanded').toBeVisible({ timeout: 10000 });

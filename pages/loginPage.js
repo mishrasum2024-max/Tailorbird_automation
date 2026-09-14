@@ -3,6 +3,7 @@ const { Logger } = require('../utils/logger');
 const { InteractionLogger } = require('../utils/InteractionLogger');
 const { healingLocator, logLocatorHealth } = require('../utils/locatorHealer');
 const { loginElementStrategies } = require('../locators/loginLocator');
+const { ensureLeftPanelExpanded } = require('../utils/leftPanelExpander');
 const authKitMessages = require('../fixture/authKitMessages.json');
 
 class LoginPage {
@@ -10,35 +11,19 @@ class LoginPage {
   constructor(page) {
     this.page = page;
 
-    // ── Self-healing locators ──────────────────────────────────────────────
-    // Strategy definitions live in locators/loginLocator.js (see that file for the
-    // ordering rationale: strategy #1 is always the exact original locator, later
-    // strategies are pure fallback safety nets). `healingLocator()` chains them with
-    // Playwright's native `.or()`, so `this.emailInput` etc. remain plain Locators:
-    // every existing `.fill()`, `.click()`, `expect(...).toBeVisible()` call site
-    // below and in the spec files keeps working unchanged.
     this._elementStrategies = loginElementStrategies(page);
 
-    // Locators (each a healed Locator — same type/behavior as a plain page.locator())
     this.emailInput = healingLocator(this._elementStrategies.emailInput);
     this.passwordInput = healingLocator(this._elementStrategies.passwordInput);
     this.continueButton = healingLocator(this._elementStrategies.continueButton);
     this.signInButton = healingLocator(this._elementStrategies.signInButton);
-    /** Broad locator for AuthKit / form validation failures */
     this.errorMessage = healingLocator(this._elementStrategies.errorMessage);
     this.organizationSelect = healingLocator(this._elementStrategies.organizationSelect);
 
-    /** Exact strings from AuthKit (keep in sync with fixture/authKitMessages.json; verify via MCP if UI changes). */
     this.authKit = authKitMessages;
   }
 
   /**
-   * Non-blocking diagnostic: logs which strategy is currently live for each tracked
-   * element. Never throws — call it at a point in the flow where the given elements are
-   * actually expected to be rendered (e.g. emailInput/continueButton right after `goto()`,
-   * passwordInput/signInButton once the password step is showing). Checking an element
-   * before its step exists always reports "NONE matched" — that's not drift, it's just
-   * asking too early — so pass `only` to scope the check to what's live at that point.
    * @param {string} [contextLabel]
    * @param {string[]} [only] subset of keys from _elementStrategies to check; omit for all
    */
@@ -49,8 +34,6 @@ class LoginPage {
   }
 
   /**
-   * Same extraction strategy as MCP `evaluate` diagnostics (tree walk + <p>), plus Playwright
-   * a11y `[role=alert]` (often empty in DOM; see fixture `_mcpVerifiedScenarios`).
    * @returns {Promise<{ fromA11yAlerts: string[], fromDomScan: string[], fromParagraphs: string[] }>}
    */
   async captureAuthKitErrorTextsForLog() {
@@ -128,16 +111,8 @@ class LoginPage {
     }
   }
 
-  /**
-   * Stable password-step chrome from live AuthKit (verified via MCP browser, 2026-05-04).
-   * Fails immediately if labels or secondary actions change.
-   */
+
   async expectPasswordStepChromeVisible() {
-    // MCP-verified live (2026-08-24): AuthKit renamed "Forgot your password?" to
-    // "Reset password" (same position/purpose — starts the password-reset flow).
-    // Alias the accessible name in the live DOM so the original locator below keeps
-    // resolving; if a further rename drops "Reset password" too, nothing gets aliased
-    // and the check below still correctly fails loud, per this method's intent.
     await this.page.evaluate(() => {
       const alreadyAliased = document.querySelector('a[aria-label="Forgot your password?"]');
       if (alreadyAliased) return;
@@ -150,11 +125,6 @@ class LoginPage {
       this.page.getByRole('link', { name: 'Forgot your password?' }),
       'FAIL: AuthKit password step — link "Forgot your password?" missing or renamed (verify LIVE UI / MCP).',
     ).toBeVisible({ timeout: 10_000 });
-    // MCP-verified live (2026-07-28): AuthKit renamed this secondary link from "Go back" to
-    // "Change email" (same position/purpose — returns to the email step). Check the current
-    // copy first; only fall back to the original "Go back" check (which will then correctly
-    // fail loud, per this method's intent) if that's missing too, so a further future rename
-    // still gets caught instead of silently passing forever.
     const changeEmailLink = this.page.getByRole('link', { name: 'Change email' });
     if (await changeEmailLink.isVisible({ timeout: 5000 }).catch(() => false)) {
       await expect(changeEmailLink).toBeVisible();
@@ -179,9 +149,6 @@ class LoginPage {
     await this.expectPasswordStepChromeVisible();
   }
 
-  /**
-   * Navigates to the login page.
-   */
   async goto() {
     const LOGIN_URL = process.env.LOGIN_URL || 'https://stalwart-collection-11-staging.authkit.app/';
     Logger.step(`Navigating to login page: ${LOGIN_URL}`);
@@ -282,14 +249,10 @@ class LoginPage {
     await this.passwordInput.fill(password);
 
     Logger.step('Step 4: Clicking Sign in...');
-    // await Promise.all([
-    //   this.page.waitForNavigation({ waitUntil: 'networkidle' }),
-    //   this.signInButton.click()
-    // ]);
 
     await this.signInButton.click();
 
-    if (email !== 'admin_1781257675038@yopmail.com') {
+    if (email !== (process.env.ONE_ORG_TEST_EMAIL || 'admin_1781257675038@yopmail.com')) {
       await this.page.waitForURL(/organization-selection/, { timeout: 30000 });
       Logger.step('Step 6: Verifying successful login...');
       await this.page.waitForTimeout(5000);
@@ -304,6 +267,53 @@ class LoginPage {
   }
 
   /**
+   * @param {string} email exact email used to log in
+   */
+  async expectAuthenticatedUiVisible(email) {
+    await ensureLeftPanelExpanded(this.page);
+    const profileEmailText = this.page.getByText(email, { exact: true });
+    await expect(
+      profileEmailText,
+      `FAIL: Post-login — signed-in user's email "${email}" not visible anywhere in the app (only shown once authenticated; verify LIVE UI / MCP).`,
+    ).toBeVisible({ timeout: 15000 });
+
+    await profileEmailText.click();
+    await expect(
+      this.page.getByRole('menuitem', { name: 'Logout' }),
+      'FAIL: Post-login — "Logout" menu item not found after opening the profile menu (only reachable once authenticated; verify LIVE UI / MCP).',
+    ).toBeVisible({ timeout: 10000 });
+    await this.page.keyboard.press('Escape');
+
+    Logger.success(`✅ Post-login authenticated UI verified: "${email}" visible, "Logout" reachable.`);
+  }
+
+  /**
+   * @param {string} email exact email of the currently signed-in user (to locate the profile trigger)
+   */
+  async logout(email) {
+    await ensureLeftPanelExpanded(this.page);
+    const profileEmailText = this.page.getByText(email, { exact: true });
+    await expect(
+      profileEmailText,
+      `FAIL: Logout — signed-in user's email "${email}" not visible; cannot open the profile menu.`,
+    ).toBeVisible({ timeout: 15000 });
+    await profileEmailText.click();
+
+    const logoutMenuItem = this.page.getByRole('menuitem', { name: 'Logout' });
+    await expect(
+      logoutMenuItem,
+      'FAIL: Logout — "Logout" menu item not found after opening the profile menu.',
+    ).toBeVisible({ timeout: 10000 });
+    await logoutMenuItem.click();
+
+    await expect(
+      this.page,
+      'FAIL: Logout — did not land on the public marketing site (https://www.tailorbird.com/); session may not have been cleared, or the post-logout destination changed.',
+    ).toHaveURL('https://www.tailorbird.com/', { timeout: 20000 });
+    Logger.success('✅ User successfully logged out.');
+  }
+
+  /**
    * Checks if login error is visible.
    * @returns {Promise<boolean>}
    */
@@ -312,13 +322,7 @@ class LoginPage {
     return this.errorMessage.isVisible();
   }
 
-  // ─── Text Agent helpers ───────────────────────────────────────────────────
-
   /**
-   * Uses MCP browser (page.evaluate) to fetch every text-bearing element from the
-   * live DOM — headings, buttons, inputs, labels, links, paragraphs, alert/live
-   * regions, and inline text nodes. Nothing is filtered before capture.
-   *
    * @param {import('@playwright/test').Page} page
    * @returns {Promise<{headings:object[],buttons:object[],inputs:object[],labels:object[],links:object[],paragraphs:object[],alerts:object[],textNodes:object[]}>}
    */
@@ -388,12 +392,6 @@ class LoginPage {
   }
 
   /**
-   * Checks that a UI element's text is "proper":
-   *   1. Non-empty after trim (submit buttons must have CTA; icon-only buttons get a soft WARN)
-   *   2. No raw HTML entity leakage (&amp; &lt; etc.)
-   *   3. No unresolved template syntax ({{ }}, <% %>, ${ })
-   *   4. No debug literals (undefined, null, [object Object], NaN)
-   *
    * Issues prefixed with "WARN:" are soft — callers log them but don't treat as failures.
    *
    * @param {{ tag:string, text?:string, placeholder?:string, ariaLabel?:string, associatedLabel?:string, type?:string, buttonType?:string, role?:string }} el
@@ -438,9 +436,6 @@ class LoginPage {
   }
 
   /**
-   * Logs every element in the snapshot via InteractionLogger, runs checkTextIsProper
-   * on each, and returns a list of hard failures (WARN-prefixed issues are logged only).
-   *
    * @param {object} snapshot  result of scanAllTextElements()
    * @param {string} stepContext  e.g. "email-step"
    * @returns {string[]}  hard failures only
@@ -532,11 +527,6 @@ class LoginPage {
   }
 
   /**
-   * Targeted scan that fetches ONLY the volatile text regions — paragraphs,
-   * alert/live regions, and inline text nodes. Use this after triggering a
-   * validation error to avoid re-logging static page chrome (heading, buttons,
-   * inputs, labels, links) that scanAllTextElements already captured.
-   *
    * @param {import('@playwright/test').Page} page
    * @returns {Promise<Array<{source:string, text:string, visible:boolean, role?:string, ariaLive?:string}>>}
    */
@@ -578,9 +568,6 @@ class LoginPage {
   }
 
   /**
-   * Logs the results of scanErrorText, runs checkTextIsProper on each visible
-   * entry, and returns the visible text strings for fixture cross-check assertions.
-   *
    * @param {Array<{source:string, text:string, visible:boolean}>} entries
    * @param {string} stepContext
    * @returns {{ visibleTexts: string[], failures: string[] }}

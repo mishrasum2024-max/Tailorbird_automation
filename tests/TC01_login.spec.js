@@ -14,6 +14,39 @@ const LOGIN_SCREENSHOT_OPTIONS = {
   maxDiffPixelRatio: 0.3,
 };
 
+test.describe('Login Flow - Logout E2E (isolated, no session persisted)', () => {
+  test('TC00 @sanity @login Verify user can log out and log back in successfully', async ({ browser }) => {
+    Logger.info('Starting isolated logout + re-login E2E test (fresh context, no session ever saved)...');
+
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    const login = new LoginPage(page);
+
+    await test.step('Login', async () => {
+      Logger.step('Navigating to login URL and signing in with credentials from .env...');
+      await page.goto(process.env.LOGIN_URL, { waitUntil: 'load' });
+      await login.login(process.env.TEST_EMAIL, process.env.TEST_PASSWORD);
+    });
+
+    await test.step('Logout', async () => {
+      Logger.step('Logging out via the profile menu...');
+      await login.logout(process.env.TEST_EMAIL);
+    });
+
+    await test.step('Log back in', async () => {
+      Logger.step('Navigating back to login URL and signing in again...');
+      await page.goto(process.env.LOGIN_URL, { waitUntil: 'load' });
+      await login.login(process.env.TEST_EMAIL, process.env.TEST_PASSWORD);
+    });
+
+    await test.step('Close Context (no session ever persisted)', async () => {
+      await context.close();
+    });
+
+    Logger.success('TC00 passed — logout and re-login both verified end-to-end, no session file written');
+  });
+});
+
 test.describe('Login Flow', () => {
   let context;
   let page;
@@ -35,6 +68,11 @@ test.describe('Login Flow', () => {
     await test.step('Perform login', async () => {
       Logger.step('Using credentials from .env...');
       await login.login(process.env.TEST_EMAIL, process.env.TEST_PASSWORD);
+    });
+
+    await test.step('Assert authenticated-only UI is visible', async () => {
+      Logger.step('Verifying post-login UI (signed-in email + reachable Logout)...');
+      await login.expectAuthenticatedUiVisible(process.env.TEST_EMAIL);
     });
 
     await test.step('Store Session', async () => {
@@ -109,6 +147,35 @@ test.describe('Login Flow', () => {
     await test.step('Store Session', async () => {
       await page.context().storageState({ path: 'OneOrganizationUserSessionState.json' });
       Logger.success('💾 Session stored successfully at OneOrganizationUserSessionState.json');
+    });
+  });
+
+  test('TC451 @sanity @login Verify vendor login user can log in successfully', async ({ browser }) => {
+    Logger.info('Starting Tailorbird login test with vendor login credentials...');
+
+    context = await browser.newContext();
+    page = await context.newPage();
+    login = new LoginPage(page);
+
+    await test.step('Go to login page', async () => {
+      Logger.step('Navigating to login URL...');
+      await page.goto(process.env.LOGIN_URL, { waitUntil: 'load' });
+    });
+
+    await test.step('Perform login', async () => {
+      Logger.step('Using VENDOR_LOGIN credentials from .env...');
+      await login.submitCredentials(process.env.VENDOR_LOGIN_EMAIL, process.env.VENDOR_LOGIN_PASSWORD);
+      await page.waitForURL((url) => !url.hostname.includes('authkit.app'), { timeout: 30000 });
+      Logger.success(`✅ Vendor login user successfully logged in and redirected to ${page.url()}`);
+    });
+
+    await test.step('Store Session', async () => {
+      await page.context().storageState({ path: 'vendorsession.json' });
+      Logger.success('💾 Session stored successfully at vendorsession.json');
+    });
+
+    await test.step('Close Context', async () => {
+      await context.close();
     });
   });
 });

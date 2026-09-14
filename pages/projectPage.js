@@ -1010,6 +1010,26 @@ exports.ProjectPage = class ProjectPage {
         }
     }
 
+    /**
+     * TC29 (Non-Contract flow): identical to fillJobForm() but hardcodes
+     * Financial Type to "Non Contract" (MCP-verified live dropdown option,
+     * distinct from "Contract"/"PO") — used to create a job whose financial
+     * type is Non Contract instead of Contract.
+     */
+    async fillNonContractJobForm({ title, jobType, vendor, description = '', estimatedBudget, startDate, endDate, selectBudgetCategory = false }) {
+        return this.fillJobForm({
+            title,
+            jobType,
+            financialType: 'Non Contract',
+            vendor,
+            description,
+            estimatedBudget,
+            startDate,
+            endDate,
+            selectBudgetCategory,
+        });
+    }
+
     formatDate(date) {
         const m = String(date.getMonth() + 1).padStart(2, '0');
         const y = date.getFullYear();

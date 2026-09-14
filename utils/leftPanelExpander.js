@@ -111,6 +111,17 @@ async function ensureLeftPanelExpanded(page) {
     const navbar = page.locator(NAVBAR_SELECTOR).first();
     await navbar.waitFor({ state: 'visible', timeout: 35000 });
 
+    // Hydration race guard (MCP/live-verified 2026-09-14): on an account whose
+    // sidebar is already pinned from a prior session (localStorage
+    // tb-sidebar-pinned), the "Unpin sidebar" button can still be un-rendered at
+    // the exact instant isPanelConfirmedPinned()'s one-shot isVisible() check
+    // below runs, even though the panel is not actually collapsed — there is no
+    // "Pin sidebar" button to find in that state, so the retry loop further down
+    // would otherwise wait out its full timeout hunting for a button that can
+    // never appear. Give the DOM a bounded real wait to settle first; this is a
+    // no-op (times out harmlessly) when the panel is genuinely collapsed.
+    await navbar.locator(UNPIN_BUTTON_SELECTOR).first().waitFor({ state: 'visible', timeout: 8000 }).catch(() => { });
+
     if (await isPanelConfirmedPinned(page, navbar)) {
         Logger.info('[LeftPanelExpander] Panel already pinned open — no action taken.');
         return;
@@ -119,6 +130,16 @@ async function ensureLeftPanelExpanded(page) {
     let lastError = null;
     for (let attempt = 1; attempt <= MAX_PIN_ATTEMPTS; attempt++) {
         try {
+            // Same hydration race guard as above, re-applied at the top of every
+            // attempt: a slower environment can still be settling when attempt 1
+            // starts, so re-verify before committing to the "hunt for Pin sidebar"
+            // path again on attempt 2/3.
+            if (await isPanelConfirmedPinned(page, navbar)) {
+                Logger.success(
+                    `[LeftPanelExpander] Panel confirmed pinned open before attempt ${attempt}/${MAX_PIN_ATTEMPTS} — settled after an earlier hydration race, no action needed.`
+                );
+                return;
+            }
             const width = await getNavbarWidth(page);
             Logger.info(
                 `[LeftPanelExpander] Attempt ${attempt}/${MAX_PIN_ATTEMPTS}: panel not confirmed pinned (width=${width}px) — expanding and pinning.`
