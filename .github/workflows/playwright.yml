@@ -50,8 +50,8 @@ jobs:
 
       # Run all remaining tests except mandatory
       - name: Run remaining tests
-        run: npx playwright test TC01_login.spec.js TC20_Bid.spec.js TC29_NonContractFlow.spec.js TC30_VendorBidAccepting.spec.js --workers=4
-
+        run: npx playwright test  --grep-invert @mandatory --workers=4
+        
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
