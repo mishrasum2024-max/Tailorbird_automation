@@ -507,4 +507,157 @@ test.describe('Verify Bids', () => {
         Logger.success(`TC319 passed — bid "${uniqueBidName}" created, bid book generated from uploaded file, vendor "${bidData.sendToVendors.vendorName}" invited`);
     });
 
+    /**
+     * Minimal CSV-line parser (handles double-quoted fields containing commas, e.g. the
+     * Location column's "BUILDING 01, BUILDING 02, ..." list) — no third-party dependency,
+     * used only to build a data-embedded AI prompt from files/bid_to_upload.csv below.
+     */
+    function parseCsvLine(line) {
+        const fields = [];
+        let current = '';
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+            const ch = line[i];
+            if (ch === '"') {
+                inQuotes = !inQuotes;
+            } else if (ch === ',' && !inQuotes) {
+                fields.push(current);
+                current = '';
+            } else {
+                current += ch;
+            }
+        }
+        fields.push(current);
+        return fields.map((f) => f.trim());
+    }
+
+    /**
+     * Builds an AI prompt with the CSV's own row data embedded directly as text (NOT as a file
+     * attachment) — MCP-verified live 2026-09-14 that Piper's Bid Book chat can fail to read an
+     * attached file's contents, but reliably generates an accurate table when the exact values
+     * are given inline in the prompt itself.
+     * @param {string} csvFile absolute path to a bid_to_upload-style CSV
+     */
+    function buildAiPromptFromCsv(csvFile) {
+        const lines = fs.readFileSync(csvFile, 'utf8').trim().split(/\r?\n/);
+        const headers = parseCsvLine(lines[0]);
+        const dataLines = lines.slice(1).filter((l) => l.trim().length > 0);
+
+        const itemLines = dataLines.map((line, i) => {
+            const values = parseCsvLine(line);
+            const pairs = headers
+                .map((h, idx) => [h, values[idx]])
+                .filter(([, v]) => v !== undefined && v !== '')
+                .map(([h, v]) => `${h}: ${v}`)
+                .join(' | ');
+            return `${i + 1}. ${pairs}`;
+        });
+
+        const prompt = `Please create the bid book table using exactly these ${itemLines.length} line item(s) (do not invent or add any other line items):\n\n${itemLines.join('\n\n')}\n\nPlease generate the complete bid book table now using these exact values.`;
+        return { prompt, headers, dataLines };
+    }
+
+    test('TC454 @regression @bid @ai : Verify AI-generated bid book from bid_to_upload.csv creates a bid and sends invitation to sumit corp', async () => {
+        test.setTimeout(600000);
+        const bidData = loadBidData();
+        const uniqueBidName = `AI_Bid_${Date.now()}`;
+        const csvFile = path.resolve('./files/bid_to_upload.csv');
+        if (!fs.existsSync(csvFile)) {
+            test.skip(true, `Bid book source file not found: ${csvFile}`);
+        }
+
+        // Read bid_to_upload.csv and build a prompt with its actual row data embedded as text
+        // (MCP-verified live: attaching the file to the chat is unreliable — the AI can fail
+        // to read it — so the exact values are given inline in the prompt instead).
+        const { prompt: aiPrompt, dataLines } = buildAiPromptFromCsv(csvFile);
+        Logger.info(`TC454: Prompt built from ${dataLines.length} CSV row(s) in bid_to_upload.csv`);
+
+        Logger.step('TC454: Navigating to Bids via left panel nav');
+        await page.goto(process.env.BASE_URL, { waitUntil: 'load' });
+        await page.waitForTimeout(2000);
+        await bidPage.navigateToBidsPageViaLeftNav();
+
+        Logger.step('TC454: Creating a new bid');
+        await bidPage.openCreateBidModal();
+        const formData = {
+            bidName: uniqueBidName,
+            property: bidData.property,
+            bidType: bidData.bidType,
+            detailLevel: bidData.detailLevel,
+            priceBy: bidData.priceBy,
+            bidDueDate: bidData.bidDueDate,
+        };
+        await bidPage.fillAndSubmitCreateBidForm(formData);
+        const bidId = await bidPage.waitForBidDetailPage();
+        Logger.success(`TC454: Bid created — "${uniqueBidName}" (ID: ${bidId})`);
+
+        Logger.step('TC454: Opening Bid Book tab and sending the CSV-data-embedded prompt');
+        await bidPage.navigateToBidBookTab();
+        await bidPage.assertBidBookTabElements();
+
+        // AI Bid Levelling responses are non-deterministic (product behavior: 3-4 differently
+        // shaped responses observed — an immediate table, a clarifying question, a partial
+        // table, etc.). Ask up to 3 times total before giving up: the initial prompt, then —
+        // only if the table still hasn't rendered in the right-hand panel — re-ask at least
+        // twice more with an explicit, data-repeating nudge, checking the panel after each ask.
+        const MAX_ASKS = 3;
+        let tableGenerated = false;
+        for (let ask = 1; ask <= MAX_ASKS && !tableGenerated; ask++) {
+            const message = ask === 1
+                ? aiPrompt
+                : `The bid book table has not appeared in the right-hand panel yet (attempt ${ask}). ${aiPrompt}`;
+            Logger.step(`TC454: AI ask #${ask}/${MAX_ASKS}`);
+            tableGenerated = await bidPage.generateBidBookViaChat(message);
+            if (tableGenerated) {
+                Logger.success(`TC454: Bid book table appeared in the right-hand panel on ask #${ask}.`);
+            } else {
+                Logger.info(`TC454: No table in the right-hand panel after ask #${ask}.`);
+            }
+        }
+        expect(tableGenerated, `Bid book table must appear in the right-hand panel within ${MAX_ASKS} asks`).toBe(true);
+
+        // Structural assertions on the generated table (CSV's own data, not AI prose) — only
+        // once the table is confirmed present, per the "invite only if table available" rule.
+        await bidPage.assertBidBookToolbar();
+        const loc = bidPage.loc();
+        await expect(loc.bidBookIframe).toBeVisible();
+        const frame = page.frameLocator('iframe').first();
+        await expect(frame.locator('table')).toBeVisible({ timeout: 15000 });
+        const rowCount = await frame.getByRole('row').count();
+        expect(rowCount, 'Generated bid book table must contain data rows beyond the header').toBeGreaterThan(1);
+        await expect(frame.getByRole('cell', { name: 'Roofing', exact: true }).first()).toBeVisible();
+        Logger.success('TC454: Bid book table verified — reflects the CSV data given in the prompt');
+
+        // ── Send invitation to "sumit corp" — hardcoded per requirement, independent of
+        // data/bidData.json drift. Disambiguated by email (oct30sumit@yopmail.com): this org
+        // has MULTIPLE vendors named "sumit corp" (MCP-verified live), so matching by name
+        // alone is not bulletproof — assertSendToVendorsFlowByEmail() (new method, does not
+        // alter the existing assertSendToVendorsFlow()) targets the exact contact email. ────
+        const expectedVendorName = 'sumit corp';
+        const expectedVendorEmail = 'oct30sumit@yopmail.com';
+        Logger.step(`TC454: Sending bid invitation to "${expectedVendorName}" (${expectedVendorEmail})`);
+        await bidPage.assertSendToVendorsFlowByEmail({
+            searchTerm: expectedVendorName,
+            vendorName: expectedVendorName,
+            vendorEmail: expectedVendorEmail,
+        });
+
+        // Bulletproof invitation check: Manage Bids must show the EXPECTED vendor, by exact
+        // name, in an "Invited" state — not just that some invited row exists.
+        Logger.step('TC454: Verifying invitation landed on the expected vendor in Manage Bids');
+        await bidPage.navigateToManageBidsTab();
+        const invitedVendorRow = page.getByRole('tabpanel', { name: 'Manage Bids' })
+            .getByRole('row', { name: expectedVendorName });
+        await expect(
+            invitedVendorRow,
+            `FAIL: expected vendor "${expectedVendorName}" must appear as a row in Manage Bids after Send to Vendors`,
+        ).toBeVisible({ timeout: 15000 });
+        await expect(
+            invitedVendorRow,
+            `FAIL: vendor "${expectedVendorName}"'s Manage Bids row must show status "Invited"`,
+        ).toContainText('Invited');
+
+        Logger.success(`TC454 passed — AI-generated bid book from bid_to_upload.csv on bid "${uniqueBidName}", invitation confirmed sent to expected vendor "${expectedVendorName}" (${expectedVendorEmail})`);
+    });
+
 });

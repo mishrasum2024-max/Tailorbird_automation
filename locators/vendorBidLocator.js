@@ -49,15 +49,63 @@ function vendorBidsGridRowsStrategies(gridScope) {
     ];
 }
 
-/** Icon-only "View Details" action button inside a bid row's pinned Actions column.
+/** Icon-only "View Details" action button for a bid row. revo-grid renders the pinned
+ * "Actions" column as a SEPARATE section, not a descendant of the data row (same quirk
+ * documented in pages/projectJob.js for the admin Jobs grid) — so this must be matched by
+ * the row's `data-rgrow` value against the whole grid/page, not scoped inside the row itself.
  * MCP-verified accessible name "View Details" (Mantine Tooltip-driven, not a plain
- * title/aria-label attribute — confirmed live via accessibility snapshot, not DOM textContent). */
-function viewDetailsButtonStrategies(rowScope) {
+ * title/aria-label attribute — confirmed live via accessibility snapshot, not DOM textContent).
+ * @param {import('@playwright/test').Page} page
+ * @param {string} rowGrow the row's `data-rgrow` attribute value
+ */
+function viewDetailsButtonStrategies(page, rowGrow) {
     return [
-        { name: 'role:button[name=View Details](original)', locator: rowScope.getByRole('button', { name: 'View Details' }) },
-        { name: 'css:button:has(svg.lucide-eye)', locator: rowScope.locator('button:has(svg.lucide-eye)') },
-        { name: 'css:[role=gridcell] button', locator: rowScope.locator('[role="gridcell"] button').first() },
-        { name: 'css:button', locator: rowScope.locator('button').last() },
+        { name: 'css:[data-rgrow=X] >> role:button[name=View Details](original)', locator: page.locator(`[data-rgrow="${rowGrow}"]`).getByRole('button', { name: 'View Details' }) },
+        { name: 'css:[data-rgrow=X] button:has(svg.lucide-eye)', locator: page.locator(`[data-rgrow="${rowGrow}"] button:has(svg.lucide-eye)`) },
+        { name: 'css:div[role=gridcell][data-rgrow=X] button', locator: page.locator(`div[role="gridcell"][data-rgrow="${rowGrow}"] button`).first() },
+        { name: 'css:[data-rgrow=X] button(last)', locator: page.locator(`[data-rgrow="${rowGrow}"] button`).last() },
+    ];
+}
+
+/** Bids listing toolbar "Export" button — downloads the current list as a CSV
+ * ("Bid Name","Property","Project","Job","Bid Due Date","Status","Created At", MCP-verified
+ * 2026-09-14) via a real browser download event. Reading this file is far more reliable than
+ * scanning the live revo-grid directly: the grid virtualizes both rows and columns, and was
+ * observed (live, in an actual Playwright run) to return an incomplete/shifting set of column
+ * headers on reads taken immediately after navigation — the exported CSV has no such issue. */
+function exportButtonStrategies(page) {
+    return [
+        { name: 'role:button[name=Export](exact,original)', locator: page.getByRole('button', { name: 'Export', exact: true }) },
+        { name: 'css:button:has-text("Export")', locator: page.locator('button:has-text("Export")').first() },
+        { name: 'text=Export(exact)', locator: page.getByText('Export', { exact: true }).first() },
+        { name: 'css:header button >> nth=-1', locator: page.locator('button').filter({ hasText: 'Export' }).last() },
+    ];
+}
+
+/** Bid-detail page header: "Accept Bid" button — only present while the bid invitation is
+ * still in the "Invited" state (MCP-verified 2026-09-14 on bid 186: header showed "Bid
+ * invitation / Invited" with "Reject Bid"/"Accept Bid" buttons and only a "Download Template"
+ * button — no Upload/Replace Document or Submit Bid button existed yet). Clicking it opens an
+ * "Accept Bid" confirmation dialog; only after confirming does the page switch to the state
+ * where uploadOrReplaceDocumentButtonStrategies/submitBidButtonStrategies become available. */
+function acceptBidButtonStrategies(page) {
+    return [
+        { name: 'role:button[name=Accept Bid](exact,original)', locator: page.getByRole('button', { name: 'Accept Bid', exact: true }) },
+        { name: 'css:button:has-text("Accept Bid")', locator: page.locator('button:has-text("Accept Bid")').first() },
+        { name: 'text=Accept Bid(exact)', locator: page.getByText('Accept Bid', { exact: true }).first() },
+        { name: 'css:header button(last-of-pair, near Reject Bid)', locator: page.locator('button').filter({ hasText: /^(Reject|Accept) Bid$/ }).last() },
+    ];
+}
+
+/** The "Accept Bid" confirmation dialog's own "Accept" button (distinct from the header's
+ * "Accept Bid" button and the dialog's "Cancel" button). MCP-verified 2026-09-14: dialog reads
+ * "Are you sure you want to accept this bid?" with Cancel/Accept buttons. */
+function acceptBidConfirmButtonStrategies(page) {
+    return [
+        { name: 'role:dialog >> role:button[name=Accept](exact,original)', locator: page.getByRole('dialog').getByRole('button', { name: 'Accept', exact: true }) },
+        { name: 'css:[role=dialog] button:has-text("Accept")', locator: page.locator('[role="dialog"] button:has-text("Accept")').filter({ hasNotText: 'Bid' }) },
+        { name: 'role:dialog[name=Accept Bid] >> role:button[name=Accept]', locator: page.getByRole('dialog', { name: 'Accept Bid' }).getByRole('button', { name: 'Accept', exact: true }) },
+        { name: 'text=Accept(exact, in dialog)', locator: page.locator('[role="dialog"]').getByText('Accept', { exact: true }).first() },
     ];
 }
 
@@ -72,16 +120,19 @@ function bidDetailTabStrategies(page) {
     ];
 }
 
-/** Bid-detail page: "Upload Document" button in the header action bar (Bid tab) — the button
- * that opens the Uploadcare "From device" widget used to attach the priced bid file.
- * MCP-verified plain <button> with visible text "Upload Document", paired with a disabled
- * "Submit Bid" button until a document is attached. */
-function uploadDocumentButtonStrategies(page) {
+/** Bid-detail page: the header action-bar button that opens the Uploadcare "From device"
+ * widget used to attach the priced bid file. MCP-verified this button reads "Upload Document"
+ * the first time, then "Replace Document" once a file is already attached (confirmed live on
+ * bid 155 after a prior upload: header showed "Uploaded: Cottages_on_Elm_Roofing_Bid_Book.xlsx"
+ * next to a "Replace Document" button, with "Submit Bid" now enabled) — match either label so
+ * this works whether or not a document already exists on the bid. */
+function uploadOrReplaceDocumentButtonStrategies(page) {
+    const nameRe = /^(Upload|Replace) Document$/;
     return [
-        { name: 'role:button[name=Upload Document](original)', locator: page.getByRole('button', { name: 'Upload Document' }).first() },
-        { name: 'css:button:has-text("Upload Document")', locator: page.locator('button:has-text("Upload Document")').first() },
-        { name: 'text=Upload Document(first)', locator: page.getByText('Upload Document', { exact: true }).first() },
-        { name: 'css:header button:near(:text("Submit Bid"))', locator: page.locator('button').filter({ hasText: 'Upload Document' }).first() },
+        { name: 'role:button[name=Upload|Replace Document](original)', locator: page.getByRole('button', { name: nameRe }).first() },
+        { name: 'css:button:has-text("Upload Document"),button:has-text("Replace Document")', locator: page.locator('button:has-text("Upload Document"), button:has-text("Replace Document")').first() },
+        { name: 'text=Upload|Replace Document(first)', locator: page.getByText(nameRe).first() },
+        { name: 'css:header button near Submit Bid', locator: page.locator('button').filter({ hasText: nameRe }).first() },
     ];
 }
 
@@ -121,9 +172,12 @@ module.exports = {
     vendorBidsNavLinkStrategies,
     vendorBidsGridStrategies,
     vendorBidsGridRowsStrategies,
+    exportButtonStrategies,
     viewDetailsButtonStrategies,
+    acceptBidButtonStrategies,
+    acceptBidConfirmButtonStrategies,
     bidDetailTabStrategies,
-    uploadDocumentButtonStrategies,
+    uploadOrReplaceDocumentButtonStrategies,
     uploadcareFromDeviceButtonStrategies,
     uploadcareDoneButtonStrategies,
     submitBidButtonStrategies,

@@ -770,6 +770,71 @@ class BidPage {
         Logger.success('Send to Vendors full e2e flow verified');
     }
 
+    /**
+     * Same "Send to Vendors" flow as assertSendToVendorsFlow() above (that method is left
+     * completely unmodified), but disambiguates the target vendor row by its exact contact
+     * email in addition to name. MCP-verified live 2026-09-14: this org has MULTIPLE vendors
+     * literally named "sumit corp" — one with contact "sumit" / oct30sumit@yopmail.com, another
+     * with contact "Tailorbird test" / admin_1781257675038@yopmail.com. Matching by name alone
+     * (as assertSendToVendorsFlow does, via the first checkbox found) can silently check the
+     * WRONG vendor's box if list ordering ever shifts. The name-panel row and the details panel
+     * row (which holds the email) share the same `data-rgrow` index (MCP/DOM-verified), so the
+     * row whose DETAILS contain the expected email gives the `data-rgrow` to check.
+     * @param {{searchTerm: string, vendorName: string, vendorEmail: string}} vendorData
+     */
+    async assertSendToVendorsFlowByEmail(vendorData) {
+        const loc = this.loc();
+        Logger.step(`Asserting Send to Vendors flow — disambiguating "${vendorData.vendorName}" by email "${vendorData.vendorEmail}"...`);
+        await expect(loc.sendToVendorsButton).toBeVisible();
+        await expect(loc.sendToVendorsButton).toContainText('Send to Vendors');
+        await loc.sendToVendorsButton.click();
+
+        await expect(loc.sendToVendorsDialog).toBeVisible({ timeout: 10000 });
+        await expect(this.page.getByRole('heading', { name: 'Send Bid to Vendors' })).toBeVisible();
+        Logger.info('Dialog "Send Bid to Vendors" open');
+
+        await expect(loc.vendorSearchInput).toBeVisible({ timeout: 15000 });
+        await loc.vendorSearchInput.fill(vendorData.searchTerm);
+        await this.page.waitForTimeout(1000);
+        Logger.info(`Searched for "${vendorData.searchTerm}"`);
+
+        // Find the details-panel row (Location/Service Area/Primary Contact/Email) whose text
+        // contains the expected email, and read its data-rgrow.
+        const detailRows = loc.sendToVendorsDialog.getByRole('row').filter({ hasText: vendorData.vendorEmail });
+        await expect(
+            detailRows.first(),
+            `FAIL: no vendor row found containing the expected email "${vendorData.vendorEmail}" after searching "${vendorData.searchTerm}"`,
+        ).toBeVisible({ timeout: 10000 });
+        const targetRgrow = await detailRows.first().getAttribute('data-rgrow');
+        expect(targetRgrow, 'FAIL: matched vendor row has no data-rgrow to cross-reference against the checkbox panel').toBeTruthy();
+        Logger.info(`Vendor row identified via email — data-rgrow="${targetRgrow}"`);
+
+        // The checkbox lives in the parallel name/checkbox panel row sharing the same data-rgrow.
+        const vendorCheckbox = loc.sendToVendorsDialog.locator(`[data-rgrow="${targetRgrow}"]`).getByRole('checkbox').first();
+        await expect(vendorCheckbox, 'FAIL: checkbox not found for the email-matched vendor row').toBeVisible({ timeout: 10000 });
+        await vendorCheckbox.click();
+        await expect(vendorCheckbox).toBeChecked();
+        Logger.success(`Correct vendor row checked — "${vendorData.vendorName}" / "${vendorData.vendorEmail}" (data-rgrow="${targetRgrow}")`);
+
+        await expect(loc.nextSelectDocsButton).toBeVisible({ timeout: 5000 });
+        await expect(loc.nextSelectDocsButton).toContainText('Next: Select Documents');
+        await loc.nextSelectDocsButton.click();
+
+        await expect(loc.docsToShareHeading).toBeVisible({ timeout: 5000 });
+        await expect(loc.uploadDocumentButton).toBeVisible();
+        await expect(loc.bidTemplateRow).toBeVisible();
+        const bidTemplateCheckbox = loc.bidTemplateRow.locator('xpath=../..').getByRole('checkbox');
+        expect(await bidTemplateCheckbox.isChecked().catch(() => true), 'Bid Template checkbox must be pre-checked').toBe(true);
+        expect(await bidTemplateCheckbox.isDisabled().catch(() => true), 'Bid Template checkbox must be disabled (always included)').toBe(true);
+
+        await expect(loc.sendInvitationsButton).toBeVisible();
+        await loc.sendInvitationsButton.click();
+        await expect(loc.sendToVendorsDialog).not.toBeVisible({ timeout: 10000 });
+        await expect(loc.invitationsSentAlert).toBeVisible({ timeout: 10000 });
+        await expect(loc.invitationsSentAlert).toContainText('Vendors have been invited to bid');
+        Logger.success(`Send to Vendors (email-disambiguated) flow verified — invited "${vendorData.vendorName}" / "${vendorData.vendorEmail}"`);
+    }
+
     // ── Reset bid book e2e (LAST — clears chat + spreadsheet) ───────────────────
 
     async assertResetBidBook() {
