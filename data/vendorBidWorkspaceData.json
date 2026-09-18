@@ -1,0 +1,8 @@
+{
+  "searchValidTerm": "Automation test",
+  "searchNoResultTerm": "zzzznonexistentbidxyz123",
+  "piperAskQuestion": "What is the due date on this bid?",
+  "propertyOverviewFields": ["Ownership Group", "Property Name", "Property Type", "Address", "City", "State", "Zip Code"],
+  "takeOffsCategoryTabs": ["Floor Plans", "Building Exterior", "Site", "Interior Common Area"],
+  "usersTableColumns": ["POC", "Name", "Status", "Phone Number", "Email Address", "Actions"]
+}

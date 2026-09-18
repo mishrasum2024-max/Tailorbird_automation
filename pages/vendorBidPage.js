@@ -18,6 +18,7 @@ const {
     uploadcareDoneButtonStrategies,
     submitBidButtonStrategies,
 } = require('../locators/vendorBidLocator');
+const { piperAskInputStrategies } = require('../locators/vendorListingLocator');
 
 /**
  * Page object for the VENDOR portal's Bids workspace — a separate app surface from the
@@ -126,6 +127,55 @@ class VendorBidPage {
             throw new Error(`VendorBidPage.findNonAwardedBidRow: found "${target.bidName}" in the export but its live grid row has no data-rgrow`);
         }
         Logger.info(`VendorBidPage: found non-Awarded bid — "${target.bidName}" (status: "${target.status}", data-rgrow="${rowGrow}")`);
+        return { rowGrow, bidName: target.bidName, status: target.status };
+    }
+
+    /**
+     * Finds the first bid whose Status exactly matches `status` (e.g. "Invited", "Awarded",
+     * "Accepted"), via the same CSV-export-then-live-row-lookup approach as
+     * findNonAwardedBidRow() above (not duplicated — this generalizes it to an arbitrary exact
+     * status instead of "not Awarded"). Exported/reusable rather than the copy of this same
+     * logic previously inlined as a local helper in tests/TC32_VendorAllTabs.spec.js.
+     * @param {string} status exact status text, e.g. "Invited"
+     * @returns {Promise<{rowGrow: string, bidName: string, status: string} | null>}
+     */
+    async findBidRowByStatus(status) {
+        Logger.step(`VendorBidPage: exporting Bids list to find a "${status}" bid...`);
+        const downloadDir = path.join(__dirname, '../downloads');
+        fs.mkdirSync(downloadDir, { recursive: true });
+        const [download] = await Promise.all([
+            this.page.waitForEvent('download', { timeout: 15000 }),
+            this.exportButton.click(),
+        ]);
+        const csvPath = path.join(downloadDir, `vendor-bids-status-lookup-${Date.now()}.csv`);
+        await download.saveAs(csvPath);
+        const lines = fs.readFileSync(csvPath, 'utf8').split(/\r?\n/).filter((l) => l.trim().length > 0);
+
+        const header = VendorBidPage._parseCsvLine(lines[0]);
+        const bidNameIdx = header.findIndex((h) => /^bid name$/i.test(h));
+        const statusIdx = header.findIndex((h) => /^status$/i.test(h));
+        if (bidNameIdx === -1 || statusIdx === -1) {
+            throw new Error(`VendorBidPage.findBidRowByStatus: could not locate "Bid Name"/"Status" columns in export header [${header.join(', ')}]`);
+        }
+
+        const bids = lines.slice(1).map((line) => {
+            const cols = VendorBidPage._parseCsvLine(line);
+            return { bidName: (cols[bidNameIdx] || '').trim(), status: (cols[statusIdx] || '').trim() };
+        }).filter((b) => b.bidName && b.status);
+
+        const target = bids.find((b) => new RegExp(`^${status}$`, 'i').test(b.status));
+        if (!target) {
+            Logger.info(`VendorBidPage: no "${status}" bid found in the export — ${JSON.stringify(bids)}`);
+            return null;
+        }
+
+        const row = healingLocator(vendorBidsGridRowsStrategies(this.bidsGrid)).filter({ hasText: target.bidName }).first();
+        await expect(row).toBeVisible({ timeout: 10000 });
+        const rowGrow = await row.getAttribute('data-rgrow');
+        if (!rowGrow) {
+            throw new Error(`VendorBidPage.findBidRowByStatus: found "${target.bidName}" in the export but its live grid row has no data-rgrow`);
+        }
+        Logger.info(`VendorBidPage: found "${status}" bid — "${target.bidName}" (data-rgrow="${rowGrow}")`);
         return { rowGrow, bidName: target.bidName, status: target.status };
     }
 
@@ -248,6 +298,40 @@ class VendorBidPage {
         await this.uploadcareDoneButton.click();
         await this.page.waitForTimeout(1500);
         Logger.success('VendorBidPage: document uploaded and widget closed.');
+    }
+
+    /**
+     * Types `question` into the Bids-listing Piper "Ask about your bids" input, sends it, and
+     * waits for a real AI answer to render — MCP-verified 2026-09-17 live (asking "Can you
+     * check i hve any open bid ?" produced an "Open Bids" response section with per-bid result
+     * cards and a closing summary paragraph). Only asserts the STRUCTURAL shape (a response
+     * container appears containing the substring "open bid", case-insensitively, with visible,
+     * non-empty text) rather than any specific bid name/count, since that content is live data
+     * that changes over time — this is deliberately not asserting exact AI wording.
+     * @param {string} question
+     * @returns {Promise<string>} the full visible text of Piper's answer container
+     */
+    async askPiperAndAwaitAnswer(question) {
+        Logger.step(`VendorBidPage: asking Piper "${question}"...`);
+        const askInput = healingLocator(piperAskInputStrategies(this.page, 'Ask about your bids')).first();
+        await expect(askInput, 'FAIL: Piper "Ask about your bids" input not visible.').toBeVisible({ timeout: 10000 });
+        const sendButton = askInput.locator('xpath=ancestor::form[1]//button').first();
+        await askInput.fill(question);
+        await expect(sendButton, 'FAIL: Piper send button did not enable after typing the question.').toBeEnabled({ timeout: 5000 });
+        await sendButton.click();
+
+        // .first(): MCP/Playwright-verified the sent question renders twice in the DOM (the
+        // chat-thread copy plus a duplicate, e.g. an accessibility/live-region echo) — both are
+        // the same rendered message, not a real ambiguity.
+        const userMessage = this.page.getByText(question, { exact: true }).first();
+        await expect(userMessage, 'FAIL: the sent question does not appear echoed back in the chat.').toBeVisible({ timeout: 10000 });
+
+        const answerContainer = this.page.locator('main').getByText(/open bid/i).first();
+        await expect(answerContainer, 'FAIL: Piper did not return an answer mentioning "open bid(s)" for this question.').toBeVisible({ timeout: 30000 });
+        const answerText = (await this.page.locator('main').innerText().catch(() => '')).trim();
+        expect(answerText.length, 'FAIL: Piper answer area is empty.').toBeGreaterThan(question.length);
+        Logger.success('VendorBidPage: Piper returned an answer to the open-bids question.');
+        return answerText;
     }
 
     async submitBid() {

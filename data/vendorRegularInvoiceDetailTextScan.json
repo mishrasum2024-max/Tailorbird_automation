@@ -1,0 +1,1303 @@
+{
+  "capturedAt": "2026-09-17T07:11:50.320Z",
+  "screen": "regular-invoice-submitted-detail",
+  "url": "https://beta.tailorbird.com/bids-and-contracts/invoices/28910",
+  "vendorEmail": "oct30sumit@yopmail.com",
+  "counts": {
+    "headings": 1,
+    "buttons": 44,
+    "inputs": 4,
+    "links": 14,
+    "paragraphs": 43,
+    "textNodes": 44
+  },
+  "snapshot": {
+    "headings": [
+      {
+        "tag": "h5",
+        "text": "Documents",
+        "visible": true,
+        "ariaLabel": null,
+        "level": "5",
+        "selector": ".m_8a5d1357"
+      }
+    ],
+    "buttons": [
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": "Unpin sidebar",
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "Thought",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "Thought",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "Thought",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "submit",
+        "disabled": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "From device",
+        "visible": false,
+        "ariaLabel": "From device",
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "Google Drive",
+        "visible": false,
+        "ariaLabel": "Google Drive",
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "Dropbox",
+        "visible": false,
+        "ariaLabel": "Dropbox",
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "Cancel",
+        "visible": false,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".uc-secondary-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": false,
+        "ariaLabel": "Close",
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".uc-mini-btn"
+      },
+      {
+        "tag": "button",
+        "text": "Add more",
+        "visible": false,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".uc-add-more-btn"
+      },
+      {
+        "tag": "button",
+        "text": "Clear",
+        "visible": false,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".uc-cancel-btn"
+      },
+      {
+        "tag": "button",
+        "text": "Add more",
+        "visible": false,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".uc-add-more-btn"
+      },
+      {
+        "tag": "button",
+        "text": "Upload",
+        "visible": false,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".uc-upload-btn"
+      },
+      {
+        "tag": "button",
+        "text": "Done",
+        "visible": false,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".uc-done-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": false,
+        "ariaLabel": "Open navigation",
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": false,
+        "ariaLabel": "Search",
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "View",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "Table",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".group-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".pin-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".sort-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".group-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".pin-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".sort-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".group-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".pin-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".sort-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".group-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".pin-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".sort-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".group-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".pin-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".sort-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".group-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".pin-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".sort-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".group-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".pin-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".sort-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": false,
+        "ariaLabel": "Search",
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "Export",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      }
+    ],
+    "inputs": [
+      {
+        "tag": "textarea",
+        "inputType": "textarea",
+        "name": null,
+        "id": "mantine-y6pqeksyp",
+        "placeholder": "Ask about your invoices",
+        "ariaLabel": null,
+        "ariaDescribedBy": null,
+        "ariaLabelledBy": null,
+        "ariaHasPopup": null,
+        "associatedLabel": null,
+        "visible": true,
+        "required": false,
+        "disabled": false,
+        "selector": "#mantine-y6pqeksyp"
+      },
+      {
+        "tag": "input",
+        "inputType": "text",
+        "name": null,
+        "id": "mantine-3gdqessp9",
+        "placeholder": "Search...",
+        "ariaLabel": null,
+        "ariaDescribedBy": null,
+        "ariaLabelledBy": null,
+        "ariaHasPopup": null,
+        "associatedLabel": null,
+        "visible": true,
+        "required": false,
+        "disabled": false,
+        "selector": "#mantine-3gdqessp9"
+      },
+      {
+        "tag": "input",
+        "inputType": "text",
+        "name": null,
+        "id": "mantine-2s8p1k5x8",
+        "placeholder": "Search...",
+        "ariaLabel": null,
+        "ariaDescribedBy": null,
+        "ariaLabelledBy": null,
+        "ariaHasPopup": null,
+        "associatedLabel": null,
+        "visible": true,
+        "required": false,
+        "disabled": true,
+        "selector": "#mantine-2s8p1k5x8"
+      },
+      {
+        "tag": "textarea",
+        "inputType": "textarea",
+        "name": null,
+        "id": null,
+        "placeholder": null,
+        "ariaLabel": null,
+        "ariaDescribedBy": null,
+        "ariaLabelledBy": null,
+        "ariaHasPopup": null,
+        "associatedLabel": null,
+        "visible": false,
+        "required": false,
+        "disabled": false,
+        "selector": "textarea"
+      }
+    ],
+    "labels": [],
+    "links": [
+      {
+        "tag": "a",
+        "text": "Dashboard",
+        "visible": true,
+        "ariaLabel": null,
+        "href": null,
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Bids",
+        "visible": true,
+        "ariaLabel": null,
+        "href": null,
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Contracts",
+        "visible": true,
+        "ariaLabel": null,
+        "href": null,
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Invoices",
+        "visible": true,
+        "ariaLabel": null,
+        "href": null,
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Change Orders",
+        "visible": true,
+        "ariaLabel": null,
+        "href": null,
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Dashboard",
+        "visible": false,
+        "ariaLabel": null,
+        "href": null,
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Bids",
+        "visible": false,
+        "ariaLabel": null,
+        "href": null,
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Contracts",
+        "visible": false,
+        "ariaLabel": null,
+        "href": null,
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Invoices",
+        "visible": false,
+        "ariaLabel": null,
+        "href": null,
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Change Orders",
+        "visible": false,
+        "ariaLabel": null,
+        "href": null,
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Get Help",
+        "visible": true,
+        "ariaLabel": null,
+        "href": "https://beta.tailorbird.com/bids-and-contracts/invoices/28910#",
+        "hasChildren": true,
+        "selector": "#get-help-link"
+      },
+      {
+        "tag": "a",
+        "text": "Powered by Uploadcare",
+        "visible": false,
+        "ariaLabel": null,
+        "href": "https://uploadcare.com/?utm_source=copyright&utm_medium=referral&utm_campaign=v4",
+        "hasChildren": false,
+        "selector": ".uc-credits"
+      },
+      {
+        "tag": "a",
+        "text": "Home",
+        "visible": true,
+        "ariaLabel": null,
+        "href": "https://beta.tailorbird.com/",
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Invoices",
+        "visible": true,
+        "ariaLabel": null,
+        "href": "https://beta.tailorbird.com/bids-and-contracts/invoices",
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      }
+    ],
+    "paragraphs": [
+      {
+        "tag": "p",
+        "text": "Get Help",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "oct30sumit@yopmail.com",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "oct30sumit@yopmail.com",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Process the supporting invoice PDF(s) I just uploaded: OCR each one, map every billed amount to the contract's schedule of values, update the G703 current-period figures and source mappings, and flag anything you can't match confidently. If a document is a lien waiver rather than an invoice, attach it as the lien waiver instead.",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Thought",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "This draft has already been confirmed and converted into an invoice, so it's no longer editable from here — nothing further to update.",
+        "visible": true,
+        "selector": "p"
+      },
+      {
+        "tag": "p",
+        "text": "Separately, the invoice file you uploaded (\"supporting_invoice_placeholder.pdf\") is just a test fixture with placeholder text — no invoice number, date, or billed amounts in it. The lien waiver file was already attached to the pay application. If you have the actual supporting invoice, please upload that and let me know if there's a new draft to work against.",
+        "visible": true,
+        "selector": "p"
+      },
+      {
+        "tag": "p",
+        "text": "Process the supporting invoice PDF(s) I just uploaded: OCR each one, map every billed amount to the contract's schedule of values, update the G703 current-period figures and source mappings, and flag anything you can't match confidently. If a document is a lien waiver rather than an invoice, attach it as the lien waiver instead.",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Thought",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Done — here's where things stand on this draft:",
+        "visible": true,
+        "selector": "p"
+      },
+      {
+        "tag": "p",
+        "text": "To move forward, please upload the actual invoice with real line-item amounts so I can map it to the schedule of values.",
+        "visible": true,
+        "selector": "p"
+      },
+      {
+        "tag": "p",
+        "text": "Process the supporting invoice PDF(s) I just uploaded: OCR each one, map every billed amount to the contract's schedule of values, update the G703 current-period figures and source mappings, and flag anything you can't match confidently. If a document is a lien waiver rather than an invoice, attach it as the lien waiver instead.",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Thought",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "This draft has already been confirmed and converted into an invoice, so there's nothing left for me to update on it.",
+        "visible": true,
+        "selector": "p"
+      },
+      {
+        "tag": "p",
+        "text": "To summarize where things are: every upload so far named \"supporting_invoice_placeholder.pdf\" has contained only placeholder test text — no invoice number, date, or dollar amounts — so I haven't been able to map any real billing data to the contract lines (\"Vanity Light,\" \"Ceiling Fan Light,\" \"Vanity Tops\"). The lien waivers have consistently come through fine and attached correctly.",
+        "visible": true,
+        "selector": "p"
+      },
+      {
+        "tag": "p",
+        "text": "If you have a live draft that still needs work, let me know its number, and please upload the actual invoice document (with real amounts) so I can complete the mapping.",
+        "visible": true,
+        "selector": "p"
+      },
+      {
+        "tag": "p",
+        "text": "Every workflow starts here — the workspace updates as you go.",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Home",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Invoices",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "TC33-REG-1789629102495",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Invoice Number",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "TC33-REG-1789629102495",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Title",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "TC33 Regular Invoice Automation",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Description",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Automated regular invoice created by TC33_PayInvoice.spec.js",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Status",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Pending Approval",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Contract",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Automation_Job",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Property",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Test Property 1_Cottages on Elm",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Raised By",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Vendor",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Invoiced Amount",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "$100.00",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Retainage Withheld",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "$0.00",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Net Payable",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "$100.00",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Invoice Date",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Sep 17, 2026",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Documents submitted with this invoice. Select one to download.",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      }
+    ],
+    "alerts": [
+      {
+        "tag": "section",
+        "text": "",
+        "visible": false,
+        "role": null,
+        "ariaLive": "polite",
+        "selector": "section"
+      },
+      {
+        "tag": "span",
+        "text": "0 files selected",
+        "visible": false,
+        "role": null,
+        "ariaLive": "polite",
+        "selector": ".uc-header-text"
+      },
+      {
+        "tag": "div",
+        "text": "Invoice submitted for approval",
+        "visible": true,
+        "role": "alert",
+        "ariaLive": null,
+        "selector": "#mantine-dhzj7n2cf"
+      }
+    ],
+    "textNodes": [
+      {
+        "tag": "span",
+        "text": "Dashboard",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1f6ac4c4"
+      },
+      {
+        "tag": "span",
+        "text": "Bids",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1f6ac4c4"
+      },
+      {
+        "tag": "span",
+        "text": "Contracts",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1f6ac4c4"
+      },
+      {
+        "tag": "span",
+        "text": "Invoices",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1f6ac4c4"
+      },
+      {
+        "tag": "span",
+        "text": "Change Orders",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1f6ac4c4"
+      },
+      {
+        "tag": "span",
+        "text": "Dashboard",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1f6ac4c4"
+      },
+      {
+        "tag": "span",
+        "text": "Bids",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1f6ac4c4"
+      },
+      {
+        "tag": "span",
+        "text": "Contracts",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1f6ac4c4"
+      },
+      {
+        "tag": "span",
+        "text": "Invoices",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1f6ac4c4"
+      },
+      {
+        "tag": "span",
+        "text": "Change Orders",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1f6ac4c4"
+      },
+      {
+        "tag": "div",
+        "text": "Piper",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "span",
+        "text": "Invoice Processing and G703 Reconciliation",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "span",
+        "text": "attachment",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1e0e6180"
+      },
+      {
+        "tag": "span",
+        "text": "Drop files here",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".uc-text"
+      },
+      {
+        "tag": "div",
+        "text": "From device",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".uc-txt"
+      },
+      {
+        "tag": "div",
+        "text": "Google Drive",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".uc-txt"
+      },
+      {
+        "tag": "div",
+        "text": "Dropbox",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".uc-txt"
+      },
+      {
+        "tag": "span",
+        "text": "0 files selected",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".uc-header-text"
+      },
+      {
+        "tag": "span",
+        "text": "No files selected",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "span",
+        "text": "Add more",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "span",
+        "text": "Add more",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "span",
+        "text": "Drop files here",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".uc-text"
+      },
+      {
+        "tag": "span",
+        "text": "Pending Approval",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "span",
+        "text": "View",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_811560b9"
+      },
+      {
+        "tag": "span",
+        "text": "Table",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_811560b9"
+      },
+      {
+        "tag": "span",
+        "text": "Scope",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".bird-table-header-title"
+      },
+      {
+        "tag": "span",
+        "text": "Description",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".bird-table-header-title"
+      },
+      {
+        "tag": "span",
+        "text": "Cost Item",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".bird-table-header-title"
+      },
+      {
+        "tag": "span",
+        "text": "Current Contract Amount",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".bird-table-header-title"
+      },
+      {
+        "tag": "span",
+        "text": "Invoice Amount",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".bird-table-header-title"
+      },
+      {
+        "tag": "span",
+        "text": "Retainage %",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".bird-table-header-title"
+      },
+      {
+        "tag": "span",
+        "text": "Retainage Withheld",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".bird-table-header-title"
+      },
+      {
+        "tag": "div",
+        "text": "Bid with material",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "120000",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Vanity Light",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "$24,000",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "$100",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Total",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "$24,000",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "$100",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "span",
+        "text": "Export",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_811560b9"
+      },
+      {
+        "tag": "div",
+        "text": "No vendor invoice files added yet",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Use + or Create Button to create one",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Invoice submitted for approval",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_3d733a3a"
+      }
+    ]
+  }
+}

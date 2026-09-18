@@ -1,0 +1,11 @@
+{
+  "newUser": {
+    "firstName": "QA",
+    "lastName": "AutomationUser",
+    "phone": "+1 555 555 5555",
+    "emailLocalPrefix": "qa.vendor.user",
+    "emailDomain": "yopmail.com"
+  },
+  "invalidEmail": "not-a-valid-email",
+  "usersSearchNoMatchTerm": "zzzznonexistentvendoruserxyz"
+}

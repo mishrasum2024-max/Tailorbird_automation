@@ -1,0 +1,959 @@
+{
+  "capturedAt": "2026-09-15T12:24:10.580Z",
+  "url": "https://beta.tailorbird.com/bids-and-contracts/change-orders",
+  "page": "Change Orders",
+  "vendorEmail": "oct30sumit@yopmail.com",
+  "counts": {
+    "buttons": 35,
+    "links": 13,
+    "paragraphs": 8,
+    "textNodes": 44
+  },
+  "snapshot": {
+    "headings": [],
+    "buttons": [
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": "Unpin sidebar",
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "submit",
+        "disabled": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "From device",
+        "visible": false,
+        "ariaLabel": "From device",
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "Google Drive",
+        "visible": false,
+        "ariaLabel": "Google Drive",
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "Dropbox",
+        "visible": false,
+        "ariaLabel": "Dropbox",
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "Cancel",
+        "visible": false,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".uc-secondary-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": false,
+        "ariaLabel": "Close",
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".uc-mini-btn"
+      },
+      {
+        "tag": "button",
+        "text": "Add more",
+        "visible": false,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".uc-add-more-btn"
+      },
+      {
+        "tag": "button",
+        "text": "Clear",
+        "visible": false,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".uc-cancel-btn"
+      },
+      {
+        "tag": "button",
+        "text": "Add more",
+        "visible": false,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".uc-add-more-btn"
+      },
+      {
+        "tag": "button",
+        "text": "Upload",
+        "visible": false,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".uc-upload-btn"
+      },
+      {
+        "tag": "button",
+        "text": "Done",
+        "visible": false,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".uc-done-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": false,
+        "ariaLabel": "Open navigation",
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "New Change Order",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": false,
+        "ariaLabel": "Search",
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "View",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "Table",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "Export",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".group-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".pin-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".sort-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".group-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".pin-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".sort-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".group-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".pin-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".sort-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".group-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".pin-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": ".sort-btn"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      }
+    ],
+    "inputs": [
+      {
+        "tag": "textarea",
+        "inputType": "textarea",
+        "name": null,
+        "id": "mantine-sg2kfzoya",
+        "placeholder": "Ask about your change orders",
+        "ariaLabel": null,
+        "ariaDescribedBy": null,
+        "ariaLabelledBy": null,
+        "ariaHasPopup": null,
+        "associatedLabel": null,
+        "visible": true,
+        "required": false,
+        "disabled": false,
+        "selector": "#mantine-sg2kfzoya"
+      },
+      {
+        "tag": "input",
+        "inputType": "text",
+        "name": null,
+        "id": "mantine-qj8whya99",
+        "placeholder": "Search...",
+        "ariaLabel": null,
+        "ariaDescribedBy": null,
+        "ariaLabelledBy": null,
+        "ariaHasPopup": null,
+        "associatedLabel": null,
+        "visible": true,
+        "required": false,
+        "disabled": false,
+        "selector": "#mantine-qj8whya99"
+      },
+      {
+        "tag": "textarea",
+        "inputType": "textarea",
+        "name": null,
+        "id": null,
+        "placeholder": null,
+        "ariaLabel": null,
+        "ariaDescribedBy": null,
+        "ariaLabelledBy": null,
+        "ariaHasPopup": null,
+        "associatedLabel": null,
+        "visible": false,
+        "required": false,
+        "disabled": false,
+        "selector": "textarea"
+      }
+    ],
+    "labels": [],
+    "links": [
+      {
+        "tag": "a",
+        "text": "Dashboard",
+        "visible": true,
+        "ariaLabel": null,
+        "href": null,
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Bids",
+        "visible": true,
+        "ariaLabel": null,
+        "href": null,
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Contracts",
+        "visible": true,
+        "ariaLabel": null,
+        "href": null,
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Invoices",
+        "visible": true,
+        "ariaLabel": null,
+        "href": null,
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Change Orders",
+        "visible": true,
+        "ariaLabel": null,
+        "href": null,
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Dashboard",
+        "visible": false,
+        "ariaLabel": null,
+        "href": null,
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Bids",
+        "visible": false,
+        "ariaLabel": null,
+        "href": null,
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Contracts",
+        "visible": false,
+        "ariaLabel": null,
+        "href": null,
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Invoices",
+        "visible": false,
+        "ariaLabel": null,
+        "href": null,
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Change Orders",
+        "visible": false,
+        "ariaLabel": null,
+        "href": null,
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Get Help",
+        "visible": true,
+        "ariaLabel": null,
+        "href": "https://beta.tailorbird.com/bids-and-contracts/change-orders#",
+        "hasChildren": true,
+        "selector": "#get-help-link"
+      },
+      {
+        "tag": "a",
+        "text": "Powered by Uploadcare",
+        "visible": false,
+        "ariaLabel": null,
+        "href": "https://uploadcare.com/?utm_source=copyright&utm_medium=referral&utm_campaign=v4",
+        "hasChildren": false,
+        "selector": ".uc-credits"
+      },
+      {
+        "tag": "a",
+        "text": "Home",
+        "visible": true,
+        "ariaLabel": null,
+        "href": "https://beta.tailorbird.com/",
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      }
+    ],
+    "paragraphs": [
+      {
+        "tag": "p",
+        "text": "Get Help",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "oct30sumit@yopmail.com",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "oct30sumit@yopmail.com",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "👋 I'm Piper",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Ask me about your change orders — drafts, approvals, or the contracts they amend. Attach a change order PDF and I'll draft it against your contract.",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Every workflow starts here — the workspace updates as you go.",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Home",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Change Orders",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      }
+    ],
+    "alerts": [
+      {
+        "tag": "section",
+        "text": "",
+        "visible": false,
+        "role": null,
+        "ariaLive": "polite",
+        "selector": "section"
+      },
+      {
+        "tag": "span",
+        "text": "0 files selected",
+        "visible": false,
+        "role": null,
+        "ariaLive": "polite",
+        "selector": ".uc-header-text"
+      }
+    ],
+    "textNodes": [
+      {
+        "tag": "span",
+        "text": "Dashboard",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1f6ac4c4"
+      },
+      {
+        "tag": "span",
+        "text": "Bids",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1f6ac4c4"
+      },
+      {
+        "tag": "span",
+        "text": "Contracts",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1f6ac4c4"
+      },
+      {
+        "tag": "span",
+        "text": "Invoices",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1f6ac4c4"
+      },
+      {
+        "tag": "span",
+        "text": "Change Orders",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1f6ac4c4"
+      },
+      {
+        "tag": "span",
+        "text": "Dashboard",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1f6ac4c4"
+      },
+      {
+        "tag": "span",
+        "text": "Bids",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1f6ac4c4"
+      },
+      {
+        "tag": "span",
+        "text": "Contracts",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1f6ac4c4"
+      },
+      {
+        "tag": "span",
+        "text": "Invoices",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1f6ac4c4"
+      },
+      {
+        "tag": "span",
+        "text": "Change Orders",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1f6ac4c4"
+      },
+      {
+        "tag": "div",
+        "text": "Piper",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "span",
+        "text": "Change Orders Assistance",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "span",
+        "text": "Drop files here",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".uc-text"
+      },
+      {
+        "tag": "div",
+        "text": "From device",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".uc-txt"
+      },
+      {
+        "tag": "div",
+        "text": "Google Drive",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".uc-txt"
+      },
+      {
+        "tag": "div",
+        "text": "Dropbox",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".uc-txt"
+      },
+      {
+        "tag": "span",
+        "text": "0 files selected",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".uc-header-text"
+      },
+      {
+        "tag": "span",
+        "text": "No files selected",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "span",
+        "text": "Add more",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "span",
+        "text": "Add more",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "span",
+        "text": "Drop files here",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".uc-text"
+      },
+      {
+        "tag": "span",
+        "text": "New Change Order",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_811560b9"
+      },
+      {
+        "tag": "span",
+        "text": "View",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_811560b9"
+      },
+      {
+        "tag": "span",
+        "text": "Table",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_811560b9"
+      },
+      {
+        "tag": "span",
+        "text": "Export",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_811560b9"
+      },
+      {
+        "tag": "span",
+        "text": "Change Order",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".bird-table-header-title"
+      },
+      {
+        "tag": "span",
+        "text": "Title",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".bird-table-header-title"
+      },
+      {
+        "tag": "span",
+        "text": "Contract",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".bird-table-header-title"
+      },
+      {
+        "tag": "span",
+        "text": "Owner Organization",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".bird-table-header-title"
+      },
+      {
+        "tag": "div",
+        "text": "Change Order #6237",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "test change order for draw reporting",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "test job for draw reporting",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "QA Automations Org_2026",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Change Order #4747",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Automation Job, please don't delete it",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "QA Automations Org_2026",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Change Order #4654",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "new4",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Automation Job, please don't delete it",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "QA Automations Org_2026",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Change Order #4293",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Mall in Noida",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "QA Automations Org_2026",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "span",
+        "text": "Actions",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".bird-table-header-title"
+      }
+    ]
+  }
+}

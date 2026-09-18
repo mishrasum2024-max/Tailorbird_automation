@@ -1,0 +1,721 @@
+{
+  "capturedAt": "2026-09-15T12:23:59.706Z",
+  "url": "https://beta.tailorbird.com/bids-and-contracts/dashboard",
+  "vendorEmail": "oct30sumit@yopmail.com",
+  "counts": {
+    "headings": 0,
+    "buttons": 8,
+    "inputs": 1,
+    "labels": 0,
+    "links": 12,
+    "paragraphs": 5,
+    "alerts": 1,
+    "textNodes": 56
+  },
+  "snapshot": {
+    "headings": [],
+    "buttons": [
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": "Unpin sidebar",
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": false,
+        "ariaLabel": "Open navigation",
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "Review Bid",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "View Invoice",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "View Invoice",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "View Change Order",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "View Invoice",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "View Invoice",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": "button"
+      }
+    ],
+    "inputs": [
+      {
+        "tag": "textarea",
+        "inputType": "textarea",
+        "name": null,
+        "id": null,
+        "placeholder": null,
+        "ariaLabel": null,
+        "ariaDescribedBy": null,
+        "ariaLabelledBy": null,
+        "ariaHasPopup": null,
+        "associatedLabel": null,
+        "visible": false,
+        "required": false,
+        "disabled": false,
+        "selector": "textarea"
+      }
+    ],
+    "labels": [],
+    "links": [
+      {
+        "tag": "a",
+        "text": "Dashboard",
+        "visible": true,
+        "ariaLabel": null,
+        "href": null,
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Bids",
+        "visible": true,
+        "ariaLabel": null,
+        "href": null,
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Contracts",
+        "visible": true,
+        "ariaLabel": null,
+        "href": null,
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Invoices",
+        "visible": true,
+        "ariaLabel": null,
+        "href": null,
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Change Orders",
+        "visible": true,
+        "ariaLabel": null,
+        "href": null,
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Dashboard",
+        "visible": false,
+        "ariaLabel": null,
+        "href": null,
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Bids",
+        "visible": false,
+        "ariaLabel": null,
+        "href": null,
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Contracts",
+        "visible": false,
+        "ariaLabel": null,
+        "href": null,
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Invoices",
+        "visible": false,
+        "ariaLabel": null,
+        "href": null,
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Change Orders",
+        "visible": false,
+        "ariaLabel": null,
+        "href": null,
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "a",
+        "text": "Get Help",
+        "visible": true,
+        "ariaLabel": null,
+        "href": "https://beta.tailorbird.com/bids-and-contracts/dashboard#",
+        "hasChildren": true,
+        "selector": "#get-help-link"
+      },
+      {
+        "tag": "a",
+        "text": "Home",
+        "visible": true,
+        "ariaLabel": null,
+        "href": "https://beta.tailorbird.com/",
+        "hasChildren": true,
+        "selector": ".mantine-focus-auto"
+      }
+    ],
+    "paragraphs": [
+      {
+        "tag": "p",
+        "text": "Get Help",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "oct30sumit@yopmail.com",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "oct30sumit@yopmail.com",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Home",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Dashboard",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      }
+    ],
+    "alerts": [
+      {
+        "tag": "section",
+        "text": "",
+        "visible": false,
+        "role": null,
+        "ariaLive": "polite",
+        "selector": "section"
+      }
+    ],
+    "textNodes": [
+      {
+        "tag": "span",
+        "text": "Dashboard",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1f6ac4c4"
+      },
+      {
+        "tag": "span",
+        "text": "Bids",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1f6ac4c4"
+      },
+      {
+        "tag": "span",
+        "text": "Contracts",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1f6ac4c4"
+      },
+      {
+        "tag": "span",
+        "text": "Invoices",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1f6ac4c4"
+      },
+      {
+        "tag": "span",
+        "text": "Change Orders",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1f6ac4c4"
+      },
+      {
+        "tag": "span",
+        "text": "Dashboard",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1f6ac4c4"
+      },
+      {
+        "tag": "span",
+        "text": "Bids",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1f6ac4c4"
+      },
+      {
+        "tag": "span",
+        "text": "Contracts",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1f6ac4c4"
+      },
+      {
+        "tag": "span",
+        "text": "Invoices",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1f6ac4c4"
+      },
+      {
+        "tag": "span",
+        "text": "Change Orders",
+        "visible": false,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1f6ac4c4"
+      },
+      {
+        "tag": "span",
+        "text": "New bid invitations",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "div",
+        "text": "None due this week",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "span",
+        "text": "Awarded bids",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "div",
+        "text": "$3,211,310 now contracted",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "span",
+        "text": "Invoices in review",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "div",
+        "text": "$1,007,493",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Across 180 submissions",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "span",
+        "text": "Pending change orders",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "div",
+        "text": "$30,000 awaiting approval",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "span",
+        "text": "New Bid Invitations",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "div",
+        "text": "bid_prop_1789464855389",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "AI_Bid_1789464905267",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "span",
+        "text": "Awaiting Submission",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "div",
+        "text": "No accepted bids awaiting submission.",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "span",
+        "text": "Approvals & Notifications",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "span",
+        "text": "Latest updates",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "div",
+        "text": "Invoice Invoice #16499 approved by Owner",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Jul 31",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Invoice Invoice #16473 approved by Owner",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Jul 24",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Change Order Change Order #6237 approved by Owner",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Jul 22",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Invoice Invoice #16472 approved by Owner",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Jul 16",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Invoice Invoice #15984 approved by Owner",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Jul 16",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "span",
+        "text": "Recent activity",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "span",
+        "text": "Latest updates",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "div",
+        "text": "bid_prop_1789464855389 — AI_Bid_1789464905267",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Sep 15",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "span",
+        "text": "Invited",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "div",
+        "text": "bid_prop_1789454121559 — AI_Bid_1789454161957",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Sep 15",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "span",
+        "text": "Submitted",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "div",
+        "text": "Test Property 1_Cottages on Elm — MCP_Verify_AI_Bid_1",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Sep 14",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "span",
+        "text": "Awarded",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "div",
+        "text": "Test Property 1_Cottages on Elm — E2E_BidBook_Automation",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Sep 2",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "span",
+        "text": "Awarded",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "div",
+        "text": "Test Property 1_Cottages on Elm — Automation test",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Sep 2",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "span",
+        "text": "Awarded",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "div",
+        "text": "Invoice Invoice #25205",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Aug 25 · $10",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "span",
+        "text": "Pending Approval",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      }
+    ]
+  }
+}

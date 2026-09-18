@@ -1,0 +1,17 @@
+{
+  "contractOptionLabel": "Automation_Job — Test Property 1_Cottages on Elm",
+  "regularInvoice": {
+    "invoiceNumberPrefix": "TC33-REG",
+    "title": "TC33 Regular Invoice Automation",
+    "description": "Automated regular invoice created by TC33_PayInvoice.spec.js",
+    "costItemLabel": "Vanity Light",
+    "amount": "100"
+  },
+  "payApplication": {
+    "notes": "Automated pay application created by TC33_PayInvoice.spec.js",
+    "costItemLabel": "Bid with material",
+    "amount": "100"
+  },
+  "lienWaiverFile": "files/lien_waiver_placeholder.pdf",
+  "supportingInvoiceFile": "files/supporting_invoice_placeholder.pdf"
+}

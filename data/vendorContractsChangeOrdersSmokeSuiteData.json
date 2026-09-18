@@ -1,0 +1,15 @@
+{
+  "contractDetailRowText": "Automation job for multi approver flow",
+  "contractSearchValidTerm": "Automation_Job",
+  "changeOrder": {
+    "contractOptionLabel": "Automation_Job — Test Property 1_Cottages on Elm",
+    "existingLineItem": {
+      "costItemLabel": "Vanity Light",
+      "amount": "250",
+      "expectedTotal": "$250.00"
+    },
+    "title": "TC Smoke Change Order",
+    "description": "Automated change order created by TC36_VendorContractsAndChangeOrdersSmokeSuite.spec.js"
+  },
+  "changeOrderSearchValidTerm": "draw reporting"
+}

@@ -1,0 +1,37 @@
+{
+  "contractOptionLabel": "Automation_Job — Test Property 1_Cottages on Elm",
+  "contractDetailRowText": "Automation job for multi approver flow",
+  "existingLineItems": ["Vanity Light", "Ceiling Fan Light", "Vanity Tops"],
+  "positiveAdjustment": {
+    "costItemLabel": "Vanity Light",
+    "amount": "500",
+    "expectedTotal": "$500.00"
+  },
+  "negativeAdjustment": {
+    "costItemLabel": "Vanity Light",
+    "amount": "-500",
+    "expectedTotal": "-$500.00"
+  },
+  "newLineItem": {
+    "scope": "TC Automation New Scope",
+    "scheduleOfValue": "999999",
+    "description": "Automated new line item created by TC34_VendorContractsAndChangeOrders.spec.js",
+    "quantity": "2",
+    "unitCost": "150",
+    "expectedTotal": "$300.00"
+  },
+  "combined": {
+    "existingCostItemLabel": "Ceiling Fan Light",
+    "existingAmount": "200",
+    "newLineItem": {
+      "scope": "TC Automation Combined Scope",
+      "scheduleOfValue": "888888",
+      "description": "Combined-scenario new line item",
+      "quantity": "1",
+      "unitCost": "100"
+    },
+    "expectedTotal": "$300.00"
+  },
+  "title": "TC Automation Change Order",
+  "description": "Automated change order created by TC34_VendorContractsAndChangeOrders.spec.js"
+}
