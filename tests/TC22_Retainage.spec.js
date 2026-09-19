@@ -30,7 +30,7 @@ test.describe('Retainage flow', () => {
         await retainagePage.gotoInvoiceList(fixture.jobId);
 
         const jobNotFound = await page.getByText(fixture.messages.jobNotFoundOnInvoiceList, { exact: false }).isVisible({ timeout: 5000 }).catch(() => false);
-        test.skip(jobNotFound, `Fixture job ${fixture.jobId} no longer exists — update fixture/retainage.json.`);
+        expect(jobNotFound, `FAIL: fixture job ${fixture.jobId} no longer exists — update fixture/retainage.json.`).toBe(false);
 
         await expect(loc.listRetainageWithheldHeader).toBeVisible({ timeout: 20000 });
         await expect(loc.listRetainageReleasedHeader).toBeVisible();
@@ -64,7 +64,7 @@ test.describe('Retainage flow', () => {
         await retainagePage.gotoInvoiceDetail(fixture.jobId, fixture.invoiceId);
 
         const notFound = await page.getByText(fixture.messages.notFoundGeneric, { exact: false }).isVisible({ timeout: 5000 }).catch(() => false);
-        test.skip(notFound, `Fixture invoice ${fixture.invoiceId} no longer exists — update fixture/retainage.json.`);
+        expect(notFound, `FAIL: fixture invoice ${fixture.invoiceId} no longer exists — update fixture/retainage.json.`).toBe(false);
 
         await expect(loc.retainagePercentLabel).toBeVisible({ timeout: 20000 });
         const values = await retainagePage.getOverviewRetainageValues();
@@ -408,7 +408,7 @@ test.describe('retainage Contract', () => {
         await retainagePage.gotoContractRetainageTab(fixture.jobId);
 
         const notFound = await page.getByText(fixture.messages.notFoundGeneric, { exact: false }).isVisible({ timeout: 5000 }).catch(() => false);
-        test.skip(notFound, `Fixture job ${fixture.jobId} no longer exists — update fixture/retainage.json.`);
+        expect(notFound, `FAIL: fixture job ${fixture.jobId} no longer exists — update fixture/retainage.json.`).toBe(false);
 
         await expect(page).toHaveURL(/contractSubTab=retainage/);
         await expect(loc.retainageSubTab).toHaveAttribute('aria-selected', 'true');

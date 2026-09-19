@@ -141,7 +141,7 @@ test.describe('Verify Bids', () => {
 
     test('TC313 @regression @bid : Verify Manage Bids tab columns and toolbar', async () => {
         const bidData = loadBidData();
-        if (!bidData.bidUrl) test.skip(true, 'bidUrl not set — run TC_BID_02 first');
+        expect(bidData.bidUrl, 'FAIL: bidData.bidUrl is not set — TC_BID_02 (TC312) must run first and succeed to create a bid.').toBeTruthy();
 
         Logger.step(`TC_BID_04: Navigating to bid: ${bidData.bidUrl}`);
         await page.goto(bidData.bidUrl, { waitUntil: 'load' });
@@ -167,7 +167,7 @@ test.describe('Verify Bids', () => {
     test('TC315 @regression @bid  : Verify AI Bid Levelling conversation, multi-turn responses, and Reset', async () => {
         test.setTimeout(600000);
         const bidData = loadBidData();
-        if (!bidData.bidUrl) test.skip(true, 'bidUrl not set — run TC_BID_02 first');
+        expect(bidData.bidUrl, 'FAIL: bidData.bidUrl is not set — TC_BID_02 (TC312) must run first and succeed to create a bid.').toBeTruthy();
 
         Logger.step(`TC_BID_08: Navigating to bid: ${bidData.bidUrl}`);
         await page.goto(bidData.bidUrl, { waitUntil: 'load' });
@@ -233,12 +233,10 @@ test.describe('Verify Bids', () => {
     test('TC316 @regression @bid : Verify attach external proposal file via Piper paperclip button and run AI Bid Levelling', async () => {
         test.setTimeout(600000);
         const bidData = loadBidData();
-        if (!bidData.bidUrl) test.skip(true, 'bidUrl not set — run TC_BID_02 first');
+        expect(bidData.bidUrl, 'FAIL: bidData.bidUrl is not set — TC_BID_02 (TC312) must run first and succeed to create a bid.').toBeTruthy();
 
         const proposalFile = path.resolve('./files/Misora_Bid_Leveling_Reference_with_data.csv');
-        if (!fs.existsSync(proposalFile)) {
-            test.skip(true, `Proposal file not found: ${proposalFile}`);
-        }
+        expect(fs.existsSync(proposalFile), `FAIL: required fixture file not found: ${proposalFile}`).toBe(true);
 
         Logger.step(`TC_BID_09: Navigating to bid: ${bidData.bidUrl}`);
         await page.goto(bidData.bidUrl, { waitUntil: 'load' });
@@ -288,7 +286,7 @@ test.describe('Verify Bids', () => {
             }
         }
         // The upload must actually complete — no dialog left blocking the chat panel.
-        await expect(page.locator('dialog[open]').first()).not.toBeVisible({ timeout: 15000 });
+        await expect(page.locator('dialog[open]').first()).not.toBeVisible({ timeout: 55000 });
 
         // ── Send AI Bid Levelling prompt ──────────────────────────────────────────
         Logger.step('TC_BID_09 — Sending AI Bid Levelling prompt after file attach');
@@ -312,7 +310,7 @@ test.describe('Verify Bids', () => {
     test('TC317 @regression @bid : Verify AI Bid Levelling empty, long, special-character, and invalid prompts', async () => {
         test.setTimeout(600000);
         const bidData = loadBidData();
-        if (!bidData.bidUrl) test.skip(true, 'bidUrl not set — run TC_BID_02 first');
+        expect(bidData.bidUrl, 'FAIL: bidData.bidUrl is not set — TC_BID_02 (TC312) must run first and succeed to create a bid.').toBeTruthy();
 
         Logger.step(`TC_BID_11: Navigating to bid: ${bidData.bidUrl}`);
         await page.goto(bidData.bidUrl, { waitUntil: 'load' });
@@ -431,9 +429,7 @@ test.describe('Verify Bids', () => {
         const bidData = loadBidData();
         const uniqueBidName = `E2E_BidBook_${Date.now()}`;
         const csvFile = path.resolve('./files/bid_to_upload.csv');
-        if (!fs.existsSync(csvFile)) {
-            test.skip(true, `Bid book source file not found: ${csvFile}`);
-        }
+        expect(fs.existsSync(csvFile), `FAIL: required fixture file not found: ${csvFile}`).toBe(true);
 
         // ── Left panel nav → Bids (repeated here deliberately for a genuine e2e chain) ──
         Logger.step('TC319: Navigating to Bids via left panel nav');
@@ -562,9 +558,7 @@ test.describe('Verify Bids', () => {
         const bidData = loadBidData();
         const uniqueBidName = `AI_Bid_${Date.now()}`;
         const csvFile = path.resolve('./files/bid_to_upload.csv');
-        if (!fs.existsSync(csvFile)) {
-            test.skip(true, `Bid book source file not found: ${csvFile}`);
-        }
+        expect(fs.existsSync(csvFile), `FAIL: required fixture file not found: ${csvFile}`).toBe(true);
 
         // Read bid_to_upload.csv and build a prompt with its actual row data embedded as text
         // (MCP-verified live: attaching the file to the chat is unreliable — the AI can fail

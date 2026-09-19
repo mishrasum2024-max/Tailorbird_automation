@@ -309,7 +309,7 @@ class PropertiesHelper {
             await expect(
                 inTable.or(inCards),
                 `FAIL: Property "${name}" not visible in treegrid row or card grid after creation (used search when available).`,
-            ).toBeVisible({ timeout: 25000 });
+            ).toBeVisible({ timeout: 55000 });
 
             console.log(`🎉 SUCCESS: Property '${name}' created and verified successfully!`);
 

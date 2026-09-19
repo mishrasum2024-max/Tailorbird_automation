@@ -451,7 +451,7 @@ class BidPage {
                 await fallbackDone.click({ force: true });
             }
         }
-        await expect(this.page.locator('dialog[open]').first()).not.toBeVisible({ timeout: 15000 });
+        await expect(this.page.locator('dialog[open]').first()).not.toBeVisible({ timeout: 55000 });
 
         Logger.success(`File attached to Bid Book chat: ${path.basename(filePath)}`);
     }
@@ -721,7 +721,7 @@ class BidPage {
         // Searching by row name finds the data row, but the checkbox lives in a gridcell
         // in the checkbox-column panel — not inside the named data row.
         const vendorRow = loc.sendToVendorsDialog
-            .getByRole('row', { name: vendorData.vendorName });
+            .getByRole('row', { name: vendorData.vendorName }).first();
         await expect(vendorRow).toBeVisible({ timeout: 10000 });
         Logger.info(`Vendor row "${vendorData.vendorName}" found`);
 

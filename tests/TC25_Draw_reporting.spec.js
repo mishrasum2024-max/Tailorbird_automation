@@ -349,9 +349,22 @@ test.describe('Draw Reporting', () => {
         expect(budgetItemAfterInclude.currentDraw, 'Budget item "Current Draw" must equal the raw invoice amount (CM Fee is not part of the disbursement schedule)').toBeCloseTo(10, 2);
         expect(budgetItemAfterInclude.drawRemaining, 'Budget item "Draw Remaining" must equal Budget Remaining − Current Draw').toBeCloseTo(budgetItemBefore.budgetRemaining - 10, 2);
 
+        // MCP-verified live (2026-09-18) on this exact property ("Test Property 6_Draw
+        // reporting"): unlike a single named budget-item row, the disbursement schedule's
+        // "Total" row is a genuine sum across EVERY budget item, and CM Fee is a real dollar
+        // amount the app posts against one of them (here, "Uncategorized" — this property has
+        // no dedicated CM-Fee scope configured), so CM Fee IS included in the Total even though
+        // it is correctly excluded from the one named line item asserted just above. The
+        // expected delta is computed relative to totalBefore rather than assumed to be an
+        // absolute $10 from a $0 baseline, so this stays correct even if excludeAllInvoicesInDraft()
+        // ever leaves a nonzero starting Total on this shared, long-lived property — the same
+        // "invoice + CM Fee" invariant already used for the Current Draw Request KPI above.
         const totalAfterInclude = await drawReportingJob.readDisbursementRowValuesInEditor('Total');
-        expect(totalAfterInclude.currentDraw, 'Disbursement Total "Current Draw" must equal the raw invoice amount').toBeCloseTo(10, 2);
-        expect(totalAfterInclude.drawRemaining, 'Disbursement Total "Draw Remaining" must equal Budget Remaining − Current Draw').toBeCloseTo(totalBefore.budgetRemaining - 10, 2);
+        expect(
+            totalAfterInclude.currentDraw - totalBefore.currentDraw,
+            'Disbursement Total "Current Draw" must increase by the raw invoice amount + CM Fee (CM Fee is posted against a real budget item, so — unlike the single named line item above — it IS included in the Total)',
+        ).toBeCloseTo(10 + cmFeeAfterDefault, 2);
+        expect(totalAfterInclude.drawRemaining, 'Disbursement Total "Draw Remaining" must equal Budget Remaining − Current Draw').toBeCloseTo(totalBefore.budgetRemaining - (10 + cmFeeAfterDefault), 2);
         await drawReportingJob.editInvoiceCmFeePercent(invoiceResult.invoiceNumberLabel, 30);
         const cmFeeAfterOverride = await drawReportingJob.readCmFeeInvoiceAmount();
         expect(cmFeeAfterOverride, 'CM Fee at a 30% override must equal invoice amount × 30%').toBeCloseTo(10 * 0.30, 2);
