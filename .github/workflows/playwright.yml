@@ -53,7 +53,7 @@ jobs:
 
       # Run all remaining tests except mandatory
       - name: Run remaining tests
-        run: npx playwright test TC32_VendorAllTabs.spec.js TC34_VendorContractsAndChangeOrdersSmokeSuite.spec.js TC33_VendorBidsSmokeSuite.spec.js TC31_VendorLogin.spec.js TC01_login.spec.js TC02_menu.spec.js TC03_manageOrganization.spec.js TC04_properties.spec.js TC07_category.spec.js TC10_approval.spec.js TC13_FinalizeBidWithUIFlow.spec.js TC20_Bid.spec.js TC25_Draw_reporting.spec.js TC28_CM_Fee.spec.js TC30_VendorBidAccepting.spec.js --workers=4
+        run: npx playwright test  --grep-invert @mandatory --workers=4
         
       - name: Upload Playwright report
         if: always()
