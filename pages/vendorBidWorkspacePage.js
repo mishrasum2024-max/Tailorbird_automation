@@ -3,6 +3,7 @@ require('dotenv').config();
 const { expect } = require('@playwright/test');
 const { Logger } = require('../utils/logger');
 const { healingLocator } = require('../utils/locatorHealer');
+const { retryOperation } = require('../utils/resilientRetry');
 const {
     bidDetailTabStrategies,
     acceptBidButtonStrategies,
@@ -111,10 +112,17 @@ class VendorBidWorkspacePage {
     async downloadTemplateAndVerify() {
         Logger.step('VendorBidWorkspacePage: clicking Download Template...');
         await expect(this.downloadTemplateButton, 'FAIL: "Download Template" button not visible.').toBeVisible({ timeout: 10000 });
-        const [download] = await Promise.all([
-            this.page.waitForEvent('download', { timeout: 15000 }),
-            this.downloadTemplateButton.click(),
-        ]);
+        // A 15s wait for the download event was observed live to be too tight under real
+        // backend latency (the file is generated on-demand server-side, not served static) —
+        // retry the click itself a few times with a longer per-attempt wait rather than just
+        // waiting longer on one click, since a genuinely missed click needs re-issuing too.
+        const download = await retryOperation(async () => {
+            const [dl] = await Promise.all([
+                this.page.waitForEvent('download', { timeout: 30000 }),
+                this.downloadTemplateButton.click(),
+            ]);
+            return dl;
+        }, { attempts: 3, delayMs: 2000, label: 'click Download Template and await the download event' });
         const filename = download.suggestedFilename();
         expect(filename.length, 'FAIL: Download Template did not produce a named file.').toBeGreaterThan(0);
         Logger.success(`VendorBidWorkspacePage: Download Template produced file "${filename}".`);
@@ -197,8 +205,12 @@ class VendorBidWorkspacePage {
         Logger.success('VendorBidWorkspacePage: Property > Asset Viewer verified (Type/Export controls + empty state).');
     }
 
-    /** Take Offs sub-tab: asserts all 4 category tabs render, and — since this property has no
-     * takeoff version — the "No versions available for this property" empty state. */
+    /** Take Offs sub-tab: asserts all 4 category tabs render, plus either the "No versions
+     * available for this property" empty state OR real take-off version data. This property
+     * is a shared, persistent fixture reused across many unrelated tests in the suite — live-
+     * verified 2026-09-20 it has since accumulated a real take-off version ("Site_..."row
+     * data) from other tests, so the empty state no longer holds permanently. Either outcome
+     * proves the tab itself renders correctly; only a genuinely broken/blank tab should fail. */
     async assertPropertyTakeOffsTabVisible() {
         Logger.step('VendorBidWorkspacePage: asserting Property > Take Offs...');
         const subTab = healingLocator(propertySubTabStrategies(this.page, 'Take Offs')).first();
@@ -208,8 +220,22 @@ class VendorBidWorkspacePage {
             await expect(tab, `FAIL: Take Offs category tab "${label}" not visible.`).toBeVisible({ timeout: 10000 });
         }
         const emptyState = healingLocator(takeOffsEmptyStateStrategies(this.page)).first();
-        await expect(emptyState, 'FAIL: Take Offs empty state ("No versions available for this property") not visible.').toBeVisible();
-        Logger.success('VendorBidWorkspacePage: Property > Take Offs verified (4 category tabs + empty state).');
+        const emptyStateVisible = await emptyState.isVisible().catch(() => false);
+        if (emptyStateVisible) {
+            Logger.success('VendorBidWorkspacePage: Property > Take Offs verified (4 category tabs + empty state).');
+            return;
+        }
+        // Scoped to visible treegrid/grid roles only (this app's revo-grid components, used
+        // consistently elsewhere in this file) — a bare `table` selector was live-verified
+        // 2026-09-20 to match an unrelated HIDDEN <table> elsewhere on the page first, giving
+        // a false "not visible" failure even though the real, visible take-off data grid was
+        // present and correctly rendered.
+        const dataGrid = this.page.locator('[role="treegrid"]:visible, [role="grid"]:visible').first();
+        await expect(
+            dataGrid,
+            'FAIL: neither the Take Offs empty state nor any version data grid is visible — tab appears broken.',
+        ).toBeVisible({ timeout: 10000 });
+        Logger.success('VendorBidWorkspacePage: Property > Take Offs verified (4 category tabs + real version data, no empty state — property has accumulated take-off data from other tests).');
     }
 
     /** Locations sub-tab: asserts its toolbar (Search/View/Table/Export) and — since this

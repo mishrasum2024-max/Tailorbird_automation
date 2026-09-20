@@ -8,6 +8,7 @@ const { VendorBidWorkspacePage } = require('../pages/vendorBidWorkspacePage');
 const { viewDetailsButtonsStrategies } = require('../locators/vendorListingLocator');
 const { healingLocator } = require('../utils/locatorHealer');
 const { Logger } = require('../utils/logger');
+const { ensureInvitedBidForVendor } = require('../utils/ensureVendorBidPool');
 
 const smokeData = require('../data/vendorBidsSmokeSuiteData.json');
 
@@ -26,6 +27,15 @@ const smokeData = require('../data/vendorBidsSmokeSuiteData.json');
  */
 test.describe('Vendor Bids — requested smoke suite', () => {
     test.use({ storageState: 'vendorsession.json' });
+
+    // TC527/TC528 below need at least one "Invited" bid in this vendor's queue — a shared,
+    // persistent resource other tests elsewhere in the suite can permanently consume (e.g.
+    // TC528's own real Accept). Ensure one exists once, up front, rather than failing or
+    // skipping on a precondition the codebase already knows how to create.
+    test.beforeAll(async ({ browser }) => {
+        test.setTimeout(15 * 60 * 1000);
+        await ensureInvitedBidForVendor(browser);
+    });
 
     test('TC526 @vendor @bids @smoke : Verify vendor can see existing bid from Bids listing', async ({ page }) => {
         test.setTimeout(90000);

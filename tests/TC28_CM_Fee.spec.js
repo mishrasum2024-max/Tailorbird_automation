@@ -323,16 +323,22 @@ test.describe('CM Fee — Invoice, Draw Calculation & Generated PDF (Test_proper
         expect(currentDrawRequest, 'Draw amount must fall within the required $15-$25 band').toBeGreaterThanOrEqual(15);
         expect(currentDrawRequest, 'Draw amount must fall within the required $15-$25 band').toBeLessThanOrEqual(25);
 
-        // Source-amount separation: the property's own budget item must carry only the real
-        // invoice subtotal as its Current Draw — the CM Fee itself is never folded into the
-        // invoiced budget item's own draw amount. (The complementary fact — that the fee itself
-        // lands under a separate "Uncategorized" bucket — is asserted independently and more
-        // reliably from the generated PDF's fixed, submitted Schedule of Values in TC444, since
-        // MCP-verified live (2026-09-02) that bucket's live in-draft figures shift with this
-        // shared property's accumulating draw history in ways that aren't safe to assert exactly
-        // from within an unsaved draft.)
+        // Corrected (2026-09-20, superseding the "source-amount separation" assumption this
+        // replaced): this suite's own setup configures CM Fee's own Budget Item to the SAME
+        // item the source invoices post against — both are CM_FEE_BUDGET_ITEM ("Bathroom
+        // fixtures install", see the suite beforeAll's `cmFeeSetup.selectBudgetItem(CM_FEE_BUDGET_ITEM)`
+        // and TC436's own assertion that this is "the job's own budget category"). MCP-verified
+        // live (2026-09-11, documented in TC444/TC449 below for the generated PDF, and
+        // reconfirmed here directly in the live draft editor on 2026-09-20): when CM Fee's
+        // Budget Item coincides with the invoiced item, the app deterministically combines the
+        // invoice subtotal and the CM Fee into that one shared disbursement row — there is no
+        // separate "Uncategorized" bucket in this scenario at all (confirmed: the live editor's
+        // disbursement schedule for this property lists no "Uncategorized" row whatsoever). The
+        // original assumption that this row excludes the fee only holds when CM Fee's own
+        // Budget Item differs from the invoiced item; here they're the same by design, so the
+        // row's Current Draw must equal the combined subtotal + CM Fee (netPay).
         const budgetItemRow = await drawReportingJob.readDisbursementRowValuesInEditor(CM_FEE_BUDGET_ITEM);
-        expect(budgetItemRow.currentDraw, `"${CM_FEE_BUDGET_ITEM}" disbursement row must carry only the invoice subtotal, not the CM Fee`).toBe(expectedSubtotal);
+        expect(budgetItemRow.currentDraw, `"${CM_FEE_BUDGET_ITEM}" disbursement row must carry the combined invoice subtotal + CM Fee (subtotal + CM Fee), since CM Fee's own Budget Item is configured to this same shared line`).toBe(expectedNetPay);
 
         await drawReportingJob.proceedToDrawStepTwo();
         const subtotalText = await drawReportingJob.getKpiValueByLabel('Subtotal');

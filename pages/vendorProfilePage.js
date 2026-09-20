@@ -156,6 +156,11 @@ class VendorProfilePage {
      * creating a user. */
     async assertAddUserDuplicateEmailThenCancel(duplicateEmail) {
         Logger.step(`VendorProfilePage: asserting Add User duplicate-email protection for "${duplicateEmail}"...`);
+        const addUserButton = healingLocator(addUserButtonStrategies(this.page)).first();
+        await expect(addUserButton, 'FAIL: "Add User" button not visible.').toBeVisible({ timeout: 10000 });
+        await addUserButton.click();
+        const openDialog = healingLocator(addVendorUserDialogStrategies(this.page)).first();
+        await expect(openDialog, 'FAIL: "Add vendor user" modal did not open.').toBeVisible({ timeout: 10000 });
         await this.#fillAddUserForm({ firstName: 'QA', lastName: 'Duplicate', phone: '+1 555 555 5555', email: duplicateEmail });
         const submitButton = healingLocator(createAndInviteButtonStrategies(this.page)).first();
         await submitButton.click();

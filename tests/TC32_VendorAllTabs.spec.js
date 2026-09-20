@@ -12,6 +12,7 @@ const { viewDetailsButtonStrategies } = require('../locators/vendorBidLocator');
 const { bidsListEmptyStateStrategies } = require('../locators/vendorBidWorkspaceLocator');
 const { healingLocator } = require('../utils/locatorHealer');
 const { Logger } = require('../utils/logger');
+const { ensureInvitedBidForVendor } = require('../utils/ensureVendorBidPool');
 
 const bidWorkspaceData = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/vendorBidWorkspaceData.json'), 'utf8'));
 const userMgmtData = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/vendorUserManagementData.json'), 'utf8'));
@@ -61,6 +62,15 @@ async function openFirstBidRowByStatus(page, status) {
 
 test.describe('Vendor Phase 3 — Bids, Read Views & Admin/Compliance', () => {
     test.use({ storageState: 'vendorsession.json' });
+
+    // Many tests below need at least one "Invited" bid sitting in this vendor's queue —
+    // a shared, persistent resource that other tests elsewhere in the suite can permanently
+    // consume (e.g. a real Accept). Ensure one exists once, up front, rather than each test
+    // failing or skipping on a precondition the codebase already knows how to create.
+    test.beforeAll(async ({ browser }) => {
+        test.setTimeout(15 * 60 * 1000);
+        await ensureInvitedBidForVendor(browser);
+    });
 
     test('TC484 @e2e @sanity @vendor @bids : Vendor can access Bids landing page with its daily-briefing panel, view invited bids, open one, and validate the complete bid workspace', async ({ page }) => {
         test.setTimeout(120000);

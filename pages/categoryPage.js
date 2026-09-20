@@ -120,6 +120,19 @@ class FinancialsCategoryPage {
                 continue;
             }
         }
+        // Live evidence (TC100, CI run 2026-09-20): right after another test in this suite
+        // resets/empties the category list, the product legitimately renders a "No
+        // categories added yet" empty state instead of any table/grid DOM element at all —
+        // there is nothing broken about the page, it simply has zero rows yet. Callers that
+        // only need an interactive, loaded category page (e.g. to then click "Add Row") are
+        // not actually blocked by this; only a strict "a table must already exist" check is.
+        // Recognize this documented empty state as a valid "page ready" outcome too, rather
+        // than treating it as a load failure.
+        const emptyState = this.page.getByText('No categories added yet').first();
+        if (await emptyState.isVisible({ timeout: 3000 }).catch(() => false)) {
+            console.log('ℹ Category list is empty (no categories yet) — treating as page-ready, not a load failure');
+            return true;
+        }
         throw new Error('Category table did not load within timeout. Table/grid not visible.');
     }
 

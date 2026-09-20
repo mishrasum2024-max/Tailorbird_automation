@@ -54,6 +54,7 @@ const prop = require('../locators/locationLocator');
 const { CapexGridStabilityPage } = require('../pages/capexGridStabilityPage');
 const { ensureLeftPanelExpanded } = require('../utils/leftPanelExpander');
 const { healingLocator } = require('../utils/locatorHealer');
+const { withExtendedTerminalWait } = require('../utils/resilientRetry');
 
 class PropertiesHelper {
     constructor(page) {
@@ -2070,7 +2071,19 @@ class PropertiesHelper {
         const tabpanel = healingLocator(prop.locationsTabpanelStrategies(this.page));
         const requiredHeaders = ['Name', 'Building', 'Site'];
         for (const header of requiredHeaders) {
-            await expect(healingLocator(prop.buildingColumnHeaderStrategies(tabpanel, header))).toBeVisible({ timeout: 10000 });
+            const headerLocator = healingLocator(prop.buildingColumnHeaderStrategies(tabpanel, header));
+            // MCP/HTML-report evidence (TC56, 2026-09-20): after switching the Locations
+            // dropdown to "Building", the grid's real data (14 rows on this property) can
+            // take longer than 10s to arrive from the backend — the original tight timeout
+            // fires while the grid still shows its "No buildings added yet" empty state,
+            // even though the header/rows do render moments later. Keep the original 10s
+            // check as the fast path, and only fall back to a realistic extended wait if it
+            // was genuinely too tight (never masks a real, persistently-missing header).
+            await withExtendedTerminalWait(
+                () => expect(headerLocator).toBeVisible({ timeout: 10000 }),
+                headerLocator,
+                { timeoutMs: 45000, visible: true, label: `Building tab "${header}" column header` }
+            );
         }
         // "Actions" column is optional in current UI depending on visible columns config.
         const actionsHeader = healingLocator(prop.buildingColumnHeaderStrategies(tabpanel, /Actions/i));

@@ -465,10 +465,21 @@ test.describe('Manage Organization', () => {
 
   test('TC34 @regression @organization Visual assertions: organization main workspace', async () => {
     Logger.info('[TC34] Starting: visual snapshot of organization main workspace');
+    // Evidence (2026-09-20 CI failure, screenshot-diff attachments): expected vs. actual
+    // baselines are pixel-identical in layout/columns/styling — the ONLY differences are
+    // the row contents of the Users table body (different pending-invite test emails),
+    // which legitimately grows/changes across runs as other specs (TC30/TC31/TC35/TC36,
+    // revoke flows, etc.) invite new test users into this shared live organization. The
+    // existing maxDiffPixels/maxDiffPixelRatio tolerance was already added for exactly this
+    // reason but is an absolute-pixel-count race against an ever-growing row count. Masking
+    // the actual dynamic region is the correct fix rather than repeatedly bumping the
+    // threshold: it still holds the surrounding chrome (nav, tabs, column headers) to a
+    // real visual-regression check.
     await expect(sharedPage.locator('.mantine-AppShell-main').first()).toHaveScreenshot(
       'organization-main-workspace.png',
       {
         ...ORGANIZATION_WORKSPACE_SCREENSHOT_OPTIONS,
+        mask: [sharedPage.locator('table.rt-TableRootTable tbody')],
       },
     );
     Logger.success('[TC34] ✅ Organization workspace visual snapshot passed');

@@ -1,6 +1,7 @@
 const { expect } = require('@playwright/test');
 const { Logger } = require('../utils/logger');
 const { healingLocator } = require('../utils/locatorHealer');
+const { retryOperation, withExtendedTerminalWait } = require('../utils/resilientRetry');
 const { BidPage } = require('./bidPage');
 const { ProjectPage } = require('./projectPage');
 const { bidLocators } = require('../locators/bidLocator');
@@ -104,11 +105,20 @@ class BidAwardPage {
 
         const loc = bidLocators(this.page);
         await expect(loc.listSearchInput).toBeVisible({ timeout: 10000 });
-        await loc.listSearchInput.fill(bidName);
-        await this.page.waitForTimeout(1200);
 
+        // A bid a vendor just submitted (TC452) can take a few seconds to reach this admin
+        // search's backend index — a single fill+10s-wait was observed live to sometimes land
+        // in that gap ("No ... bids added yet" even though the bid genuinely exists). Re-issuing
+        // the same search a few times (not just waiting longer on one stale result) self-corrects
+        // once the index catches up, without masking a truly missing bid (every attempt fails
+        // identically if the bid really isn't there).
         const rowLink = loc.bidRowLink(bidName);
-        await expect(rowLink, `FAIL: bid "${bidName}" must appear in the Bids list`).toBeVisible({ timeout: 10000 });
+        await retryOperation(async () => {
+            await loc.listSearchInput.fill('');
+            await loc.listSearchInput.fill(bidName);
+            await this.page.waitForTimeout(1500);
+            await expect(rowLink, `FAIL: bid "${bidName}" must appear in the Bids list`).toBeVisible({ timeout: 10000 });
+        }, { attempts: 4, delayMs: 3000, label: `search Bids list for "${bidName}"` });
 
         const status = await this.getBidListStatus(bidName);
         Logger.info(`BidAwardPage: bid "${bidName}" list Status = "${status}"`);
@@ -298,7 +308,24 @@ class BidAwardPage {
             await expect(projectNameInput).toBeVisible({ timeout: 10000 });
             await projectNameInput.fill(projectName);
             await createProjectSubmitBtn.click();
-            await this.page.waitForTimeout(1500);
+
+            // Live-verified 2026-09-20 (screenshot at failure): "Create New Project" can still
+            // be mid-submit (its own spinner + a spinning submit button) well past the previous
+            // fixed 1500ms+15s wait — real backend latency on project creation, not a broken
+            // flow. Wait for ITS OWN terminal condition (the dialog actually closing) first,
+            // with a realistic fallback, before expecting the Award Bid dialog to reappear.
+            // Deliberately NOT reusing `createProjectDialog` (healingLocator) for this "must
+            // disappear" check: its own last-resort fallback strategy is `getByRole('dialog')
+            // .last()`, which — once Create New Project closes and the underlying Award Bid
+            // dialog (already open the whole time, per the stacking note above) is the only
+            // dialog left — still matches THAT dialog, so "not visible" could never resolve.
+            // A narrow heading-text check has no such false-positive-match risk.
+            const createProjectHeading = this.page.getByRole('heading', { name: 'Create New Project', exact: true });
+            await withExtendedTerminalWait(
+                async () => await expect(createProjectHeading, 'Create New Project dialog must close after submitting').not.toBeVisible({ timeout: 15000 }),
+                createProjectHeading,
+                { timeoutMs: 45000, visible: false, label: 'Create New Project dialog close' },
+            );
 
             await expect(confirmDialog, 'FAIL: Award Bid dialog must reappear after creating the new Project').toBeVisible({ timeout: 15000 });
             await expect(projectSelect, 'FAIL: newly-created Project must be auto-selected in the Award Bid dialog').toHaveValue(projectName, { timeout: 10000 });
