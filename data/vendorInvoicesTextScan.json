@@ -1,13 +1,13 @@
 {
-  "capturedAt": "2026-09-15T12:24:06.657Z",
+  "capturedAt": "2026-09-20T13:12:06.444Z",
   "url": "https://beta.tailorbird.com/bids-and-contracts/invoices",
   "page": "Invoices",
   "vendorEmail": "oct30sumit@yopmail.com",
   "counts": {
-    "buttons": 39,
+    "buttons": 50,
     "links": 13,
-    "paragraphs": 8,
-    "textNodes": 51
+    "paragraphs": 24,
+    "textNodes": 65
   },
   "snapshot": {
     "headings": [],
@@ -19,6 +19,46 @@
         "ariaLabel": "Unpin sidebar",
         "name": null,
         "type": null,
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "Thought",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "Thought",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "Thought",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "Thought",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
         "disabled": false,
         "selector": "button"
       },
@@ -401,6 +441,76 @@
         "type": "button",
         "disabled": false,
         "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
       }
     ],
     "inputs": [
@@ -408,7 +518,7 @@
         "tag": "textarea",
         "inputType": "textarea",
         "name": null,
-        "id": "mantine-mb7qr6pja",
+        "id": "mantine-duk1u6wvc",
         "placeholder": "Ask about your invoices",
         "ariaLabel": null,
         "ariaDescribedBy": null,
@@ -418,13 +528,13 @@
         "visible": true,
         "required": false,
         "disabled": false,
-        "selector": "#mantine-mb7qr6pja"
+        "selector": "#mantine-duk1u6wvc"
       },
       {
         "tag": "input",
         "inputType": "text",
         "name": null,
-        "id": "mantine-4tmrxla9p",
+        "id": "mantine-63d0ptqtf",
         "placeholder": "Search...",
         "ariaLabel": null,
         "ariaDescribedBy": null,
@@ -434,7 +544,7 @@
         "visible": true,
         "required": false,
         "disabled": false,
-        "selector": "#mantine-4tmrxla9p"
+        "selector": "#mantine-63d0ptqtf"
       },
       {
         "tag": "textarea",
@@ -594,15 +704,111 @@
       },
       {
         "tag": "p",
-        "text": "👋 I'm Piper",
+        "text": "Process the supporting invoice PDF(s) I just uploaded: OCR each one, map every billed amount to the contract's schedule of values, update the G703 current-period figures and source mappings, and flag anything you can't match confidently. If a document is a lien waiver rather than an invoice, attach it as the lien waiver instead.",
         "visible": true,
         "selector": ".mantine-focus-auto"
       },
       {
         "tag": "p",
-        "text": "Ask me about your invoices — drafts, submitted invoices, or the contract lines they bill against. Attach an invoice PDF and I'll process it.",
+        "text": "Thought",
         "visible": true,
         "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "This draft has already been confirmed and converted into an invoice, so it's no longer editable from here — nothing further to update.",
+        "visible": true,
+        "selector": "p"
+      },
+      {
+        "tag": "p",
+        "text": "Separately, the invoice file you uploaded (\"supporting_invoice_placeholder.pdf\") is just a test fixture with placeholder text — no invoice number, date, or billed amounts in it. The lien waiver file was already attached to the pay application. If you have the actual supporting invoice, please upload that and let me know if there's a new draft to work against.",
+        "visible": true,
+        "selector": "p"
+      },
+      {
+        "tag": "p",
+        "text": "Process the supporting invoice PDF(s) I just uploaded: OCR each one, map every billed amount to the contract's schedule of values, update the G703 current-period figures and source mappings, and flag anything you can't match confidently. If a document is a lien waiver rather than an invoice, attach it as the lien waiver instead.",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Thought",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Done — here's where things stand on this draft:",
+        "visible": true,
+        "selector": "p"
+      },
+      {
+        "tag": "p",
+        "text": "To move forward, please upload the actual invoice with real line-item amounts so I can map it to the schedule of values.",
+        "visible": true,
+        "selector": "p"
+      },
+      {
+        "tag": "p",
+        "text": "Process the supporting invoice PDF(s) I just uploaded: OCR each one, map every billed amount to the contract's schedule of values, update the G703 current-period figures and source mappings, and flag anything you can't match confidently. If a document is a lien waiver rather than an invoice, attach it as the lien waiver instead.",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Thought",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "This draft has already been confirmed and converted into an invoice, so there's nothing left for me to update on it.",
+        "visible": true,
+        "selector": "p"
+      },
+      {
+        "tag": "p",
+        "text": "To summarize where things are: every upload so far named \"supporting_invoice_placeholder.pdf\" has contained only placeholder test text — no invoice number, date, or dollar amounts — so I haven't been able to map any real billing data to the contract lines (\"Vanity Light,\" \"Ceiling Fan Light,\" \"Vanity Tops\"). The lien waivers have consistently come through fine and attached correctly.",
+        "visible": true,
+        "selector": "p"
+      },
+      {
+        "tag": "p",
+        "text": "If you have a live draft that still needs work, let me know its number, and please upload the actual invoice document (with real amounts) so I can complete the mapping.",
+        "visible": true,
+        "selector": "p"
+      },
+      {
+        "tag": "p",
+        "text": "Process the supporting invoice PDF(s) I just uploaded: OCR each one, map every billed amount to the contract's schedule of values, update the G703 current-period figures and source mappings, and flag anything you can't match confidently. If a document is a lien waiver rather than an invoice, attach it as the lien waiver instead.",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Thought",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "This draft has also already been confirmed and converted to an invoice, so it's no longer editable — nothing to save here.",
+        "visible": true,
+        "selector": "p"
+      },
+      {
+        "tag": "p",
+        "text": "Across all four attempts, every file uploaded under the name \"supporting_invoice_placeholder.pdf\" has been the same test fixture with no real invoice data (no invoice number, date, or amounts), so I haven't been able to map anything to the schedule of values. The lien waiver attachments have all gone through fine.",
+        "visible": true,
+        "selector": "p"
+      },
+      {
+        "tag": "p",
+        "text": "If you have an actual invoice to bill against a still-open draft, upload it and let me know which draft it's for, and I'll process it right away.",
+        "visible": true,
+        "selector": "p"
       },
       {
         "tag": "p",
@@ -732,11 +938,19 @@
       },
       {
         "tag": "span",
-        "text": "Invoices Assistance",
+        "text": "Invoice Processing and G703 Reconciliation",
         "visible": true,
         "role": null,
         "dataTestId": null,
         "selector": "span"
+      },
+      {
+        "tag": "span",
+        "text": "attachment",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_1e0e6180"
       },
       {
         "tag": "span",
@@ -868,7 +1082,7 @@
       },
       {
         "tag": "div",
-        "text": "Invoice #28522",
+        "text": "Invoice #29355",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -876,7 +1090,7 @@
       },
       {
         "tag": "div",
-        "text": "GUARD_InvoiceB_1789465814929",
+        "text": "TMPL_Invoice_1789894067880",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -884,7 +1098,7 @@
       },
       {
         "tag": "div",
-        "text": "Invoice #28521",
+        "text": "Invoice #29353",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -892,7 +1106,7 @@
       },
       {
         "tag": "div",
-        "text": "GUARD_InvoiceA_1789465814929",
+        "text": "DOC_Invoice_1789893971753",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -900,7 +1114,7 @@
       },
       {
         "tag": "div",
-        "text": "Invoice #28519",
+        "text": "Invoice #29351",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -908,7 +1122,7 @@
       },
       {
         "tag": "div",
-        "text": "REJECT_Invoice_1789465715124",
+        "text": "GUARD_InvoiceB_1789893871581",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -916,7 +1130,7 @@
       },
       {
         "tag": "div",
-        "text": "Invoice #28518",
+        "text": "Invoice #29350",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -924,7 +1138,7 @@
       },
       {
         "tag": "div",
-        "text": "INCEXC_Invoice2_1789465654842",
+        "text": "GUARD_InvoiceA_1789893871581",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -932,7 +1146,7 @@
       },
       {
         "tag": "div",
-        "text": "Invoice #28517",
+        "text": "Invoice #29348",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -940,7 +1154,7 @@
       },
       {
         "tag": "div",
-        "text": "INCEXC_Invoice1_1789465654842",
+        "text": "REJECT_Invoice_1789893780722",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -948,7 +1162,7 @@
       },
       {
         "tag": "div",
-        "text": "Invoice #28516",
+        "text": "Invoice #29346",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -956,7 +1170,7 @@
       },
       {
         "tag": "div",
-        "text": "CALC_Invoice_1789465607945",
+        "text": "INCEXC_Invoice2_1789893724795",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -964,7 +1178,7 @@
       },
       {
         "tag": "div",
-        "text": "Invoice #28514",
+        "text": "Invoice #29345",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -972,7 +1186,7 @@
       },
       {
         "tag": "div",
-        "text": "TC375_Invoice_1789465453070",
+        "text": "INCEXC_Invoice1_1789893724795",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -980,7 +1194,7 @@
       },
       {
         "tag": "div",
-        "text": "Invoice #28513",
+        "text": "Invoice #29344",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -988,7 +1202,7 @@
       },
       {
         "tag": "div",
-        "text": "Reassign_S4_Description_1789465450553",
+        "text": "CALC_Invoice_1789893679032",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -996,7 +1210,7 @@
       },
       {
         "tag": "div",
-        "text": "Invoice #28512",
+        "text": "Invoice #29340",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -1004,7 +1218,7 @@
       },
       {
         "tag": "div",
-        "text": "Reassign_S3_Description_1789465252017",
+        "text": "TC375_Invoice_1789893534912",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -1012,7 +1226,7 @@
       },
       {
         "tag": "div",
-        "text": "Invoice #28511",
+        "text": "Invoice #29291",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -1020,7 +1234,7 @@
       },
       {
         "tag": "div",
-        "text": "Reassign_S2_Description_1789465246209",
+        "text": "MultiApprover_Invoice_1789734591336_UM8D",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -1028,7 +1242,7 @@
       },
       {
         "tag": "div",
-        "text": "Invoice #28510",
+        "text": "Invoice #29062",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -1036,7 +1250,111 @@
       },
       {
         "tag": "div",
-        "text": "Reassign_S1_Description_1789465231426",
+        "text": "MultiApprover_Invoice_1789722535540_E2AL",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Draft Invoice",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "supporting_invoice_placeholder.pdf",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Invoice #29012",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "MultiApprover_Invoice_1789637401709_KR2V",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Invoice #28936",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "MultiApprover_Invoice_1789632680179_DI8R",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "PAY-1008",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "TC33-REG-1789629102495",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "TC33 Regular Invoice Automation",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Automated regular invoice created by TC33_PayInvoice.spec.js",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "PAY-1007",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "PAY-1006",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Flag unreadable placeholder invoice on draft 17 for review",
         "visible": true,
         "role": null,
         "dataTestId": null,

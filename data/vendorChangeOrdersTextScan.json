@@ -1,13 +1,13 @@
 {
-  "capturedAt": "2026-09-15T12:24:10.580Z",
+  "capturedAt": "2026-09-20T13:12:10.168Z",
   "url": "https://beta.tailorbird.com/bids-and-contracts/change-orders",
   "page": "Change Orders",
   "vendorEmail": "oct30sumit@yopmail.com",
   "counts": {
-    "buttons": 35,
+    "buttons": 46,
     "links": 13,
     "paragraphs": 8,
-    "textNodes": 44
+    "textNodes": 73
   },
   "snapshot": {
     "headings": [],
@@ -298,9 +298,9 @@
         "visible": true,
         "ariaLabel": null,
         "name": null,
-        "type": null,
+        "type": "button",
         "disabled": false,
-        "selector": ".group-btn"
+        "selector": ".mantine-focus-auto"
       },
       {
         "tag": "button",
@@ -308,9 +308,9 @@
         "visible": true,
         "ariaLabel": null,
         "name": null,
-        "type": null,
+        "type": "button",
         "disabled": false,
-        "selector": ".pin-btn"
+        "selector": ".mantine-focus-auto"
       },
       {
         "tag": "button",
@@ -318,9 +318,119 @@
         "visible": true,
         "ariaLabel": null,
         "name": null,
-        "type": null,
+        "type": "button",
         "disabled": false,
-        "selector": ".sort-btn"
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
       },
       {
         "tag": "button",
@@ -368,7 +478,7 @@
         "tag": "textarea",
         "inputType": "textarea",
         "name": null,
-        "id": "mantine-sg2kfzoya",
+        "id": "mantine-pdbdvgmha",
         "placeholder": "Ask about your change orders",
         "ariaLabel": null,
         "ariaDescribedBy": null,
@@ -378,13 +488,13 @@
         "visible": true,
         "required": false,
         "disabled": false,
-        "selector": "#mantine-sg2kfzoya"
+        "selector": "#mantine-pdbdvgmha"
       },
       {
         "tag": "input",
         "inputType": "text",
         "name": null,
-        "id": "mantine-qj8whya99",
+        "id": "mantine-34l3hzylw",
         "placeholder": "Search...",
         "ariaLabel": null,
         "ariaDescribedBy": null,
@@ -394,7 +504,7 @@
         "visible": true,
         "required": false,
         "disabled": false,
-        "selector": "#mantine-qj8whya99"
+        "selector": "#mantine-34l3hzylw"
       },
       {
         "tag": "textarea",
@@ -827,16 +937,8 @@
         "selector": ".bird-table-header-title"
       },
       {
-        "tag": "span",
-        "text": "Owner Organization",
-        "visible": true,
-        "role": null,
-        "dataTestId": null,
-        "selector": ".bird-table-header-title"
-      },
-      {
         "tag": "div",
-        "text": "Change Order #6237",
+        "text": "Change Order #8851",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -844,7 +946,7 @@
       },
       {
         "tag": "div",
-        "text": "test change order for draw reporting",
+        "text": "TC Smoke Change Order Provenance 1789905582557",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -852,7 +954,7 @@
       },
       {
         "tag": "div",
-        "text": "test job for draw reporting",
+        "text": "Automation_Job",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -860,7 +962,7 @@
       },
       {
         "tag": "div",
-        "text": "QA Automations Org_2026",
+        "text": "Draft Change Order",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -868,7 +970,7 @@
       },
       {
         "tag": "div",
-        "text": "Change Order #4747",
+        "text": "Automation_Job",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -876,7 +978,7 @@
       },
       {
         "tag": "div",
-        "text": "Automation Job, please don't delete it",
+        "text": "Draft Change Order",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -884,7 +986,7 @@
       },
       {
         "tag": "div",
-        "text": "QA Automations Org_2026",
+        "text": "Automation_Job",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -892,7 +994,7 @@
       },
       {
         "tag": "div",
-        "text": "Change Order #4654",
+        "text": "Change Order #8850",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -900,7 +1002,7 @@
       },
       {
         "tag": "div",
-        "text": "new4",
+        "text": "TC Smoke Change Order 1789905561276",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -908,7 +1010,7 @@
       },
       {
         "tag": "div",
-        "text": "Automation Job, please don't delete it",
+        "text": "Automation_Job",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -916,7 +1018,7 @@
       },
       {
         "tag": "div",
-        "text": "QA Automations Org_2026",
+        "text": "Draft Change Order",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -924,7 +1026,7 @@
       },
       {
         "tag": "div",
-        "text": "Change Order #4293",
+        "text": "Automation_Job",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -932,7 +1034,7 @@
       },
       {
         "tag": "div",
-        "text": "Mall in Noida",
+        "text": "Change Order #8849",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -940,7 +1042,247 @@
       },
       {
         "tag": "div",
-        "text": "QA Automations Org_2026",
+        "text": "TC Smoke Change Order Provenance 1789891768831",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Automation_Job",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Draft Change Order",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Automation_Job",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Change Order #8848",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "TC Smoke Change Order 1789891744698",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Automation_Job",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Draft Change Order",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Automation_Job",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Change Order #8847",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "TC Smoke Change Order Provenance 1789807531375",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Automation_Job",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Draft Change Order",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Automation_Job",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Draft Change Order",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Automation_Job",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Change Order #8846",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "TC Smoke Change Order 1789807508346",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Automation_Job",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Change Order #8789",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "TC Smoke Change Order Provenance 1789650001382",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Automation_Job",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Draft Change Order",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Automation_Job",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Draft Change Order",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Automation_Job",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Change Order #8788",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "TC Smoke Change Order 1789649874012",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Automation_Job",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Draft Change Order",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Automation_Job",
         "visible": true,
         "role": null,
         "dataTestId": null,

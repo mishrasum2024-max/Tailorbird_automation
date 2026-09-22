@@ -75,7 +75,15 @@ test.describe.serial('CM Fee Configuration', () => {
         await budgetJob.clickSubmitForApproval();
         Logger.success('Suite setup: budget revision submitted for approval');
 
-        await ctx.close();
+        // Live-confirmed 2026-09-22 (headed run): closing a manually-created extra context
+        // under this project's project-wide trace: 'retain-on-failure' can throw a benign
+        // internal trace-resource-export race (ENOENT on a temp .trace/.zip file) even though
+        // every real action above already completed successfully — same documented issue as
+        // utils/ensureVendorBidPool.js#ensureInvitedBidForVendor, and the same fix already
+        // applied to tests/TC22_Retainage.spec.js's beforeAll. Never let that artifact-cleanup
+        // noise fail this whole suite's beforeAll (which, unguarded, cascaded into every test
+        // in the file failing/timing out).
+        await ctx.close().catch((e) => Logger.info(`beforeAll: ctx.close() cleanup warning (ignored): ${e.message.split('\n')[0]}`));
     });
 
     test.beforeEach(async ({ page: p }) => {
@@ -112,9 +120,12 @@ test.describe.serial('CM Fee Configuration', () => {
         expect(toastText).toMatch(/property_draw_config (created|updated) successfully/);
 
         // Re-open to verify the saved values actually persisted server-side, not just
-        // reflected the in-memory form state.
+        // reflected the in-memory form state. The success toast can fire slightly before the
+        // re-opened dialog's own fetch reflects the just-saved value (live-confirmed
+        // 2026-09-22: a one-shot read here was flaky) — poll the checkbox's real state
+        // instead of reading it once immediately after re-opening.
         await cmFeePage.openCmFeeConfiguration();
-        expect(await cmFeePage.isCmFeeEnabled()).toBe(true);
+        await expect(cmFeePage.loc().cmFeeEnabledCheckbox, 'FAIL: CM Fee Enabled checkbox did not persist as checked after save.').toBeChecked({ checked: true, timeout: 10000 });
         expect(await cmFeePage.getPercentageValue()).toBe('15');
         expect(await cmFeePage.getBudgetItemValue()).toBe('Site Prep');
         await cmFeePage.closeCmFeeViaCancel();

@@ -81,7 +81,13 @@ test.beforeAll(async ({ browser }) => {
 });
 
 test.afterAll(async () => {
-  if (context) await context.close();
+  // Live-confirmed 2026-09-22: closing this shared context can throw a benign internal
+  // trace-resource-export race (ENOENT on a temp .trace/.zip file) under this project's
+  // project-wide trace: 'retain-on-failure' — same documented issue already fixed in
+  // utils/ensureVendorBidPool.js, tests/TC22_Retainage.spec.js, and tests/TC28_CM_Fee.spec.js.
+  // Left unguarded here, it obscured the real error whenever the preceding test timed out,
+  // by throwing its own secondary ENOENT during the forced teardown.
+  if (context) await context.close().catch((e) => Logger.info(`afterAll: context.close() cleanup warning (ignored): ${e.message.split('\n')[0]}`));
 });
 
 test.describe('PROPERTY', () => {

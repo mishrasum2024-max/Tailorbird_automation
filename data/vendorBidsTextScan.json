@@ -1,13 +1,13 @@
 {
-  "capturedAt": "2026-09-15T12:23:56.789Z",
+  "capturedAt": "2026-09-20T13:11:59.904Z",
   "url": "https://beta.tailorbird.com/bids-and-contracts/bids",
   "page": "Bids",
   "vendorEmail": "oct30sumit@yopmail.com",
   "counts": {
-    "buttons": 24,
-    "links": 17,
-    "paragraphs": 8,
-    "textNodes": 32
+    "buttons": 32,
+    "links": 21,
+    "paragraphs": 25,
+    "textNodes": 46
   },
   "snapshot": {
     "headings": [],
@@ -19,6 +19,46 @@
         "ariaLabel": "Unpin sidebar",
         "name": null,
         "type": null,
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "Thought",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "Open",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "Open",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "Thought",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
         "disabled": false,
         "selector": "button"
       },
@@ -251,6 +291,46 @@
         "type": "button",
         "disabled": false,
         "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "button",
+        "text": "",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": "button",
+        "disabled": false,
+        "selector": ".mantine-focus-auto"
       }
     ],
     "inputs": [
@@ -258,7 +338,7 @@
         "tag": "textarea",
         "inputType": "textarea",
         "name": null,
-        "id": "mantine-apij1npjn",
+        "id": "mantine-au2z58vpw",
         "placeholder": "Ask about your bids",
         "ariaLabel": null,
         "ariaDescribedBy": null,
@@ -268,13 +348,13 @@
         "visible": true,
         "required": false,
         "disabled": false,
-        "selector": "#mantine-apij1npjn"
+        "selector": "#mantine-au2z58vpw"
       },
       {
         "tag": "input",
         "inputType": "text",
         "name": null,
-        "id": "mantine-e8rjtcoxx",
+        "id": "mantine-erxfo7h2o",
         "placeholder": "Search...",
         "ariaLabel": null,
         "ariaDescribedBy": null,
@@ -284,7 +364,7 @@
         "visible": true,
         "required": false,
         "disabled": false,
-        "selector": "#mantine-e8rjtcoxx"
+        "selector": "#mantine-erxfo7h2o"
       },
       {
         "tag": "textarea",
@@ -442,19 +522,55 @@
       },
       {
         "tag": "a",
-        "text": "bid_prop_1789454121559",
+        "text": "bid_prop_1789893274239",
         "visible": true,
         "ariaLabel": null,
-        "href": "https://beta.tailorbird.com/properties/details?propertyId=11877",
+        "href": "https://beta.tailorbird.com/properties/details?propertyId=12423",
         "hasChildren": false,
         "selector": "a"
       },
       {
         "tag": "a",
-        "text": "bid_prop_1789464855389",
+        "text": "bid_prop_1789893274239",
         "visible": true,
         "ariaLabel": null,
-        "href": "https://beta.tailorbird.com/properties/details?propertyId=11902",
+        "href": "https://beta.tailorbird.com/properties/details?propertyId=12423",
+        "hasChildren": false,
+        "selector": "a"
+      },
+      {
+        "tag": "a",
+        "text": "Test Property 1_Cottages on Elm",
+        "visible": true,
+        "ariaLabel": null,
+        "href": "https://beta.tailorbird.com/properties/details?propertyId=5758",
+        "hasChildren": false,
+        "selector": "a"
+      },
+      {
+        "tag": "a",
+        "text": "Test Property 1_Cottages on Elm",
+        "visible": true,
+        "ariaLabel": null,
+        "href": "https://beta.tailorbird.com/properties/details?propertyId=5758",
+        "hasChildren": false,
+        "selector": "a"
+      },
+      {
+        "tag": "a",
+        "text": "Test Property 1_Cottages on Elm",
+        "visible": true,
+        "ariaLabel": null,
+        "href": "https://beta.tailorbird.com/properties/details?propertyId=5758",
+        "hasChildren": false,
+        "selector": "a"
+      },
+      {
+        "tag": "a",
+        "text": "Test Property 1_Cottages on Elm",
+        "visible": true,
+        "ariaLabel": null,
+        "href": "https://beta.tailorbird.com/properties/details?propertyId=5758",
         "hasChildren": false,
         "selector": "a"
       }
@@ -480,15 +596,117 @@
       },
       {
         "tag": "p",
-        "text": "👋 I'm Piper",
+        "text": "Can you check i hve any open bid ?",
         "visible": true,
         "selector": ".mantine-focus-auto"
       },
       {
         "tag": "p",
-        "text": "Ask me about your bids — open requests, due dates, submitted responses, or anything on the page to the right.",
+        "text": "Thought",
         "visible": true,
         "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Open Bids",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "bid_prop_1789637278366",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Due 2026-12-31",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Vnedor Test Tickets",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Due 2026-09-25",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "One is already accepted, due December 31, 2026, and the other is still just an invitation due September 25, 2026 — that one needs your response soonest.",
+        "visible": true,
+        "selector": "p"
+      },
+      {
+        "tag": "p",
+        "text": "Can you check i hve any open bid ?",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "You have 2 open bids: one at \"bid_prop_1789637278366\" (already Accepted, due Dec 31, 2026) and one at \"Vnedor Test Tickets\" (still Invited, due Sept 25, 2026 — needs a response soon). I posted both above as cards you can open.",
+        "visible": true,
+        "selector": "p"
+      },
+      {
+        "tag": "p",
+        "text": "Can you check i hve any open bid ?",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Yes — same two as above: one Accepted bid due Dec 31, 2026, and one still awaiting your response (Invited) due Sept 25, 2026. Want me to open either one?",
+        "visible": true,
+        "selector": "p"
+      },
+      {
+        "tag": "p",
+        "text": "Can you check i hve any open bid ?",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Thought",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Checked again — still the same 2 open bids: an Accepted one due Dec 31, 2026, and an Invited one due Sept 25, 2026 that still needs your response.",
+        "visible": true,
+        "selector": "p"
+      },
+      {
+        "tag": "p",
+        "text": "Can you check i hve any open bid ?",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Same result: 2 open bids — one Accepted (due Dec 31, 2026) and one Invited (due Sept 25, 2026), still awaiting your response. Let me know if you'd like me to open one.",
+        "visible": true,
+        "selector": "p"
+      },
+      {
+        "tag": "p",
+        "text": "Can you check i hve any open bid ?",
+        "visible": true,
+        "selector": ".mantine-focus-auto"
+      },
+      {
+        "tag": "p",
+        "text": "Still 2 open bids — Accepted one due Dec 31, 2026, and the Invited one due Sept 25, 2026 that's still waiting on your response. Nothing's changed since I last checked.",
+        "visible": true,
+        "selector": "p"
       },
       {
         "tag": "p",
@@ -610,11 +828,43 @@
       },
       {
         "tag": "span",
-        "text": "Bids Assistance",
+        "text": "Checking Open Bids Status",
         "visible": true,
         "role": null,
         "dataTestId": null,
         "selector": "span"
+      },
+      {
+        "tag": "span",
+        "text": "Accepted",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_5add502a"
+      },
+      {
+        "tag": "span",
+        "text": "Open",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_811560b9"
+      },
+      {
+        "tag": "span",
+        "text": "Invited",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_5add502a"
+      },
+      {
+        "tag": "span",
+        "text": "Open",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": ".m_811560b9"
       },
       {
         "tag": "span",
@@ -738,7 +988,7 @@
       },
       {
         "tag": "div",
-        "text": "AI_Bid_1789454161957",
+        "text": "AI_Bid_1789893324941",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -754,7 +1004,87 @@
       },
       {
         "tag": "div",
-        "text": "AI_Bid_1789464905267",
+        "text": "Award_Project_1789908353684",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "E2E_BidBook_1789893364077",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "QA Automations Org_2026",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Award_Project_1789909796308",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Auto_Invited_1789906425390",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "QA Automations Org_2026",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Auto_Invited_1789907703708",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "QA Automations Org_2026",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Auto_Invited_1789908439822",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "QA Automations Org_2026",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Auto_Invited_1789909375870",
         "visible": true,
         "role": null,
         "dataTestId": null,

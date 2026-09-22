@@ -71,6 +71,27 @@ class VendorBidPage {
     }
 
     /**
+     * Forces the Bids grid's revo-grid element to an oversized explicit height so every row
+     * mounts into the DOM, instead of only whatever fits the container's current rendered
+     * height. Same documented root cause/technique as pages/retainagePage.js's
+     * renderAllRetainageTabRows() and pages/capexPage.js's forceGridFullWidth() for the same
+     * revo-grid technology elsewhere in this app — live/CI investigation (2026-09-22) of
+     * TC484/TC489/TC494/TC497/TC501/TC526/TC529/TC532's shared "element(s) not found" failure
+     * confirmed this exact bidsGrid element computes `overflow: hidden` with a fixed pixel
+     * height (e.g. 948px) that does not reliably grow to fit every row in every environment —
+     * a bid far enough down the list can be present in the CSV export (and the backend data)
+     * yet never mount into the live DOM, which is what made findNonAwardedBidRow()/
+     * findBidRowByStatus() intermittently time out on a bid that genuinely existed.
+     */
+    async forceGridFullHeight() {
+        await this.bidsGrid.evaluate((grid) => {
+            grid.style.setProperty('height', '20000px', 'important');
+            grid.style.setProperty('max-height', '20000px', 'important');
+        });
+        await this.page.waitForTimeout(300);
+    }
+
+    /**
      * Finds the first bid that is NOT "Awarded" (i.e. still active from the vendor's side —
      * "Invited", "Submitted", or "Re-submitted") by exporting the Bids list to CSV and reading
      * that file, rather than scanning the live grid directly.
@@ -120,6 +141,7 @@ class VendorBidPage {
             return null;
         }
 
+        await this.forceGridFullHeight();
         const row = healingLocator(vendorBidsGridRowsStrategies(this.bidsGrid)).filter({ hasText: target.bidName }).first();
         await expect(row).toBeVisible({ timeout: 10000 });
         const rowGrow = await row.getAttribute('data-rgrow');
@@ -163,12 +185,13 @@ class VendorBidPage {
             return { bidName: (cols[bidNameIdx] || '').trim(), status: (cols[statusIdx] || '').trim() };
         }).filter((b) => b.bidName && b.status);
 
-        const target = bids.find((b) => new RegExp(`^${status}$`, 'i').test(b.status));
+        const target = bids.find((b) => b.status.toLowerCase() === status.toLowerCase());
         if (!target) {
             Logger.info(`VendorBidPage: no "${status}" bid found in the export — ${JSON.stringify(bids)}`);
             return null;
         }
 
+        await this.forceGridFullHeight();
         const row = healingLocator(vendorBidsGridRowsStrategies(this.bidsGrid)).filter({ hasText: target.bidName }).first();
         await expect(row).toBeVisible({ timeout: 10000 });
         const rowGrow = await row.getAttribute('data-rgrow');

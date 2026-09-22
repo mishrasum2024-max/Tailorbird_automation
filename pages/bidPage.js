@@ -4,6 +4,7 @@ const { expect } = require('@playwright/test');
 const { Logger } = require('../utils/logger');
 const { bidLocators } = require('../locators/bidLocator');
 const leftPanel = require('./leftPanel');
+const { forceGridFullWidth } = require('../utils/columnResizeHelper');
 
 const DOWNLOADS_DIR = path.join(process.cwd(), 'downloads');
 
@@ -797,6 +798,13 @@ class BidPage {
         await loc.vendorSearchInput.fill(vendorData.searchTerm);
         await this.page.waitForTimeout(1000);
         Logger.info(`Searched for "${vendorData.searchTerm}"`);
+
+        // Same revo-grid column-virtualization documented throughout this app (e.g.
+        // utils/columnResizeHelper.js's own forceGridFullWidth doc comment) — this dialog's
+        // grid never had the mitigation applied. Live-confirmed 2026-09-22: the vendor
+        // directory's equivalent grid renders zero email/contact text until forced wide, so a
+        // vendor whose row is genuinely present can still fail an email-text filter here.
+        await forceGridFullWidth(this.page);
 
         // Find the details-panel row (Location/Service Area/Primary Contact/Email) whose text
         // contains the expected email, and read its data-rgrow.

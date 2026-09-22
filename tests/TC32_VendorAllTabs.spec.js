@@ -8,7 +8,6 @@ const { VendorListingPage } = require('../pages/vendorListingPage');
 const { VendorBidWorkspacePage } = require('../pages/vendorBidWorkspacePage');
 const { VendorProfilePage } = require('../pages/vendorProfilePage');
 const { VendorBidPage } = require('../pages/vendorBidPage');
-const { viewDetailsButtonStrategies } = require('../locators/vendorBidLocator');
 const { bidsListEmptyStateStrategies } = require('../locators/vendorBidWorkspaceLocator');
 const { healingLocator } = require('../utils/locatorHealer');
 const { Logger } = require('../utils/logger');
@@ -19,44 +18,22 @@ const userMgmtData = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/ve
 const lastVendorTestUserPath = path.join(__dirname, '../data/lastVendorTestUser.json');
 
 /**
+ * Thin wrapper around VendorBidPage.findBidRowByStatus()/openBidRow() — this used to be its
+ * own independent CSV-export-then-live-row-lookup implementation, which duplicated (and,
+ * lacking VendorBidPage.forceGridFullHeight(), could intermittently fail where)
+ * VendorBidPage.findBidRowByStatus() already did the same thing. Investigation 2026-09-22
+ * (TC484/TC489 CI failures) found this local copy was the actual remaining independent
+ * failure point after fixing the shared method — reusing the shared, now-fixed method here
+ * removes the duplicate instead of patching two copies of the same fix.
  * @param {import('@playwright/test').Page} page
  * @param {string} status exact status text, e.g. "Invited", "Awarded"
  * @returns {Promise<string|null>} the bid's URL, or null if no row matches
  */
 async function openFirstBidRowByStatus(page, status) {
-    const downloadDir = path.join(__dirname, '../downloads');
-    fs.mkdirSync(downloadDir, { recursive: true });
-    const exportButton = page.getByRole('button', { name: 'Export', exact: true });
-    const [download] = await Promise.all([
-        page.waitForEvent('download', { timeout: 15000 }),
-        exportButton.click(),
-    ]);
-    const csvPath = path.join(downloadDir, `vendor-bids-status-lookup-${Date.now()}.csv`);
-    await download.saveAs(csvPath);
-    const lines = fs.readFileSync(csvPath, 'utf8').split(/\r?\n/).filter((l) => l.trim().length > 0);
-    const header = VendorBidPage._parseCsvLine(lines[0]);
-    const nameIdx = header.findIndex((h) => /^bid name$/i.test(h));
-    const statusIdx = header.findIndex((h) => /^status$/i.test(h));
-    if (nameIdx === -1 || statusIdx === -1) {
-        throw new Error(`openFirstBidRowByStatus: could not locate "Bid Name"/"Status" columns in export header [${header.join(', ')}]`);
-    }
-
-    const bids = lines.slice(1).map((line) => {
-        const cols = VendorBidPage._parseCsvLine(line);
-        return { bidName: (cols[nameIdx] || '').trim(), status: (cols[statusIdx] || '').trim() };
-    });
-    const target = bids.find((b) => b.bidName && new RegExp(`^${status}$`, 'i').test(b.status));
+    const vendorBidPage = new VendorBidPage(page);
+    const target = await vendorBidPage.findBidRowByStatus(status);
     if (!target) return null;
-
-    const rows = page.locator('revo-grid [role="row"][data-rgrow]').filter({ hasText: target.bidName });
-    await expect(rows.first(), `FAIL: bid "${target.bidName}" found in export but not in the live grid.`).toBeVisible({ timeout: 10000 });
-    const rowGrow = await rows.first().getAttribute('data-rgrow');
-    const viewDetailsBtn = healingLocator(viewDetailsButtonStrategies(page, rowGrow));
-    await viewDetailsBtn.scrollIntoViewIfNeeded();
-    await viewDetailsBtn.click();
-    await page.waitForURL(/\/bids-and-contracts\/bids\/\d+/, { timeout: 15000 });
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(1500);
+    await vendorBidPage.openBidRow(target.rowGrow);
     return page.url();
 }
 

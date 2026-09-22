@@ -153,6 +153,14 @@ class RetainagePage {
     await this.loc.retainageSubTab.click();
     await this.page.waitForURL(/contractSubTab=retainage/, { timeout: 15000 });
     await this.page.waitForTimeout(1500);
+    // Same row-virtualization risk documented on renderAllRetainageTabRows() (this job
+    // accumulates more invoices from every past run, so the row a caller is about to search
+    // for — e.g. via getRetainageTabInvoiceRow() — can easily sit outside the grid's
+    // default rendered window). Every other nav method in this class already force-renders
+    // its own grid (gotoInvoiceList/gotoInvoiceDetail -> forceGridFullWidth); this one didn't
+    // yet, which let a freshly-created, already-approved invoice go "not found" here even
+    // though it genuinely existed (CI/live investigation, 2026-09-22, TC344/TC345).
+    await this.renderAllRetainageTabRows();
     Logger.success('Navigated to Contracts > Retainage tab.');
   }
 

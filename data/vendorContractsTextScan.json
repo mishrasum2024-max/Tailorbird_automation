@@ -1,5 +1,5 @@
 {
-  "capturedAt": "2026-09-15T12:24:02.467Z",
+  "capturedAt": "2026-09-20T13:12:03.326Z",
   "url": "https://beta.tailorbird.com/bids-and-contracts/contracts",
   "page": "Contracts",
   "vendorEmail": "oct30sumit@yopmail.com",
@@ -268,7 +268,7 @@
         "tag": "textarea",
         "inputType": "textarea",
         "name": null,
-        "id": "mantine-ycvosdi18",
+        "id": "mantine-8vbjncoh5",
         "placeholder": "Ask about your contracts",
         "ariaLabel": null,
         "ariaDescribedBy": null,
@@ -278,13 +278,13 @@
         "visible": true,
         "required": false,
         "disabled": false,
-        "selector": "#mantine-ycvosdi18"
+        "selector": "#mantine-8vbjncoh5"
       },
       {
         "tag": "input",
         "inputType": "text",
         "name": null,
-        "id": "mantine-51mtlexf5",
+        "id": "mantine-om6h1p147",
         "placeholder": "Search...",
         "ariaLabel": null,
         "ariaDescribedBy": null,
@@ -294,7 +294,7 @@
         "visible": true,
         "required": false,
         "disabled": false,
-        "selector": "#mantine-51mtlexf5"
+        "selector": "#mantine-om6h1p147"
       },
       {
         "tag": "textarea",

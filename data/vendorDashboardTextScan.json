@@ -1,16 +1,16 @@
 {
-  "capturedAt": "2026-09-15T12:23:59.706Z",
+  "capturedAt": "2026-09-20T13:11:00.516Z",
   "url": "https://beta.tailorbird.com/bids-and-contracts/dashboard",
   "vendorEmail": "oct30sumit@yopmail.com",
   "counts": {
     "headings": 0,
-    "buttons": 8,
+    "buttons": 15,
     "inputs": 1,
     "labels": 0,
     "links": 12,
     "paragraphs": 5,
     "alerts": 1,
-    "textNodes": 56
+    "textNodes": 77
   },
   "snapshot": {
     "headings": [],
@@ -38,6 +38,36 @@
       {
         "tag": "button",
         "text": "Review Bid",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "Continue Submission",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "Continue Submission",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "Continue Submission",
         "visible": true,
         "ariaLabel": null,
         "name": null,
@@ -88,6 +118,46 @@
       {
         "tag": "button",
         "text": "View Invoice",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "Continue Editing",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "Continue Editing",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "Continue Editing",
+        "visible": true,
+        "ariaLabel": null,
+        "name": null,
+        "type": null,
+        "disabled": false,
+        "selector": "button"
+      },
+      {
+        "tag": "button",
+        "text": "Continue Editing",
         "visible": true,
         "ariaLabel": null,
         "name": null,
@@ -390,7 +460,7 @@
       },
       {
         "tag": "div",
-        "text": "$1,007,493",
+        "text": "$1,008,228",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -398,7 +468,7 @@
       },
       {
         "tag": "div",
-        "text": "Across 180 submissions",
+        "text": "Across 195 submissions",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -414,7 +484,7 @@
       },
       {
         "tag": "div",
-        "text": "$30,000 awaiting approval",
+        "text": "$66,000 awaiting approval",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -430,7 +500,7 @@
       },
       {
         "tag": "div",
-        "text": "bid_prop_1789464855389",
+        "text": "Test Property 1_Cottages on Elm",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -438,7 +508,7 @@
       },
       {
         "tag": "div",
-        "text": "AI_Bid_1789464905267",
+        "text": "Auto_Invited_1789909375870",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -454,7 +524,47 @@
       },
       {
         "tag": "div",
-        "text": "No accepted bids awaiting submission.",
+        "text": "Test Property 1_Cottages on Elm",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Auto_Invited_1789906425390",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Test Property 1_Cottages on Elm",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Auto_Invited_1789907703708",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Test Property 1_Cottages on Elm",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Auto_Invited_1789908439822",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -573,8 +683,24 @@
         "selector": "span"
       },
       {
+        "tag": "span",
+        "text": "Draft Change Order",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "span",
+        "text": "Draft",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
         "tag": "div",
-        "text": "bid_prop_1789464855389 — AI_Bid_1789464905267",
+        "text": "Automation_Job · Test Property 1_Cottages on Elm",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -582,7 +708,119 @@
       },
       {
         "tag": "div",
-        "text": "Sep 15",
+        "text": "Saved Sep 20",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "span",
+        "text": "Draft Change Order",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "span",
+        "text": "Draft",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "div",
+        "text": "Automation_Job · Test Property 1_Cottages on Elm",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Saved Sep 20",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "span",
+        "text": "Draft Change Order",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "span",
+        "text": "Draft",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "div",
+        "text": "Automation_Job · Test Property 1_Cottages on Elm",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Saved Sep 20",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "span",
+        "text": "Draft Change Order",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "span",
+        "text": "Draft",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "div",
+        "text": "Automation_Job · Test Property 1_Cottages on Elm",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Saved Sep 20",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Test Property 1_Cottages on Elm — Auto_Invited_1789909375870",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Sep 20",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -598,7 +836,7 @@
       },
       {
         "tag": "div",
-        "text": "bid_prop_1789454121559 — AI_Bid_1789454161957",
+        "text": "Test Property 1_Cottages on Elm — Auto_Invited_1789908439822",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -606,7 +844,7 @@
       },
       {
         "tag": "div",
-        "text": "Sep 15",
+        "text": "Sep 20",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -614,7 +852,7 @@
       },
       {
         "tag": "span",
-        "text": "Submitted",
+        "text": "Accepted",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -622,7 +860,7 @@
       },
       {
         "tag": "div",
-        "text": "Test Property 1_Cottages on Elm — MCP_Verify_AI_Bid_1",
+        "text": "Test Property 1_Cottages on Elm — Auto_Invited_1789907703708",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -630,7 +868,55 @@
       },
       {
         "tag": "div",
-        "text": "Sep 14",
+        "text": "Sep 20",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "span",
+        "text": "Accepted",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "div",
+        "text": "Test Property 1_Cottages on Elm — Auto_Invited_1789906425390",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Sep 20",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "span",
+        "text": "Accepted",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "span"
+      },
+      {
+        "tag": "div",
+        "text": "bid_prop_1789893274239 — E2E_BidBook_1789893364077",
+        "visible": true,
+        "role": null,
+        "dataTestId": null,
+        "selector": "div"
+      },
+      {
+        "tag": "div",
+        "text": "Sep 20",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -646,7 +932,7 @@
       },
       {
         "tag": "div",
-        "text": "Test Property 1_Cottages on Elm — E2E_BidBook_Automation",
+        "text": "bid_prop_1789893274239 — AI_Bid_1789893324941",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -654,7 +940,7 @@
       },
       {
         "tag": "div",
-        "text": "Sep 2",
+        "text": "Sep 20",
         "visible": true,
         "role": null,
         "dataTestId": null,
@@ -663,54 +949,6 @@
       {
         "tag": "span",
         "text": "Awarded",
-        "visible": true,
-        "role": null,
-        "dataTestId": null,
-        "selector": "span"
-      },
-      {
-        "tag": "div",
-        "text": "Test Property 1_Cottages on Elm — Automation test",
-        "visible": true,
-        "role": null,
-        "dataTestId": null,
-        "selector": "div"
-      },
-      {
-        "tag": "div",
-        "text": "Sep 2",
-        "visible": true,
-        "role": null,
-        "dataTestId": null,
-        "selector": "div"
-      },
-      {
-        "tag": "span",
-        "text": "Awarded",
-        "visible": true,
-        "role": null,
-        "dataTestId": null,
-        "selector": "span"
-      },
-      {
-        "tag": "div",
-        "text": "Invoice Invoice #25205",
-        "visible": true,
-        "role": null,
-        "dataTestId": null,
-        "selector": "div"
-      },
-      {
-        "tag": "div",
-        "text": "Aug 25 · $10",
-        "visible": true,
-        "role": null,
-        "dataTestId": null,
-        "selector": "div"
-      },
-      {
-        "tag": "span",
-        "text": "Pending Approval",
         "visible": true,
         "role": null,
         "dataTestId": null,

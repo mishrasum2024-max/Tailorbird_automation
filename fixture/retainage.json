@@ -3,12 +3,10 @@
   "propertyName": "Test Property3 Automation Retainage flow",
   "jobName": "Automation_Job_for_Retainage_flow",
   "jobId": 4304,
-  "invoiceId": 17630,
   "invoiceListUrl": "https://beta.tailorbird.com/jobs/4304?tab=invoices",
-  "invoiceDetailUrl": "https://beta.tailorbird.com/jobs/4304/invoices/17630",
   "discoveredVia": "mcp-browser-playwright",
   "discoveredAt": "2026-07-21T00:00:00.000Z",
-  "notes": "Rebuilt 2026-07-21 — the prior fixture invoice (#14080) no longer existed on job 4304 (staging data drift) and every invoice amount used by this suite has been capped at $10 or below per policy. Invoice #17630 (Gross $10, invoice-level Retainage % override to 10%) was created and approved live via MCP browser specifically because 10% on $10 yields a clean whole-dollar Retainage Withheld ($1) with zero rounding ambiguity anywhere (line-items grid, invoice list, Invoice Details Overview panel, and the Math.round-to-nearest-dollar check in TC329/TC330) — smaller overrides (e.g. 4%) produce sub-$1 withheld amounts that the Overview panel (but not the grid) rounds down to $0 on display, which looked like a bug but isn't. If this fixture invoice is ever deleted, recreate one the same way (small whole-dollar-clean Retainage Withheld) and update invoiceId here — TC22_Retainage.spec.js and pages/retainagePage.js read only from this file, no code changes needed.",
+  "notes": "Rebuilt 2026-09-21 — this job's invoices are periodically cleaned up (the prior static fixture invoices, #14080 then #17630, both went stale that way, most recently confirmed live via MCP browser). Instead of hand-maintaining a static invoiceId here, TC22_Retainage.spec.js now provisions its own invoice at run time in a top-level beforeAll (RetainagePage.createDraftInvoice() + setRetainagePercent(10) + setLineInvoiceAmount(row, 10) + confirmInvoice()) and shares that one resolvedInvoiceId across every test in the file — no per-test invoice creation, no stale ID to update. The $10 gross / 10% override math below (lineItem/expected) is still the exact target shape (Withheld $1, Net Payable $9, whole-dollar-clean, no rounding ambiguity — see the original reasoning this replaces: smaller overrides like 4% produce sub-$1 withheld amounts the Overview panel rounds down to $0 on display) — the beforeAll recreates precisely this, so these values still describe the invoice under test, they just aren't looked up by a hardcoded invoiceId anymore.",
 
   "lineItem": {
     "scope": "Bid with material",
