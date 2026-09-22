@@ -172,11 +172,35 @@ exports.ApprovalJob = class ApprovalJob {
      * @param {string} namePrefix - Template name prefix to match (e.g. 'OOO_InvTemplate_')
      * @param {string} templateType - Type label to also match (e.g. 'Invoice')
      */
+    /**
+     * Forces the Approval Templates treegrid's revo-grid element to an oversized explicit
+     * height so every template row mounts into the DOM instead of only whatever fits the
+     * container's current rendered height. Same documented root cause/technique as
+     * pages/vendorBidPage.js's forceGridFullHeight() and pages/retainagePage.js's
+     * renderAllRetainageTabRows() for the same revo-grid technology elsewhere in this app —
+     * live/MCP investigation (2026-09-22) confirmed this treegrid only mounts ~26 of the
+     * full template list at a time (scrollHeight === clientHeight, i.e. no virtual scroll
+     * buffer), so a template further down the unfiltered list — including one just created
+     * in the same run — can be completely absent from the DOM. That is what made
+     * deleteConflictingTemplatesForProperty() log "No conflicting templates found" for a
+     * template that demonstrably existed (confirmed by the server rejecting a duplicate
+     * create as "already linked with another similar template rule").
+     */
+    async forceTemplatesGridFullHeight() {
+        const grid = this.page.locator('[role="treegrid"]').first();
+        await grid.evaluate((el) => {
+            el.style.setProperty('height', '20000px', 'important');
+            el.style.setProperty('max-height', '20000px', 'important');
+        }).catch(() => { });
+        await this.page.waitForTimeout(300);
+    }
+
     async deleteConflictingTemplatesForProperty(namePrefix, templateType = 'Invoice') {
         try {
             Logger.step(`Checking for existing "${templateType}" templates with prefix "${namePrefix}"...`);
             await this.clearSearch();
             await this.page.waitForTimeout(800);
+            await this.forceTemplatesGridFullHeight();
 
             const tree = this.page.locator('[role="treegrid"]');
             const dataRows = tree.getByRole('row').filter({ has: this.page.locator('.revo-grid-cell-clear-btn') });
@@ -200,6 +224,12 @@ exports.ApprovalJob = class ApprovalJob {
                     await this.deleteTemplate(templateName);
                     deletedCount++;
                     await this.page.waitForTimeout(500);
+                    // Let the grid fully re-settle before the next iteration searches it again —
+                    // same grid-remount risk documented in deleteTemplate() above, compounding
+                    // across multiple deletions in one pass is what's suspected to have produced
+                    // TC225's ~285s silent hang.
+                    await this.page.locator('[role="treegrid"]').first()
+                        .waitFor({ state: 'visible', timeout: 10000 }).catch(() => { });
                 } catch (delErr) {
                     Logger.info(`Could not delete "${templateName}": ${delErr.message}`);
                 }
@@ -600,7 +630,6 @@ exports.ApprovalJob = class ApprovalJob {
             const dataRows = tree.getByRole('row').filter({ has: this.page.locator('.revo-grid-cell-clear-btn') });
             const actionRows = tree.getByRole('row').filter({ has: this.page.getByRole('button', { name: 'Edit' }) });
             const n = await dataRows.count();
-            const actionN = await actionRows.count();
 
             let idx = -1;
             for (let i = 0; i < n; i++) {
@@ -613,6 +642,18 @@ exports.ApprovalJob = class ApprovalJob {
             }
             if (idx < 0) {
                 throw new Error('No data row found for template: ' + templateName);
+            }
+
+            // The data-column panel and the pinned Actions-column panel are each virtualized
+            // independently, so right after forceTemplatesGridFullHeight() they can briefly
+            // report different rendered row counts while the Actions panel catches up. Poll
+            // instead of reading actionRows.count() once, so a transient lag doesn't get
+            // mistaken for a genuinely missing Actions row.
+            let actionN = await actionRows.count();
+            const deadline = Date.now() + 10000;
+            while (idx >= actionN && Date.now() < deadline) {
+                await this.page.waitForTimeout(500);
+                actionN = await actionRows.count();
             }
             if (n !== actionN) {
                 Logger.info(`Approval grid row alignment differs: dataRows=${n} actionRows=${actionN}`);
@@ -641,8 +682,18 @@ exports.ApprovalJob = class ApprovalJob {
             await this.clickDeleteTemplate(templateName);
 
             await approval.deleteConfirmButton.click();
-            await this.page.getByRole('button', { name: 'Create Template' }).first()
-                .waitFor({ state: 'visible', timeout: 20000 }).catch(() => { });
+            const reappeared = await this.page.getByRole('button', { name: 'Create Template' }).first()
+                .waitFor({ state: 'visible', timeout: 20000 }).then(() => true).catch(() => false);
+            if (!reappeared) {
+                // Live/CI investigation 2026-09-22 (TC225's ~285s silent hang): this grid can
+                // remount mid-interaction during rapid sequential deletions — same documented
+                // revo-grid instability as pages/capexGridStabilityPage.js. This timeout used
+                // to be swallowed silently, letting the caller believe the delete succeeded and
+                // immediately proceed against a UI that might still be settling. Surface it and
+                // give the grid one extra beat to settle before returning.
+                Logger.info(`deleteTemplate: "Create Template" did not reappear within 20s after deleting "${templateName}" — grid may still be settling.`);
+                await this.page.waitForTimeout(2000);
+            }
             await this.page.waitForTimeout(400);
 
             Logger.success('Template deleted: ' + templateName);
