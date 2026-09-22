@@ -3,6 +3,7 @@ const fs = require('fs');
 const { expect } = require('@playwright/test');
 const { Logger } = require('../utils/logger');
 const { vendorLocators } = require('../locators/vendorLocator');
+const { resetActiveFilters } = require('../utils/filterResetHelper');
 
 const VENDORS_DIRECTORY_URL = '/vendors/directory';
 
@@ -21,11 +22,13 @@ class VendorDirectoryPage {
             }
             await this.page.waitForURL(/vendors\/directory/, { timeout: 15000 });
             await this.waitForDirectoryReady();
+            await resetActiveFilters(this.page);
             Logger.success('Navigated to Vendors Directory');
         } catch (e) {
             Logger.error(`goToDirectory failed: ${e.message}`);
             await this.page.goto(VENDORS_DIRECTORY_URL, { waitUntil: 'domcontentloaded' });
             await this.waitForDirectoryReady();
+            await resetActiveFilters(this.page);
         }
     }
 

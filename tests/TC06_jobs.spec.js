@@ -9,6 +9,8 @@ const PropertiesHelper = require('../pages/properties');
 const { setTabsDisabledState } = require('../utils/tabsDisabledHelper');
 const { ensureLeftPanelExpanded } = require('../utils/leftPanelExpander');
 const { healingLocator } = require('../utils/locatorHealer');
+const { retryOperation } = require('../utils/resilientRetry');
+const { resetActiveFilters } = require('../utils/filterResetHelper');
 const {
     contractsTabPanelStrategies,
     contractEditButtonStrategies,
@@ -210,12 +212,16 @@ test.describe('Project and Jobs', () => {
             await expect(jobsMenu).toBeVisible({ timeout: 15000 });
             await jobsMenu.click();
             await page.waitForTimeout(20000);
+            // MCP-verified live (2026-09-22): a filter left active on this Jobs listing from
+            // an earlier session silently excludes a freshly-created job from ever matching
+            // the search below, no matter how many times it's retried/reloaded — the job is
+            // genuinely absent from the filtered view, not slow to appear. Confirmed the
+            // failure disappeared immediately once the stuck filter was cleared.
+            await resetActiveFilters(page);
 
             Logger.step('Opening target job from Jobs listing...');
             const searchInput = page.locator('input[placeholder="Search..."]').first();
             await expect(searchInput).toBeVisible({ timeout: 15000 });
-            await searchInput.fill(targetJobName);
-            await page.waitForTimeout(1500);
 
             // View Details button removed; the ID column now has a clickable link to job details.
             // Restrict to this project so we do not open "Mall in Noida" / "Mall in noida" from another project.
@@ -223,7 +229,25 @@ test.describe('Project and Jobs', () => {
                 .getByRole('row')
                 .filter({ hasText: targetJobName })
                 .filter({ hasText: projectData.projectName });
-            await expect(matchingRows.first()).toBeVisible({ timeout: 15000 });
+            // MCP-verified live (2026-09-22): re-issuing the search alone (no reload) kept
+            // failing identically even though the job genuinely existed — a fresh, hard
+            // navigation to the Jobs listing found it immediately. The in-app left-panel click
+            // that opens this listing reuses an already-fetched client-side dataset from
+            // earlier in the session (e.g. TC81's own visit to Jobs before the job existed),
+            // so no amount of re-searching that stale dataset can find a job created after it
+            // loaded — only a reload forces a fresh fetch. Reloading on each retry attempt
+            // (rather than once, or the search-only retry pattern used for the Bids admin
+            // search in pages/bidAwardPage.js, which faces a genuine backend-index lag instead
+            // of a stale client cache) targets this specific, verified cause.
+            await retryOperation(async () => {
+                await page.reload({ waitUntil: 'domcontentloaded' });
+                await page.waitForTimeout(2000);
+                await expect(searchInput).toBeVisible({ timeout: 15000 });
+                await searchInput.fill('');
+                await searchInput.fill(targetJobName);
+                await page.waitForTimeout(1500);
+                await expect(matchingRows.first(), `FAIL: job "${targetJobName}" must appear in the Jobs list`).toBeVisible({ timeout: 10000 });
+            }, { attempts: 4, delayMs: 3000, label: `search Jobs list for "${targetJobName}"` });
             const targetRow = (await matchingRows.count()) > 1 ? matchingRows.last() : matchingRows.first();
             await expect(targetRow).toBeVisible({ timeout: 10000 });
 

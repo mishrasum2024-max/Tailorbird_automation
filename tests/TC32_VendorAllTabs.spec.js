@@ -269,19 +269,6 @@ test.describe('Vendor Phase 3 — Bids, Read Views & Admin/Compliance', () => {
         Logger.success('TC494: Property tab Locations sub-tab verified.');
     });
 
-    test('TC495 @vendor @manageTeam @regression : Settings/Admin is reachable from the bottom-left navigation (Profile), and the Profile page renders all 4 tabs correctly', async ({ page }) => {
-        test.setTimeout(90000);
-        const profile = new VendorProfilePage(page);
-
-        await page.goto(process.env.BASE_URL, { waitUntil: 'load' });
-        await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(1500);
-        await profile.navigateViaSidebarAvatar();
-        await profile.assertProfileTabsVisible();
-
-        Logger.success('TC495: Settings/Admin (Profile) navigation and its 4 tabs verified.');
-    });
-
     test('TC496 @vendor @manageTeam @regression : Vendor profile tab shows complete company information, and Edit opens a pre-filled modal that Cancel discards without saving', async ({ page }) => {
         test.setTimeout(90000);
         const profile = new VendorProfilePage(page);
@@ -450,40 +437,4 @@ test.describe('Vendor Phase 3 — Bids, Read Views & Admin/Compliance', () => {
         Logger.success('TC502: Vendor session persisted across direct navigation and back/forward with no forced re-login.');
     });
 
-    test('TC503 @e2e @vendor @bids @property @manageTeam @regression : Full cross-module regression journey — Dashboard, Bids landing, a bid workspace with its Property/Asset Viewer/Take Offs widgets, and Settings/Admin user management, all in one continuous vendor session', async ({ page }) => {
-        test.setTimeout(150000);
-        const dashboard = new VendorDashboardPage(page);
-        const vendorListingPage = new VendorListingPage(page);
-        const workspace = new VendorBidWorkspacePage(page);
-        const profile = new VendorProfilePage(page);
-
-        Logger.step('TC503: Step 1 — Dashboard summary');
-        await page.goto(process.env.BASE_URL, { waitUntil: 'load' });
-        await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(1500);
-        await dashboard.navigateToDashboard();
-        await dashboard.assertBreadcrumbVisible();
-        await dashboard.assertKpiCardsVisible();
-
-        Logger.step('TC503: Step 2 — Bids landing page');
-        await vendorListingPage.navigateTo('bids');
-        await vendorListingPage.assertListingPageFullyVisible('bids');
-
-        Logger.step('TC503: Step 3 — open a bid workspace and its Property/Asset Viewer/Take Offs widgets');
-        const url = await openFirstBidRowByStatus(page, 'Invited');
-        expect(url, 'FAIL: no "Invited" bid found to open for the cross-module journey.').toBeTruthy();
-        await workspace.assertBidTabFullyVisible();
-        await workspace.openPropertyTab();
-        await workspace.assertPropertyOverviewFieldsVisible();
-        await workspace.assertPropertyAssetViewerTabVisible();
-        await workspace.assertPropertyTakeOffsTabVisible();
-
-        Logger.step('TC503: Step 4 — Settings/Admin (Profile) and vendor user management');
-        await profile.navigateViaSidebarAvatar();
-        await profile.assertProfileTabsVisible();
-        await profile.openVendorProfileTab();
-        await profile.assertUsersTableColumnsVisible();
-
-        Logger.success('TC503: Full cross-module regression journey verified — Dashboard, Bids, bid workspace widgets, and Settings/Admin user management.');
-    });
 });

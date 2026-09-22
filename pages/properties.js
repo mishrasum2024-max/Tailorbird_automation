@@ -55,6 +55,7 @@ const { CapexGridStabilityPage } = require('../pages/capexGridStabilityPage');
 const { ensureLeftPanelExpanded } = require('../utils/leftPanelExpander');
 const { healingLocator } = require('../utils/locatorHealer');
 const { withExtendedTerminalWait } = require('../utils/resilientRetry');
+const { resetActiveFilters } = require('../utils/filterResetHelper');
 
 class PropertiesHelper {
     constructor(page) {
@@ -184,6 +185,7 @@ class PropertiesHelper {
             await apiWait;
             await this.recoverPropertiesDataIfErrored();
             await this.waitForPropertiesPageLoaded();
+            await resetActiveFilters(this.page);
             return;
         }
         const apiWait = this.waitForApi200('goToProperties:menu', [/\/api\/properties/, /\/api\/bird-table\?table_name=property/, /\/api\/table-view-config\?tableName=property/], 60_000);
@@ -194,6 +196,7 @@ class PropertiesHelper {
         await apiWait;
         await this.recoverPropertiesDataIfErrored();
         await this.waitForPropertiesPageLoaded();
+        await resetActiveFilters(this.page);
     }
 
     async createProperty(name, address, city, state, zip, type, uiBenchmark) {
@@ -396,7 +399,21 @@ class PropertiesHelper {
 
         const checkbox = healingLocator(filterCheckboxStrategies(popup, type));
         await checkbox.waitFor({ state: 'visible', timeout: 20000 });
-        await checkbox.click();
+
+        // MCP-verified live (2026-09-22): a click landing right as the filter drawer's own
+        // opening transition is still settling (most likely on the FIRST filterProperty() call
+        // of a run, immediately after the drawer opens) can land on the checkbox without
+        // actually toggling it — confirmed by observing the checkbox's own `checked` DOM state
+        // stay false after one click, then flip true on an identical second click once the
+        // drawer had settled. Verifying the real checked state and retrying beats a blind
+        // extra wait, since it directly targets the failure mode instead of guessing a delay.
+        let isChecked = false;
+        for (let attempt = 0; attempt < 3 && !isChecked; attempt++) {
+            await checkbox.click();
+            isChecked = await checkbox.isChecked().catch(() => false);
+            if (!isChecked) await this.page.waitForTimeout(500);
+        }
+        expect(isChecked, `FAIL: filter checkbox "${type}" did not register as checked after 3 click attempts.`).toBe(true);
 
         await this.page.waitForTimeout(3000);
 

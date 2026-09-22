@@ -3,6 +3,7 @@ const { unitInteriorLocators, unitInteriorElementStrategies } = require('../loca
 const { healingLocator } = require('../utils/locatorHealer');
 const { Logger } = require('../utils/logger');
 const { InteractionLogger } = require('../utils/InteractionLogger');
+const { resetActiveFilters } = require('../utils/filterResetHelper');
 
 /** Fixed test job. JOB_NAME is used for searching; JOB_ID only for URL verification. */
 const JOB_NAME = "Automation Job, please don't delete it";
@@ -35,6 +36,7 @@ class UnitInteriorPage {
         await navItem.click();
         await this.page.waitForURL(/\/jobs/, { timeout: 20000 });
         await this.page.waitForTimeout(2000);
+        await resetActiveFilters(this.page);
         Logger.success('[UnitInterior] Jobs listing page loaded');
     }
 
@@ -137,6 +139,7 @@ class UnitInteriorPage {
             document.querySelectorAll('main, .mantine-AppShell-navbar').forEach(el => { el.style.zoom = '70%'; });
         });
         await this.page.waitForTimeout(2000);
+        await resetActiveFilters(this.page);
 
         Logger.info(`[UnitInterior] Searching for job: "${jobName}"`);
         const searchInput = this.page.locator('input[placeholder="Search..."]').first();

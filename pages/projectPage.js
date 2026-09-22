@@ -23,6 +23,7 @@ const {
     jobOverviewEditButtonStrategies,
 } = require('../locators/projectPageLocator');
 const { healingLocator, logLocatorHealth } = require('../utils/locatorHealer');
+const { resetActiveFilters } = require('../utils/filterResetHelper');
 
 exports.ProjectPage = class ProjectPage {
     constructor(page) {
@@ -219,6 +220,7 @@ exports.ProjectPage = class ProjectPage {
                 .or(this.page.locator('input[placeholder="Search..."]'))
                 .first();
             await searchInput.waitFor({ state: 'visible', timeout: 30000 });
+            await resetActiveFilters(this.page);
 
             Logger.success('✅ Navigated to Projects with no errors.');
         } catch (e) {

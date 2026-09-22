@@ -2,6 +2,7 @@ const { expect } = require("@playwright/test");
 const { Logger } = require('../utils/logger');
 const { invoiceLocators } = require('../locators/invoiceLocator');
 const { changeOrderLocators } = require('../locators/changeOrderLocator');
+const { resetActiveFilters } = require('../utils/filterResetHelper');
 
 class InvoicePage {
     /**
@@ -83,6 +84,7 @@ class InvoicePage {
             await this.page.goto(jobUrl, { waitUntil: 'load' });
             await expect(this.page).toHaveURL(/tab=invoices/);
             await this.page.waitForTimeout(1000);
+            await resetActiveFilters(this.page);
             Logger.success('Navigated to Invoice tab successfully.');
         } catch (error) {
             Logger.error(`Error navigating to invoices: ${error.message}`);
@@ -313,6 +315,7 @@ class InvoicePage {
             await this.page.waitForTimeout(1000);
             await this.page.waitForURL(/tab=invoices/);
             await this.page.waitForTimeout(2000);
+            await resetActiveFilters(this.page);
             Logger.success('Navigated to Invoice tab successfully.');
         } catch (error) {
             Logger.error(`Error in navigateToInvoiceTab: ${error.message}`);
@@ -367,6 +370,7 @@ class InvoicePage {
 
             await this.page.waitForLoadState('load');
             await this.page.waitForTimeout(2000);
+            await resetActiveFilters(this.page);
             Logger.success('Navigated to Change Order tab successfully.');
         } catch (error) {
             Logger.error(`Error in navigateToChangeOrderTab: ${error.message}`);

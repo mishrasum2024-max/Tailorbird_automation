@@ -2,6 +2,7 @@ const { expect } = require('@playwright/test');
 const { Logger } = require('../utils/logger');
 const { approvalJobLocators, approvalElementStrategies, addPropertyRowStrategies, addPropertyRowCheckboxStrategies, firstPropertyResultRowStrategies, createPropertyDialogStrategies } = require('../locators/approvalLocator');
 const { healingLocator } = require('../utils/locatorHealer');
+const { resetActiveFilters } = require('../utils/filterResetHelper');
 
 let approval;
 let approvalStrategies;
@@ -832,6 +833,7 @@ exports.ApprovalJob = class ApprovalJob {
             Logger.step('Navigating to Approval Templates tab');
             await approval.approvalTemplatesTab.click();
             await this.page.waitForTimeout(8000);
+            await resetActiveFilters(this.page);
             Logger.success('Navigated to Approval Templates tab');
         } catch (error) {
             Logger.error('Error navigating to Approval Templates tab: ' + error.message);

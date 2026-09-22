@@ -1,6 +1,7 @@
 const { expect } = require("@playwright/test");
 const { categoryPageLocators, categoryElementStrategies, categoryGridCellByTextStrategies, categoryFilterCloseNearStrategies } = require("../locators/categoryPageLocator");
 const { healingLocator } = require("../utils/locatorHealer");
+const { resetActiveFilters } = require("../utils/filterResetHelper");
 
 class FinancialsCategoryPage {
     /**
@@ -74,6 +75,7 @@ class FinancialsCategoryPage {
 
         await this.page.waitForLoadState("domcontentloaded");
         await this.page.waitForTimeout(10000);
+        await resetActiveFilters(this.page);
     }
 
     /**

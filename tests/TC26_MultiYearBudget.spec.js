@@ -20,7 +20,14 @@ let propertyName, budgetItemName, startYear, endYear, propertyId, timestamp;
 let negPropertyName;
 
 test.describe('Multi-Year Budget', () => {
-    test.describe.configure({ mode: 'serial', retries: 1 });
+    // Deliberately NOT `mode: 'serial'`: Playwright's serial mode skips every remaining
+    // test in the block the moment one test fails, which hid 24+ downstream tests behind
+    // a single upstream failure (e.g. TC391) even though most of them only depend on the
+    // property/budget-item/plan state created by TC386-390, not on TC391 itself passing.
+    // Dropping serial keeps the same in-file declaration order (this project's global
+    // `workers: 1` means tests still execute one at a time, in order) but lets every test
+    // attempt to run and report its own real pass/fail instead of being skipped outright.
+    test.describe.configure({ retries: 1 });
 
     test.beforeEach(async ({ page: p }) => {
         page = p;

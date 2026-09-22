@@ -774,9 +774,10 @@ class BidPage {
     /**
      * Same "Send to Vendors" flow as assertSendToVendorsFlow() above (that method is left
      * completely unmodified), but disambiguates the target vendor row by its exact contact
-     * email in addition to name. MCP-verified live 2026-09-14: this org has MULTIPLE vendors
-     * literally named "sumit corp" — one with contact "sumit" / oct30sumit@yopmail.com, another
-     * with contact "Tailorbird test" / admin_1781257675038@yopmail.com. Matching by name alone
+     * email in addition to name. MCP-verified live 2026-09-22: only ONE vendor org is named
+     * exactly "sumit corp" (contact "QA Automation User" / qa.vendor.user.1789477137786@yopmail.com),
+     * but a name search also fuzzy-matches a differently-named "sumit corp1" (contact
+     * "Tailorbird test" / admin_1781257675038@yopmail.com) — matching by name alone
      * (as assertSendToVendorsFlow does, via the first checkbox found) can silently check the
      * WRONG vendor's box if list ordering ever shifts. The name-panel row and the details panel
      * row (which holds the email) share the same `data-rgrow` index (MCP/DOM-verified), so the
