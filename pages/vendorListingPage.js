@@ -298,6 +298,37 @@ class VendorListingPage {
         return null;
     }
 
+    /**
+     * Finds a row in the currently-visible (unfiltered) grid whose FULL text does not contain
+     * `searchTerm` and is unique among all rows — used as a search-differentiation control (a
+     * row expected to disappear when `searchTerm` is searched for, and reappear when cleared).
+     * NEW, additive helper: a naive approach using just a row's first line (e.g. a shared
+     * status label like "Draft Change Order") is not safe — MCP-verified live 2026-09-22 on
+     * Change Orders: many rows share that exact first line, including several that
+     * legitimately match the search term via their Contract column, so filtering by that
+     * shared first line alone can still resolve to a visible row after the search and produce
+     * a false failure. Only a row's FULL text is checked for uniqueness, so the same row can
+     * be reliably re-located by its full text after filtering.
+     * @param {string} searchTerm
+     * @returns {Promise<string>} the unique, non-matching row's full text.
+     */
+    async findUniqueNonMatchingRowText(searchTerm) {
+        const rows = this.page.locator('[role="row"][data-rgrow]');
+        const allTexts = await rows.allInnerTexts();
+        const counts = new Map();
+        for (const t of allTexts) counts.set(t, (counts.get(t) || 0) + 1);
+
+        const candidate = allTexts.find(
+            (t) => t.trim().length > 0 && !t.toLowerCase().includes(searchTerm.toLowerCase()) && counts.get(t) === 1,
+        );
+        if (!candidate) {
+            throw new Error(
+                `VendorListingPage.findUniqueNonMatchingRowText: no row with unique full text not containing "${searchTerm}" was found among ${allTexts.length} row(s).`,
+            );
+        }
+        return candidate;
+    }
+
     static get pageKeys() {
         return Object.keys(LISTING_PAGES);
     }

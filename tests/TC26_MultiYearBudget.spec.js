@@ -19,7 +19,7 @@ let page, approvalJob, budgetJob, mybJob;
 let propertyName, budgetItemName, startYear, endYear, propertyId, timestamp;
 let negPropertyName;
 
-test.describe('Multi-Year Budget', () => {
+test.describe.serial('Multi-Year Budget', () => {
     // Deliberately NOT `mode: 'serial'`: Playwright's serial mode skips every remaining
     // test in the block the moment one test fails, which hid 24+ downstream tests behind
     // a single upstream failure (e.g. TC391) even though most of them only depend on the

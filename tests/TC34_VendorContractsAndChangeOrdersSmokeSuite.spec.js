@@ -227,10 +227,26 @@ test.describe('Vendor Contracts & Change Orders — requested smoke suite', () =
             }
 
             Logger.step('TC543: verify Search');
-            const otherRowLocator = page.locator('[role="row"][data-rgrow]').filter({ hasNotText: smokeData.changeOrderSearchValidTerm }).first();
-            const otherRowName = (await otherRowLocator.innerText()).split('\n')[0];
+            // Uses findUniqueNonMatchingRowText (new, additive VendorListingPage helper) instead
+            // of a plain hasNotText().first() + first-line-only filter: MCP-verified live
+            // 2026-09-22 that the naive first-line text ("Draft Change Order") is shared by many
+            // rows, including some that legitimately match the search term via their Contract
+            // column, so it could still resolve to a visible row after searching and fail this
+            // check for the wrong reason. A row whose FULL text is unique among all rows avoids
+            // that collision entirely.
+            const otherRowName = await vendorListingPage.findUniqueNonMatchingRowText(smokeData.changeOrderSearchValidTerm);
             expect(otherRowName.length, 'FAIL: could not find a non-matching Change Order row to use as a search control.').toBeGreaterThan(0);
             const otherRow = page.locator('[role="row"][data-rgrow]').filter({ hasText: otherRowName }).first();
+            // Captured before searching, for the post-clear restoration check below — MCP-
+            // verified live 2026-09-22: this listing is a genuinely shared, actively-mutating
+            // resource (other concurrent automation runs create/whose cleanup removes Change
+            // Orders continuously), so the ONE specific row captured above as `otherRowName`
+            // can itself be gone by the time the clear-search step runs moments later — this
+            // is not a rendering delay, live-confirmed the row's own locator resolves to 0
+            // matches even on the pre-search, unfiltered listing at that later point in time.
+            // Asserting on the total row count restoring instead of that one specific row's
+            // exact text avoids depending on any single row's continued existence.
+            const rowCountBeforeSearch = await page.locator('[role="row"][data-rgrow]').filter({ hasText: /./ }).count();
 
             const searchInput = page.getByPlaceholder('Search...', { exact: true });
             await searchInput.fill(smokeData.changeOrderSearchValidTerm);
@@ -241,7 +257,15 @@ test.describe('Vendor Contracts & Change Orders — requested smoke suite', () =
 
             const clearButton = page.getByRole('button', { name: 'Clear search', exact: true });
             await clearButton.click();
-            await expect(otherRow, `FAIL: non-matching row "${otherRowName}" did not reappear after clearing the search.`).toBeVisible({ timeout: 10000 });
+            // Checks the listing is restored to (at least) its pre-search row count rather than
+            // re-checking `otherRow` specifically — see the comment on rowCountBeforeSearch above
+            // for why pinning to that one row is unsafe in this actively-mutating listing.
+            await expect
+                .poll(
+                    async () => page.locator('[role="row"][data-rgrow]').filter({ hasText: /./ }).count(),
+                    { message: 'FAIL: Change Orders listing did not restore its row count after clearing the search.', timeout: 10000 },
+                )
+                .toBeGreaterThanOrEqual(rowCountBeforeSearch);
 
             Logger.success(`TC543: Change Orders Export (${columns.length} columns, ${rowCount} rows) and Search both verified working.`);
         });

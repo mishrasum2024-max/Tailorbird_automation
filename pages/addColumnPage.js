@@ -800,11 +800,52 @@ class AddColumnPage {
         return null;
     }
 
+    /**
+     * NEW, additive-only fast alternative to _getAutomationColumnEntries()/
+     * _findRowByColumnName(): reads every Custom Columns description's name in ONE evaluate()
+     * call instead of iterating with a separate scrollIntoViewIfNeeded()+evaluate() Playwright
+     * round-trip per item. MCP-verified live 2026-09-22 on the Images page: the Manage
+     * Columns dialog's Custom Columns list is NOT virtualized (every <p> description is
+     * already present in the DOM at once — confirmed via a direct bulk query returning all 66
+     * accumulated entries instantly, no scrolling required). The existing per-item scan was
+     * paying that per-item round-trip cost for nothing, and on a page whose Custom Columns
+     * list keeps growing from every past automation run (66+ entries observed live), that
+     * cost compounds across every call into the ~280s test-timeout TC425 was hitting. Neither
+     * of the existing functions above is modified — this is a separate, faster code path.
+     */
+    async _getAutomationColumnNamesFast() {
+        await this._ensureManageColumnsOpen();
+        await this._openCustomColumnsDropdown();
+        const dialog = this.loc.manageColumnsDialog;
+        return dialog.evaluate((dialogEl) =>
+            Array.from(dialogEl.querySelectorAll('p'))
+                .filter((p) => /^Automation /.test(p.textContent.trim()))
+                .map((p) => p.previousElementSibling?.textContent?.trim() || '')
+                .filter(Boolean),
+        );
+    }
+
+    /** Fast alternative to _findRowByColumnName(): locates the matching description by index
+     * from a single bulk name read (_getAutomationColumnNamesFast), then builds the same
+     * Locator shape the existing code already uses (_customColumnRowFromDescription). */
+    async _findRowByColumnNameFast(columnName) {
+        await this._openCustomColumnsDropdown();
+        const names = await this._getAutomationColumnNamesFast();
+        const index = names.indexOf(columnName);
+        if (index === -1) return null;
+
+        const descriptions = this.loc.manageColumnsDialog.locator('p').filter({ hasText: /^Automation / });
+        const desc = descriptions.nth(index);
+        await desc.scrollIntoViewIfNeeded().catch(() => {});
+        const row = this._customColumnRowFromDescription(desc);
+        return (await row.isVisible({ timeout: 1000 }).catch(() => false)) ? row : null;
+    }
+
     async _deleteAutomationColumnEntry(name) {
         await this._ensureManageColumnsOpen();
         await this._openCustomColumnsDropdown();
 
-        const row = await this._findRowByColumnName(name);
+        const row = await this._findRowByColumnNameFast(name);
         if (!row) {
             throw new Error(`Column row "${name}" not found in Manage Columns`);
         }
@@ -857,7 +898,7 @@ class AddColumnPage {
 
     async _getCustomColumnNames() {
         try {
-            return (await this._getAutomationColumnEntries({ fullScan: true })).map((entry) => entry.name);
+            return await this._getAutomationColumnNamesFast();
         } catch (error) {
             Logger.error(`Error getting custom column names: ${error.message}`);
             return [];

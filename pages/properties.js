@@ -55,6 +55,7 @@ const { CapexGridStabilityPage } = require('../pages/capexGridStabilityPage');
 const { ensureLeftPanelExpanded } = require('../utils/leftPanelExpander');
 const { healingLocator } = require('../utils/locatorHealer');
 const { withExtendedTerminalWait } = require('../utils/resilientRetry');
+const { waitForSlowDataWithReload } = require('../utils/resilientRetry');
 const { resetActiveFilters } = require('../utils/filterResetHelper');
 
 class PropertiesHelper {
@@ -2083,6 +2084,32 @@ class PropertiesHelper {
         const unitRowCount = await unitRows.count();
         expect(unitRowCount).toBeGreaterThan(1);
         console.log(`✔ Unit rows verified (${unitRowCount})`);
+    }
+    /**
+     * NEW, additive-only robust version of expectUnitTable() — reuses the exact same
+     * locator strategies and assertions, just wrapped with waitForSlowDataWithReload. Does
+     * not alter expectUnitTable() itself. MCP-verified live 2026-09-22: on a heavily-reused
+     * property (274 accumulated units), the Units grid's own backend call
+     * (`/api/bird-table?table_name=unit&property_id=...`) took as long as 94 seconds to
+     * return real data, and separately returned an outright 502 on one attempt — a plain
+     * longer timeout can't recover from that 502 since the request already failed and the
+     * frontend gave up on it; only a fresh page reload (the selected "unit" location type
+     * survives in the URL's `selected-location` query param) re-triggers the backend call.
+     */
+    async expectUnitTableRobust() {
+        await waitForSlowDataWithReload(
+            this.page,
+            async (timeoutMs) => {
+                const tabpanel = healingLocator(prop.locationsTabpanelStrategies(this.page));
+                await expect(healingLocator(prop.unitNameHeaderStrategies(tabpanel))).toBeVisible({ timeout: timeoutMs });
+                const unitRows = healingLocator(prop.treegridDataRowsStrategies(tabpanel, this.page));
+                await expect(unitRows.first()).toBeVisible({ timeout: 5000 });
+                const unitRowCount = await unitRows.count();
+                expect(unitRowCount).toBeGreaterThan(1);
+                console.log(`✔ Unit rows verified (${unitRowCount})`);
+            },
+            { attempts: 2, timeoutMs: 100000, label: 'Locations tab Unit Name header' },
+        );
     }
     async expectBuildingTable() {
         const tabpanel = healingLocator(prop.locationsTabpanelStrategies(this.page));

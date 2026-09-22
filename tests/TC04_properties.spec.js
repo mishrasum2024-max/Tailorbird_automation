@@ -10,6 +10,7 @@ import testData from '../fixture/property.json';
 const uiMessages = require('../fixture/tailorbirdUiMessages.json');
 const loc = require('../locators/locationLocator');
 const { verifyColumnContentDoesNotWrap, forceGridFullWidth } = require('../utils/columnResizeHelper');
+const { waitForSlowDataWithReload } = require('../utils/resilientRetry');
 import { propertyLocators, filterButtonStrategies, filterCloseButtonStrategies, assetViewerTabStrategies, dropdownInputByLabelStrategies, exportButtonStrategies } from '../locators/propertyLocator.js';
 const { healingLocator } = require('../utils/locatorHealer');
 const { ProjectPage } = require('../pages/projectPage');
@@ -231,7 +232,12 @@ test.describe('PROPERTY', () => {
   });
 
   test("TC56 @sanity @regression @property - Validate Location Tab", async () => {
-    test.setTimeout(180000);
+    // Bumped from 180000: expectUnitTableRobust's waitForSlowDataWithReload needs up to
+    // ~200s of budget alone (2 attempts x 100s, MCP-verified live 2026-09-22 this property's
+    // Units API can take up to 94s or 502 outright) on top of everything this test already
+    // does before reaching that step (site/column CRUD, settings drawer) — 180s left no room
+    // for the retry and killed the whole test mid-reload instead of letting it recover.
+    test.setTimeout(300000);
     await prop.goto(tcTakeoffsStartUrl);
     await prop.goToProperties();
     const propertyName = 'Test Property 1_Cottages on Elm';
@@ -254,7 +260,10 @@ test.describe('PROPERTY', () => {
     });
     await test.step('Verify Unit view', async () => {
       await prop.selectLocation("unit");
-      await prop.expectUnitTable();
+      // expectUnitTableRobust (new, additive properties.js method): MCP-verified live
+      // 2026-09-22 that this property's Units backend call can take up to 94s or outright
+      // 502 under real conditions (274 accumulated units) — see its own doc comment.
+      await prop.expectUnitTableRobust();
     });
     await test.step('Verify Building view', async () => {
       await prop.selectLocation("building");
@@ -538,6 +547,12 @@ test.describe('PROPERTY', () => {
   });
 
   test("TC62 @sanity @property - Validate add Units rows inside Locations and no duplicate row added", async () => {
+    // New: this test had no explicit timeout (falling back to the global 280s default).
+    // waitForSlowDataWithReload below needs up to ~200s of budget alone (2 attempts x 100s,
+    // MCP-verified live 2026-09-22 this property's Units API can take up to 94s or 502
+    // outright), plus everything else this test does before and after that step — 280s left
+    // too little margin.
+    test.setTimeout(360000);
     await prop.goto(tcTakeoffsStartUrl);
     await prop.goToProperties();
     await prop.changeView('Table View');
@@ -561,12 +576,26 @@ test.describe('PROPERTY', () => {
 
     await prop.selectLocation("unit");
     await page.waitForLoadState('domcontentloaded');
-    const locationsPanel = healingLocator(loc.locationsTabpanelStrategies(page));
-    const noUnitsState = locationsPanel.getByText(/No units added yet/i).first();
+    const noUnitsState = healingLocator(loc.locationsTabpanelStrategies(page)).getByText(/No units added yet/i).first();
 
-    await expect(
-      locationsPanel.getByRole("columnheader", { name: /Unit Name/i }).first(),
-    ).toBeVisible({ timeout: 55000 });
+    // waitForSlowDataWithReload (new, additive utils/resilientRetry.js helper): MCP-verified
+    // live 2026-09-22 that this property's Units backend call
+    // (`/api/bird-table?table_name=unit&property_id=...`) can take up to 94s under real
+    // conditions (274 accumulated units), and separately returned an outright 502 on one
+    // attempt — a longer timeout alone can't recover from that 502 since the request already
+    // failed; only a fresh page reload (the selected "unit" location type survives in the
+    // URL's `selected-location` query param) re-triggers the backend call.
+    await waitForSlowDataWithReload(
+      page,
+      async (timeoutMs) => {
+        const locationsPanel = healingLocator(loc.locationsTabpanelStrategies(page));
+        await expect(
+          locationsPanel.getByRole("columnheader", { name: /Unit Name/i }).first(),
+        ).toBeVisible({ timeout: timeoutMs });
+      },
+      { attempts: 2, timeoutMs: 100000, label: 'Locations tab Unit Name header (TC62)' },
+    );
+    const locationsPanel = healingLocator(loc.locationsTabpanelStrategies(page));
 
     await prop.addButton();
     let unitName = "A new unit";
