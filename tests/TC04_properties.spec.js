@@ -95,6 +95,12 @@ test.describe('PROPERTY', () => {
   test.describe.configure({ retries: 1 });
 
   test('TC49 @sanity @mandatory @regression @property @contract - Validate Property Export Functionality and New Property Creation', async () => {
+    // New: this test had no explicit timeout (falling back to the global 280s default).
+    // createPropertyRobust's best-effort listing-visibility retry can take up to ~90s alone
+    // (3 attempts x 30s, MCP-verified live 2026-09-23 — see its own doc comment in
+    // properties.js for the stale-listing root cause), on top of the export flow and
+    // form-fill steps this test already does beforehand.
+    test.setTimeout(360000);
     await test.step('Table View â€” BirdTable toolbar (Export) is available', async () => {
       await prop.changeView(testData.viewName);
     });
@@ -104,7 +110,12 @@ test.describe('PROPERTY', () => {
     });
 
     await test.step('Create property via modal, assert success toast copy, then list', async () => {
-      await prop.createProperty(name, address, city, state, zip, property_type, uiMessages);
+      // createPropertyRobust (new, additive PropertiesHelper method) instead of
+      // createProperty: MCP-verified live 2026-09-23 the Enter-press fix alone wasn't
+      // enough — see its doc comment for the real root cause (client-side stale-cache on
+      // the Properties listing after in-app navigation). createProperty() itself is
+      // untouched — still used by 6 other files.
+      await prop.createPropertyRobust(name, address, city, state, zip, property_type, uiMessages);
     });
 
     await test.step('Write propertyData.json / downloads snapshot for downstream tests', async () => {

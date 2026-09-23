@@ -259,8 +259,15 @@ function projectElementStrategies(page) {
             { name: 'position:dialog-first-h2', locator: page.locator('[role="dialog"] h2').first() },
         ],
         nameInput: [
-            { name: 'label:Name', locator: page.getByLabel('Name') },
-            { name: 'role:textbox[name=Name]', locator: page.getByRole('textbox', { name: 'Name' }) },
+            // exact: true on both role-based strategies below is required (MCP/CI-verified
+            // 2026-09-23, same class of issue already documented on propertyLocator.js's own
+            // nameInputStrategies): a non-exact "Name" substring-matches any accumulated
+            // property named "name_<timestamp>" rendered as a checkbox inside this same
+            // dialog's Property multi-select dropdown — real CI failure, "resolved to 21
+            // elements" — once enough such properties exist. Exact matching still targets
+            // the identical field the original non-exact strategies were written for.
+            { name: 'label:Name(exact)', locator: page.getByLabel('Name', { exact: true }) },
+            { name: 'role:textbox[name=Name](exact)', locator: page.getByRole('textbox', { name: 'Name', exact: true }) },
             /** MCP-verified: real placeholder is "Enter project name" — no data-testid/aria-label exists anywhere in this modal. */
             { name: 'placeholder:Enter project name', locator: page.getByPlaceholder('Enter project name') },
             /** MCP-verified: field order in the modal is fixed [Name, Property, Description, Start Date, End Date, ...] — Name is always the 1st non-hidden input. Positional, weakest signal, kept last. */

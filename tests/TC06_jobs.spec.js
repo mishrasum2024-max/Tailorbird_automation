@@ -245,6 +245,11 @@ test.describe('Project and Jobs', () => {
                 await expect(searchInput).toBeVisible({ timeout: 15000 });
                 await searchInput.fill('');
                 await searchInput.fill(targetJobName);
+                // MCP-verified live 2026-09-23: this search box does not filter on input
+                // alone — confirmed live a filled-but-unsubmitted search leaves the Jobs
+                // grid fully unfiltered, and only filters (or shows "No jobs added yet" for
+                // a non-match) once Enter is pressed.
+                await searchInput.press('Enter').catch(() => { });
                 await page.waitForTimeout(1500);
                 await expect(matchingRows.first(), `FAIL: job "${targetJobName}" must appear in the Jobs list`).toBeVisible({ timeout: 10000 });
             }, { attempts: 4, delayMs: 3000, label: `search Jobs list for "${targetJobName}"` });

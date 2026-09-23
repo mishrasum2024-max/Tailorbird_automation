@@ -1417,6 +1417,11 @@ exports.ApprovalJob = class ApprovalJob {
         try {
             Logger.step('Searching for template: ' + searchTerm);
             await approval.searchInput.fill(searchTerm);
+            // MCP-verified live 2026-09-23: this search box does not filter on input alone —
+            // confirmed live a filled-but-unsubmitted search leaves the Approval Templates
+            // grid fully unfiltered, and only filters (or shows "No approval templates added
+            // yet" for a non-match) once Enter is pressed.
+            await approval.searchInput.press('Enter').catch(() => { });
             await this.page.waitForTimeout(800);
             Logger.success('Search filter applied: ' + searchTerm);
         } catch (error) {
@@ -1429,6 +1434,10 @@ exports.ApprovalJob = class ApprovalJob {
         try {
             Logger.step('Clearing search filter');
             await approval.searchInput.clear();
+            // MCP-verified live 2026-09-23: same as searchTemplate() above — clearing the
+            // input alone does not restore the unfiltered grid; confirmed live it stays on
+            // "No approval templates added yet" until Enter is pressed.
+            await approval.searchInput.press('Enter').catch(() => { });
             await this.page.waitForTimeout(600);
             Logger.success('Search filter cleared');
         } catch (error) {
