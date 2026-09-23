@@ -732,6 +732,9 @@ class PropertiesHelper {
             if (await searchInput.isVisible().catch(() => false)) {
                 await searchInput.click();
                 await searchInput.fill(name);
+                // Same Properties listing already MCP-verified live 2026-09-23 to need
+                // Enter to filter.
+                await searchInput.press('Enter').catch(() => {});
                 await this.page.waitForTimeout(600);
             }
 
@@ -2331,7 +2334,11 @@ class PropertiesHelper {
         await exteriorTab.click();
     }
     async searchInvalidProperty(name) {
-        await this.page.locator(propertyLocators.searchInput).first().fill(name);
+        const searchInput = this.page.locator(propertyLocators.searchInput).first();
+        await searchInput.fill(name);
+        // Same Properties listing already MCP-verified live 2026-09-23 to need Enter to
+        // filter.
+        await searchInput.press('Enter').catch(() => {});
         await this.page.waitForTimeout(5000);
         await this.page.waitForTimeout(3000);
     }
@@ -2484,7 +2491,11 @@ class PropertiesHelper {
 
 
     async clearSearch(name) {
-        await this.page.locator(propertyLocators.searchInput).first().fill(name);
+        const searchInput = this.page.locator(propertyLocators.searchInput).first();
+        await searchInput.fill(name);
+        // Same Properties listing already MCP-verified live 2026-09-23 to need Enter to
+        // filter.
+        await searchInput.press('Enter').catch(() => {});
         await this.page.waitForTimeout(5000);
         await this.page.waitForTimeout(3000);
     }

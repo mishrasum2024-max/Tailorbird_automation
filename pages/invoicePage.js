@@ -985,6 +985,9 @@ class InvoicePage {
                     const search = this.page.getByPlaceholder('Search...').first();
                     if (await search.isVisible({ timeout: 2000 }).catch(() => false)) {
                         await search.fill(String(searchText));
+                        // Same Invoice/Change Order listing already MCP-verified live
+                        // 2026-09-23 to need Enter to filter.
+                        await search.press('Enter').catch(() => {});
                         await this.page.waitForLoadState('load');
                         await this.page.waitForTimeout(1200);
                     }
@@ -1385,6 +1388,9 @@ class InvoicePage {
             await this.page.waitForLoadState('load');
             await this.page.waitForTimeout(400);
             await search.fill(String(changeOrderNumber));
+            // Same Invoice/Change Order listing already MCP-verified live 2026-09-23 to
+            // need Enter to filter.
+            await search.press('Enter').catch(() => {});
             await this.page.waitForLoadState('load');
             await this.page.waitForTimeout(1500);
         }
@@ -2548,6 +2554,9 @@ class InvoicePage {
                 await searchBox.fill('');
                 await this.page.waitForTimeout(300);
                 await searchBox.fill(searchTerm);
+                // Same Invoice/Change Order listing already MCP-verified live 2026-09-23
+                // to need Enter to filter.
+                await searchBox.press('Enter').catch(() => {});
                 await this.page.waitForLoadState('load').catch(() => { });
                 await this.page.waitForTimeout(2000);
             }
@@ -2660,6 +2669,9 @@ class InvoicePage {
                 await searchBox.fill('');
                 await this.page.waitForTimeout(300);
                 await searchBox.fill(searchTerm);
+                // Same Invoice/Change Order listing already MCP-verified live 2026-09-23
+                // to need Enter to filter.
+                await searchBox.press('Enter').catch(() => {});
                 await this.page.waitForLoadState('load').catch(() => { });
                 await this.page.waitForTimeout(5000);
             }

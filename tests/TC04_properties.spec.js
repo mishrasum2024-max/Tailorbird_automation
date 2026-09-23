@@ -962,7 +962,10 @@ test.describe('PROPERTY', () => {
     const propertiesUrl = new URL(page.url()).origin + '/properties';
     await page.goto(propertiesUrl, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2000);
-    await page.locator('[placeholder="Search..."]').first().fill(propertyName);
+    const coverPicSearchInput = page.locator('[placeholder="Search..."]').first();
+    await coverPicSearchInput.fill(propertyName);
+    // Same Properties listing already MCP-verified live 2026-09-23 to need Enter to filter.
+    await coverPicSearchInput.press('Enter').catch(() => {});
     await page.waitForTimeout(3000);
     await expect(page.locator('[style*="files.tailorbird.com"]')).toBeVisible({ timeout: 15000 });
   });

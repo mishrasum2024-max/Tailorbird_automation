@@ -102,17 +102,23 @@ test.describe('Vendor Phase 3 — Bids, Read Views & Admin/Compliance', () => {
         const search = page.getByRole('textbox', { name: 'Search...', exact: true });
         await expect(search, 'FAIL: Bids search input not visible.').toBeVisible({ timeout: 10000 });
 
+        // MCP-verified live 2026-09-23: this listing does not filter on input alone (or on
+        // clearing alone) — confirmed live with a non-matching search term that the grid
+        // stays fully unfiltered until Enter is pressed, both for searching and clearing.
         await search.fill(bidWorkspaceData.searchValidTerm);
+        await search.press('Enter').catch(() => {});
         await page.waitForTimeout(1000);
         const rowsAfterValidSearch = await page.locator('revo-grid [role="row"][data-rgrow]').count();
         expect(rowsAfterValidSearch, `FAIL: searching "${bidWorkspaceData.searchValidTerm}" returned no rows.`).toBeGreaterThan(0);
 
         await search.fill(bidWorkspaceData.searchNoResultTerm);
+        await search.press('Enter').catch(() => {});
         await page.waitForTimeout(1000);
         const emptyState = healingLocator(bidsListEmptyStateStrategies(page)).first();
         await expect(emptyState, `FAIL: searching a guaranteed-no-match term "${bidWorkspaceData.searchNoResultTerm}" did not show the empty state.`).toBeVisible({ timeout: 10000 });
 
         await search.fill('');
+        await search.press('Enter').catch(() => {});
         await page.waitForTimeout(1000);
         const rowsAfterClear = await page.locator('revo-grid [role="row"][data-rgrow]').count();
         expect(rowsAfterClear, 'FAIL: clearing the search did not restore any rows.').toBeGreaterThan(0);

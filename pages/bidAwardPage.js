@@ -116,6 +116,10 @@ class BidAwardPage {
         await retryOperation(async () => {
             await loc.listSearchInput.fill('');
             await loc.listSearchInput.fill(bidName);
+            // MCP-verified live 2026-09-23: this listing does not filter on input alone —
+            // confirmed live with a non-matching search term that the grid stays fully
+            // unfiltered until Enter is pressed.
+            await loc.listSearchInput.press('Enter').catch(() => {});
             await this.page.waitForTimeout(1500);
             await expect(rowLink, `FAIL: bid "${bidName}" must appear in the Bids list`).toBeVisible({ timeout: 10000 });
         }, { attempts: 4, delayMs: 3000, label: `search Bids list for "${bidName}"` });

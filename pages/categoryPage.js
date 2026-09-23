@@ -381,6 +381,7 @@ class FinancialsCategoryPage {
             const searchInput = this.catLoc.mainSearchInput;
             if (await searchInput.isVisible({ timeout: 60000 }).catch(() => false)) {
                 await searchInput.fill(rowName).catch(() => {});
+                await searchInput.press('Enter').catch(() => {});
                 await this.page.waitForTimeout(1500);
             }
         }
@@ -397,6 +398,7 @@ class FinancialsCategoryPage {
             const searchInput = this.catLoc.mainSearchInput;
             if (await searchInput.isVisible({ timeout: 60000 }).catch(() => false)) {
                 await searchInput.fill(rowName).catch(() => {});
+                await searchInput.press('Enter').catch(() => {});
                 await this.page.waitForTimeout(2000);
             }
             console.warn(`[addCategoryRowByName] Row '${rowName}' not found after ${Date.now() - startWait}ms — asserting with remaining time`);

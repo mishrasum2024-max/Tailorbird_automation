@@ -24,6 +24,8 @@ class MultiApproverPage {
     async searchAndOpenJob(jobName) {
         Logger.step(`Searching for job: ${jobName}`);
         await this.loc.jobsSearchInput.fill(jobName);
+        // Same Jobs listing already MCP-verified live 2026-09-23 to need Enter to filter.
+        await this.loc.jobsSearchInput.press('Enter').catch(() => {});
         const jobRow = this.page.getByRole('row').filter({ hasText: jobName });
         await expect(jobRow.first()).toBeVisible({ timeout: 20000 });
 
@@ -158,6 +160,9 @@ class MultiApproverPage {
     async searchApprovals(term) {
         Logger.step(`Searching approvals for: ${term}`);
         await this.loc.approvalsSearchInput.fill(term);
+        // Same All/My Approvals listing already MCP-verified live 2026-09-23 to need Enter
+        // to filter.
+        await this.loc.approvalsSearchInput.press('Enter').catch(() => {});
         await this.page.waitForTimeout(600);
     }
 

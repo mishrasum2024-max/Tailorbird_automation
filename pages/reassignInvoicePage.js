@@ -63,6 +63,8 @@ class ReassignInvoicePage {
         // own dataset (aria-rowcount) to just this property first, same pattern used for the
         // Properties/Invoice search elsewhere in this file.
         await this.loc.jobsSearchInput.fill(propertyName);
+        // Same Jobs listing already MCP-verified live 2026-09-23 to need Enter to filter.
+        await this.loc.jobsSearchInput.press('Enter').catch(() => {});
         await this.page.waitForTimeout(1000);
 
         const propertyJobRows = this.loc.jobRowsForProperty();

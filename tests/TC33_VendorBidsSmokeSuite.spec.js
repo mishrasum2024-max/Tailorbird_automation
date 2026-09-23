@@ -172,6 +172,10 @@ test.describe('Vendor Bids — requested smoke suite', () => {
         const search = page.getByRole('textbox', { name: 'Search...', exact: true });
         await expect(search, 'FAIL: Bids search input not visible.').toBeVisible({ timeout: 10000 });
         await search.fill(smokeData.searchValidTerm);
+        // MCP-verified live 2026-09-23: this listing does not filter on input alone —
+        // confirmed live with a non-matching search term that the grid stays fully
+        // unfiltered until Enter is pressed.
+        await search.press('Enter').catch(() => {});
         await page.waitForTimeout(1000);
 
         const matchingRow = page.locator('revo-grid [role="row"][data-rgrow]').filter({ hasText: smokeData.searchValidTerm }).first();

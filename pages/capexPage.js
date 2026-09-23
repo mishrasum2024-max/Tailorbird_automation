@@ -363,11 +363,16 @@ class CapexPage {
     async search(term) {
         await this.l.searchInput.waitFor({ state: 'visible', timeout: 30000 });
         await this.l.searchInput.fill(term);
+        // MCP-verified live 2026-09-23: this listing does not filter on input alone —
+        // confirmed live with a non-matching search term that the grid stays fully
+        // unfiltered until Enter is pressed.
+        await this.l.searchInput.press('Enter').catch(() => {});
         await this.page.waitForTimeout(1100);
     }
 
     async clearSearch() {
         await this.l.searchInput.fill('');
+        await this.l.searchInput.press('Enter').catch(() => {});
         // Clearing can race the grid's own debounce/data-refetch — confirmed live via MCP
         // browser this race is real (rows can still read 0 right after clearing) but not
         // reliably reproducible on demand, so poll for rows to actually reappear instead of

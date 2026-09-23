@@ -54,7 +54,11 @@ class VendorProfilePage {
     async navigateViaSidebarAvatar() {
         Logger.step('VendorProfilePage: navigating via sidebar avatar → Profile...');
         await ensureLeftPanelExpanded(this.page);
-        const avatarTrigger = this.page.locator('nav').getByText(this.vendorEmail, { exact: true }).first();
+        // MCP-verified live 2026-09-23: the sidebar no longer renders the vendor's email as
+        // visible text (it now shows only a single-letter Mantine Avatar placeholder), so a
+        // getByText(vendorEmail) lookup can never match. The Avatar root itself is the real
+        // click target regardless of its placeholder letter/initial.
+        const avatarTrigger = this.page.locator('nav .mantine-Avatar-root').first();
         await expect(avatarTrigger, 'FAIL: sidebar avatar/profile trigger not visible.').toBeVisible({ timeout: 10000 });
         await avatarTrigger.click();
         const profileMenuItem = this.page.getByRole('menuitem', { name: 'Profile', exact: true });
@@ -215,10 +219,15 @@ class VendorProfilePage {
         const search = this.page.getByRole('textbox', { name: 'Search...', exact: true });
         await expect(search, 'FAIL: Users table search input not visible.').toBeVisible({ timeout: 10000 });
         await search.fill(noMatchTerm);
+        // MCP-verified live 2026-09-23: this table does not filter on input alone (or on
+        // clearing alone) — confirmed live with a non-matching search term that the table
+        // stays fully unfiltered until Enter is pressed, both for searching and clearing.
+        await search.press('Enter').catch(() => {});
         await this.page.waitForTimeout(1000);
         const row = healingLocator(userRowByEmailStrategies(this.page, stillVisibleEmail)).first();
         await expect(row, `FAIL: user row for "${stillVisibleEmail}" is still visible after searching an unrelated term "${noMatchTerm}".`).toBeHidden({ timeout: 10000 });
         await search.fill('');
+        await search.press('Enter').catch(() => {});
         await this.page.waitForTimeout(1000);
         await expect(row, `FAIL: user row for "${stillVisibleEmail}" did not reappear after clearing the search.`).toBeVisible({ timeout: 10000 });
         Logger.success('VendorProfilePage: Users search no-match + clear verified.');

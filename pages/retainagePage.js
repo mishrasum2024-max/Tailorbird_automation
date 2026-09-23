@@ -56,6 +56,10 @@ class RetainagePage {
   async searchInvoiceList(term) {
     Logger.step(`Searching invoice list for: ${term}`);
     await this.loc.invoiceListSearchInput.fill(term);
+    // MCP-verified live 2026-09-23: this listing does not filter on input alone —
+    // confirmed live with a non-matching search term that the grid stays fully
+    // unfiltered until Enter is pressed.
+    await this.loc.invoiceListSearchInput.press('Enter').catch(() => {});
     await this.page.waitForTimeout(600);
   }
 

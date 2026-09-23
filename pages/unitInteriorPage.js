@@ -50,6 +50,8 @@ class UnitInteriorPage {
         await searchInput.waitFor({ state: 'visible', timeout: 30000 });
         InteractionLogger.logFormFill('Jobs search input', JOB_NAME);
         await searchInput.fill(JOB_NAME);
+        // Same Jobs listing already MCP-verified live 2026-09-23 to need Enter to filter.
+        await searchInput.press('Enter').catch(() => {});
         await this.page.waitForTimeout(1500);
 
         // Find the row that matches the exact job name and click its ID link
@@ -146,6 +148,8 @@ class UnitInteriorPage {
         await searchInput.waitFor({ state: 'visible', timeout: 30000 });
         InteractionLogger.logFormFill('Jobs search input', jobName);
         await searchInput.fill(jobName);
+        // Same Jobs listing already MCP-verified live 2026-09-23 to need Enter to filter.
+        await searchInput.press('Enter').catch(() => {});
         await this.page.waitForTimeout(1500);
 
         const matchingRow = this.page

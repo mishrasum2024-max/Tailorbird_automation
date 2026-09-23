@@ -712,7 +712,11 @@ class BidPage {
         Logger.info('"Next: Select Documents" correctly hidden before vendor selection');
 
         // Search for vendor
-        await loc.vendorSearchInput.fill(vendorData.searchTerm);
+        // MCP-verified live 2026-09-23: a plain .fill() does not trigger this dialog's
+        // search at all (grid stays fully unfiltered) — it needs real per-character
+        // keystroke events (pressSequentially) followed by Enter to actually filter.
+        await loc.vendorSearchInput.pressSequentially(vendorData.searchTerm);
+        await loc.vendorSearchInput.press('Enter').catch(() => {});
         await this.page.waitForTimeout(1000);
         Logger.info(`Searched for "${vendorData.searchTerm}"`);
 
@@ -796,7 +800,11 @@ class BidPage {
         Logger.info('Dialog "Send Bid to Vendors" open');
 
         await expect(loc.vendorSearchInput).toBeVisible({ timeout: 15000 });
-        await loc.vendorSearchInput.fill(vendorData.searchTerm);
+        // MCP-verified live 2026-09-23: a plain .fill() does not trigger this dialog's
+        // search at all (grid stays fully unfiltered) — it needs real per-character
+        // keystroke events (pressSequentially) followed by Enter to actually filter.
+        await loc.vendorSearchInput.pressSequentially(vendorData.searchTerm);
+        await loc.vendorSearchInput.press('Enter').catch(() => {});
         await this.page.waitForTimeout(1000);
         Logger.info(`Searched for "${vendorData.searchTerm}"`);
 
