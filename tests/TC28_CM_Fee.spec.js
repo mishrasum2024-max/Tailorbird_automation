@@ -43,7 +43,11 @@ test.describe.serial('CM Fee Configuration', () => {
         await setupPage.waitForTimeout(1500);
         await ensureLeftPanelExpanded(setupPage);
         await prop.goToProperties();
-        await prop.createProperty(
+        // createPropertyRobust (existing, additive PropertiesHelper method — pages/properties.js)
+        // instead of createProperty: same MCP-verified client-side stale-cache bug on the
+        // Properties listing after in-app navigation, already root-caused and fixed there.
+        // createProperty() itself is untouched.
+        await prop.createPropertyRobust(
             sharedPropertyName,
             'Domestic Terminal, College Park, GA 30337, USA',
             'College Park', 'GA', '30337',

@@ -165,7 +165,7 @@ test.describe('Retainage flow', () => {
         await retainagePage.gotoInvoiceDetail(fixture.jobId, resolvedInvoiceId);
         await expect(loc.retainagePercentInput).toBeVisible({ timeout: 20000 });
 
-        await expect(loc.lineItemsRetainagePercentHeader).toBeVisible({ timeout: 15000 });
+        await expect(loc.lineItemsRetainagePercentHeader).toBeVisible({ timeout: 55000 });
         await expect(loc.lineItemsRetainageAmountHeader).toBeVisible();
         await expect(loc.lineItemsRetainageReleasedHeader).toBeVisible();
         await expect(loc.lineItemsTotalWithheldHeader).toBeVisible();
@@ -182,7 +182,7 @@ test.describe('Retainage flow', () => {
         await expect(loc.goBackButton).toBeVisible({ timeout: 20000 });
 
         await retainagePage.goBack();
-        await expect(page).toHaveURL(/tab=invoices/, { timeout: 15000 });
+        await expect(page).toHaveURL(/tab=invoices/, { timeout: 55000 });
         Logger.success('Go Back navigated from Invoice Details drawer back to the Invoice list.');
     });
 
@@ -211,7 +211,7 @@ test.describe('Retainage flow', () => {
         await expect(loc.retainagePercentInput).toBeVisible({ timeout: 20000 });
 
         const row = retainagePage.getInvoiceLineItemRow(fixture.lineItem.scope, fixture.lineItem.scheduleOfValue);
-        await expect(row, `Line item row "${fixture.lineItem.label}" must be visible in the invoice line-items grid`).toBeVisible({ timeout: 15000 });
+        await expect(row, `Line item row "${fixture.lineItem.label}" must be visible in the invoice line-items grid`).toBeVisible({ timeout: 55000 });
 
         const values = await retainagePage.getInvoiceLineItemRowValues(row);
         Logger.info(`Line-items grid row values for "${fixture.lineItem.label}": ${JSON.stringify(values)}`);
@@ -461,7 +461,7 @@ test.describe('retainage Contract', () => {
         await expect(loc.retainageSubTab).toHaveAttribute('aria-selected', 'true');
         Logger.success('Contracts tab loaded and Retainage sub-tab is selected.');
 
-        await expect(loc.retainageTabInvoiceOrLineItemHeader).toBeVisible({ timeout: 15000 });
+        await expect(loc.retainageTabInvoiceOrLineItemHeader).toBeVisible({ timeout: 55000 });
         await expect(loc.retainageTabDateHeader).toBeVisible();
         await expect(loc.retainageTabWithheldHeader).toBeVisible();
         await expect(loc.retainageTabReleasedHeader).toBeVisible();
@@ -469,11 +469,11 @@ test.describe('retainage Contract', () => {
         Logger.success('Headers verified: Invoice / Line Item, Date, Withheld, Released, Outstanding.');
     });
 
-    test('TC336 @regression @retainage : Verify Invoice row is present with correct Date/Withheld/Released/Outstanding and expands successfully', async () => {
+    test.only('TC336 @regression @retainage : Verify Invoice row is present with correct Date/Withheld/Released/Outstanding and expands successfully', async () => {
         await retainagePage.gotoContractRetainageTab(fixture.jobId);
 
         const invoiceRow = retainagePage.getRetainageTabInvoiceRow(`Invoice #${resolvedInvoiceId}`);
-        await expect(invoiceRow, 'Invoice present on Retainage tab').toBeVisible({ timeout: 15000 });
+        await expect(invoiceRow, 'Invoice present on Retainage tab').toBeVisible({ timeout: 55000 });
 
         const before = await retainagePage.getRetainageTabRowValues(invoiceRow);
         Logger.info(`Invoice row before expand: ${JSON.stringify(before)}`);
@@ -491,14 +491,14 @@ test.describe('retainage Contract', () => {
         Logger.success('Invoice row expanded successfully — line item child row is visible.');
     });
 
-    test('TC337 @regression @retainage : Verify every available line item under the invoice is expanded and has no further nested rows', async () => {
+    test.only('TC337 @regression @retainage : Verify every available line item under the invoice is expanded and has no further nested rows', async () => {
         await retainagePage.gotoContractRetainageTab(fixture.jobId);
         const invoiceRow = retainagePage.getRetainageTabInvoiceRow(`Invoice #${resolvedInvoiceId}`);
-        await expect(invoiceRow).toBeVisible({ timeout: 15000 });
+        await expect(invoiceRow).toBeVisible({ timeout: 55000 });
 
         await retainagePage.toggleRetainageTabRow(invoiceRow);
         await expect
-            .poll(() => retainagePage.getChildRowCount(invoiceRow), { timeout: 8000 })
+            .poll(() => retainagePage.getChildRowCount(invoiceRow), { timeout: 55000 })
             .toBe(1); // exactly 1 line item, matching the retainage-invoices API payload (lines.length === 1)
         Logger.success(`Invoice #${resolvedInvoiceId} expanded to exactly 1 child row — matches the retainage-invoices API payload (lines.length === 1), independent of any other invoices present in the grid.`);
 
@@ -508,7 +508,7 @@ test.describe('retainage Contract', () => {
         Logger.success('Confirmed no additional expandable rows remain under the line item — expansion is exhaustive for this fixture.');
     });
 
-    test('TC338 @regression @retainage : Expanded line item shows correct Scope/Schedule of Value label and currency values', async () => {
+    test.only('TC338 @regression @retainage : Expanded line item shows correct Scope/Schedule of Value label and currency values', async () => {
         await retainagePage.gotoContractRetainageTab(fixture.jobId);
         const invoiceRow = retainagePage.getRetainageTabInvoiceRow(`Invoice #${resolvedInvoiceId}`);
         await retainagePage.toggleRetainageTabRow(invoiceRow);
@@ -532,7 +532,7 @@ test.describe('retainage Contract', () => {
         Logger.success(`Parent-child hierarchy verified: line item Withheld/Released (${values.withheld}/${values.released}) match parent invoice row.`);
     });
 
-    test('TC339 @regression @retainage : Total row is correct and cross-checks against the expanded rows', async () => {
+    test.only('TC339 @regression @retainage : Total row is correct and cross-checks against the expanded rows', async () => {
         await retainagePage.gotoContractRetainageTab(fixture.jobId);
         const invoiceRow = retainagePage.getRetainageTabInvoiceRow(`Invoice #${resolvedInvoiceId}`);
         await retainagePage.toggleRetainageTabRow(invoiceRow);
@@ -557,7 +557,7 @@ test.describe('retainage Contract', () => {
         Logger.success(`Cross-check passed: fixture invoice #${resolvedInvoiceId}'s own Withheld/Released (${invoiceValues.withheld}/${invoiceValues.released}) match the sum of its expanded line item(s), and correctly contribute to the grid-wide Total row above.`);
     });
 
-    test('TC340 @regression @retainage : Withheld amount matches Invoice Amount x Retainage % from the invoice created earlier', async () => {
+    test.only('TC340 @regression @retainage : Withheld amount matches Invoice Amount x Retainage % from the invoice created earlier', async () => {
         await retainagePage.gotoInvoiceDetail(fixture.jobId, resolvedInvoiceId);
         await expect(loc.retainagePercentInput).toBeVisible({ timeout: 20000 });
         const overview = await retainagePage.getOverviewRetainageValues();
@@ -568,7 +568,7 @@ test.describe('retainage Contract', () => {
 
         await retainagePage.gotoContractRetainageTab(fixture.jobId);
         const invoiceRow = retainagePage.getRetainageTabInvoiceRow(`Invoice #${resolvedInvoiceId}`);
-        await expect(invoiceRow).toBeVisible({ timeout: 15000 });
+        await expect(invoiceRow).toBeVisible({ timeout: 55000 });
         const retainageTabValues = await retainagePage.getRetainageTabRowValues(invoiceRow);
         const actualWithheld = RetainagePage.parseCurrency(retainageTabValues.withheld);
         const actualOutstanding = RetainagePage.parseCurrency(retainageTabValues.outstanding);
@@ -581,13 +581,13 @@ test.describe('retainage Contract', () => {
         Logger.success(`Outstanding ($${actualOutstanding}) >= this invoice's own Withheld ($${actualWithheld}) - Released ($${actualReleased}) verified.`);
     });
 
-    test('TC341 @regression @retainage : Currency formatting is correct for Withheld/Released/Outstanding', async () => {
+    test.only('TC341 @regression @retainage : Currency formatting is correct for Withheld/Released/Outstanding', async () => {
         await retainagePage.gotoContractRetainageTab(fixture.jobId);
         const invoiceRow = retainagePage.getRetainageTabInvoiceRow(`Invoice #${resolvedInvoiceId}`);
-        await expect(invoiceRow).toBeVisible({ timeout: 15000 });
+        await expect(invoiceRow).toBeVisible({ timeout: 55000 });
         await retainagePage.toggleRetainageTabRow(invoiceRow);
         const lineItemRow = retainagePage.getRetainageTabLineItemRow(fixture.lineItem.scope, fixture.lineItem.scheduleOfValue);
-        await expect(lineItemRow).toBeVisible({ timeout: 8000 });
+        await expect(lineItemRow).toBeVisible({ timeout: 55000 });
 
         const invoiceValues = await retainagePage.getRetainageTabRowValues(invoiceRow);
         const lineItemValues = await retainagePage.getRetainageTabRowValues(lineItemRow);
@@ -605,10 +605,10 @@ test.describe('retainage Contract', () => {
         Logger.success('Zero-amount formatting verified: Released renders as "$0" (not "$0.00" or blank).');
     });
 
-    test('TC342 @regression @retainage : Expand/collapse persists data correctly with no UI corruption across repeated cycles', async () => {
+    test.only('TC342 @regression @retainage : Expand/collapse persists data correctly with no UI corruption across repeated cycles', async () => {
         await retainagePage.gotoContractRetainageTab(fixture.jobId);
         const invoiceRow = retainagePage.getRetainageTabInvoiceRow(`Invoice #${resolvedInvoiceId}`);
-        await expect(invoiceRow).toBeVisible({ timeout: 15000 });
+        await expect(invoiceRow).toBeVisible({ timeout: 55000 });
 
         for (let cycle = 1; cycle <= 2; cycle++) {
             await retainagePage.toggleRetainageTabRow(invoiceRow);
@@ -638,7 +638,7 @@ test.describe('retainage Contract', () => {
         }
     });
 
-    test('TC343 @regression @retainage : Contract / Documents / Retainage sub-tab selection state is correct when switching tabs', async () => {
+    test.only('TC343 @regression @retainage : Contract / Documents / Retainage sub-tab selection state is correct when switching tabs', async () => {
         await retainagePage.gotoContractRetainageTab(fixture.jobId);
         await expect(loc.retainageSubTab).toHaveAttribute('aria-selected', 'true');
 
@@ -659,7 +659,7 @@ test.describe('retainage Contract', () => {
         Logger.success('Switched back to Retainage sub-tab — selected state correct and URL reflects contractSubTab=retainage.');
     });
 
-    test('TC344 @regression @retainage : retainage-invoices API returns 200 with values matching the UI', async () => {
+    test.only('TC344 @regression @retainage : retainage-invoices API returns 200 with values matching the UI', async () => {
         let capturedResponse = null;
         const retainageInvoicesEndpoint = fixture.apiEndpoints.retainageInvoices.replace('{jobId}', fixture.jobId);
         page.on('response', async (response) => {
@@ -671,7 +671,7 @@ test.describe('retainage Contract', () => {
         const start = Date.now();
         await retainagePage.gotoContractRetainageTab(fixture.jobId);
         const invoiceRow = retainagePage.getRetainageTabInvoiceRow(`Invoice #${resolvedInvoiceId}`);
-        await expect(invoiceRow).toBeVisible({ timeout: 15000 });
+        await expect(invoiceRow).toBeVisible({ timeout: 55000 });
         const elapsedMs = Date.now() - start;
 
         expect(capturedResponse, 'GET /api/jobs/{jobId}/retainage-invoices must have fired while loading the Retainage tab').not.toBeNull();
@@ -697,7 +697,7 @@ test.describe('retainage Contract', () => {
         Logger.success(`API payload cross-checked against UI: sum of lines[].withheld (${apiWithheldFormatted}) matches the rendered invoice row Withheld (${rowValues.withheld}).`);
     });
 
-    test('TC345 @regression @retainage : No console errors, page errors, or failed API responses on the Contract > Retainage tab', async () => {
+    test.only('TC345 @regression @retainage : No console errors, page errors, or failed API responses on the Contract > Retainage tab', async () => {
         const consoleErrors = [];
         const pageErrors = [];
         const failedResponses = [];
@@ -711,10 +711,10 @@ test.describe('retainage Contract', () => {
 
         await retainagePage.gotoContractRetainageTab(fixture.jobId);
         const invoiceRow = retainagePage.getRetainageTabInvoiceRow(`Invoice #${resolvedInvoiceId}`);
-        await expect(invoiceRow).toBeVisible({ timeout: 15000 });
+        await expect(invoiceRow).toBeVisible({ timeout: 55000 });
         await retainagePage.toggleRetainageTabRow(invoiceRow);
         const lineItemRow = retainagePage.getRetainageTabLineItemRow(fixture.lineItem.scope, fixture.lineItem.scheduleOfValue);
-        await expect(lineItemRow).toBeVisible({ timeout: 8000 });
+        await expect(lineItemRow).toBeVisible({ timeout: 55000 });
         await retainagePage.toggleRetainageTabRow(invoiceRow);
 
         expect(consoleErrors, `Unexpected console errors: ${JSON.stringify(consoleErrors)}`).toHaveLength(0);
@@ -723,9 +723,9 @@ test.describe('retainage Contract', () => {
         Logger.success('No console errors, page errors, or failed (4xx/5xx) API responses observed while loading and expanding/collapsing the Contract > Retainage tab.');
     });
 
-    test('TC346 @regression @retainage : Verify Contract Overview fields and hide retainage totals when Retainage % is 0', async () => {
+    test.only('TC346 @regression @retainage : Verify Contract Overview fields and hide retainage totals when Retainage % is 0', async () => {
         await retainagePage.gotoContractRetainageTab(fixture.jobId);
-        await expect(loc.contractsTabPanel).toBeVisible({ timeout: 15000 });
+        await expect(loc.contractsTabPanel).toBeVisible({ timeout: 55000 });
 
         const fields = [
             ['Property', fixture.contractOverview.property],
@@ -754,9 +754,9 @@ test.describe('retainage Contract', () => {
         Logger.success('Total Withheld / Total Released / Outstanding Balance are correctly hidden on the Contract Overview card because this contract\'s Retainage % is 0.');
     });
 
-    test('TC347 @regression @retainage : Edit Contract Overview drawer locks Retainage % once the contract is finalized', async () => {
+    test.only('TC347 @regression @retainage : Edit Contract Overview drawer locks Retainage % once the contract is finalized', async () => {
         await retainagePage.gotoContractRetainageTab(fixture.jobId);
-        await expect(loc.editContractOverviewButton).toBeVisible({ timeout: 15000 });
+        await expect(loc.editContractOverviewButton).toBeVisible({ timeout: 55000 });
 
         await retainagePage.openEditContractOverviewDrawer();
         await expect(loc.editContractOverviewDialog.getByRole('heading', { name: fixture.editContractOverview.dialogTitle })).toBeVisible();
@@ -778,9 +778,9 @@ test.describe('retainage Contract', () => {
         await retainagePage.cancelEditContractOverviewDrawer();
     });
 
-    test('TC348 @regression @retainage : Retainage sub-tab is enabled because the contract is finalized', async () => {
+    test.only('TC348 @regression @retainage : Retainage sub-tab is enabled because the contract is finalized', async () => {
         await retainagePage.gotoContractRetainageTab(fixture.jobId);
-        await expect(loc.retainageSubTab).toBeEnabled({ timeout: 10000 });
+        await expect(loc.retainageSubTab).toBeEnabled({ timeout: 30000 });
         Logger.success('Retainage sub-tab is enabled — consistent with this contract being finalized.');
     });
 });

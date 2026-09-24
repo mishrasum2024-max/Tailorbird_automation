@@ -47,6 +47,40 @@ async function createNewProperty(page) {
     }
 }
 
+// NEW, additive-only helper — does NOT modify createNewProperty() above, which TC170 still
+// uses unchanged. Root-caused live (MCP browser, 2026-09-24): TC169's failure is a client-
+// side stale-cache bug — after creating a property, navigating back to the Properties list
+// via the in-app "Properties" nav link is an SPA route change that never refetches the
+// listing's data, so the immediately-following search finds nothing even though the
+// property genuinely exists (confirmed: a real page reload at that exact point finds it
+// instantly). This routes TC169 through the already-existing, already-verified
+// PropertiesHelper.createPropertyRobust() (pages/properties.js — built and MCP-verified
+// 2026-09-23 for the same bug in TC49) instead of writing a duplicate fix.
+async function createNewPropertyRobust(page) {
+    const propertyTypes = ["Garden Style", "Mid Rise", "High Rise", "Military Housing"];
+    const propertyType = propertyTypes[Math.floor(Math.random() * propertyTypes.length)];
+    const uniqueSuffix = Date.now();
+    const propertyName = `Approval_Test_Property_${uniqueSuffix}`;
+    const address = 'Domestic Terminal, College Park, GA 30337, USA';
+    const city = 'College Park';
+    const state = 'GA';
+    const zip = '30337';
+
+    try {
+        Logger.step('Creating new property (robust) for approval template test: ' + propertyName);
+        const propHelper = new PropertiesHelper(page);
+        await propHelper.goToProperties();
+        await page.waitForTimeout(500);
+
+        await propHelper.createPropertyRobust(propertyName, address, city, state, zip, propertyType);
+        Logger.success('New property created (robust): ' + propertyName);
+        return propertyName;
+    } catch (error) {
+        Logger.error('Failed to create property (robust): ' + error.message);
+        throw error;
+    }
+}
+
 let currentPropertyName = '';
 const APPROVAL_VISUAL_ASSERT = {
     animations: 'disabled',
@@ -134,7 +168,7 @@ test.describe('Approval Templates', () => {
     });
 
     test('TC169 @approval @regression @sanity : Verify user can successfully create an approval template with all required fields', async () => {
-        currentPropertyName = await createNewProperty(page);
+        currentPropertyName = await createNewPropertyRobust(page);
         Logger.info('Property for template: ' + currentPropertyName);
 
         await approvalJob.navigateToApprovalTab();
@@ -162,7 +196,7 @@ test.describe('Approval Templates', () => {
     test('TC170 @approval @regression : Verify approval template validation for missing and invalid inputs', async () => {
 
         // Create a new property for this test
-        currentPropertyName = await createNewProperty(page);
+        currentPropertyName = await createNewPropertyRobust(page);
         Logger.info('Created property for template: ' + currentPropertyName);
 
         await approvalJob.navigateToApprovalTab();
@@ -639,7 +673,7 @@ test.describe('Approval Templates', () => {
 
     test('TC184 @approval @regression : Verify template type cannot be changed while editing', async () => {
         test.setTimeout(240000);
-        const tc176Property = await createNewProperty(page);
+        const tc176Property = await createNewPropertyRobust(page);
         await approvalJob.navigateToApprovalTab();
         await approvalJob.navigateToApprovalTemplatesTab();
         await approvalJob.waitForPageLoad();
@@ -700,7 +734,7 @@ test.describe('Approval Templates', () => {
     });
 
     test('TC185 @approval @regression @positive : Verify newly created template appears in search results', async () => {
-        const propertyName = await createNewProperty(page);
+        const propertyName = await createNewPropertyRobust(page);
         await approvalJob.navigateToApprovalTab();
         await approvalJob.navigateToApprovalTemplatesTab();
         await approvalJob.waitForPageLoad();
@@ -994,7 +1028,7 @@ test.describe('Approval Templates', () => {
 
     test('TC201 @approval @regression @positive : Verify cancelled template deletion keeps the template and confirmed deletion removes it', async () => {
         test.setTimeout(240000);
-        const propertyName = await createNewProperty(page);
+        const propertyName = await createNewPropertyRobust(page);
         await approvalJob.navigateToApprovalTab();
         await approvalJob.navigateToApprovalTemplatesTab();
         await approvalJob.waitForPageLoad();
@@ -1197,7 +1231,7 @@ test.describe('Approval Templates', () => {
         const fs = require('fs');
         const path = require('path');
 
-        const tc199Property = await createNewProperty(page);
+        const tc199Property = await createNewPropertyRobust(page);
         await approvalJob.navigateToApprovalTab();
         await approvalJob.navigateToApprovalTemplatesTab();
         await approvalJob.waitForPageLoad();

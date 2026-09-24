@@ -59,7 +59,11 @@ test.describe.serial('Finalize contract UI flow', () => {
 
         Logger.step('TC224: Create property + persist propertyData (TC14 core)');
         await prop.goToProperties();
-        await prop.createProperty(propertyName, address, city, state, zip, propertyType);
+        // createPropertyRobust (existing, additive PropertiesHelper method — pages/properties.js)
+        // instead of createProperty: same MCP-verified client-side stale-cache bug on the
+        // Properties listing after in-app navigation, already root-caused and fixed there.
+        // createProperty() itself is untouched.
+        await prop.createPropertyRobust(propertyName, address, city, state, zip, propertyType);
 
         const propertyPayload = { propertyName };
         const propertyDataPath = path.join(__dirname, '../data/propertyData.json');

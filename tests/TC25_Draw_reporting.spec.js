@@ -72,7 +72,11 @@ test.describe('Draw Reporting', () => {
         const propertyName = `TC372_DrawReportProp_${timestamp}`;
 
         Logger.step('TC372 Step 1: Creating new property for Draw Reporting');
-        await approvalJob.createProperty(
+        // createPropertyRobust (existing, additive ApprovalJob method — pages/approvalPage.js)
+        // instead of createProperty: same MCP-verified client-side stale-cache bug on the
+        // Properties listing after in-app navigation, already root-caused and fixed there.
+        // createProperty() itself is untouched.
+        await approvalJob.createPropertyRobust(
             propertyName,
             'Domestic Terminal, College Park, GA 30337, USA',
             'College Park',

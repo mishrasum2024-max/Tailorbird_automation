@@ -365,7 +365,11 @@ test.describe('Budget Workflow', () => {
 
         // ===== STEP 1: Create new property =====
         Logger.step('TC269 Step 1: Creating new property');
-        await approvalJob.createProperty(
+        // createPropertyRobust (existing, additive ApprovalJob method — pages/approvalPage.js)
+        // instead of createProperty: same MCP-verified client-side stale-cache bug on the
+        // Properties listing after in-app navigation, already root-caused and fixed there.
+        // createProperty() itself is untouched.
+        await approvalJob.createPropertyRobust(
             propertyName,
             'Domestic Terminal, College Park, GA 30337, USA',
             'College Park',
@@ -500,7 +504,11 @@ test.describe('Budget Workflow', () => {
 
         // ===== STEP 1: Create new property =====
         Logger.step('TC271 Step 1: Creating new property');
-        await approvalJob.createProperty(
+        // createPropertyRobust (existing, additive ApprovalJob method — pages/approvalPage.js)
+        // instead of createProperty: same MCP-verified client-side stale-cache bug on the
+        // Properties listing after in-app navigation, already root-caused and fixed there.
+        // createProperty() itself is untouched.
+        await approvalJob.createPropertyRobust(
             propertyName,
             'Domestic Terminal, College Park, GA 30337, USA',
             'College Park',
