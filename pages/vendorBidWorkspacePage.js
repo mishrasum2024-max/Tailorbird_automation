@@ -238,8 +238,8 @@ class VendorBidWorkspacePage {
         Logger.success('VendorBidWorkspacePage: Property > Take Offs verified (4 category tabs + real version data, no empty state — property has accumulated take-off data from other tests).');
     }
 
-    /** Locations sub-tab: asserts its toolbar (Search/View/Table/Export) and — since this
-     * property has no sites — the "No sites added yet" empty state. */
+    /** Locations sub-tab: asserts its toolbar (Search/View/Table/Export) and its Sites content —
+     * either the "No sites added yet" empty state, or a populated Sites grid. */
     async assertPropertyLocationsTabVisible() {
         Logger.step('VendorBidWorkspacePage: asserting Property > Locations...');
         const subTab = healingLocator(propertySubTabStrategies(this.page, 'Locations')).first();
@@ -248,9 +248,25 @@ class VendorBidWorkspacePage {
             const toolbarButton = this.page.getByRole('button', { name: label, exact: true });
             await expect(toolbarButton, `FAIL: Locations toolbar "${label}" button not visible.`).toBeVisible({ timeout: 10000 });
         }
+        // MCP-verified live 2026-09-24: this property is a shared, persistent automation
+        // resource — other tests in this suite have since added real Sites to it (confirmed
+        // live: its Locations grid now shows populated rows, not the empty state), so "no sites
+        // added yet" is no longer guaranteed. The toolbar rendering correctly is the actual
+        // thing under test; accept either the empty state or a populated Locations grid instead
+        // of hard-requiring emptiness.
         const emptyState = healingLocator(locationsEmptyStateStrategies(this.page)).first();
-        await expect(emptyState, 'FAIL: Locations empty state ("No sites added yet") not visible.').toBeVisible();
-        Logger.success('VendorBidWorkspacePage: Property > Locations verified (toolbar + empty state).');
+        const gridRow = this.page.locator('[role="treegrid"] [role="row"]').first();
+        await expect
+            .poll(
+                async () => (await emptyState.isVisible().catch(() => false)) || (await gridRow.isVisible().catch(() => false)),
+                {
+                    timeout: 60_000,
+                    intervals: [500, 1000, 2000, 3000],
+                    message: 'FAIL: Locations tab showed neither the "No sites added yet" empty state nor a populated Sites grid.',
+                },
+            )
+            .toBe(true);
+        Logger.success('VendorBidWorkspacePage: Property > Locations verified (toolbar + empty-state-or-populated grid).');
     }
 }
 

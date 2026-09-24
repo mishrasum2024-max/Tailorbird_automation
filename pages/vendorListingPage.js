@@ -247,8 +247,19 @@ class VendorListingPage {
         // this live count) is the row-completeness source of truth. This only asserts that
         // whatever IS currently mounted actually renders working, visible action buttons.
         const viewDetailsButtons = healingLocator(viewDetailsButtonsStrategies(this.page));
+        // MCP-verified live 2026-09-24: right after the export download completes, the grid's
+        // "View Details" buttons can still read 0 for a stretch — a real render race, not a
+        // broken grid (the export itself already proved rowCount > 0 above). A single
+        // instantaneous .count() call has no wait built in, so poll for it instead of checking
+        // once. 60s to match this app's real observed backend/render latency elsewhere.
+        await expect
+            .poll(() => viewDetailsButtons.count(), {
+                timeout: 60_000,
+                intervals: [500, 1000, 2000, 3000],
+                message: `FAIL: ${cfg.navLabel} grid has zero "View Details" buttons — expected at least one visible data row.`,
+            })
+            .toBeGreaterThan(0);
         const viewDetailsCount = await viewDetailsButtons.count();
-        expect(viewDetailsCount, `FAIL: ${cfg.navLabel} grid has zero "View Details" buttons — expected at least one visible data row.`).toBeGreaterThan(0);
         expect(
             viewDetailsCount,
             `FAIL: ${cfg.navLabel} shows ${viewDetailsCount} "View Details" button(s), more than its own export's ${rowCount} row(s) — unexpected extra/duplicate rows.`,
@@ -270,7 +281,7 @@ class VendorListingPage {
      * truncated string instead of throwing — the CSV export is the only complete source.
      * @returns {Promise<Record<string,string> | null>}
      */
-    async exportAndFindRow(pageKey, matchColumn, matchValue) {
+    async #exportAndFindRowOnce(pageKey, matchColumn, matchValue) {
         const cfg = LISTING_PAGES[pageKey];
         const downloadDir = path.join(__dirname, '../downloads');
         fs.mkdirSync(downloadDir, { recursive: true });
@@ -296,6 +307,33 @@ class VendorListingPage {
             }
         }
         return null;
+    }
+
+    /**
+     * MCP-verified live 2026-09-24: a just-submitted record (e.g. a Change Order created
+     * moments earlier in the same test) can be missing from this export even right after
+     * navigateTo() — navigateTo is an in-app SPA nav-link click, which never forces a refetch,
+     * so the export can reflect stale/not-yet-indexed data. Same reload-then-repoll pattern
+     * already used elsewhere in this framework for freshly-created invoices. A row that's been
+     * around for a while (the common case) is still found on the very first export, so this
+     * adds no extra cost for already-passing callers.
+     * @param {'bids'|'contracts'|'invoices'|'changeOrders'} pageKey
+     * @param {string} matchColumn
+     * @param {string} matchValue
+     * @param {{ reloadAttempts?: number }} [options]
+     * @returns {Promise<Record<string,string> | null>}
+     */
+    async exportAndFindRow(pageKey, matchColumn, matchValue, { reloadAttempts = 3 } = {}) {
+        let row = await this.#exportAndFindRowOnce(pageKey, matchColumn, matchValue);
+        if (row) return row;
+
+        for (let attempt = 1; attempt <= reloadAttempts && !row; attempt++) {
+            Logger.info(`VendorListingPage.exportAndFindRow: "${matchValue}" not found in export (reload attempt ${attempt}/${reloadAttempts}) — reloading and retrying.`);
+            await this.page.reload({ waitUntil: 'load' }).catch(() => {});
+            await this.page.waitForTimeout(1500);
+            row = await this.#exportAndFindRowOnce(pageKey, matchColumn, matchValue);
+        }
+        return row;
     }
 
     /**

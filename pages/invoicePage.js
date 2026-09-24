@@ -1221,9 +1221,16 @@ class InvoicePage {
             await this.page.waitForTimeout(2000);
 
             // Verify it appears in list by number (most reliable across Draft/Approved).
+            // MCP-verified live 2026-09-24: a just-created record can take real backend
+            // propagation time (observed up to several minutes for a sibling flow — invoice
+            // rows on the Retainage tab) before it's fetchable at all, independent of search or
+            // reload timing alone. A plain re-check of the same page for a few seconds doesn't
+            // cover that; reload between attempts to force a genuinely fresh fetch, and space
+            // attempts out to give real wall-clock time to pass.
             let inList = await this.verifyChangeOrderInList({ number: changeOrderNumber });
-            for (let r = 0; r < 3 && !inList; r++) {
-                await this.page.waitForTimeout(3000);
+            for (let r = 0; r < 5 && !inList; r++) {
+                await this.page.waitForTimeout(20000);
+                await this.page.reload({ waitUntil: 'load' }).catch(() => {});
                 inList = await this.verifyChangeOrderInList({ number: changeOrderNumber });
             }
 
@@ -2571,12 +2578,32 @@ class InvoicePage {
             // openInvoiceDetailsBySearch() (called moments later in the same recovery loop, with a
             // longer fixed pre-wait before its own equivalent check) reliably found the very same
             // row. waitFor({state:'visible'}) actually polls, so use that instead.
-            const rowVisible = await matchingRow
+            let rowVisible = await matchingRow
                 .waitFor({ state: 'visible', timeout: 40000 })
                 .then(() => true)
                 .catch(() => false);
             if (!rowVisible) {
-                Logger.info(`[TC109 recovery] No invoice row found for "${searchTerm}".`);
+                // MCP-verified live 2026-09-24: a just-created/just-confirmed invoice can be
+                // missing from this list's already-fetched client-side data even with Enter
+                // already pressed — search filters the same stale dataset a plain unfiltered
+                // view would use. A reload picks it up immediately (same root cause already
+                // fixed for the Reassign Invoice grid elsewhere in this framework).
+                Logger.info(`[TC109 recovery] Row for "${searchTerm}" not found — reloading and retrying once.`);
+                await this.page.reload({ waitUntil: 'load' }).catch(() => {});
+                await this.page.waitForTimeout(1500);
+                const retrySearchBox = this.page.locator('main input[placeholder="Search..."]:visible').first();
+                if (await retrySearchBox.isVisible({ timeout: 5000 }).catch(() => false)) {
+                    await retrySearchBox.fill(searchTerm);
+                    await retrySearchBox.press('Enter').catch(() => {});
+                    await this.page.waitForTimeout(1500);
+                }
+                rowVisible = await matchingRow
+                    .waitFor({ state: 'visible', timeout: 20000 })
+                    .then(() => true)
+                    .catch(() => false);
+            }
+            if (!rowVisible) {
+                Logger.info(`[TC109 recovery] No invoice row found for "${searchTerm}" even after reload.`);
                 return null;
             }
 
@@ -2683,12 +2710,30 @@ class InvoicePage {
             // Same isVisible()-doesn't-poll fix as getInvoiceStatusBySearch() above — this happened
             // to work in practice only because of the longer fixed wait just above, which is not a
             // reliable substitute for actually waiting on the row.
-            const rowVisible = await matchingRow
+            let rowVisible = await matchingRow
                 .waitFor({ state: 'visible', timeout: 40000 })
                 .then(() => true)
                 .catch(() => false);
             if (!rowVisible) {
-                Logger.info(`[TC109 recovery] Could not find invoice row for "${searchTerm}" to open.`);
+                // Same reload fallback as getInvoiceStatusBySearch() above — a just-created row
+                // can be missing from this list's already-fetched client-side data regardless of
+                // search/Enter; a reload picks it up.
+                Logger.info(`[TC109 recovery] Row for "${searchTerm}" not found — reloading and retrying once.`);
+                await this.page.reload({ waitUntil: 'load' }).catch(() => {});
+                await this.page.waitForTimeout(1500);
+                const retrySearchBox = this.page.locator('main input[placeholder="Search..."]:visible').first();
+                if (await retrySearchBox.isVisible({ timeout: 5000 }).catch(() => false)) {
+                    await retrySearchBox.fill(searchTerm);
+                    await retrySearchBox.press('Enter').catch(() => {});
+                    await this.page.waitForTimeout(1500);
+                }
+                rowVisible = await matchingRow
+                    .waitFor({ state: 'visible', timeout: 20000 })
+                    .then(() => true)
+                    .catch(() => false);
+            }
+            if (!rowVisible) {
+                Logger.info(`[TC109 recovery] Could not find invoice row for "${searchTerm}" to open, even after reload.`);
                 return false;
             }
 

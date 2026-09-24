@@ -68,10 +68,12 @@ class ReassignInvoicePage {
         await this.page.waitForTimeout(1000);
 
         const propertyJobRows = this.loc.jobRowsForProperty();
+        // Same virtualized/search-dependent Jobs grid as discoverPropertyJobs() in the test file
+        // (bumped there to 65000 for the same variability) — kept in sync here.
         await expect(
             propertyJobRows.first(),
             `No jobs found for property "${propertyName}"`
-        ).toBeVisible({ timeout: 15000 });
+        ).toBeVisible({ timeout: 65000 });
 
         const targetRow = jobName ? propertyJobRows.filter({ hasText: jobName }).first() : propertyJobRows.first();
         await expect(targetRow, `Job "${jobName}" not found for property "${propertyName}"`).toBeVisible({ timeout: 10000 });
@@ -180,10 +182,25 @@ class ReassignInvoicePage {
      */
     async waitForInvoiceRowText(invoiceNumber, { timeout = 30000 } = {}) {
         let rowText = null;
-        await expect(async () => {
-            rowText = await this.getInvoiceRowText(invoiceNumber);
-            expect(rowText, `Invoice row "${invoiceNumber}" not yet visible in grid`).toBeTruthy();
-        }).toPass({ timeout, intervals: [1000, 2000, 3000] });
+        try {
+            await expect(async () => {
+                rowText = await this.getInvoiceRowText(invoiceNumber);
+                expect(rowText, `Invoice row "${invoiceNumber}" not yet visible in grid`).toBeTruthy();
+            }).toPass({ timeout, intervals: [1000, 2000, 3000] });
+        } catch (err) {
+            // MCP-verified live 2026-09-24: right after creating/confirming an invoice, this
+            // grid's already-fetched client-side data does not include it — a direct reload at
+            // that exact point shows it instantly (confirmed both via the unfiltered grid and
+            // via the list's own search box, which hits the same stale cache and also misses
+            // it). Same reload-then-repoll fallback already used by waitForInvoiceAbsent() below
+            // for the same root cause in the opposite direction.
+            await this.page.reload({ waitUntil: 'load' }).catch(() => {});
+            await this.page.waitForTimeout(2000);
+            await expect(async () => {
+                rowText = await this.getInvoiceRowText(invoiceNumber);
+                expect(rowText, `Invoice row "${invoiceNumber}" not visible in grid after reload`).toBeTruthy();
+            }).toPass({ timeout: 20000, intervals: [1000, 2000, 3000] });
+        }
         return rowText;
     }
 

@@ -470,10 +470,12 @@ test.describe('retainage Contract', () => {
     });
 
     test('TC336 @regression @retainage : Verify Invoice row is present with correct Date/Withheld/Released/Outstanding and expands successfully', async () => {
+        // Bumped from the 280000ms default: waitForRetainageTabInvoiceRow's real-backend-latency
+        // retry budget (MCP-verified 2026-09-24) can legitimately take several minutes.
+        test.setTimeout(500000);
         await retainagePage.gotoContractRetainageTab(fixture.jobId);
 
-        const invoiceRow = retainagePage.getRetainageTabInvoiceRow(`Invoice #${resolvedInvoiceId}`);
-        await expect(invoiceRow, 'Invoice present on Retainage tab').toBeVisible({ timeout: 55000 });
+        const invoiceRow = await retainagePage.waitForRetainageTabInvoiceRow(fixture.jobId, `Invoice #${resolvedInvoiceId}`);
 
         const before = await retainagePage.getRetainageTabRowValues(invoiceRow);
         Logger.info(`Invoice row before expand: ${JSON.stringify(before)}`);
@@ -492,9 +494,9 @@ test.describe('retainage Contract', () => {
     });
 
     test('TC337 @regression @retainage : Verify every available line item under the invoice is expanded and has no further nested rows', async () => {
+        test.setTimeout(500000);
         await retainagePage.gotoContractRetainageTab(fixture.jobId);
-        const invoiceRow = retainagePage.getRetainageTabInvoiceRow(`Invoice #${resolvedInvoiceId}`);
-        await expect(invoiceRow).toBeVisible({ timeout: 55000 });
+        const invoiceRow = await retainagePage.waitForRetainageTabInvoiceRow(fixture.jobId, `Invoice #${resolvedInvoiceId}`);
 
         await retainagePage.toggleRetainageTabRow(invoiceRow);
         await expect
@@ -509,8 +511,9 @@ test.describe('retainage Contract', () => {
     });
 
     test('TC338 @regression @retainage : Expanded line item shows correct Scope/Schedule of Value label and currency values', async () => {
+        test.setTimeout(500000);
         await retainagePage.gotoContractRetainageTab(fixture.jobId);
-        const invoiceRow = retainagePage.getRetainageTabInvoiceRow(`Invoice #${resolvedInvoiceId}`);
+        const invoiceRow = await retainagePage.waitForRetainageTabInvoiceRow(fixture.jobId, `Invoice #${resolvedInvoiceId}`);
         await retainagePage.toggleRetainageTabRow(invoiceRow);
 
         const lineItemRow = retainagePage.getRetainageTabLineItemRow(fixture.lineItem.scope, fixture.lineItem.scheduleOfValue);
@@ -533,8 +536,9 @@ test.describe('retainage Contract', () => {
     });
 
     test('TC339 @regression @retainage : Total row is correct and cross-checks against the expanded rows', async () => {
+        test.setTimeout(500000);
         await retainagePage.gotoContractRetainageTab(fixture.jobId);
-        const invoiceRow = retainagePage.getRetainageTabInvoiceRow(`Invoice #${resolvedInvoiceId}`);
+        const invoiceRow = await retainagePage.waitForRetainageTabInvoiceRow(fixture.jobId, `Invoice #${resolvedInvoiceId}`);
         await retainagePage.toggleRetainageTabRow(invoiceRow);
         const lineItemRow = retainagePage.getRetainageTabLineItemRow(fixture.lineItem.scope, fixture.lineItem.scheduleOfValue);
         await expect(lineItemRow).toBeVisible({ timeout: 8000 });
@@ -558,6 +562,7 @@ test.describe('retainage Contract', () => {
     });
 
     test('TC340 @regression @retainage : Withheld amount matches Invoice Amount x Retainage % from the invoice created earlier', async () => {
+        test.setTimeout(500000);
         await retainagePage.gotoInvoiceDetail(fixture.jobId, resolvedInvoiceId);
         await expect(loc.retainagePercentInput).toBeVisible({ timeout: 20000 });
         const overview = await retainagePage.getOverviewRetainageValues();
@@ -567,8 +572,7 @@ test.describe('retainage Contract', () => {
         Logger.info(`Invoice detail: grossAmount=${grossAmount}, retainagePercent=${retainagePercent}%, expectedWithheld=${expectedWithheld}`);
 
         await retainagePage.gotoContractRetainageTab(fixture.jobId);
-        const invoiceRow = retainagePage.getRetainageTabInvoiceRow(`Invoice #${resolvedInvoiceId}`);
-        await expect(invoiceRow).toBeVisible({ timeout: 55000 });
+        const invoiceRow = await retainagePage.waitForRetainageTabInvoiceRow(fixture.jobId, `Invoice #${resolvedInvoiceId}`);
         const retainageTabValues = await retainagePage.getRetainageTabRowValues(invoiceRow);
         const actualWithheld = RetainagePage.parseCurrency(retainageTabValues.withheld);
         const actualOutstanding = RetainagePage.parseCurrency(retainageTabValues.outstanding);
@@ -582,9 +586,9 @@ test.describe('retainage Contract', () => {
     });
 
     test('TC341 @regression @retainage : Currency formatting is correct for Withheld/Released/Outstanding', async () => {
+        test.setTimeout(500000);
         await retainagePage.gotoContractRetainageTab(fixture.jobId);
-        const invoiceRow = retainagePage.getRetainageTabInvoiceRow(`Invoice #${resolvedInvoiceId}`);
-        await expect(invoiceRow).toBeVisible({ timeout: 55000 });
+        const invoiceRow = await retainagePage.waitForRetainageTabInvoiceRow(fixture.jobId, `Invoice #${resolvedInvoiceId}`);
         await retainagePage.toggleRetainageTabRow(invoiceRow);
         const lineItemRow = retainagePage.getRetainageTabLineItemRow(fixture.lineItem.scope, fixture.lineItem.scheduleOfValue);
         await expect(lineItemRow).toBeVisible({ timeout: 55000 });
@@ -606,9 +610,9 @@ test.describe('retainage Contract', () => {
     });
 
     test('TC342 @regression @retainage : Expand/collapse persists data correctly with no UI corruption across repeated cycles', async () => {
+        test.setTimeout(500000);
         await retainagePage.gotoContractRetainageTab(fixture.jobId);
-        const invoiceRow = retainagePage.getRetainageTabInvoiceRow(`Invoice #${resolvedInvoiceId}`);
-        await expect(invoiceRow).toBeVisible({ timeout: 55000 });
+        const invoiceRow = await retainagePage.waitForRetainageTabInvoiceRow(fixture.jobId, `Invoice #${resolvedInvoiceId}`);
 
         for (let cycle = 1; cycle <= 2; cycle++) {
             await retainagePage.toggleRetainageTabRow(invoiceRow);
@@ -660,6 +664,7 @@ test.describe('retainage Contract', () => {
     });
 
     test('TC344 @regression @retainage : retainage-invoices API returns 200 with values matching the UI', async () => {
+        test.setTimeout(500000);
         let capturedResponse = null;
         const retainageInvoicesEndpoint = fixture.apiEndpoints.retainageInvoices.replace('{jobId}', fixture.jobId);
         page.on('response', async (response) => {
@@ -670,8 +675,7 @@ test.describe('retainage Contract', () => {
 
         const start = Date.now();
         await retainagePage.gotoContractRetainageTab(fixture.jobId);
-        const invoiceRow = retainagePage.getRetainageTabInvoiceRow(`Invoice #${resolvedInvoiceId}`);
-        await expect(invoiceRow).toBeVisible({ timeout: 55000 });
+        const invoiceRow = await retainagePage.waitForRetainageTabInvoiceRow(fixture.jobId, `Invoice #${resolvedInvoiceId}`);
         const elapsedMs = Date.now() - start;
 
         expect(capturedResponse, 'GET /api/jobs/{jobId}/retainage-invoices must have fired while loading the Retainage tab').not.toBeNull();
@@ -698,6 +702,7 @@ test.describe('retainage Contract', () => {
     });
 
     test('TC345 @regression @retainage : No console errors, page errors, or failed API responses on the Contract > Retainage tab', async () => {
+        test.setTimeout(500000);
         const consoleErrors = [];
         const pageErrors = [];
         const failedResponses = [];
@@ -710,8 +715,7 @@ test.describe('retainage Contract', () => {
         });
 
         await retainagePage.gotoContractRetainageTab(fixture.jobId);
-        const invoiceRow = retainagePage.getRetainageTabInvoiceRow(`Invoice #${resolvedInvoiceId}`);
-        await expect(invoiceRow).toBeVisible({ timeout: 55000 });
+        const invoiceRow = await retainagePage.waitForRetainageTabInvoiceRow(fixture.jobId, `Invoice #${resolvedInvoiceId}`);
         await retainagePage.toggleRetainageTabRow(invoiceRow);
         const lineItemRow = retainagePage.getRetainageTabLineItemRow(fixture.lineItem.scope, fixture.lineItem.scheduleOfValue);
         await expect(lineItemRow).toBeVisible({ timeout: 55000 });

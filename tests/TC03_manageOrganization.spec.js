@@ -475,11 +475,20 @@ test.describe('Manage Organization', () => {
     // the actual dynamic region is the correct fix rather than repeatedly bumping the
     // threshold: it still holds the surrounding chrome (nav, tabs, column headers) to a
     // real visual-regression check.
+    //
+    // MCP-verified live 2026-09-24: the mask selector above (`table.rt-TableRootTable tbody`)
+    // matches ZERO elements on the live page — the Users list was never an HTML <table> at
+    // all, it's a <revo-grid> (role="treegrid"). Playwright's `mask` silently no-ops when a
+    // selector matches nothing, so this mask has never actually been masking anything, which
+    // is exactly why the diff kept recurring despite this "fix" already being in place.
+    // Corrected to the grid's real row-data element (confirmed live via
+    // document.querySelectorAll('revogr-data[type="rgRow"]')), which still leaves the column
+    // headers/toolbar chrome unmasked for a real visual check.
     await expect(sharedPage.locator('.mantine-AppShell-main').first()).toHaveScreenshot(
       'organization-main-workspace.png',
       {
         ...ORGANIZATION_WORKSPACE_SCREENSHOT_OPTIONS,
-        mask: [sharedPage.locator('table.rt-TableRootTable tbody')],
+        mask: [sharedPage.locator('revogr-data[type="rgRow"]')],
       },
     );
     Logger.success('[TC34] ✅ Organization workspace visual snapshot passed');

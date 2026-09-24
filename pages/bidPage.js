@@ -24,7 +24,7 @@ class BidPage {
 
     async navigateToBidsPage() {
         Logger.step('Navigating to Bids list page...');
-        await this.page.goto(`${process.env.BASE_URL}/bids`, { waitUntil: 'load' });
+        await this.page.goto(`${process.env.BASE_URL}/bids`, { timeout : 60000, waitUntil: 'load' });
         await this.page.waitForTimeout(3000);
         await expect(this.page).toHaveURL(/\/bids$/);
         Logger.success('On Bids list page');

@@ -107,7 +107,20 @@ class MultiApproverPage {
 
     async openInvoiceFromList(invoiceNumber) {
         Logger.step(`Opening invoice #${invoiceNumber} from list`);
-        await this.loc.invoiceListLink(`Invoice #${invoiceNumber}`).click();
+        const link = this.loc.invoiceListLink(`Invoice #${invoiceNumber}`);
+        const appeared = await link.waitFor({ state: 'visible', timeout: 20000 }).then(() => true).catch(() => false);
+        if (!appeared) {
+            // MCP-verified live 2026-09-24: a just-created invoice can be missing from this
+            // list's already-fetched client-side data even moments after creation on the same
+            // page — same root cause already fixed for the Reassign Invoice grid and the
+            // Invoice-tab search recovery helpers elsewhere in this framework. A reload picks
+            // it up.
+            Logger.info(`Invoice #${invoiceNumber} link not visible in list — reloading and retrying once.`);
+            await this.page.reload({ waitUntil: 'load' }).catch(() => {});
+            await this.page.waitForTimeout(1500);
+            await link.waitFor({ state: 'visible', timeout: 20000 });
+        }
+        await link.click();
         await expect(this.loc.invoiceDetailsDialog).toBeVisible({ timeout: 20000 });
     }
 

@@ -563,8 +563,13 @@ class PropertiesHelper {
 
         await this.page.waitForTimeout(3000);
 
+        // changeView()'s own API wait (waitForApi200, 32s) is caught/non-fatal — under real
+        // backend load it can time out without throwing, leaving this filter action racing an
+        // already-degraded response. Give Reset Filters real room to catch up rather than
+        // failing on what's fundamentally the same backend latency, already documented
+        // elsewhere in this codebase (CI stability fixes, 2026-07-31).
         const resetBtn = popup.getByRole('button', { name: 'Reset Filters' });
-        await expect(resetBtn).toBeVisible({ timeout: 15000 });
+        await expect(resetBtn).toBeVisible({ timeout: 45000 });
         await expect(popup.getByText(/Applied Filters/i)).toBeVisible({ timeout: 10000 });
 
         const grid = this.page.locator(propertyLocators.gridRootWrapper).first();

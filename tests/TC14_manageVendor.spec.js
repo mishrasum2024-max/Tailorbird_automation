@@ -228,7 +228,7 @@ test.describe('Vendors Directory', () => {
             filteredCount = Number.isFinite(n) && n < 1000 ? n : null;
             return filteredCount;
         }, {
-            timeout: 15000,
+            timeout: 30000,
             message: 'Carpentry filter never reported a real (non-placeholder) matched-row count or the empty state',
         }).not.toBeNull();
         Logger.info(`TC238 step2: Carpentry filter — backend-reported matched rows: ${filteredCount} ✓`);

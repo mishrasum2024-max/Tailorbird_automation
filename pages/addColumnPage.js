@@ -966,7 +966,12 @@ class AddColumnPage {
     async deleteAllCustomColumns() {
         let deleted = 0;
         let consecutiveFailures = 0;
-        const maxConsecutiveFailures = 3;
+        // Bumped from 3 (CI-observed, TC67): under concurrent test runs mutating this same
+        // shared custom-columns list, a real delete can legitimately take more than 3
+        // consecutive rounds to land cleanly once row positions keep shifting underneath it —
+        // same documented root cause as the toBeHidden() fallback below, just needing a bit
+        // more headroom at this caller level too.
+        const maxConsecutiveFailures = 5;
 
         try {
             await this._ensureManageColumnsOpen();

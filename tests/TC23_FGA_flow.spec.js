@@ -377,7 +377,11 @@ test.describe.serial("FGA", () => {
     let sharedEmail = null;
 
     test.beforeAll(async ({ browser }) => {
-        test.setTimeout(400000);
+        // Bumped from 400000: this hook waits on a real external Mailinator inbox round-trip
+        // (documented flakiness source — see the yopmail->mailinator migration notes) on top of
+        // the full admin invite + activation flow; 400s was observed to not always be enough
+        // under real mail-delivery delay.
+        test.setTimeout(600000);
         test.skip(!dashboardLandingUrl, "DASHBOARD_URL or fixture dashboard required");
 
         const adminContext = await browser.newContext({ storageState: "sessionState.json" });

@@ -194,8 +194,29 @@ class VendorProfilePage {
         await submitButton.click();
         await expect(dialog, 'FAIL: "Add vendor user" modal did not close after a valid submission.').toBeHidden({ timeout: 15000 });
 
+        // MCP-verified live 2026-09-24: two independent, real causes can hide the new row right
+        // after creation — (1) genuine backend/list-refresh latency (confirmed live: the row was
+        // absent immediately after close but present ~20s+ later), and (2) this Users grid is a
+        // virtualized revo-grid that only mounts ~9 rows at a time, so once the list grows past
+        // that, a row can be fully present in the data but simply not rendered without a scroll
+        // (confirmed live via a direct GET /api/bird-table fetch showing complete data while the
+        // DOM only showed a subset). Poll for up to 60s (this app's real observed AI/backend
+        // latency elsewhere), re-scrolling the grid on every attempt so virtualization can never
+        // mask the result regardless of timing.
         const newRow = healingLocator(userRowByEmailStrategies(this.page, user.email)).first();
-        await expect(newRow, `FAIL: newly created user "${user.email}" not visible in the Users table.`).toBeVisible({ timeout: 15000 });
+        await expect
+            .poll(
+                async () => {
+                    await this.#scrollUsersGridToBottom();
+                    return await newRow.isVisible().catch(() => false);
+                },
+                {
+                    timeout: 60_000,
+                    intervals: [500, 1000, 2000, 3000],
+                    message: `FAIL: newly created user "${user.email}" not visible in the Users table.`,
+                },
+            )
+            .toBe(true);
         Logger.success(`VendorProfilePage: user "${user.email}" created and visible in the Users table.`);
     }
 
@@ -229,8 +250,46 @@ class VendorProfilePage {
         await search.fill('');
         await search.press('Enter').catch(() => {});
         await this.page.waitForTimeout(1000);
-        await expect(row, `FAIL: user row for "${stillVisibleEmail}" did not reappear after clearing the search.`).toBeVisible({ timeout: 10000 });
+        // MCP-verified live 2026-09-24: after clearing the search (and even after a hard reload
+        // with no search involved at all), this row can be genuinely absent from the rendered
+        // DOM while still fully present in the underlying data — confirmed via a direct
+        // GET /api/bird-table fetch returning the complete user list. Root cause is client-side
+        // vertical virtualization on this revo-grid (only ~9 rows mount at a time), not a data or
+        // timing issue — a scroll (verified live via the same shadow-DOM-aware recursive pattern
+        // used for horizontal grid scrolling elsewhere in this framework) is required to mount
+        // it, so poll while re-scrolling rather than just waiting longer.
+        await expect
+            .poll(
+                async () => {
+                    await this.#scrollUsersGridToBottom();
+                    return await row.isVisible().catch(() => false);
+                },
+                {
+                    timeout: 60_000,
+                    intervals: [500, 1000, 2000, 3000],
+                    message: `FAIL: user row for "${stillVisibleEmail}" did not reappear after clearing the search.`,
+                },
+            )
+            .toBe(true);
         Logger.success('VendorProfilePage: Users search no-match + clear verified.');
+    }
+
+    /** Scrolls the (revo-grid, shadow-DOM) Users grid to its bottom so rows outside the default
+     * virtualized render window get mounted. Mirrors addColumnPage.js's _scrollGridRight()
+     * horizontal-scroll pattern (MCP-verified 2026-09-15/23), adapted for vertical scroll and
+     * MCP-verified live 2026-09-24 against this Users grid specifically. */
+    async #scrollUsersGridToBottom() {
+        await this.page.evaluate(() => {
+            const scrollNode = (node) => {
+                if (!node) return;
+                if (node.scrollHeight > node.clientHeight + 5) {
+                    node.scrollTop = node.scrollHeight;
+                }
+                for (const child of node.children || []) scrollNode(child);
+                if (node.shadowRoot) scrollNode(node.shadowRoot);
+            };
+            document.querySelectorAll('revo-grid, [role="treegrid"], revogr-viewport-scroll').forEach(scrollNode);
+        }).catch(() => {});
     }
 
     /** Opens the row-delete confirmation for the user matching `email`, asserts its title and
