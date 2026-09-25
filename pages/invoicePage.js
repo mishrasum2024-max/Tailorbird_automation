@@ -2,6 +2,7 @@ const { expect } = require("@playwright/test");
 const { Logger } = require('../utils/logger');
 const { invoiceLocators } = require('../locators/invoiceLocator');
 const { changeOrderLocators } = require('../locators/changeOrderLocator');
+const { resetActiveFilters } = require('../utils/filterResetHelper');
 
 class InvoicePage {
     /**
@@ -83,6 +84,7 @@ class InvoicePage {
             await this.page.goto(jobUrl, { waitUntil: 'load' });
             await expect(this.page).toHaveURL(/tab=invoices/);
             await this.page.waitForTimeout(1000);
+            await resetActiveFilters(this.page);
             Logger.success('Navigated to Invoice tab successfully.');
         } catch (error) {
             Logger.error(`Error navigating to invoices: ${error.message}`);
@@ -313,6 +315,7 @@ class InvoicePage {
             await this.page.waitForTimeout(1000);
             await this.page.waitForURL(/tab=invoices/);
             await this.page.waitForTimeout(2000);
+            await resetActiveFilters(this.page);
             Logger.success('Navigated to Invoice tab successfully.');
         } catch (error) {
             Logger.error(`Error in navigateToInvoiceTab: ${error.message}`);
@@ -367,6 +370,7 @@ class InvoicePage {
 
             await this.page.waitForLoadState('load');
             await this.page.waitForTimeout(2000);
+            await resetActiveFilters(this.page);
             Logger.success('Navigated to Change Order tab successfully.');
         } catch (error) {
             Logger.error(`Error in navigateToChangeOrderTab: ${error.message}`);
@@ -981,6 +985,9 @@ class InvoicePage {
                     const search = this.page.getByPlaceholder('Search...').first();
                     if (await search.isVisible({ timeout: 2000 }).catch(() => false)) {
                         await search.fill(String(searchText));
+                        // Same Invoice/Change Order listing already MCP-verified live
+                        // 2026-09-23 to need Enter to filter.
+                        await search.press('Enter').catch(() => {});
                         await this.page.waitForLoadState('load');
                         await this.page.waitForTimeout(1200);
                     }
@@ -1214,9 +1221,16 @@ class InvoicePage {
             await this.page.waitForTimeout(2000);
 
             // Verify it appears in list by number (most reliable across Draft/Approved).
+            // MCP-verified live 2026-09-24: a just-created record can take real backend
+            // propagation time (observed up to several minutes for a sibling flow — invoice
+            // rows on the Retainage tab) before it's fetchable at all, independent of search or
+            // reload timing alone. A plain re-check of the same page for a few seconds doesn't
+            // cover that; reload between attempts to force a genuinely fresh fetch, and space
+            // attempts out to give real wall-clock time to pass.
             let inList = await this.verifyChangeOrderInList({ number: changeOrderNumber });
-            for (let r = 0; r < 3 && !inList; r++) {
-                await this.page.waitForTimeout(3000);
+            for (let r = 0; r < 5 && !inList; r++) {
+                await this.page.waitForTimeout(20000);
+                await this.page.reload({ waitUntil: 'load' }).catch(() => {});
                 inList = await this.verifyChangeOrderInList({ number: changeOrderNumber });
             }
 
@@ -1381,6 +1395,9 @@ class InvoicePage {
             await this.page.waitForLoadState('load');
             await this.page.waitForTimeout(400);
             await search.fill(String(changeOrderNumber));
+            // Same Invoice/Change Order listing already MCP-verified live 2026-09-23 to
+            // need Enter to filter.
+            await search.press('Enter').catch(() => {});
             await this.page.waitForLoadState('load');
             await this.page.waitForTimeout(1500);
         }
@@ -2544,6 +2561,9 @@ class InvoicePage {
                 await searchBox.fill('');
                 await this.page.waitForTimeout(300);
                 await searchBox.fill(searchTerm);
+                // Same Invoice/Change Order listing already MCP-verified live 2026-09-23
+                // to need Enter to filter.
+                await searchBox.press('Enter').catch(() => {});
                 await this.page.waitForLoadState('load').catch(() => { });
                 await this.page.waitForTimeout(2000);
             }
@@ -2558,12 +2578,32 @@ class InvoicePage {
             // openInvoiceDetailsBySearch() (called moments later in the same recovery loop, with a
             // longer fixed pre-wait before its own equivalent check) reliably found the very same
             // row. waitFor({state:'visible'}) actually polls, so use that instead.
-            const rowVisible = await matchingRow
+            let rowVisible = await matchingRow
                 .waitFor({ state: 'visible', timeout: 40000 })
                 .then(() => true)
                 .catch(() => false);
             if (!rowVisible) {
-                Logger.info(`[TC109 recovery] No invoice row found for "${searchTerm}".`);
+                // MCP-verified live 2026-09-24: a just-created/just-confirmed invoice can be
+                // missing from this list's already-fetched client-side data even with Enter
+                // already pressed — search filters the same stale dataset a plain unfiltered
+                // view would use. A reload picks it up immediately (same root cause already
+                // fixed for the Reassign Invoice grid elsewhere in this framework).
+                Logger.info(`[TC109 recovery] Row for "${searchTerm}" not found — reloading and retrying once.`);
+                await this.page.reload({ waitUntil: 'load' }).catch(() => {});
+                await this.page.waitForTimeout(1500);
+                const retrySearchBox = this.page.locator('main input[placeholder="Search..."]:visible').first();
+                if (await retrySearchBox.isVisible({ timeout: 5000 }).catch(() => false)) {
+                    await retrySearchBox.fill(searchTerm);
+                    await retrySearchBox.press('Enter').catch(() => {});
+                    await this.page.waitForTimeout(1500);
+                }
+                rowVisible = await matchingRow
+                    .waitFor({ state: 'visible', timeout: 20000 })
+                    .then(() => true)
+                    .catch(() => false);
+            }
+            if (!rowVisible) {
+                Logger.info(`[TC109 recovery] No invoice row found for "${searchTerm}" even after reload.`);
                 return null;
             }
 
@@ -2656,6 +2696,9 @@ class InvoicePage {
                 await searchBox.fill('');
                 await this.page.waitForTimeout(300);
                 await searchBox.fill(searchTerm);
+                // Same Invoice/Change Order listing already MCP-verified live 2026-09-23
+                // to need Enter to filter.
+                await searchBox.press('Enter').catch(() => {});
                 await this.page.waitForLoadState('load').catch(() => { });
                 await this.page.waitForTimeout(5000);
             }
@@ -2667,12 +2710,30 @@ class InvoicePage {
             // Same isVisible()-doesn't-poll fix as getInvoiceStatusBySearch() above — this happened
             // to work in practice only because of the longer fixed wait just above, which is not a
             // reliable substitute for actually waiting on the row.
-            const rowVisible = await matchingRow
+            let rowVisible = await matchingRow
                 .waitFor({ state: 'visible', timeout: 40000 })
                 .then(() => true)
                 .catch(() => false);
             if (!rowVisible) {
-                Logger.info(`[TC109 recovery] Could not find invoice row for "${searchTerm}" to open.`);
+                // Same reload fallback as getInvoiceStatusBySearch() above — a just-created row
+                // can be missing from this list's already-fetched client-side data regardless of
+                // search/Enter; a reload picks it up.
+                Logger.info(`[TC109 recovery] Row for "${searchTerm}" not found — reloading and retrying once.`);
+                await this.page.reload({ waitUntil: 'load' }).catch(() => {});
+                await this.page.waitForTimeout(1500);
+                const retrySearchBox = this.page.locator('main input[placeholder="Search..."]:visible').first();
+                if (await retrySearchBox.isVisible({ timeout: 5000 }).catch(() => false)) {
+                    await retrySearchBox.fill(searchTerm);
+                    await retrySearchBox.press('Enter').catch(() => {});
+                    await this.page.waitForTimeout(1500);
+                }
+                rowVisible = await matchingRow
+                    .waitFor({ state: 'visible', timeout: 20000 })
+                    .then(() => true)
+                    .catch(() => false);
+            }
+            if (!rowVisible) {
+                Logger.info(`[TC109 recovery] Could not find invoice row for "${searchTerm}" to open, even after reload.`);
                 return false;
             }
 

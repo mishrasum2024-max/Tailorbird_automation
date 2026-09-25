@@ -3,6 +3,7 @@ const { unitInteriorLocators, unitInteriorElementStrategies } = require('../loca
 const { healingLocator } = require('../utils/locatorHealer');
 const { Logger } = require('../utils/logger');
 const { InteractionLogger } = require('../utils/InteractionLogger');
+const { resetActiveFilters } = require('../utils/filterResetHelper');
 
 /** Fixed test job. JOB_NAME is used for searching; JOB_ID only for URL verification. */
 const JOB_NAME = "Automation Job, please don't delete it";
@@ -35,6 +36,7 @@ class UnitInteriorPage {
         await navItem.click();
         await this.page.waitForURL(/\/jobs/, { timeout: 20000 });
         await this.page.waitForTimeout(2000);
+        await resetActiveFilters(this.page);
         Logger.success('[UnitInterior] Jobs listing page loaded');
     }
 
@@ -48,6 +50,8 @@ class UnitInteriorPage {
         await searchInput.waitFor({ state: 'visible', timeout: 30000 });
         InteractionLogger.logFormFill('Jobs search input', JOB_NAME);
         await searchInput.fill(JOB_NAME);
+        // Same Jobs listing already MCP-verified live 2026-09-23 to need Enter to filter.
+        await searchInput.press('Enter').catch(() => {});
         await this.page.waitForTimeout(1500);
 
         // Find the row that matches the exact job name and click its ID link
@@ -137,12 +141,15 @@ class UnitInteriorPage {
             document.querySelectorAll('main, .mantine-AppShell-navbar').forEach(el => { el.style.zoom = '70%'; });
         });
         await this.page.waitForTimeout(2000);
+        await resetActiveFilters(this.page);
 
         Logger.info(`[UnitInterior] Searching for job: "${jobName}"`);
         const searchInput = this.page.locator('input[placeholder="Search..."]').first();
         await searchInput.waitFor({ state: 'visible', timeout: 30000 });
         InteractionLogger.logFormFill('Jobs search input', jobName);
         await searchInput.fill(jobName);
+        // Same Jobs listing already MCP-verified live 2026-09-23 to need Enter to filter.
+        await searchInput.press('Enter').catch(() => {});
         await this.page.waitForTimeout(1500);
 
         const matchingRow = this.page

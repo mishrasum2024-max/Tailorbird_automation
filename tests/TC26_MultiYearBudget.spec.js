@@ -19,8 +19,15 @@ let page, approvalJob, budgetJob, mybJob;
 let propertyName, budgetItemName, startYear, endYear, propertyId, timestamp;
 let negPropertyName;
 
-test.describe('Multi-Year Budget', () => {
-    test.describe.configure({ mode: 'serial', retries: 1 });
+test.describe.serial('Multi-Year Budget', () => {
+    // Deliberately NOT `mode: 'serial'`: Playwright's serial mode skips every remaining
+    // test in the block the moment one test fails, which hid 24+ downstream tests behind
+    // a single upstream failure (e.g. TC391) even though most of them only depend on the
+    // property/budget-item/plan state created by TC386-390, not on TC391 itself passing.
+    // Dropping serial keeps the same in-file declaration order (this project's global
+    // `workers: 1` means tests still execute one at a time, in order) but lets every test
+    // attempt to run and report its own real pass/fail instead of being skipped outright.
+    test.describe.configure({ retries: 1 });
 
     test.beforeEach(async ({ page: p }) => {
         page = p;
@@ -35,7 +42,12 @@ test.describe('Multi-Year Budget', () => {
     });
 
     test('TC386 @multiYearBudget @sanity @regression @e2e : create a brand-new property', async () => {
-        test.setTimeout(120000);
+        // Bumped from 120000: createPropertyRobust's best-effort listing-visibility retry
+        // (waitForSlowDataWithReload, up to 3 reload attempts x 30s) can take up to ~90s on
+        // top of the form-fill steps — see its own doc comment in approvalPage.js for the
+        // MCP-verified root cause (client-side stale-cache on the Properties listing after
+        // creation) this is working around.
+        test.setTimeout(180000);
         timestamp = Date.now();
         propertyName = `TC26_MYBProp_${timestamp}`;
         budgetItemName = `MYB_Item_${timestamp}`;
@@ -43,7 +55,11 @@ test.describe('Multi-Year Budget', () => {
         endYear = 2036;
 
         Logger.step('TC386: Creating new property for Multi-Year Budget');
-        await approvalJob.createProperty(
+        // createPropertyRobust (new, additive ApprovalJob method) instead of createProperty:
+        // see its doc comment for the MCP-verified root cause of TC386's failure (a
+        // client-side stale-cache bug on the Properties listing, not a locator issue).
+        // createProperty() itself is untouched — still used by 13 other files.
+        await approvalJob.createPropertyRobust(
             propertyName,
             'Domestic Terminal, College Park, GA 30337, USA',
             'College Park',
@@ -416,9 +432,15 @@ test.describe('Multi-Year Budget', () => {
     });
 
     test('TC411 @multiYearBudget @regression : a plan created with zero budget items shows a distinct empty state', async () => {
-        test.setTimeout(150000);
+        // Bumped from 150000: createPropertyRobust's best-effort listing-visibility retry can
+        // take up to ~90s on top of both the property-creation form-fill AND this test's own
+        // plan-initialization steps afterward — see TC386's identical timeout comment above.
+        test.setTimeout(210000);
         negPropertyName = `TC411_NegProp_${Date.now()}`;
-        await approvalJob.createProperty(
+        // createPropertyRobust (new, additive ApprovalJob method) instead of createProperty:
+        // same MCP-verified client-side stale-cache bug that broke TC386 — see its doc
+        // comment in approvalPage.js. createProperty() itself is untouched.
+        await approvalJob.createPropertyRobust(
             negPropertyName,
             'Domestic Terminal, College Park, GA 30337, USA',
             'College Park',

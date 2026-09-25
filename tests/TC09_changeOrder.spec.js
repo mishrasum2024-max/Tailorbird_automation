@@ -382,7 +382,9 @@ test.describe('Change Order tab', () => {
         test.describe.configure({ retries: 1 });
 
         test('TC145 @regression @changeOrder @changeOrderAndinvoice : Verify change order creation with Current Contract Value and Revised Contract Amount', async ({}, testInfo) => {
-            testInfo.setTimeout(180000);
+            // Bumped from 180000: createCompleteChangeOrder's list-verification retry can now
+            // take longer (reload-based, spaced-out backend-latency retries).
+            testInfo.setTimeout(300000);
             Logger.step('Creating complete change order with all fields...');
             await page.waitForLoadState('load');
             await page.waitForTimeout(5000);

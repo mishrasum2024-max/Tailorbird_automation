@@ -129,11 +129,16 @@ class ImagesPage {
 
     async searchImages(text) {
         await this.loc.searchInput.fill(text);
+        // MCP-verified live 2026-09-23: this listing does not filter on input alone —
+        // confirmed live with a non-matching search term that the grid stays fully
+        // unfiltered until Enter is pressed.
+        await this.loc.searchInput.press('Enter').catch(() => {});
         await this.page.waitForTimeout(1200);
     }
 
     async clearSearch() {
         await this.loc.searchInput.fill('');
+        await this.loc.searchInput.press('Enter').catch(() => {});
         await this.page.waitForTimeout(800);
     }
 

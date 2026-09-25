@@ -24,7 +24,7 @@ class BidPage {
 
     async navigateToBidsPage() {
         Logger.step('Navigating to Bids list page...');
-        await this.page.goto(`${process.env.BASE_URL}/bids`, { waitUntil: 'load' });
+        await this.page.goto(`${process.env.BASE_URL}/bids`, { timeout : 60000, waitUntil: 'load' });
         await this.page.waitForTimeout(3000);
         await expect(this.page).toHaveURL(/\/bids$/);
         Logger.success('On Bids list page');
@@ -712,7 +712,11 @@ class BidPage {
         Logger.info('"Next: Select Documents" correctly hidden before vendor selection');
 
         // Search for vendor
-        await loc.vendorSearchInput.fill(vendorData.searchTerm);
+        // MCP-verified live 2026-09-23: a plain .fill() does not trigger this dialog's
+        // search at all (grid stays fully unfiltered) — it needs real per-character
+        // keystroke events (pressSequentially) followed by Enter to actually filter.
+        await loc.vendorSearchInput.pressSequentially(vendorData.searchTerm);
+        await loc.vendorSearchInput.press('Enter').catch(() => {});
         await this.page.waitForTimeout(1000);
         Logger.info(`Searched for "${vendorData.searchTerm}"`);
 
@@ -774,9 +778,10 @@ class BidPage {
     /**
      * Same "Send to Vendors" flow as assertSendToVendorsFlow() above (that method is left
      * completely unmodified), but disambiguates the target vendor row by its exact contact
-     * email in addition to name. MCP-verified live 2026-09-14: this org has MULTIPLE vendors
-     * literally named "sumit corp" — one with contact "sumit" / oct30sumit@yopmail.com, another
-     * with contact "Tailorbird test" / admin_1781257675038@yopmail.com. Matching by name alone
+     * email in addition to name. MCP-verified live 2026-09-22: only ONE vendor org is named
+     * exactly "sumit corp" (contact "QA Automation User" / qa.vendor.user.1789477137786@yopmail.com),
+     * but a name search also fuzzy-matches a differently-named "sumit corp1" (contact
+     * "Tailorbird test" / admin_1781257675038@yopmail.com) — matching by name alone
      * (as assertSendToVendorsFlow does, via the first checkbox found) can silently check the
      * WRONG vendor's box if list ordering ever shifts. The name-panel row and the details panel
      * row (which holds the email) share the same `data-rgrow` index (MCP/DOM-verified), so the
@@ -795,7 +800,11 @@ class BidPage {
         Logger.info('Dialog "Send Bid to Vendors" open');
 
         await expect(loc.vendorSearchInput).toBeVisible({ timeout: 15000 });
-        await loc.vendorSearchInput.fill(vendorData.searchTerm);
+        // MCP-verified live 2026-09-23: a plain .fill() does not trigger this dialog's
+        // search at all (grid stays fully unfiltered) — it needs real per-character
+        // keystroke events (pressSequentially) followed by Enter to actually filter.
+        await loc.vendorSearchInput.pressSequentially(vendorData.searchTerm);
+        await loc.vendorSearchInput.press('Enter').catch(() => {});
         await this.page.waitForTimeout(1000);
         Logger.info(`Searched for "${vendorData.searchTerm}"`);
 

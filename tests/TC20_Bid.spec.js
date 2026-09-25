@@ -60,7 +60,11 @@ test.describe('Verify Bids', () => {
         await setupPage.waitForTimeout(1500);
         await ensureLeftPanelExpanded(setupPage);
         await prop.goToProperties();
-        await prop.createProperty(
+        // createPropertyRobust (existing, additive PropertiesHelper method — pages/properties.js)
+        // instead of createProperty: same MCP-verified client-side stale-cache bug on the
+        // Properties listing after in-app navigation, already root-caused and fixed there.
+        // createProperty() itself is untouched.
+        await prop.createPropertyRobust(
             propertyName,
             'Domestic Terminal, College Park, GA 30337, USA',
             'College Park', 'GA', '30337',
@@ -623,12 +627,22 @@ test.describe('Verify Bids', () => {
         Logger.success('TC454: Bid book table verified — reflects the CSV data given in the prompt');
 
         // ── Send invitation to "sumit corp" — hardcoded per requirement, independent of
-        // data/bidData.json drift. Disambiguated by email (oct30sumit@yopmail.com): this org
-        // has MULTIPLE vendors named "sumit corp" (MCP-verified live), so matching by name
-        // alone is not bulletproof — assertSendToVendorsFlowByEmail() (new method, does not
-        // alter the existing assertSendToVendorsFlow()) targets the exact contact email. ────
+        // data/bidData.json drift. Disambiguated by email — assertSendToVendorsFlowByEmail()
+        // (new method, does not alter the existing assertSendToVendorsFlow()) targets the
+        // exact contact email rather than just the name.
+        //
+        // MCP-verified live (2026-09-22): the vendor directory (`vendor_organization`, 14,541
+        // rows) has exactly ONE org named exactly "sumit corp" (id 237). Its "Primary Contact
+        // Email" — the email actually shown/searched in the admin-side Send to Vendors dialog —
+        // is qa.vendor.user.1789477137786@yopmail.com, NOT oct30sumit@yopmail.com. Confirmed via
+        // the ai_bid_vendor join for a bid this exact vendor org (vendor_id 237) already
+        // accepted/submitted while logged in as oct30sumit@yopmail.com: that login is simply a
+        // different individual user under the same "sumit corp" vendor org, not the org's own
+        // designated Primary Contact — a legitimate many-users-per-org relationship, not a bug.
+        // The previous oct30sumit@yopmail.com value here could never match any admin-side
+        // directory row, which is what made this assertion time out.
         const expectedVendorName = 'sumit corp';
-        const expectedVendorEmail = 'oct30sumit@yopmail.com';
+        const expectedVendorEmail = 'qa.vendor.user.1789477137786@yopmail.com';
         Logger.step(`TC454: Sending bid invitation to "${expectedVendorName}" (${expectedVendorEmail})`);
         await bidPage.assertSendToVendorsFlowByEmail({
             searchTerm: expectedVendorName,

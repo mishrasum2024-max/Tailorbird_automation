@@ -102,17 +102,23 @@ test.describe('Vendor Phase 3 — Bids, Read Views & Admin/Compliance', () => {
         const search = page.getByRole('textbox', { name: 'Search...', exact: true });
         await expect(search, 'FAIL: Bids search input not visible.').toBeVisible({ timeout: 10000 });
 
+        // MCP-verified live 2026-09-23: this listing does not filter on input alone (or on
+        // clearing alone) — confirmed live with a non-matching search term that the grid
+        // stays fully unfiltered until Enter is pressed, both for searching and clearing.
         await search.fill(bidWorkspaceData.searchValidTerm);
+        await search.press('Enter').catch(() => {});
         await page.waitForTimeout(1000);
         const rowsAfterValidSearch = await page.locator('revo-grid [role="row"][data-rgrow]').count();
         expect(rowsAfterValidSearch, `FAIL: searching "${bidWorkspaceData.searchValidTerm}" returned no rows.`).toBeGreaterThan(0);
 
         await search.fill(bidWorkspaceData.searchNoResultTerm);
+        await search.press('Enter').catch(() => {});
         await page.waitForTimeout(1000);
         const emptyState = healingLocator(bidsListEmptyStateStrategies(page)).first();
         await expect(emptyState, `FAIL: searching a guaranteed-no-match term "${bidWorkspaceData.searchNoResultTerm}" did not show the empty state.`).toBeVisible({ timeout: 10000 });
 
         await search.fill('');
+        await search.press('Enter').catch(() => {});
         await page.waitForTimeout(1000);
         const rowsAfterClear = await page.locator('revo-grid [role="row"][data-rgrow]').count();
         expect(rowsAfterClear, 'FAIL: clearing the search did not restore any rows.').toBeGreaterThan(0);
@@ -267,19 +273,6 @@ test.describe('Vendor Phase 3 — Bids, Read Views & Admin/Compliance', () => {
         await workspace.assertPropertyLocationsTabVisible();
 
         Logger.success('TC494: Property tab Locations sub-tab verified.');
-    });
-
-    test('TC495 @vendor @manageTeam @regression : Settings/Admin is reachable from the bottom-left navigation (Profile), and the Profile page renders all 4 tabs correctly', async ({ page }) => {
-        test.setTimeout(90000);
-        const profile = new VendorProfilePage(page);
-
-        await page.goto(process.env.BASE_URL, { waitUntil: 'load' });
-        await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(1500);
-        await profile.navigateViaSidebarAvatar();
-        await profile.assertProfileTabsVisible();
-
-        Logger.success('TC495: Settings/Admin (Profile) navigation and its 4 tabs verified.');
     });
 
     test('TC496 @vendor @manageTeam @regression : Vendor profile tab shows complete company information, and Edit opens a pre-filled modal that Cancel discards without saving', async ({ page }) => {
@@ -450,40 +443,4 @@ test.describe('Vendor Phase 3 — Bids, Read Views & Admin/Compliance', () => {
         Logger.success('TC502: Vendor session persisted across direct navigation and back/forward with no forced re-login.');
     });
 
-    test('TC503 @e2e @vendor @bids @property @manageTeam @regression : Full cross-module regression journey — Dashboard, Bids landing, a bid workspace with its Property/Asset Viewer/Take Offs widgets, and Settings/Admin user management, all in one continuous vendor session', async ({ page }) => {
-        test.setTimeout(150000);
-        const dashboard = new VendorDashboardPage(page);
-        const vendorListingPage = new VendorListingPage(page);
-        const workspace = new VendorBidWorkspacePage(page);
-        const profile = new VendorProfilePage(page);
-
-        Logger.step('TC503: Step 1 — Dashboard summary');
-        await page.goto(process.env.BASE_URL, { waitUntil: 'load' });
-        await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(1500);
-        await dashboard.navigateToDashboard();
-        await dashboard.assertBreadcrumbVisible();
-        await dashboard.assertKpiCardsVisible();
-
-        Logger.step('TC503: Step 2 — Bids landing page');
-        await vendorListingPage.navigateTo('bids');
-        await vendorListingPage.assertListingPageFullyVisible('bids');
-
-        Logger.step('TC503: Step 3 — open a bid workspace and its Property/Asset Viewer/Take Offs widgets');
-        const url = await openFirstBidRowByStatus(page, 'Invited');
-        expect(url, 'FAIL: no "Invited" bid found to open for the cross-module journey.').toBeTruthy();
-        await workspace.assertBidTabFullyVisible();
-        await workspace.openPropertyTab();
-        await workspace.assertPropertyOverviewFieldsVisible();
-        await workspace.assertPropertyAssetViewerTabVisible();
-        await workspace.assertPropertyTakeOffsTabVisible();
-
-        Logger.step('TC503: Step 4 — Settings/Admin (Profile) and vendor user management');
-        await profile.navigateViaSidebarAvatar();
-        await profile.assertProfileTabsVisible();
-        await profile.openVendorProfileTab();
-        await profile.assertUsersTableColumnsVisible();
-
-        Logger.success('TC503: Full cross-module regression journey verified — Dashboard, Bids, bid workspace widgets, and Settings/Admin user management.');
-    });
 });

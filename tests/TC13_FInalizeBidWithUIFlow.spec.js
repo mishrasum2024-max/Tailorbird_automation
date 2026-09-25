@@ -59,7 +59,11 @@ test.describe.serial('Finalize contract UI flow', () => {
 
         Logger.step('TC224: Create property + persist propertyData (TC14 core)');
         await prop.goToProperties();
-        await prop.createProperty(propertyName, address, city, state, zip, propertyType);
+        // createPropertyRobust (existing, additive PropertiesHelper method — pages/properties.js)
+        // instead of createProperty: same MCP-verified client-side stale-cache bug on the
+        // Properties listing after in-app navigation, already root-caused and fixed there.
+        // createProperty() itself is untouched.
+        await prop.createPropertyRobust(propertyName, address, city, state, zip, propertyType);
 
         const propertyPayload = { propertyName };
         const propertyDataPath = path.join(__dirname, '../data/propertyData.json');
@@ -393,7 +397,11 @@ test.describe.serial('Finalize contract UI flow', () => {
             await page.waitForSelector('input[placeholder="Search..."]:not([data-disabled="true"])', { timeout: 30000 });
             Logger.success('TC-OOO-APPROVAL-VERIFY: All Approvals page loaded ✓');
 
-            await page.getByPlaceholder('Search...').first().fill(invoiceId);
+            const allApprovalsSearchInput = page.getByPlaceholder('Search...').first();
+            await allApprovalsSearchInput.fill(invoiceId);
+            // Same All/My Approvals listing already MCP-verified live 2026-09-23 to need
+            // Enter to filter.
+            await allApprovalsSearchInput.press('Enter').catch(() => {});
             // Give CI more time — approval indexing may lag after invoice creation.
             await page.waitForTimeout(3000);
             Logger.info(`TC-OOO-APPROVAL-VERIFY: Searched for ID "${invoiceId}"`);

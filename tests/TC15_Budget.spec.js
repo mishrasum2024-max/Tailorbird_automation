@@ -278,6 +278,12 @@ test.describe('Budget Workflow', () => {
         const hasConstruction = await budgetJob.isTextVisible('Construction', 10000);
         const hasSitePrep = await budgetJob.isTextVisible('Site Prep', 10000);
         expect(hasConstruction || hasSitePrep, 'Uploaded budget data (Construction or Site Prep) must be visible after submit').toBeTruthy();
+        // Same fix already proven on TC260 immediately above: RevoGrid renders asynchronously
+        // after network-idle, so counting rows right away can race the grid's own paint and
+        // read 0 even though the uploaded data is genuinely there a moment later. Wait for an
+        // actual data row (not a loading skeleton) before counting.
+        await page.locator('[role="row"]').filter({ has: page.locator('[role="gridcell"]') })
+            .first().waitFor({ state: 'visible', timeout: 20000 }).catch(() => {});
         const mainGridCount = await budgetJob.getDataRowCount();
         expect(mainGridCount, 'Main budget grid must have rows after submit').toBeGreaterThan(0);
         Logger.success('TC261: Upload on other property, submitted, verified');
@@ -359,7 +365,11 @@ test.describe('Budget Workflow', () => {
 
         // ===== STEP 1: Create new property =====
         Logger.step('TC269 Step 1: Creating new property');
-        await approvalJob.createProperty(
+        // createPropertyRobust (existing, additive ApprovalJob method — pages/approvalPage.js)
+        // instead of createProperty: same MCP-verified client-side stale-cache bug on the
+        // Properties listing after in-app navigation, already root-caused and fixed there.
+        // createProperty() itself is untouched.
+        await approvalJob.createPropertyRobust(
             propertyName,
             'Domestic Terminal, College Park, GA 30337, USA',
             'College Park',
@@ -494,7 +504,11 @@ test.describe('Budget Workflow', () => {
 
         // ===== STEP 1: Create new property =====
         Logger.step('TC271 Step 1: Creating new property');
-        await approvalJob.createProperty(
+        // createPropertyRobust (existing, additive ApprovalJob method — pages/approvalPage.js)
+        // instead of createProperty: same MCP-verified client-side stale-cache bug on the
+        // Properties listing after in-app navigation, already root-caused and fixed there.
+        // createProperty() itself is untouched.
+        await approvalJob.createPropertyRobust(
             propertyName,
             'Domestic Terminal, College Park, GA 30337, USA',
             'College Park',

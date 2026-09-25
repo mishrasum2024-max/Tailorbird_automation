@@ -56,6 +56,10 @@ class RetainagePage {
   async searchInvoiceList(term) {
     Logger.step(`Searching invoice list for: ${term}`);
     await this.loc.invoiceListSearchInput.fill(term);
+    // MCP-verified live 2026-09-23: this listing does not filter on input alone —
+    // confirmed live with a non-matching search term that the grid stays fully
+    // unfiltered until Enter is pressed.
+    await this.loc.invoiceListSearchInput.press('Enter').catch(() => {});
     await this.page.waitForTimeout(600);
   }
 
@@ -167,6 +171,54 @@ class RetainagePage {
   /** @param {string} invoiceNumberText e.g. "Invoice #14080" */
   getRetainageTabInvoiceRow(invoiceNumberText) {
     return this.loc.retainageTabInvoiceRow(invoiceNumberText);
+  }
+
+  /**
+   * Same root cause already fixed for the Reassign Invoice / vendor Users grids elsewhere in
+   * this framework — a just-created invoice's data can be missing from this tab's already-
+   * fetched grid dataset even right after a fresh navigation; renderAllRetainageTabRows() only
+   * defeats *virtualization* (rows present in the data but not mounted), it can't reveal a row
+   * whose data was never fetched. MCP-verified live 2026-09-24 (job 4304, the real shared fixture
+   * job this suite uses): a freshly-approved invoice was still absent from this tab's data
+   * several reload cycles after creation, then present a few minutes later once re-checked — this
+   * is genuine backend propagation/indexing latency for this specific tab's data source, not a
+   * one-shot client cache issue a single reload always clears. Poll first (cheap, covers a brief
+   * render/fetch race), then retry a bounded number of full reload+re-navigation cycles (via
+   * gotoContractRetainageTab, which already re-applies renderAllRetainageTabRows), spaced out to
+   * give the backend real time to catch up, before giving up.
+   * @param {number|string} jobId
+   * @param {string} invoiceNumberText e.g. "Invoice #14080"
+   * @param {{ timeout?: number, reloadAttempts?: number, reloadTimeout?: number }} [options]
+   * @returns {Promise<import('@playwright/test').Locator>}
+   */
+  async waitForRetainageTabInvoiceRow(jobId, invoiceNumberText, { timeout = 20000, reloadAttempts = 6, reloadTimeout = 20000, interAttemptWaitMs = 30000 } = {}) {
+    let row = this.getRetainageTabInvoiceRow(invoiceNumberText);
+    const found = await expect(row, `Invoice "${invoiceNumberText}" present on Retainage tab`)
+      .toBeVisible({ timeout })
+      .then(() => true)
+      .catch(() => false);
+    if (found) return row;
+
+    for (let attempt = 1; attempt <= reloadAttempts; attempt++) {
+      // MCP-verified live 2026-09-24: this is real backend propagation time, not something a
+      // reload itself accelerates — an invoice that wasn't found minutes after creation was
+      // confirmed present several minutes later with no further action taken. Give real
+      // wall-clock time to pass between attempts rather than reloading back-to-back.
+      Logger.info(`Invoice "${invoiceNumberText}" not visible on Retainage tab — waiting ${interAttemptWaitMs}ms before reload attempt ${attempt}/${reloadAttempts}.`);
+      await this.page.waitForTimeout(interAttemptWaitMs);
+      await this.gotoContractRetainageTab(jobId);
+      row = this.getRetainageTabInvoiceRow(invoiceNumberText);
+      const foundThisAttempt = await expect(row, `Invoice "${invoiceNumberText}" present on Retainage tab after reload ${attempt}/${reloadAttempts}`)
+        .toBeVisible({ timeout: reloadTimeout })
+        .then(() => true)
+        .catch(() => false);
+      if (foundThisAttempt) return row;
+    }
+
+    // Final attempt with the full caller-facing error (surfaces a real, informative failure).
+    row = this.getRetainageTabInvoiceRow(invoiceNumberText);
+    await expect(row, `Invoice "${invoiceNumberText}" present on Retainage tab after ${reloadAttempts} reload attempts`).toBeVisible({ timeout: reloadTimeout });
+    return row;
   }
 
   /**

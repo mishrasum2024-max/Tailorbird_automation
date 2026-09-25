@@ -24,6 +24,8 @@ class MultiApproverPage {
     async searchAndOpenJob(jobName) {
         Logger.step(`Searching for job: ${jobName}`);
         await this.loc.jobsSearchInput.fill(jobName);
+        // Same Jobs listing already MCP-verified live 2026-09-23 to need Enter to filter.
+        await this.loc.jobsSearchInput.press('Enter').catch(() => {});
         const jobRow = this.page.getByRole('row').filter({ hasText: jobName });
         await expect(jobRow.first()).toBeVisible({ timeout: 20000 });
 
@@ -105,7 +107,20 @@ class MultiApproverPage {
 
     async openInvoiceFromList(invoiceNumber) {
         Logger.step(`Opening invoice #${invoiceNumber} from list`);
-        await this.loc.invoiceListLink(`Invoice #${invoiceNumber}`).click();
+        const link = this.loc.invoiceListLink(`Invoice #${invoiceNumber}`);
+        const appeared = await link.waitFor({ state: 'visible', timeout: 20000 }).then(() => true).catch(() => false);
+        if (!appeared) {
+            // MCP-verified live 2026-09-24: a just-created invoice can be missing from this
+            // list's already-fetched client-side data even moments after creation on the same
+            // page — same root cause already fixed for the Reassign Invoice grid and the
+            // Invoice-tab search recovery helpers elsewhere in this framework. A reload picks
+            // it up.
+            Logger.info(`Invoice #${invoiceNumber} link not visible in list — reloading and retrying once.`);
+            await this.page.reload({ waitUntil: 'load' }).catch(() => {});
+            await this.page.waitForTimeout(1500);
+            await link.waitFor({ state: 'visible', timeout: 20000 });
+        }
+        await link.click();
         await expect(this.loc.invoiceDetailsDialog).toBeVisible({ timeout: 20000 });
     }
 
@@ -158,6 +173,9 @@ class MultiApproverPage {
     async searchApprovals(term) {
         Logger.step(`Searching approvals for: ${term}`);
         await this.loc.approvalsSearchInput.fill(term);
+        // Same All/My Approvals listing already MCP-verified live 2026-09-23 to need Enter
+        // to filter.
+        await this.loc.approvalsSearchInput.press('Enter').catch(() => {});
         await this.page.waitForTimeout(600);
     }
 

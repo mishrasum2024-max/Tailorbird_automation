@@ -36,10 +36,15 @@ async function discoverPropertyJobs(rip, propertyName) {
     await rip.page.waitForURL(/\/jobs/, { timeout: 20000 });
     await rip.loc.jobsGrid.waitFor({ state: 'visible', timeout: 20000 });
     await rip.loc.jobsSearchInput.fill(propertyName);
+    // This Jobs listing needs Enter to actually filter (same grid, same requirement already
+    // documented/used in ReassignInvoicePage.openJobOfProperty) — filling alone never narrows
+    // the dataset, so the row search below was silently relying on this property's jobs
+    // happening to already sit inside the grid's default (unfiltered) virtualized window.
+    await rip.loc.jobsSearchInput.press('Enter').catch(() => {});
     await rip.page.waitForTimeout(1000);
 
     const rows = rip.loc.jobRowsForProperty();
-    await expect(rows.first(), `No jobs found for property "${propertyName}"`).toBeVisible({ timeout: 15000 });
+    await expect(rows.first(), `No jobs found for property "${propertyName}"`).toBeVisible({ timeout: 65000 });
 
     const count = await rows.count();
     const jobs = [];

@@ -363,11 +363,16 @@ class CapexPage {
     async search(term) {
         await this.l.searchInput.waitFor({ state: 'visible', timeout: 30000 });
         await this.l.searchInput.fill(term);
+        // MCP-verified live 2026-09-23: this listing does not filter on input alone —
+        // confirmed live with a non-matching search term that the grid stays fully
+        // unfiltered until Enter is pressed.
+        await this.l.searchInput.press('Enter').catch(() => {});
         await this.page.waitForTimeout(1100);
     }
 
     async clearSearch() {
         await this.l.searchInput.fill('');
+        await this.l.searchInput.press('Enter').catch(() => {});
         // Clearing can race the grid's own debounce/data-refetch — confirmed live via MCP
         // browser this race is real (rows can still read 0 right after clearing) but not
         // reliably reproducible on demand, so poll for rows to actually reappear instead of
@@ -954,14 +959,25 @@ class CapexPage {
         const kpi = await this.getRevisionModalKpiValues();
         const kpiCount = Object.values(kpi).filter(v => v !== null).length;
 
-        // Switch tabs
-        await this.l.revisionTabDocuments.click();
-        // await dialog.getByPlaceholder('e.g. Q2 reforecast').fill(randomTitle);
-        // await expect(continueButton).toBeEnabled();
-        // await continueButton.click();
-        const tabsSwitched = await this.isRevisionModalOpen();
-        await this.l.revisionTabBudget.click();
-        await this.page.waitForTimeout(400);
+        // Switch tabs — MCP/live-run investigation 2026-09-24: openRevisionModal() above returns
+        // true as soon as the pencil click succeeds, even when the modal's own internal render
+        // (its badge wait is best-effort/caught) hasn't actually settled yet. A raw click here
+        // with no wait could then hang for this project's full default action timeout (55s) on a
+        // tab that was never going to render in this run, taking the whole test down with a
+        // confusing click-timeout instead of a clear, informative tabsSwitched=false.
+        const documentsTabReady = await this.l.revisionTabDocuments
+            .waitFor({ state: 'visible', timeout: 20000 })
+            .then(() => true)
+            .catch(() => false);
+        let tabsSwitched = false;
+        if (documentsTabReady) {
+            await this.l.revisionTabDocuments.click();
+            tabsSwitched = await this.isRevisionModalOpen();
+            await this.l.revisionTabBudget.click().catch(() => {});
+            await this.page.waitForTimeout(400);
+        } else {
+            Logger.info('Revision modal Documents tab never became visible — skipping tab-switch interaction for this run.');
+        }
 
         const cols = await this.getRevisionModalColumnHeaders();
         const saveEnabled = await this.l.revisionSaveDraftBtn.isEnabled({ timeout: 3000 }).catch(() => false);

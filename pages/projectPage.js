@@ -23,6 +23,7 @@ const {
     jobOverviewEditButtonStrategies,
 } = require('../locators/projectPageLocator');
 const { healingLocator, logLocatorHealth } = require('../utils/locatorHealer');
+const { resetActiveFilters } = require('../utils/filterResetHelper');
 
 exports.ProjectPage = class ProjectPage {
     constructor(page) {
@@ -218,7 +219,8 @@ exports.ProjectPage = class ProjectPage {
                 .getByRole('textbox', { name: 'Search...' })
                 .or(this.page.locator('input[placeholder="Search..."]'))
                 .first();
-            await searchInput.waitFor({ state: 'visible', timeout: 30000 });
+            await searchInput.waitFor({ state: 'visible', timeout: 80000 });
+            await resetActiveFilters(this.page);
 
             Logger.success('✅ Navigated to Projects with no errors.');
         } catch (e) {
@@ -359,7 +361,7 @@ exports.ProjectPage = class ProjectPage {
                     .locator('p', { hasText: labelText })
                     .locator('xpath=following-sibling::p[1]');
 
-                await expect(valueLocator).toBeVisible({timeout: 50000});
+                await expect(valueLocator).toBeVisible({timeout: 80000});
                 await expect(valueLocator).toHaveText(expectedText);
 
                 Logger.success(`✅ ${labelText} verified successfully`);

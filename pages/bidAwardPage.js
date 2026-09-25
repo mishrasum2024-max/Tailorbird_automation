@@ -116,6 +116,10 @@ class BidAwardPage {
         await retryOperation(async () => {
             await loc.listSearchInput.fill('');
             await loc.listSearchInput.fill(bidName);
+            // MCP-verified live 2026-09-23: this listing does not filter on input alone —
+            // confirmed live with a non-matching search term that the grid stays fully
+            // unfiltered until Enter is pressed.
+            await loc.listSearchInput.press('Enter').catch(() => {});
             await this.page.waitForTimeout(1500);
             await expect(rowLink, `FAIL: bid "${bidName}" must appear in the Bids list`).toBeVisible({ timeout: 10000 });
         }, { attempts: 4, delayMs: 3000, label: `search Bids list for "${bidName}"` });
@@ -138,7 +142,21 @@ class BidAwardPage {
 
     async goToManageBidsTab() {
         Logger.step('BidAwardPage: opening Manage Bids tab...');
-        await expect(this.manageBidsTab).toBeVisible({ timeout: 10000 });
+        // The bid detail page's tab bar can take longer than 10s to mount under real load
+        // (CI-observed 2026-09-22: "Manage Bids" tab not found right after navigation even
+        // though the locator itself already has 4 independent fallback strategies — this is a
+        // render-timing gap, not a missing/wrong selector). One bounded reload-and-retry, the
+        // same pattern already used elsewhere in this codebase for cross-pane render lag on
+        // this same Bids feature, self-corrects a slow first render without masking a genuinely
+        // missing tab (a reload that still can't find it fails identically either way).
+        let visible = await this.manageBidsTab.isVisible({ timeout: 10000 }).catch(() => false);
+        if (!visible) {
+            Logger.info('BidAwardPage: "Manage Bids" tab not visible after 10s — reloading once and retrying.');
+            await this.page.reload({ waitUntil: 'domcontentloaded' });
+            await this.page.waitForTimeout(2000);
+            visible = await this.manageBidsTab.isVisible({ timeout: 20000 }).catch(() => false);
+        }
+        await expect(this.manageBidsTab, 'FAIL: "Manage Bids" tab never became visible, even after a reload.').toBeVisible({ timeout: 5000 });
         await this.manageBidsTab.click();
         await this.page.waitForURL(/tab=manage-bids/, { timeout: 15000 });
         await this.page.waitForTimeout(1500);

@@ -3,6 +3,7 @@ const fs = require('fs');
 const { expect } = require('@playwright/test');
 const { Logger } = require('../utils/logger');
 const { vendorLocators } = require('../locators/vendorLocator');
+const { resetActiveFilters } = require('../utils/filterResetHelper');
 
 const VENDORS_DIRECTORY_URL = '/vendors/directory';
 
@@ -21,11 +22,13 @@ class VendorDirectoryPage {
             }
             await this.page.waitForURL(/vendors\/directory/, { timeout: 15000 });
             await this.waitForDirectoryReady();
+            await resetActiveFilters(this.page);
             Logger.success('Navigated to Vendors Directory');
         } catch (e) {
             Logger.error(`goToDirectory failed: ${e.message}`);
             await this.page.goto(VENDORS_DIRECTORY_URL, { waitUntil: 'domcontentloaded' });
             await this.waitForDirectoryReady();
+            await resetActiveFilters(this.page);
         }
     }
 
@@ -193,7 +196,10 @@ class VendorDirectoryPage {
             const expBtn = this.locators.exportBtn;
             if (await expBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
                 const downloadsPath = path.join(process.cwd(), 'downloads');
-                const [download] = await Promise.all([this.page.waitForEvent('download', { timeout: 10000 }), expBtn.click()]);
+                // Bumped from 10000 to match the 15000ms convention used for every other export
+                // download wait in this framework (e.g. VendorListingPage.exportAndReadColumns) —
+                // this was the only one still on the tighter default.
+                const [download] = await Promise.all([this.page.waitForEvent('download', { timeout: 15000 }), expBtn.click()]);
                 const savePath = path.join(downloadsPath, await download.suggestedFilename());
                 await download.saveAs(savePath);
                 const content = fs.readFileSync(savePath, 'utf-8');

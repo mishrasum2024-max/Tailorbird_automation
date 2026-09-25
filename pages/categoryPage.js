@@ -1,6 +1,7 @@
 const { expect } = require("@playwright/test");
 const { categoryPageLocators, categoryElementStrategies, categoryGridCellByTextStrategies, categoryFilterCloseNearStrategies } = require("../locators/categoryPageLocator");
 const { healingLocator } = require("../utils/locatorHealer");
+const { resetActiveFilters } = require("../utils/filterResetHelper");
 
 class FinancialsCategoryPage {
     /**
@@ -74,6 +75,7 @@ class FinancialsCategoryPage {
 
         await this.page.waitForLoadState("domcontentloaded");
         await this.page.waitForTimeout(10000);
+        await resetActiveFilters(this.page);
     }
 
     /**
@@ -379,6 +381,7 @@ class FinancialsCategoryPage {
             const searchInput = this.catLoc.mainSearchInput;
             if (await searchInput.isVisible({ timeout: 60000 }).catch(() => false)) {
                 await searchInput.fill(rowName).catch(() => {});
+                await searchInput.press('Enter').catch(() => {});
                 await this.page.waitForTimeout(1500);
             }
         }
@@ -395,6 +398,7 @@ class FinancialsCategoryPage {
             const searchInput = this.catLoc.mainSearchInput;
             if (await searchInput.isVisible({ timeout: 60000 }).catch(() => false)) {
                 await searchInput.fill(rowName).catch(() => {});
+                await searchInput.press('Enter').catch(() => {});
                 await this.page.waitForTimeout(2000);
             }
             console.warn(`[addCategoryRowByName] Row '${rowName}' not found after ${Date.now() - startWait}ms — asserting with remaining time`);

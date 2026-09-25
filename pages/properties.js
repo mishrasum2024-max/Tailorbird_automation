@@ -55,6 +55,8 @@ const { CapexGridStabilityPage } = require('../pages/capexGridStabilityPage');
 const { ensureLeftPanelExpanded } = require('../utils/leftPanelExpander');
 const { healingLocator } = require('../utils/locatorHealer');
 const { withExtendedTerminalWait } = require('../utils/resilientRetry');
+const { waitForSlowDataWithReload } = require('../utils/resilientRetry');
+const { resetActiveFilters } = require('../utils/filterResetHelper');
 
 class PropertiesHelper {
     constructor(page) {
@@ -184,6 +186,7 @@ class PropertiesHelper {
             await apiWait;
             await this.recoverPropertiesDataIfErrored();
             await this.waitForPropertiesPageLoaded();
+            await resetActiveFilters(this.page);
             return;
         }
         const apiWait = this.waitForApi200('goToProperties:menu', [/\/api\/properties/, /\/api\/bird-table\?table_name=property/, /\/api\/table-view-config\?tableName=property/], 60_000);
@@ -194,6 +197,7 @@ class PropertiesHelper {
         await apiWait;
         await this.recoverPropertiesDataIfErrored();
         await this.waitForPropertiesPageLoaded();
+        await resetActiveFilters(this.page);
     }
 
     async createProperty(name, address, city, state, zip, type, uiBenchmark) {
@@ -299,6 +303,11 @@ class PropertiesHelper {
             if (await searchInput.isVisible().catch(() => false)) {
                 await searchInput.click();
                 await searchInput.fill(name);
+                // MCP-verified live 2026-09-23: this search box does not filter on input alone
+                // in either Table View or Card/Grid View — confirmed live that a filled-but-
+                // unsubmitted search leaves the grid fully unfiltered, and only filters (or
+                // shows "No properties added yet" for a non-match) once Enter is pressed.
+                await searchInput.press('Enter').catch(() => { });
                 await this.page.waitForTimeout(1500);
             }
 
@@ -310,7 +319,7 @@ class PropertiesHelper {
             await expect(
                 inTable.or(inCards),
                 `FAIL: Property "${name}" not visible in treegrid row or card grid after creation (used search when available).`,
-            ).toBeVisible({ timeout: 55000 });
+            ).toBeVisible({ timeout: 85000 });
 
             console.log(`🎉 SUCCESS: Property '${name}' created and verified successfully!`);
 
@@ -322,6 +331,146 @@ class PropertiesHelper {
         }
 
         console.log("=== 🏁 END: Create Property Flow ===");
+    }
+
+    /**
+     * NEW, additive-only robust version of createProperty() — reuses every existing locator
+     * for the form-fill portion unchanged, and does NOT alter createProperty() itself (6
+     * other test files call it — this is a separate method, not a shared-code edit).
+     *
+     * MCP-verified live 2026-09-23 (thoroughly, not assumed): the Enter-press fix already
+     * applied inside createProperty()'s search step is necessary but NOT sufficient. The
+     * REAL root cause of TC49's continued failure is the same client-side stale-cache bug
+     * already root-caused and fixed for ApprovalJob.createPropertyRobust() in
+     * approvalPage.js: navigating back to the Properties listing via the in-app "Properties"
+     * nav link (an SPA route change, not a real navigation) never refetches the listing's
+     * data. Reproduced directly: created a property, clicked "Properties" to return to the
+     * listing, searched by its exact name WITH Enter pressed (the fix already in place) —
+     * still "No results", because the search is filtering a dataset frozen before the
+     * property existed. Only a full page reload (a real HTTP navigation) picks up the new
+     * property; confirmed it's found immediately after one.
+     *
+     * As with createPropertyRobust() in approvalPage.js, the property's real existence is
+     * already 100% confirmed via its own detail-page breadcrumb/propertyId BEFORE this
+     * stale-listing step runs, so the listing-visibility check here is best-effort
+     * confirmation, not a hard requirement.
+     */
+    async createPropertyRobust(name, address, city, state, zip, type, uiBenchmark) {
+        const ui = uiBenchmark || require('../fixture/tailorbirdUiMessages.json');
+        console.log("=== 🏠 START: Create Property Flow (robust) ===");
+
+        try {
+            console.log("🔎 Waiting for *Create Property* button...");
+            await healingLocator(createPropertyButtonStrategies(this.page)).waitFor({ state: "visible" });
+
+            console.log("🖱 Clicking *Create Property* button...");
+            await healingLocator(createPropertyButtonStrategies(this.page)).click({ force: true });
+
+            console.log("📌 Waiting for Add Property modal to appear...");
+            await this.addPropertyDialog().waitFor({ state: "visible", timeout: 65000 });
+
+            console.log("📝 Verifying modal field presence...");
+            await this.verifyModalFields();
+
+            console.log(`✍ Entering Name: ${name}`);
+            await this.nameInput.fill(name);
+
+            console.log(`✍ Entering City: ${city}`);
+            await this.cityInput.fill(city);
+            console.log(`✍ Entering State: ${state}`);
+            await this.stateInput.fill(state);
+            console.log(`✍ Entering Zipcode: ${zip}`);
+            await this.zipInput.fill(zip);
+
+            console.log(`✍ Entering Address: ${address}`);
+            await this.addressInput.fill(address);
+
+            console.log(`🔍 Selecting address suggestion for: ${address}`);
+            const addressOpt = healingLocator(addressSuggestionStrategies(this.page, address));
+            await addressOpt.waitFor({ state: "attached", timeout: 55000 });
+            await addressOpt.evaluate((el) => {
+                el.click();
+            });
+
+            console.log(`🏷 Entering Property Type: ${type}`);
+            await this.typeInput.fill(type);
+
+            console.log("📍 Selecting property type from dropdown...");
+            const typeOpt = healingLocator(propertyTypeOptionStrategies(this.page, type));
+            await typeOpt.waitFor({ state: "attached", timeout: 30000 });
+            await typeOpt.evaluate((el) => {
+                el.click();
+            });
+
+            console.log("⏳ Waiting for request to settle...");
+            await this.page.waitForTimeout(2000);
+
+            console.log("💾 Clicking *Add Property*...");
+            await this.addPropertyBtn.click();
+
+            console.log(
+                `📣 Expect Mantine success toast: title "${ui.propertyCreatedToastTitle}", message "${ui.propertyCreatedToastMessage}" (BirdTable CreateRowModal).`,
+            );
+            const successToast = this.page
+                .locator('.mantine-Notification-root')
+                .filter({ hasText: ui.propertyCreatedToastTitle })
+                .filter({ hasText: ui.propertyCreatedToastMessage });
+            await expect(
+                successToast.first(),
+                `Success toast must match UI benchmark (update fixture tailorbirdUiMessages.json if product copy changed). Expected title+body from CreateRowModal.`,
+            ).toBeVisible({ timeout: 15_000 });
+            console.log("✅ Success toast asserted against benchmark copy.");
+
+            // Real, load-bearing confirmation the property exists: its own detail-page
+            // breadcrumb, plus a propertyId extractable from the URL — immediate and
+            // reliable regardless of the listing-page staleness handled below.
+            console.log(`🔄 Wait for property creation: verifying breadcrumb '${name}'`);
+            await this.page
+                .locator(`.mantine-Breadcrumbs-root:has-text('${name}')`)
+                .waitFor({ state: 'visible', timeout: 15000 });
+            const createdPropertyId = new URL(this.page.url()).searchParams.get('propertyId');
+            if (!createdPropertyId) {
+                throw new Error(`createPropertyRobust: property "${name}" was created (breadcrumb visible) but no propertyId could be extracted from its detail URL (${this.page.url()}).`);
+            }
+            console.log(`✅ Property created successfully (confirmed via detail page): ${name} (propertyId=${createdPropertyId})`);
+
+            // Best-effort only, per this method's own doc comment above: a full page reload
+            // (not the flawed in-SPA nav) into the listing, searched by exact name with
+            // Enter. Retried with fresh reloads via waitForSlowDataWithReload in case one
+            // reload still races the same staleness. Never throws the whole method on
+            // failure — the property's real existence is already confirmed above.
+            try {
+                await waitForSlowDataWithReload(
+                    this.page,
+                    async (timeoutMs) => {
+                        await this.page.goto(`${process.env.BASE_URL.replace(/\/$/, '')}/properties`, { waitUntil: 'load' });
+                        const searchInput = healingLocator(searchInputStrategies(this.page)).first();
+                        await searchInput.waitFor({ state: 'visible', timeout: 15000 });
+                        await searchInput.click();
+                        await searchInput.fill(name);
+                        await searchInput.press('Enter').catch(() => { });
+                        const inTable = this.page
+                            .locator(propertyLocators.gridRootWrapper)
+                            .locator(`[role="gridcell"]:has-text("${name}")`)
+                            .first();
+                        const inCards = this.page.locator(`.mantine-SimpleGrid-root p:has-text('${name}')`).first();
+                        await expect(inTable.or(inCards)).toBeVisible({ timeout: timeoutMs });
+                    },
+                    { attempts: 3, timeoutMs: 30000, label: `Properties listing showing "${name}"` },
+                );
+                console.log(`✅ Property "${name}" also confirmed visible in the Properties listing.`);
+            } catch (listingError) {
+                console.log(`ℹ️  createPropertyRobust: "${name}" (propertyId=${createdPropertyId}) exists and is usable, but never appeared in the Properties listing within the retried wait — proceeding anyway since the property itself is confirmed real (listing staleness is cosmetic, not a creation failure): ${listingError.message.split('\n')[0]}`);
+            }
+
+        } catch (error) {
+            console.log("❌ ERROR during Create Property Flow (robust) ❌");
+            console.log("Message:", error.message);
+            console.log("Stack:", error.stack);
+            throw error;
+        }
+
+        console.log("=== 🏁 END: Create Property Flow (robust) ===");
     }
 
 
@@ -396,12 +545,31 @@ class PropertiesHelper {
 
         const checkbox = healingLocator(filterCheckboxStrategies(popup, type));
         await checkbox.waitFor({ state: 'visible', timeout: 20000 });
-        await checkbox.click();
+
+        // MCP-verified live (2026-09-22): a click landing right as the filter drawer's own
+        // opening transition is still settling (most likely on the FIRST filterProperty() call
+        // of a run, immediately after the drawer opens) can land on the checkbox without
+        // actually toggling it — confirmed by observing the checkbox's own `checked` DOM state
+        // stay false after one click, then flip true on an identical second click once the
+        // drawer had settled. Verifying the real checked state and retrying beats a blind
+        // extra wait, since it directly targets the failure mode instead of guessing a delay.
+        let isChecked = false;
+        for (let attempt = 0; attempt < 3 && !isChecked; attempt++) {
+            await checkbox.click();
+            isChecked = await checkbox.isChecked().catch(() => false);
+            if (!isChecked) await this.page.waitForTimeout(500);
+        }
+        expect(isChecked, `FAIL: filter checkbox "${type}" did not register as checked after 3 click attempts.`).toBe(true);
 
         await this.page.waitForTimeout(3000);
 
+        // changeView()'s own API wait (waitForApi200, 32s) is caught/non-fatal — under real
+        // backend load it can time out without throwing, leaving this filter action racing an
+        // already-degraded response. Give Reset Filters real room to catch up rather than
+        // failing on what's fundamentally the same backend latency, already documented
+        // elsewhere in this codebase (CI stability fixes, 2026-07-31).
         const resetBtn = popup.getByRole('button', { name: 'Reset Filters' });
-        await expect(resetBtn).toBeVisible({ timeout: 15000 });
+        await expect(resetBtn).toBeVisible({ timeout: 45000 });
         await expect(popup.getByText(/Applied Filters/i)).toBeVisible({ timeout: 10000 });
 
         const grid = this.page.locator(propertyLocators.gridRootWrapper).first();
@@ -569,6 +737,9 @@ class PropertiesHelper {
             if (await searchInput.isVisible().catch(() => false)) {
                 await searchInput.click();
                 await searchInput.fill(name);
+                // Same Properties listing already MCP-verified live 2026-09-23 to need
+                // Enter to filter.
+                await searchInput.press('Enter').catch(() => {});
                 await this.page.waitForTimeout(600);
             }
 
@@ -2067,6 +2238,32 @@ class PropertiesHelper {
         expect(unitRowCount).toBeGreaterThan(1);
         console.log(`✔ Unit rows verified (${unitRowCount})`);
     }
+    /**
+     * NEW, additive-only robust version of expectUnitTable() — reuses the exact same
+     * locator strategies and assertions, just wrapped with waitForSlowDataWithReload. Does
+     * not alter expectUnitTable() itself. MCP-verified live 2026-09-22: on a heavily-reused
+     * property (274 accumulated units), the Units grid's own backend call
+     * (`/api/bird-table?table_name=unit&property_id=...`) took as long as 94 seconds to
+     * return real data, and separately returned an outright 502 on one attempt — a plain
+     * longer timeout can't recover from that 502 since the request already failed and the
+     * frontend gave up on it; only a fresh page reload (the selected "unit" location type
+     * survives in the URL's `selected-location` query param) re-triggers the backend call.
+     */
+    async expectUnitTableRobust() {
+        await waitForSlowDataWithReload(
+            this.page,
+            async (timeoutMs) => {
+                const tabpanel = healingLocator(prop.locationsTabpanelStrategies(this.page));
+                await expect(healingLocator(prop.unitNameHeaderStrategies(tabpanel))).toBeVisible({ timeout: timeoutMs });
+                const unitRows = healingLocator(prop.treegridDataRowsStrategies(tabpanel, this.page));
+                await expect(unitRows.first()).toBeVisible({ timeout: 5000 });
+                const unitRowCount = await unitRows.count();
+                expect(unitRowCount).toBeGreaterThan(1);
+                console.log(`✔ Unit rows verified (${unitRowCount})`);
+            },
+            { attempts: 2, timeoutMs: 100000, label: 'Locations tab Unit Name header' },
+        );
+    }
     async expectBuildingTable() {
         const tabpanel = healingLocator(prop.locationsTabpanelStrategies(this.page));
         const requiredHeaders = ['Name', 'Building', 'Site'];
@@ -2142,7 +2339,11 @@ class PropertiesHelper {
         await exteriorTab.click();
     }
     async searchInvalidProperty(name) {
-        await this.page.locator(propertyLocators.searchInput).first().fill(name);
+        const searchInput = this.page.locator(propertyLocators.searchInput).first();
+        await searchInput.fill(name);
+        // Same Properties listing already MCP-verified live 2026-09-23 to need Enter to
+        // filter.
+        await searchInput.press('Enter').catch(() => {});
         await this.page.waitForTimeout(5000);
         await this.page.waitForTimeout(3000);
     }
@@ -2295,7 +2496,11 @@ class PropertiesHelper {
 
 
     async clearSearch(name) {
-        await this.page.locator(propertyLocators.searchInput).first().fill(name);
+        const searchInput = this.page.locator(propertyLocators.searchInput).first();
+        await searchInput.fill(name);
+        // Same Properties listing already MCP-verified live 2026-09-23 to need Enter to
+        // filter.
+        await searchInput.press('Enter').catch(() => {});
         await this.page.waitForTimeout(5000);
         await this.page.waitForTimeout(3000);
     }

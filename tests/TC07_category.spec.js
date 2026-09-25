@@ -248,7 +248,7 @@ test.describe('Category tab', () => {
             await expect(viewBtn).toBeVisible({ timeout: 8000 });
             await viewBtn.click();
             const viewMenu = page.locator('[role="menu"], [role="listbox"], [role="dialog"]').first();
-            await expect(viewMenu).toBeVisible({ timeout: 5000 });
+            await expect(viewMenu).toBeVisible({ timeout: 10000 });
             await page.keyboard.press('Escape');
             await page.waitForTimeout(400);
             if (await viewMenu.isVisible().catch(() => false)) await page.mouse.click(5, 5);
@@ -256,7 +256,7 @@ test.describe('Category tab', () => {
             await expect(tableBtn).toBeVisible({ timeout: 8000 });
             await tableBtn.click();
             const tableMenu = page.locator('[role="menu"], [role="listbox"], [role="dialog"]').first();
-            await expect(tableMenu).toBeVisible({ timeout: 5000 });
+            await expect(tableMenu).toBeVisible({ timeout: 10000 });
             await page.keyboard.press('Escape');
             await page.waitForTimeout(400);
             if (await tableMenu.isVisible().catch(() => false)) await page.mouse.click(5, 5);

@@ -1092,8 +1092,10 @@ exports.ProjectJob = class ProjectJob {
             const searchInput = page.locator('input[placeholder="Search..."]').first();
             await expect(searchInput).toBeVisible({ timeout: 15000 });
             await searchInput.fill(targetJobName);
+            // Same Jobs listing already MCP-verified live 2026-09-23 to need Enter to filter.
+            await searchInput.press('Enter').catch(() => {});
             await page.waitForTimeout(1500);
-    
+
             const matchingRows = page
                 .getByRole('row')
                 .filter({ hasText: targetJobName })

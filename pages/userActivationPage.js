@@ -262,7 +262,7 @@ class UserActivationPage {
      * Handles both — clicking the org whose name contains orgNameFragment when present.
      */
     async selectOrganizationIfPrompted(orgNameFragment = '2026') {
-        await this.activationPage.waitForURL(/organization-selection|beta\.tailorbird\.com/, { timeout: 30000 });
+        await this.activationPage.waitForURL(/organization-selection|beta\.tailorbird\.com/, { timeout: 90000 });
         if (/organization-selection/.test(this.activationPage.url())) {
             Logger.step(`[Activation] Organization-selection screen shown — choosing org containing "${orgNameFragment}"`);
             await this.activationPage
