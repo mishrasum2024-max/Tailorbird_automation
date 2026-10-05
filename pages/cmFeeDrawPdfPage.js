@@ -221,6 +221,28 @@ exports.CMFeeDrawPdfPage = class CMFeeDrawPdfPage {
             });
         }
 
+        // MCP-verified live (2026-10-05): this table gained a trailing "CM Fee" column
+        // (Invoice Number | Vendor | Payment Status | Amount | CM Fee), so the Total row's LAST
+        // cell read above is now the CM Fee total (e.g. "$12.00"), not the Amount total
+        // (e.g. "$64.00"). Re-read the Total from the "Amount" column located by its header
+        // name; if no "Amount" header is found, the value read above is kept unchanged.
+        // The header is not necessarily rows.nth(0) — the dialog also renders other (empty) table
+        // rows before it (MCP-verified: header was the 4th matched row) — so search for it.
+        let amountColumnIndex = -1;
+        for (let i = 0; i < rowCount && amountColumnIndex < 0; i++) {
+            const headerCells = (await rows.nth(i).getByRole('columnheader').allTextContents()).map((c) => c.trim());
+            amountColumnIndex = headerCells.indexOf('Amount');
+        }
+        if (amountColumnIndex >= 0) {
+            for (let i = 0; i < rowCount; i++) {
+                const totalRowCells = (await rows.nth(i).getByRole('cell').allTextContents()).map((c) => c.trim());
+                if (totalRowCells[0] === 'Total' && totalRowCells[amountColumnIndex]) {
+                    total = totalRowCells[amountColumnIndex];
+                    break;
+                }
+            }
+        }
+
         await this.closeDrawDetailDialog(dialog);
         Logger.success(`Draw "${drawName}" detail invoices: ${JSON.stringify(invoices)}, total=${total}`);
         return { invoices, total };

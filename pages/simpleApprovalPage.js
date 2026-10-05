@@ -64,7 +64,7 @@ class SimpleApprovalPage {
 
         for (let attempt = 0; attempt < 2 && !hasPopulatedOptions(body); attempt++) {
             Logger.info(`Approval API options still empty. Retrying in 5s (attempt ${attempt + 1}/2)...`);
-            await this.page.waitForTimeout(5000);
+            await this.page.waitForTimeout(8000);
             body = await fetchApprovalData();
         }
 

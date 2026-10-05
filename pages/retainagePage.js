@@ -1,6 +1,6 @@
-const { expect } = require('@playwright/test');
-const { Logger } = require('../utils/logger');
-const { retainageLocators } = require('../locators/retainageLocator');
+const { expect } = require("@playwright/test");
+const { Logger } = require("../utils/logger");
+const { retainageLocators } = require("../locators/retainageLocator");
 
 /**
  * Retainage UI lives inside the existing Invoice tab / Invoice Details drawer — there is no
@@ -30,10 +30,10 @@ class RetainagePage {
    * @param {import('@playwright/test').Locator} gridLocator
    */
   async forceGridFullWidth(gridLocator) {
-    await gridLocator.waitFor({ state: 'attached', timeout: 20000 });
-    await gridLocator.evaluate((grid) => {
-      grid.style.setProperty('width', '3000px', 'important');
-      grid.style.setProperty('min-width', '3000px', 'important');
+    await gridLocator.waitFor({ state: "attached", timeout: 20000 });
+    await gridLocator.evaluate(grid => {
+      grid.style.setProperty("width", "3000px", "important");
+      grid.style.setProperty("min-width", "3000px", "important");
     });
     await this.page.waitForTimeout(400);
   }
@@ -41,7 +41,9 @@ class RetainagePage {
   /** @param {number|string} jobId */
   async gotoInvoiceList(jobId) {
     Logger.step(`Navigating to invoice list for job ${jobId}...`);
-    await this.page.goto(`${process.env.BASE_URL}/jobs/${jobId}?tab=invoices`, { waitUntil: 'load' });
+    await this.page.goto(`${process.env.BASE_URL}/jobs/${jobId}?tab=invoices`, {
+      waitUntil: "load",
+    });
     await this.page.waitForTimeout(2000);
     // Wrapped in catch: a genuinely missing/empty list (e.g. "Job not found") has no grid to
     // widen, and callers already handle that case themselves via their own not-found check.
@@ -59,7 +61,7 @@ class RetainagePage {
     // MCP-verified live 2026-09-23: this listing does not filter on input alone —
     // confirmed live with a non-matching search term that the grid stays fully
     // unfiltered until Enter is pressed.
-    await this.loc.invoiceListSearchInput.press('Enter').catch(() => {});
+    await this.loc.invoiceListSearchInput.press("Enter").catch(() => {});
     await this.page.waitForTimeout(600);
   }
 
@@ -70,7 +72,7 @@ class RetainagePage {
    * @returns {Promise<string>}
    */
   async createDraftInvoice() {
-    Logger.step('Creating new draft invoice');
+    Logger.step("Creating new draft invoice");
     await this.loc.createInvoiceButton.click();
     await this.page.waitForURL(/\/invoices\/\d+/, { timeout: 20000 });
     const invoiceId = this.page.url().match(/\/invoices\/(\d+)/)[1];
@@ -86,8 +88,13 @@ class RetainagePage {
    * @param {number|string} invoiceId
    */
   async gotoInvoiceDetail(jobId, invoiceId) {
-    Logger.step(`Navigating to invoice detail ${invoiceId} for job ${jobId}...`);
-    await this.page.goto(`${process.env.BASE_URL}/jobs/${jobId}/invoices/${invoiceId}`, { waitUntil: 'load' });
+    Logger.step(
+      `Navigating to invoice detail ${invoiceId} for job ${jobId}...`
+    );
+    await this.page.goto(
+      `${process.env.BASE_URL}/jobs/${jobId}/invoices/${invoiceId}`,
+      { waitUntil: "load" }
+    );
     await this.page.waitForTimeout(2000);
     // Wrapped in catch: a genuinely missing invoice (e.g. "not found") has no grid to widen, and
     // callers already handle that case themselves via their own not-found check.
@@ -108,7 +115,7 @@ class RetainagePage {
   /** Parses "$4,800" / "- $200" / "+ $0" style values into signed numbers. */
   static parseCurrency(text) {
     const negative = /^-/.test(text.trim());
-    const digits = text.replace(/[^0-9.]/g, '');
+    const digits = text.replace(/[^0-9.]/g, "");
     const value = digits ? parseFloat(digits) : 0;
     return negative ? -value : value;
   }
@@ -125,7 +132,7 @@ class RetainagePage {
     Logger.step(`Setting Retainage % to "${value}"...`);
     await this.loc.retainagePercentInput.click();
     await this.loc.retainagePercentInput.fill(String(value));
-    await this.page.keyboard.press('Tab');
+    await this.page.keyboard.press("Tab");
     await this.page.waitForTimeout(1000);
   }
 
@@ -136,7 +143,7 @@ class RetainagePage {
 
   async goBack() {
     await this.loc.goBackButton.click();
-    await this.page.waitForLoadState('load');
+    await this.page.waitForLoadState("load");
   }
 
   /** @param {string} invoiceNumberText e.g. "Invoice #14080" */
@@ -150,10 +157,16 @@ class RetainagePage {
    */
   async gotoContractRetainageTab(jobId) {
     Logger.step(`Navigating to Contracts > Retainage tab for job ${jobId}...`);
-    await this.page.goto(`${process.env.BASE_URL}/jobs/${jobId}?tab=contracts`, { waitUntil: 'load' });
+    await this.page.goto(
+      `${process.env.BASE_URL}/jobs/${jobId}?tab=contracts`,
+      { waitUntil: "load" }
+    );
     await this.page.waitForTimeout(2000);
     await this.loc.contractsTab.click().catch(() => {});
-    await this.loc.retainageSubTab.waitFor({ state: 'visible', timeout: 15000 });
+    await this.loc.retainageSubTab.waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
     await this.loc.retainageSubTab.click();
     await this.page.waitForURL(/contractSubTab=retainage/, { timeout: 15000 });
     await this.page.waitForTimeout(1500);
@@ -165,7 +178,7 @@ class RetainagePage {
     // yet, which let a freshly-created, already-approved invoice go "not found" here even
     // though it genuinely existed (CI/live investigation, 2026-09-22, TC344/TC345).
     await this.renderAllRetainageTabRows();
-    Logger.success('Navigated to Contracts > Retainage tab.');
+    Logger.success("Navigated to Contracts > Retainage tab.");
   }
 
   /** @param {string} invoiceNumberText e.g. "Invoice #14080" */
@@ -191,9 +204,21 @@ class RetainagePage {
    * @param {{ timeout?: number, reloadAttempts?: number, reloadTimeout?: number }} [options]
    * @returns {Promise<import('@playwright/test').Locator>}
    */
-  async waitForRetainageTabInvoiceRow(jobId, invoiceNumberText, { timeout = 20000, reloadAttempts = 6, reloadTimeout = 20000, interAttemptWaitMs = 30000 } = {}) {
+  async waitForRetainageTabInvoiceRow(
+    jobId,
+    invoiceNumberText,
+    {
+      timeout = 20000,
+      reloadAttempts = 6,
+      reloadTimeout = 20000,
+      interAttemptWaitMs = 30000,
+    } = {}
+  ) {
     let row = this.getRetainageTabInvoiceRow(invoiceNumberText);
-    const found = await expect(row, `Invoice "${invoiceNumberText}" present on Retainage tab`)
+    const found = await expect(
+      row,
+      `Invoice "${invoiceNumberText}" present on Retainage tab`
+    )
       .toBeVisible({ timeout })
       .then(() => true)
       .catch(() => false);
@@ -204,11 +229,16 @@ class RetainagePage {
       // reload itself accelerates — an invoice that wasn't found minutes after creation was
       // confirmed present several minutes later with no further action taken. Give real
       // wall-clock time to pass between attempts rather than reloading back-to-back.
-      Logger.info(`Invoice "${invoiceNumberText}" not visible on Retainage tab — waiting ${interAttemptWaitMs}ms before reload attempt ${attempt}/${reloadAttempts}.`);
+      Logger.info(
+        `Invoice "${invoiceNumberText}" not visible on Retainage tab — waiting ${interAttemptWaitMs}ms before reload attempt ${attempt}/${reloadAttempts}.`
+      );
       await this.page.waitForTimeout(interAttemptWaitMs);
       await this.gotoContractRetainageTab(jobId);
       row = this.getRetainageTabInvoiceRow(invoiceNumberText);
-      const foundThisAttempt = await expect(row, `Invoice "${invoiceNumberText}" present on Retainage tab after reload ${attempt}/${reloadAttempts}`)
+      const foundThisAttempt = await expect(
+        row,
+        `Invoice "${invoiceNumberText}" present on Retainage tab after reload ${attempt}/${reloadAttempts}`
+      )
         .toBeVisible({ timeout: reloadTimeout })
         .then(() => true)
         .catch(() => false);
@@ -217,7 +247,10 @@ class RetainagePage {
 
     // Final attempt with the full caller-facing error (surfaces a real, informative failure).
     row = this.getRetainageTabInvoiceRow(invoiceNumberText);
-    await expect(row, `Invoice "${invoiceNumberText}" present on Retainage tab after ${reloadAttempts} reload attempts`).toBeVisible({ timeout: reloadTimeout });
+    await expect(
+      row,
+      `Invoice "${invoiceNumberText}" present on Retainage tab after ${reloadAttempts} reload attempts`
+    ).toBeVisible({ timeout: reloadTimeout });
     return row;
   }
 
@@ -251,9 +284,9 @@ class RetainagePage {
    */
   async getRetainageTabRowValues(row) {
     const text = await row.innerText();
-    const parts = text.split('\n').filter(Boolean);
+    const parts = text.split("\n").filter(Boolean);
     // Level-0 invoice rows start with the tree-toggle glyph '›' as its own line.
-    const cells = parts[0] === '›' ? parts.slice(1) : parts;
+    const cells = parts[0] === "›" ? parts.slice(1) : parts;
     const [label, date, withheld, released, outstanding] = cells;
     return { label, date, withheld, released, outstanding };
   }
@@ -261,7 +294,9 @@ class RetainagePage {
   /** @returns {Promise<{withheld:string, released:string, outstanding:string}>} */
   async getRetainageTabTotals() {
     const text = await this.loc.retainageTabTotalRow.innerText();
-    const [, withheld, released, outstanding] = text.split('\n').filter(Boolean);
+    const [, withheld, released, outstanding] = text
+      .split("\n")
+      .filter(Boolean);
     return { withheld, released, outstanding };
   }
 
@@ -273,12 +308,16 @@ class RetainagePage {
    * @returns {Promise<number>}
    */
   async getChildRowCount(invoiceRow) {
-    return invoiceRow.evaluate((rowEl) => {
-      const allRows = Array.from(document.querySelectorAll('revo-grid revogr-data[type="rgRow"] div[role="row"]'));
+    return invoiceRow.evaluate(rowEl => {
+      const allRows = Array.from(
+        document.querySelectorAll(
+          'revo-grid revogr-data[type="rgRow"] div[role="row"]'
+        )
+      );
       const idx = allRows.indexOf(rowEl);
       let count = 0;
       for (let i = idx + 1; i < allRows.length; i++) {
-        if (allRows[i].querySelector('.tree-toggle')) break;
+        if (allRows[i].querySelector(".tree-toggle")) break;
         count++;
       }
       return count;
@@ -297,10 +336,10 @@ class RetainagePage {
    */
   async renderAllRetainageTabRows() {
     await this.page.evaluate(() => {
-      const grid = document.querySelector('revo-grid');
-      const wrapper = document.querySelector('.retainage-history-revogrid');
-      if (grid) grid.style.setProperty('height', '20000px', 'important');
-      if (wrapper) wrapper.style.setProperty('height', '20000px', 'important');
+      const grid = document.querySelector("revo-grid");
+      const wrapper = document.querySelector(".retainage-history-revogrid");
+      if (grid) grid.style.setProperty("height", "20000px", "important");
+      if (wrapper) wrapper.style.setProperty("height", "20000px", "important");
     });
     await this.page.waitForTimeout(300);
   }
@@ -342,7 +381,7 @@ class RetainagePage {
    */
   async getColumnValueForRow(row, headerLocator) {
     const attached = await headerLocator
-      .waitFor({ state: 'attached', timeout: 5000 })
+      .waitFor({ state: "attached", timeout: 5000 })
       .then(() => true)
       .catch(() => false);
     if (!attached) {
@@ -350,20 +389,28 @@ class RetainagePage {
       // still be missing here if the caller reached this row via some other path — force once
       // more and retry rather than failing outright. See forceGridFullWidth's doc comment.
       await this.forceGridFullWidth(this.loc.lineItemsGrid);
-      await headerLocator.waitFor({ state: 'attached', timeout: 10000 });
+      await headerLocator.waitFor({ state: "attached", timeout: 10000 });
     }
-    const colIndex = await headerLocator.evaluate((el) => el.getAttribute('data-rgcol') || el.getAttribute('aria-colindex'));
+    const colIndex = await headerLocator.evaluate(
+      el => el.getAttribute("data-rgcol") || el.getAttribute("aria-colindex")
+    );
     if (!colIndex) {
-      throw new Error(`Could not resolve column index for header: ${await headerLocator.textContent()}`);
+      throw new Error(
+        `Could not resolve column index for header: ${await headerLocator.textContent()}`
+      );
     }
-    const cell = row.locator(`[role="gridcell"][data-rgcol="${colIndex}"], [role="gridcell"][aria-colindex="${colIndex}"]`).first();
+    const cell = row
+      .locator(
+        `[role="gridcell"][data-rgcol="${colIndex}"], [role="gridcell"][aria-colindex="${colIndex}"]`
+      )
+      .first();
     // A focused/edited cell can render an inline "Clear selection" (✕) button, and the open
     // NumberInput editor injects its own <style> tag — both confirmed live via MCP browser to
     // leak into textContent() and contaminate the value. Strip them before reading text; the
     // button's presence is checked separately via getLineOverrideClearButton, not by parsing this.
-    return cell.evaluate((el) => {
+    return cell.evaluate(el => {
       const clone = el.cloneNode(true);
-      clone.querySelectorAll('button, style').forEach((n) => n.remove());
+      clone.querySelectorAll("button, style").forEach(n => n.remove());
       return clone.textContent.trim();
     });
   }
@@ -374,13 +421,24 @@ class RetainagePage {
    * @param {import('@playwright/test').Locator} row
    */
   async getInvoiceLineItemRowValues(row) {
-    const [invoiceAmount, retainagePercent, retainageAmount, retainageReleased, totalWithheldToDate, outstandingRetainage, netPayable] = await Promise.all([
+    const [
+      invoiceAmount,
+      retainagePercent,
+      retainageAmount,
+      retainageReleased,
+      totalWithheldToDate,
+      outstandingRetainage,
+      netPayable,
+    ] = await Promise.all([
       this.getColumnValueForRow(row, this.loc.lineItemsInvoiceAmountHeader),
       this.getColumnValueForRow(row, this.loc.lineItemsRetainagePercentHeader),
       this.getColumnValueForRow(row, this.loc.lineItemsRetainageAmountHeader),
       this.getColumnValueForRow(row, this.loc.lineItemsRetainageReleasedHeader),
       this.getColumnValueForRow(row, this.loc.lineItemsTotalWithheldHeader),
-      this.getColumnValueForRow(row, this.loc.lineItemsOutstandingRetainageHeader),
+      this.getColumnValueForRow(
+        row,
+        this.loc.lineItemsOutstandingRetainageHeader
+      ),
       this.getColumnValueForRow(row, this.loc.lineItemsNetPayableHeader),
     ]);
     return {
@@ -401,7 +459,9 @@ class RetainagePage {
    * @param {import('@playwright/test').Locator} headerLocator
    */
   async openLineCellEditor(row, headerLocator) {
-    const colIndex = await headerLocator.evaluate((el) => el.getAttribute('data-rgcol') || el.getAttribute('aria-colindex'));
+    const colIndex = await headerLocator.evaluate(
+      el => el.getAttribute("data-rgcol") || el.getAttribute("aria-colindex")
+    );
     await row.locator(`[data-rgcol="${colIndex}"]`).dblclick();
   }
 
@@ -417,8 +477,8 @@ class RetainagePage {
     Logger.step(`Setting line Invoice Amount to ${amount}`);
     await this.openLineCellEditor(row, this.loc.lineItemsInvoiceAmountHeader);
     await this.loc.cellCurrencyEditorInput.fill(String(amount));
-    await this.loc.cellCurrencyEditorInput.press('Enter');
-    await this.page.waitForTimeout(1000);
+    await this.loc.cellCurrencyEditorInput.press("Enter");
+    await this.page.waitForTimeout(5000);
   }
 
   /**
@@ -428,20 +488,26 @@ class RetainagePage {
    */
   async setLineRetainagePercentOverride(row, value) {
     Logger.step(`Overriding line Retainage % to ${value}`);
-    await this.openLineCellEditor(row, this.loc.lineItemsRetainagePercentHeader);
-    await this.page.keyboard.press('ControlOrMeta+a');
+    await this.openLineCellEditor(
+      row,
+      this.loc.lineItemsRetainagePercentHeader
+    );
+    await this.page.keyboard.press("ControlOrMeta+a");
     await this.page.keyboard.type(String(value));
-    await this.page.keyboard.press('Enter');
-    await this.page.waitForTimeout(1000);
+    await this.page.keyboard.press("Enter");
+    await this.page.waitForTimeout(5000);
   }
 
   /** @param {import('@playwright/test').Locator} row */
   async setLineRetainageReleased(row, amount) {
     Logger.step(`Setting line Retainage Released to ${amount}`);
-    await this.openLineCellEditor(row, this.loc.lineItemsRetainageReleasedHeader);
+    await this.openLineCellEditor(
+      row,
+      this.loc.lineItemsRetainageReleasedHeader
+    );
     await this.loc.cellCurrencyEditorInput.fill(String(amount));
-    await this.loc.cellCurrencyEditorInput.press('Enter');
-    await this.page.waitForTimeout(1000);
+    await this.loc.cellCurrencyEditorInput.press("Enter");
+    await this.page.waitForTimeout(5000);
   }
 
   /** @param {import('@playwright/test').Locator} row */
@@ -457,9 +523,11 @@ class RetainagePage {
    * @returns {Promise<{approved: boolean, errorMessage: string|null}>}
    */
   async confirmInvoice() {
-    Logger.step('Clicking Confirm Invoice');
+    Logger.step("Clicking Confirm Invoice");
     await this.loc.confirmInvoiceButton.click();
-    await expect(this.loc.confirmInvoiceConfirmationDialog).toBeVisible({ timeout: 10000 });
+    await expect(this.loc.confirmInvoiceConfirmationDialog).toBeVisible({
+      timeout: 10000,
+    });
     await this.loc.confirmInvoiceConfirmationConfirmButton.click();
 
     const approved = await this.page
@@ -468,31 +536,44 @@ class RetainagePage {
       .catch(() => false);
 
     if (approved) {
-      Logger.success('Invoice confirmed and approved.');
+      Logger.success("Invoice confirmed and approved.");
       return { approved: true, errorMessage: null };
     }
 
-    await expect(this.loc.confirmationFailedToastTitle, 'Neither approval redirect nor a "Confirmation Failed" toast appeared').toBeVisible({ timeout: 10000 });
-    const errorMessage = (await this.loc.confirmationFailedToastMessage.textContent()).trim();
+    await expect(
+      this.loc.confirmationFailedToastTitle,
+      'Neither approval redirect nor a "Confirmation Failed" toast appeared'
+    ).toBeVisible({ timeout: 10000 });
+    const errorMessage = (
+      await this.loc.confirmationFailedToastMessage.textContent()
+    ).trim();
     Logger.info(`Confirmation rejected: ${errorMessage}`);
     return { approved: false, errorMessage };
   }
 
   /** @param {string} label e.g. "Property", "Budget Category" */
   async getContractOverviewFieldValue(label) {
-    return (await this.loc.contractOverviewFieldValue(label).textContent()).trim();
+    return (
+      await this.loc.contractOverviewFieldValue(label).textContent()
+    ).trim();
   }
 
   async openEditContractOverviewDrawer() {
-    Logger.step('Opening Edit Contract Overview drawer');
+    Logger.step("Opening Edit Contract Overview drawer");
     await this.loc.editContractOverviewButton.click();
-    await expect(this.loc.editContractOverviewDialog).toBeVisible({ timeout: 15000 });
+    await expect(this.loc.editContractOverviewDialog).toBeVisible({
+      timeout: 15000,
+    });
   }
 
   async cancelEditContractOverviewDrawer() {
     await this.loc.editContractOverviewCancelButton.click();
-    await expect(this.loc.editContractOverviewDialog).not.toBeVisible({ timeout: 10000 });
-    Logger.success('Edit Contract Overview drawer closed via Cancel — no changes saved.');
+    await expect(this.loc.editContractOverviewDialog).not.toBeVisible({
+      timeout: 10000,
+    });
+    Logger.success(
+      "Edit Contract Overview drawer closed via Cancel — no changes saved."
+    );
   }
 }
 

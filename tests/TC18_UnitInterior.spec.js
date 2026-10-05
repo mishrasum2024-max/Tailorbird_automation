@@ -1120,4 +1120,132 @@ test.describe('Unit Interior', () => {
         },
     );
 
+    test('TC495 @regression : Verify expanding unit 105 shows full data for every scope row',
+        async () => {
+            // MCP-verified 2026-10-05 on this spec's job (3828, "Automation Job, please don't delete it"):
+            // expanding unit 105 opens its nested scope grid (Scope | Status | Scheduled Start |
+            // Start Date | End Date | Days in Renovation | Invoiced Amount). Scope, Status and Start
+            // Date always carry data; Scheduled Start, End Date, Days in Renovation and Invoiced
+            // Amount show the value when one exists and the "—" placeholder when it does not — the
+            // ui-contract-units API returns null for them on these scopes (scheduled_start_date,
+            // reno_end_date, invoice_amount), so "—" is the correct display there.
+            // Read-only: no selection or status changes, so it cannot affect the other tests.
+            Logger.info('[TC495] START: Unit 105 expanded scope rows must show their full data');
+
+            const unitNumber = 105;
+            const EMPTY_PLACEHOLDER = '—';
+            const EXPECTED_SCOPE_HEADERS = [
+                'Scope', 'Status', 'Scheduled Start', 'Start Date', 'End Date', 'Days in Renovation', 'Invoiced Amount',
+            ];
+            // Columns that must always hold real data on every scope row.
+            const REQUIRED_DATA_COLUMNS = ['Scope', 'Status', 'Start Date'];
+            // Columns that must render a value, or the "—" placeholder when the data does not exist yet.
+            const VALUE_OR_PLACEHOLDER_COLUMNS = ['Scheduled Start', 'End Date', 'Days in Renovation', 'Invoiced Amount'];
+            const DATE_PATTERN = /^\d{2}\/\d{2}\/\d{4}$/;
+
+            // The nested scope grid is a second revo-grid (role="treegrid") rendered INSIDE the
+            // units treegrid — both contain a "Scheduled Start" header in their subtree, so the
+            // role-based strategy takes the innermost (last) match.
+            const scopesGrid = healingLocator([
+                {
+                    name: 'role:treegrid[has columnheader=Scheduled Start] (innermost)',
+                    locator: loc.unitsPanel
+                        .getByRole('treegrid')
+                        .filter({ has: page.getByRole('columnheader', { name: 'Scheduled Start', exact: true }) })
+                        .last(),
+                },
+                {
+                    name: 'css:.contract-units-scopes-detail-revogrid >> role:treegrid',
+                    locator: loc.unitsPanel.locator('.contract-units-scopes-detail-revogrid').getByRole('treegrid').first(),
+                },
+            ]).first();
+            const scopeRows = scopesGrid.getByRole('row').filter({ has: page.getByRole('gridcell') });
+
+            await test.step(`S1: Search for unit ${unitNumber} on the Units tab`, async () => {
+                InteractionLogger.logFormFill('Search by unit name', String(unitNumber));
+                await loc.unitSearchInput.fill(String(unitNumber));
+                await loc.unitSearchInput.press('Enter');
+                await expect(
+                    loc.rowByUnitNum(unitNumber),
+                    `FAIL [TC495-S1]: Unit ${unitNumber} must be visible in the Units grid after searching "${unitNumber}"`,
+                ).toBeVisible({ timeout: 10000 });
+                Logger.success(`[TC495-S1] Unit ${unitNumber} found`);
+            });
+
+            await test.step(`S2: Expand unit ${unitNumber} and wait for its scope rows`, async () => {
+                const toggle = loc.rowToggleBtnByUnitNum(unitNumber);
+                await expect(
+                    toggle,
+                    `FAIL [TC495-S2]: Unit ${unitNumber} must have the › expand toggle`,
+                ).toBeVisible({ timeout: 10000 });
+                InteractionLogger.logButtonClick(`Unit ${unitNumber} expand toggle`, '›');
+                await toggle.click();
+                await expect(
+                    scopesGrid,
+                    `FAIL [TC495-S2]: Expanding unit ${unitNumber} must open its scope grid`,
+                ).toBeVisible({ timeout: 15000 });
+                await expect(
+                    scopeRows.first(),
+                    `FAIL [TC495-S2]: Expanded unit ${unitNumber} must list at least one scope row`,
+                ).toBeVisible({ timeout: 15000 });
+                Logger.success(`[TC495-S2] Unit ${unitNumber} expanded — scope grid visible`);
+            });
+
+            await test.step(`S3: Every scope row under unit ${unitNumber} shows its full data (Scope, Status, Start Date populated; other columns show a value or "—")`, async () => {
+                const headers = (await scopesGrid.getByRole('columnheader').allInnerTexts())
+                    .map(text => text.trim())
+                    .filter(Boolean);
+                const rows = await scopeRows.evaluateAll(rowEls => rowEls.map(rowEl =>
+                    Array.from(rowEl.querySelectorAll('[role="gridcell"]')).map(cell => (cell.innerText || '').trim()),
+                ));
+                Logger.info(`[TC495-S3] Scope grid headers: ${JSON.stringify(headers)}`);
+                rows.forEach((cells, i) => Logger.info(`[TC495-S3] Scope row ${i + 1}: ${JSON.stringify(cells)}`));
+
+                expect(
+                    headers,
+                    `FAIL [TC495-S3]: Unit ${unitNumber}'s scope grid must show all ${EXPECTED_SCOPE_HEADERS.length} columns`,
+                ).toEqual(EXPECTED_SCOPE_HEADERS);
+                expect(rows.length, `FAIL [TC495-S3]: Unit ${unitNumber} must have at least one scope row`).toBeGreaterThan(0);
+
+                const problems = [];
+                rows.forEach((cells, rowIndex) => {
+                    const valueOf = column => (cells[headers.indexOf(column)] ?? '').trim();
+                    const rowLabel = `scope row ${rowIndex + 1} ("${valueOf('Scope') || '?'}")`;
+
+                    for (const column of REQUIRED_DATA_COLUMNS) {
+                        const value = valueOf(column);
+                        if (!value || value === EMPTY_PLACEHOLDER || value === '-') {
+                            problems.push(`${rowLabel} → "${column}" must hold data but is "${value || '(blank)'}"`);
+                        }
+                    }
+                    const status = valueOf('Status');
+                    if (status && !fixture.unitsTab.knownStatusValues.includes(status)) {
+                        problems.push(`${rowLabel} → "Status" "${status}" is not a recognised status`);
+                    }
+                    const startDate = valueOf('Start Date');
+                    if (startDate && !DATE_PATTERN.test(startDate)) {
+                        problems.push(`${rowLabel} → "Start Date" "${startDate}" is not a MM/DD/YYYY date`);
+                    }
+                    for (const column of VALUE_OR_PLACEHOLDER_COLUMNS) {
+                        if (!valueOf(column)) {
+                            problems.push(`${rowLabel} → "${column}" is blank — it must show a value or "${EMPTY_PLACEHOLDER}"`);
+                        }
+                    }
+                });
+                InteractionLogger.logAssertion(
+                    'ScopeData', `Unit ${unitNumber} expanded scope rows show their full data`,
+                    '0 problems', `${problems.length} problem(s)`, problems.length === 0,
+                );
+                expect(
+                    problems,
+                    `FAIL [TC495-S3]: Expanded unit ${unitNumber} scope rows must show their full data — ` +
+                    `${problems.length} problem(s):\n${problems.join('\n')}`,
+                ).toEqual([]);
+                Logger.success(`[TC495-S3] All ${rows.length} scope row(s) under unit ${unitNumber} show their full data`);
+            });
+
+            Logger.success('[TC495] COMPLETE: Unit 105 expanded scope rows show full data');
+        },
+    );
+
 });

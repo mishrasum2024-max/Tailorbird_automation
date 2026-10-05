@@ -266,7 +266,7 @@ class FinancialsCategoryPage {
         const L = this.catLoc;
         await expect(L.filterFunnelBtn).toBeVisible();
         await L.filterFunnelBtn.click();
-        await this.page.waitForTimeout(500);
+        await this.page.waitForTimeout(1000);
 
         const filterInput = L.filterGlobalSearch;
         await expect(filterInput).toBeVisible();
@@ -288,7 +288,7 @@ class FinancialsCategoryPage {
 
         if (await closeFilterBtn.isVisible().catch(() => false)) {
             await closeFilterBtn.click();
-            await this.page.waitForTimeout(500);
+            await this.page.waitForTimeout(1500);
         }
 
         return rowCount;

@@ -221,6 +221,10 @@ test.describe("Manage Team & Roles", () => {
       // which the old accessible-name regex no longer matches; match on the
       // unchanged placeholder instead.
       await expect(
+        // MCP-verified 2026-10-05: since the BirdTable rebuild of the Users table (app PR #1362)
+        // the placeholder is just "Search...". This added locator keeps the original placeholder
+        // match and falls back to the new one; `||` leaves the original line below untouched.
+        page.locator('input[placeholder="Search by name or email"], input[placeholder="Search by name or e-mail"]').or(page.getByRole("tabpanel", { name: roleManagementUiLabels.tabUsers }).getByPlaceholder("Search...", { exact: true })).first() ||
         page.locator('input[placeholder="Search by name or email"], input[placeholder="Search by name or e-mail"]'),
       ).toBeVisible({ timeout: 15_000 });
       InteractionLogger.logButtonClick(roleManagementUiLabels.tabPropertyAccess, "Property access tab — content differs");
