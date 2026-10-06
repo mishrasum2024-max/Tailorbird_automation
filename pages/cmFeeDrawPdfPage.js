@@ -39,6 +39,19 @@ exports.CMFeeDrawPdfPage = class CMFeeDrawPdfPage {
         await this.page.waitForTimeout(3000);
 
         const invoiceTab = this.page.getByRole('tab', { name: 'Invoice', exact: true });
+        // MCP-verified 2026-10-06: the locator is correct (job tabs: Job Summary | Contracts |
+        // Change Orders | Invoice), but on a slow beta the job page can stay on its blank loading
+        // shell (no tabs rendered) for the whole 55s click timeout. Wait for the tab; if it never
+        // renders, reload once and wait again before clicking.
+        const invoiceTabRendered = await invoiceTab
+            .waitFor({ state: 'visible', timeout: 30000 })
+            .then(() => true)
+            .catch(() => false);
+        if (!invoiceTabRendered) {
+            Logger.info(`Job ${jobId} page did not render its tabs within 30s — reloading once`);
+            await this.page.reload({ waitUntil: 'load' });
+            await invoiceTab.waitFor({ state: 'visible', timeout: 60000 });
+        }
         await invoiceTab.click();
         await this.page.waitForTimeout(2000);
 
@@ -221,26 +234,34 @@ exports.CMFeeDrawPdfPage = class CMFeeDrawPdfPage {
             });
         }
 
-        // MCP-verified live (2026-10-05): this table gained a trailing "CM Fee" column
-        // (Invoice Number | Vendor | Payment Status | Amount | CM Fee), so the Total row's LAST
-        // cell read above is now the CM Fee total (e.g. "$12.00"), not the Amount total
-        // (e.g. "$64.00"). Re-read the Total from the "Amount" column located by its header
-        // name; if no "Amount" header is found, the value read above is kept unchanged.
-        // The header is not necessarily rows.nth(0) — the dialog also renders other (empty) table
-        // rows before it (MCP-verified: header was the 4th matched row) — so search for it.
-        let amountColumnIndex = -1;
-        for (let i = 0; i < rowCount && amountColumnIndex < 0; i++) {
-            const headerCells = (await rows.nth(i).getByRole('columnheader').allTextContents()).map((c) => c.trim());
-            amountColumnIndex = headerCells.indexOf('Amount');
-        }
-        if (amountColumnIndex >= 0) {
-            for (let i = 0; i < rowCount; i++) {
-                const totalRowCells = (await rows.nth(i).getByRole('cell').allTextContents()).map((c) => c.trim());
-                if (totalRowCells[0] === 'Total' && totalRowCells[amountColumnIndex]) {
-                    total = totalRowCells[amountColumnIndex];
-                    break;
+        // MCP-verified live (2026-10-05 / 2026-10-06): the Invoices table has a trailing "CM Fee"
+        // column (Invoice Number | Vendor | Payment Status | Amount | CM Fee), so the Total row's
+        // LAST cell read above is the CM Fee total (e.g. "$4.00"), not the Amount total. The dialog
+        // also holds a second, hidden "Budget Snapshot" table with its OWN "Total" row
+        // (Budget Category | Billed this draw | Invoices), and the invoice row count varies per
+        // draw — so re-read the Total generically, straight from the DOM: find the table whose
+        // header row includes "Invoice Number" and "Amount", locate the Amount column by name,
+        // and take THAT table's "Total" row value in that column. innerText (not textContent)
+        // keeps Mantine's injected <style> text out of the header names. No row count, row
+        // position or column position is assumed. If no such table is found, the value read
+        // above is kept unchanged.
+        const amountTotal = await dialog.locator('table').evaluateAll((tables) => {
+            const textOf = (el) => (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+            for (const table of tables) {
+                const headerRow = table.querySelector('thead tr') || table.querySelector('tr');
+                if (!headerRow) continue;
+                const headers = Array.from(headerRow.querySelectorAll('th, td')).map(textOf);
+                const amountIndex = headers.indexOf('Amount');
+                if (amountIndex < 0 || !headers.includes('Invoice Number')) continue;
+                for (const tr of Array.from(table.querySelectorAll('tr'))) {
+                    const cells = Array.from(tr.querySelectorAll('th, td')).map(textOf);
+                    if (cells[0] === 'Total' && cells[amountIndex]) return cells[amountIndex];
                 }
             }
+            return null;
+        });
+        if (amountTotal) {
+            total = amountTotal;
         }
 
         await this.closeDrawDetailDialog(dialog);
