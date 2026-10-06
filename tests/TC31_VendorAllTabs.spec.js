@@ -579,11 +579,32 @@ test.describe("Vendor Phase 3 — Bids, Read Views & Admin/Compliance", () => {
       test.setTimeout(240000);
       const readDashboardInvitedCount = async () => {
         await dashboard.navigateToDashboard();
+        // MCP-verified 2026-10-06: in-app navigation back to the Dashboard makes no
+        // /api/vendor-dashboard call (only the cached RSC payload), so the badge keeps the
+        // count from the first visit and the before/after "stable" check compared two stale
+        // reads (CI: 1 vs listing 0). A reload forces a fresh /api/vendor-dashboard read.
+        await Promise.all([
+          page
+            .waitForResponse(r => /\/api\/vendor-dashboard/.test(r.url()), { timeout: 30000 })
+            .catch(() => null),
+          page.reload({ waitUntil: "load" }),
+        ]);
+        await page.waitForTimeout(1500);
         await dashboard.assertNewBidInvitationsPanelVisible();
         return (await newBidInvitationsBadge.innerText()).trim();
       };
       const readListingInvitedCount = async attempt => {
         await vendorListingPage.navigateTo("bids");
+        // Same caching as the Dashboard: in-app navigation can reuse the grid rows from the
+        // first visit (no /api/bird-table request), so the export would repeat stale data.
+        // A reload forces a fresh bird-table read before exporting.
+        await Promise.all([
+          page
+            .waitForResponse(r => /\/api\/bird-table\?table_name=bids_and_contracts/.test(r.url()), { timeout: 30000 })
+            .catch(() => null),
+          page.reload({ waitUntil: "load" }),
+        ]);
+        await page.waitForTimeout(1500);
         const [retryDownload] = await Promise.all([
           page.waitForEvent("download", { timeout: 15000 }),
           exportButton.click(),
