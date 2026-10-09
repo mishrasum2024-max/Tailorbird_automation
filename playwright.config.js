@@ -6,12 +6,35 @@ import path from 'path';
 // Load environment variables from .env
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
+/*
+ * Timing — one place for every default wait.
+ *
+ * DEFAULT_WAIT_MS is the MAXIMUM Playwright waits for an action (click,
+ * fill…), a navigation, or a web-first assertion (expect(...).toBeVisible()
+ * etc.) that does not pass its own timeout. Playwright continues the moment
+ * the condition is met, so a fast page still moves on immediately; a slow
+ * page gets up to 60 s instead of failing early. A call that passes its
+ * own { timeout } keeps that value.
+ *
+ * SLOW_FACTOR (env, default 1, max 5) scales every value below for slow
+ * days without touching any test, e.g. SLOW_FACTOR=1.5 → 90 s waits.
+ */
+const SLOW_FACTOR = (() => {
+  const value = Number(process.env.SLOW_FACTOR || 1);
+
+  return Number.isFinite(value) && value >= 1 ? Math.min(value, 5) : 1;
+})();
+/** @param {number} ms */
+const scaled = ms => Math.round(ms * SLOW_FACTOR);
+const DEFAULT_WAIT_MS = scaled(60 * 1000);
+
 /**
  * @see https://playwright.dev/docs/test-configuration
  */
 export default defineConfig({
   testDir: './tests',
-  timeout: 280 * 1000,
+  /* Whole test (scaled by SLOW_FACTOR; test.setTimeout() in a test still wins) */
+  timeout: scaled(280 * 1000),
 
   /* Run tests in files in parallel */
   fullyParallel: true,
@@ -45,6 +68,8 @@ export default defineConfig({
   updateSnapshots: 'missing',
 
   expect: {
+    /* Web-first assertions without their own timeout (was Playwright's 5 s default) */
+    timeout: DEFAULT_WAIT_MS,
     toHaveScreenshot: {
       pathTemplate:
         'committed_ui_snapshots/{testFilePath}/{arg}{ext}',
@@ -55,7 +80,9 @@ export default defineConfig({
   use: {
     headless: true,
     viewport: { width: 1920, height: 1080 },
-    actionTimeout: 55 * 1000,
+    /* click / fill / check … and page.goto / waitForURL / reload */
+    actionTimeout: DEFAULT_WAIT_MS,
+    navigationTimeout: DEFAULT_WAIT_MS,
 
     /* Base URL from .env */
     baseURL: process.env.BASE_URL,

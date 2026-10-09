@@ -58,4 +58,32 @@ async function retryOperation(action, { attempts = 3, delayMs = 1500, label = 'o
     throw lastError;
 }
 
-module.exports = { withExtendedTerminalWait, retryOperation };
+/**
+ * NEW, additive-only helper for pages whose backend data call can be genuinely very slow OR
+ * outright fail with a gateway error under real conditions — MCP-verified live 2026-09-22: on
+ * "Test Property 1_Cottages on Elm" (274 accumulated units from repeated automation runs),
+ * `/api/bird-table?table_name=unit&property_id=5758` took as long as 94 seconds to return a
+ * real 200, and one attempt returned an outright 502 ("upstream error") that the frontend
+ * gave up on rather than silently retrying. A longer wait alone can't recover from that 502 —
+ * the request already failed — so this reloads the page (the selected location type survives
+ * in the URL's `selected-location` query param) between attempts, not just re-polls the same
+ * failed state.
+ */
+async function waitForSlowDataWithReload(page, checkFn, { attempts = 2, timeoutMs = 100000, label = 'element' } = {}) {
+    let lastError;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+        try {
+            return await checkFn(timeoutMs);
+        } catch (err) {
+            lastError = err;
+            Logger.info(`[resilientRetry] "${label}" attempt ${attempt}/${attempts} failed (${err.message.split('\n')[0]}) — reloading and retrying with a fresh backend request.`);
+            if (attempt < attempts) {
+                await page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {});
+                await page.waitForTimeout(1500);
+            }
+        }
+    }
+    throw lastError;
+}
+
+module.exports = { withExtendedTerminalWait, retryOperation, waitForSlowDataWithReload };

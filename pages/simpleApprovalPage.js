@@ -64,7 +64,7 @@ class SimpleApprovalPage {
 
         for (let attempt = 0; attempt < 2 && !hasPopulatedOptions(body); attempt++) {
             Logger.info(`Approval API options still empty. Retrying in 5s (attempt ${attempt + 1}/2)...`);
-            await this.page.waitForTimeout(5000);
+            await this.page.waitForTimeout(8000);
             body = await fetchApprovalData();
         }
 
@@ -130,12 +130,19 @@ class SimpleApprovalPage {
     }
 
     async searchApprovals(term) {
-        await healingLocator(this.strategies.searchInput).fill(term, { timeout: 10000 });
+        const input = healingLocator(this.strategies.searchInput);
+        await input.fill(term, { timeout: 10000 });
+        // MCP-verified live 2026-09-23: this listing does not filter on input alone —
+        // confirmed live with a non-matching search term that the grid stays fully
+        // unfiltered until Enter is pressed.
+        await input.press('Enter').catch(() => {});
         await this.page.waitForTimeout(600);
     }
 
     async clearSearch() {
-        await healingLocator(this.strategies.searchInput).clear({ timeout: 10000 });
+        const input = healingLocator(this.strategies.searchInput);
+        await input.clear({ timeout: 10000 });
+        await input.press('Enter').catch(() => {});
         await this.page.waitForTimeout(400);
     }
 

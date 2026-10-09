@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c ' *)",
+      "Bash(node -e ' *)",
+      "Bash(node -e \"const pw = require\\('@playwright/test'\\); console.log\\(typeof pw.chromium, typeof pw.chromium.launch\\);\")",
+      "Bash(node \"C:\\\\Users\\\\hp\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--pull-to-revert-changes-tailorbird-next-Playwright-Tailorbird-UI-Automation\\\\14c41467-512b-40b1-9164-e939caba1a2e\\\\scratchpad\\\\tc109_repro.js\")",
+      "Bash(node debug_repro/repro_tc109.js)",
+      "Bash(echo \"started with pid $!\")",
+      "Edit(tests/**)",
+      "Write(tests/**)",
+      "Edit(.claude/skills/tailorbird-playwright/SKILL.md)"
+    ]
+  }
+}

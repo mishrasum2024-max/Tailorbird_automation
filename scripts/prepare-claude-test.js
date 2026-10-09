@@ -22,21 +22,110 @@ const OUTPUT_FILE = path.join(
   "claude-test-generation-prompt.md"
 );
 
-function readJson(filePath, name) {
-  if (!fs.existsSync(filePath)) {
-    throw new Error(
-      `${name} not found: ${filePath}`
-    );
+const MEMORY_DIGEST_FILE = path.join(
+  __dirname,
+  "..",
+  "data",
+  "memory-digest.md"
+);
+
+const INVESTIGATION_NOTES_FILE = path.join(
+  __dirname,
+  "..",
+  "data",
+  "testcase-investigation-notes.json"
+);
+
+/*
+ * Written by ai-generate-testcases.yml's live-browser investigation
+ * step (if it ran and was cached forward via the
+ * session-investigation-bundle artifact) — real DOM/role/URL facts
+ * already observed against the live app for each test case, keyed by
+ * final test-case id. Reusing these here means Claude doesn't have to
+ * rediscover the same UI structure from scratch during automation.
+ *
+ * Optional: older tickets, or a run where investigation fell back to
+ * unverified candidates, simply won't have this file.
+ */
+function readInvestigationNotes(selectedIds) {
+  if (!fs.existsSync(INVESTIGATION_NOTES_FILE)) {
+    return "";
+  }
+
+  let notes;
+
+  try {
+    notes = JSON.parse(fs.readFileSync(INVESTIGATION_NOTES_FILE, "utf8"));
+  } catch (error) {
+    return "";
+  }
+
+  const selectedIdSet = new Set(selectedIds);
+
+  const entries = Object.entries(notes).filter(([id]) =>
+    selectedIdSet.has(id)
+  );
+
+  if (!entries.length) {
+    return "";
+  }
+
+  const formatted = entries
+    .map(([id, note]) => {
+      const lines = [`### ${id}`];
+
+      if (note.url) {
+        lines.push(`**URL:** ${note.url}`);
+      }
+
+      if (Array.isArray(note.keyElements) && note.keyElements.length) {
+        lines.push(
+          `**Key elements observed:**\n` +
+            note.keyElements.map((el) => `- ${el}`).join("\n")
+        );
+      }
+
+      if (note.notes) {
+        lines.push(`**Notes:** ${note.notes}`);
+      }
+
+      return lines.join("\n\n");
+    })
+    .join("\n\n---\n\n");
+
+  return (
+    "## Known Live-App Facts (from earlier live-browser investigation)\n\n" +
+    "These are REAL observations already captured against the live " +
+    "application while validating these test cases before Slack " +
+    "approval. Treat this as a strong hint, not gospel — the app may " +
+    "have changed since, so verify anything critical still holds " +
+    "before relying on it blindly.\n\n" +
+    formatted +
+    "\n"
+  );
+}
+
+function readMemoryDigest() {
+  if (!fs.existsSync(MEMORY_DIGEST_FILE)) {
+    return "## Known Prior Issues (persistent AI-agent memory)\n\n(No digest was built for this run.)\n";
   }
 
   try {
-    return JSON.parse(
-      fs.readFileSync(filePath, "utf8")
-    );
+    return fs.readFileSync(MEMORY_DIGEST_FILE, "utf8");
   } catch (error) {
-    throw new Error(
-      `Failed to parse ${name}: ${error.message}`
-    );
+    return "## Known Prior Issues (persistent AI-agent memory)\n\n(Digest unavailable this run.)\n";
+  }
+}
+
+function readJson(filePath, name) {
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`${name} not found: ${filePath}`);
+  }
+
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch (error) {
+    throw new Error(`Failed to parse ${name}: ${error.message}`);
   }
 }
 
@@ -72,10 +161,7 @@ function main() {
   // Read ticket context
   // --------------------------------------------------
 
-  const ticket = readJson(
-    TICKET_FILE,
-    "current-ticket-context.json"
-  );
+  const ticket = readJson(TICKET_FILE, "current-ticket-context.json");
 
   // --------------------------------------------------
   // Read ONLY Slack-approved test cases
@@ -86,10 +172,9 @@ function main() {
     "selected-testcases.json"
   );
 
-  const selectedTestCases =
-    Array.isArray(selectedData.selectedTestCases)
-      ? selectedData.selectedTestCases
-      : [];
+  const selectedTestCases = Array.isArray(selectedData.selectedTestCases)
+    ? selectedData.selectedTestCases
+    : [];
 
   if (!selectedTestCases.length) {
     throw new Error(
@@ -102,14 +187,10 @@ function main() {
   console.log("SLACK-APPROVED TEST CASES");
   console.log("======================================");
   console.log(`Ticket: ${ticket.id}`);
-  console.log(
-    `Selected test cases: ${selectedTestCases.length}`
-  );
+  console.log(`Selected test cases: ${selectedTestCases.length}`);
 
   selectedTestCases.forEach(testCase => {
-    console.log(
-      `- ${testCase.id} | ${testCase.title}`
-    );
+    console.log(`- ${testCase.id} | ${testCase.title}`);
   });
 
   console.log("======================================");
@@ -118,10 +199,13 @@ function main() {
   // Build selected test-case documentation
   // --------------------------------------------------
 
-  const selectedTestCaseText =
-    selectedTestCases
-      .map(formatTestCase)
-      .join("\n\n---\n\n");
+  const selectedTestCaseText = selectedTestCases
+    .map(formatTestCase)
+    .join("\n\n---\n\n");
+
+  const investigationNotesText = readInvestigationNotes(
+    selectedTestCases.map(testCase => testCase.id)
+  );
 
   // --------------------------------------------------
   // Claude prompt
@@ -204,7 +288,19 @@ Instead, report why that specific approved test case could not be automated.
 
 ---
 
+${readMemoryDigest()}
+---
+${investigationNotesText ? `\n${investigationNotesText}---\n` : ""}
 # BEFORE WRITING TESTS
+
+Before writing any code, read and follow:
+
+\`.claude/skills/tailorbird-playwright/SKILL.md\`
+
+That skill is the source of truth for this repository's Playwright
+framework patterns (pages/, locators/, utils/, fixture/, data/,
+tests/). Everything below is the ticket-specific task; the skill
+governs HOW to implement it.
 
 Inspect the existing repository carefully.
 
@@ -237,6 +333,10 @@ exploration that runs out of budget before anything is written.
 
 Follow this order strictly:
 
+0. First check the "Known Prior Issues" section above. If this ticket's
+   area/component matches a recorded entry, start from that known-good
+   pattern instead of exploring blind — it can save you a large number
+   of MCP browser turns.
 1. Do the MINIMUM exploration needed to understand the target UI
    (check authentication state, locate the feature, identify the
    relevant existing patterns). Do not exhaustively map every element
@@ -347,7 +447,22 @@ Follow these rules strictly:
 - Follow existing test naming conventions.
 - Follow existing folder structure.
 - Use existing authentication/session mechanisms.
-- Use existing test data where possible.
+- A daily data-cleanup job removes test data from this environment —
+  only the properties below (and jobs/projects that already belong to
+  them) are permanent and safe to reference by a hardcoded name. Do
+  not hardcode the name of any OTHER property, job, or project; if the
+  test needs one that isn't on this list, create it fresh at the start
+  of the test using this repo's existing property/project/job creation
+  page-object methods (the same pattern already used throughout
+  tests/*.js), not a fixed name that may no longer exist by the time
+  this test runs again:
+  - Test Property 1_Cottages on Elm
+  - Test Property 2_The Westerham
+  - Test Property3 Automation Retainage flow
+  - Test Property4_Multiapprover_automation
+  - Test Property5_Reassigning_Automation
+  - Test Property 6_Draw reporting
+  - Test_property7_CM_Fee_Automation
 
 ---
 
@@ -452,25 +567,15 @@ Do not expand the scope.
   // Write Claude prompt
   // --------------------------------------------------
 
-  fs.writeFileSync(
-    OUTPUT_FILE,
-    prompt,
-    "utf8"
-  );
+  fs.writeFileSync(OUTPUT_FILE, prompt, "utf8");
 
   console.log("");
   console.log("======================================");
   console.log("CLAUDE PROMPT READY");
   console.log("======================================");
-  console.log(
-    `📁 Saved to: ${OUTPUT_FILE}`
-  );
-  console.log(
-    `🎯 Ticket: ${ticket.id} | ${ticket.title}`
-  );
-  console.log(
-    `✅ Approved test cases: ${selectedTestCases.length}`
-  );
+  console.log(`📁 Saved to: ${OUTPUT_FILE}`);
+  console.log(`🎯 Ticket: ${ticket.id} | ${ticket.title}`);
+  console.log(`✅ Approved test cases: ${selectedTestCases.length}`);
   console.log("======================================");
 }
 
@@ -478,9 +583,7 @@ try {
   main();
 } catch (error) {
   console.error("");
-  console.error(
-    "❌ Failed to prepare Claude prompt."
-  );
+  console.error("❌ Failed to prepare Claude prompt.");
   console.error(error.message);
   process.exit(1);
 }

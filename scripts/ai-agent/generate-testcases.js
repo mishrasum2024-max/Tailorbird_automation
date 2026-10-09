@@ -13,17 +13,13 @@ const path = require("path");
  * 1. Reading the approved Notion ticket context
  * 2. Preparing the instructions for Claude Code
  * 3. Making sure Claude generates comprehensive test cases
- * 4. Enforcing exactly SIX test-case categories:
+ * 4. Enforcing exactly TWO test-case categories:
  *
- *    - E2E
- *    - Edge
- *    - Positive
- *    - Negative
- *    - UI
- *    - Visual
+ *    - E2E + Positive
+ *    - Negative + Edge
  *
- * 5. Supporting approximately 50 test cases or more when
- *    the ticket requires them.
+ * 5. Supporting 20-25 test cases (~10-15 per category), matching
+ *    .claude/skills/automation-testcase-generation/SKILL.md
  *
  * IMPORTANT:
  * This script ONLY prepares/validates test-case generation.
@@ -65,12 +61,8 @@ const PROMPT_FILE = path.join(
  */
 
 const ALLOWED_TYPES = [
-  "E2E",
-  "Edge",
-  "Positive",
-  "Negative",
-  "UI",
-  "Visual",
+  "E2E + Positive",
+  "Negative + Edge",
 ];
 
 /*
@@ -147,6 +139,24 @@ TICKET CONTEXT
 ${JSON.stringify(ticketContext, null, 2)}
 
 ============================================================
+FOLLOW THE TEST-CASE-GENERATION SKILL
+============================================================
+
+The complete methodology for this task lives in:
+
+.claude/skills/automation-testcase-generation/SKILL.md
+
+Load and follow that skill for HOW to analyze the ticket:
+Acceptance Criteria strikethrough rules, comment rules,
+screenshot rules, mandatory functional coverage (Import, Export,
+Search, Filter, AI Chat, tabs/subtabs, dropdowns, historical
+data, View Details), quality bar, and the final coverage audit.
+
+The sections below are the exact PARAMETERS for this run
+(categories and counts) — they match the skill and take
+precedence if anything here and the skill ever disagree.
+
+============================================================
 IMPORTANT OBJECTIVE
 ============================================================
 
@@ -158,14 +168,10 @@ Every test case must be directly related to the actual ticket,
 its requirements, acceptance criteria, UI behavior, business
 logic, validation rules, integrations and user workflows.
 
-There is NO hard limit of 30 test cases.
+Generate 20-25 test cases total. Never exceed 25.
 
-Approximately 50 test cases is perfectly acceptable.
-
-If the ticket requires fewer test cases, generate fewer.
-
-If the ticket requires more than 50 meaningful test cases,
-generate more.
+If the ticket requires fewer test cases, generate fewer, but
+still keep both categories represented.
 
 DO NOT create duplicate or meaningless test cases just to reach
 a number.
@@ -175,18 +181,19 @@ MANDATORY TEST CASE CATEGORIES
 ============================================================
 
 Every generated test case MUST belong to exactly ONE of these
-six categories:
+two categories:
 
-1. E2E
-2. Edge
-3. Positive
-4. Negative
-5. UI
-6. Visual
+1. E2E + Positive
+2. Negative + Edge
 
 Use these exact values in the "type" field.
 
 Allowed type values:
+
+- E2E + Positive
+- Negative + Edge
+
+Do NOT use:
 
 - E2E
 - Edge
@@ -194,9 +201,6 @@ Allowed type values:
 - Negative
 - UI
 - Visual
-
-Do NOT use:
-
 - Visual/UI
 - UI/Visual
 - Functional
@@ -209,149 +213,61 @@ Do NOT use:
 CATEGORY DEFINITIONS
 ============================================================
 
-1. E2E
+1. E2E + POSITIVE
 
-End-to-end scenarios covering a complete real user workflow.
+Complete realistic user workflows and expected successful
+behavior using valid inputs.
 
 Examples:
 
 - Complete workflow from beginning to successful completion
 - Multiple screens/modules involved
 - Data created in one area and verified in another
-- Full business workflow
-- Submit/save/approve/verify flows
-
-These should represent realistic user journeys.
-
-------------------------------------------------------------
-
-2. EDGE
-
-Boundary, unusual or exceptional conditions.
-
-Examples:
-
-- Minimum values
-- Maximum values
-- Empty states
-- Very large data
-- Very long text
-- Decimal values
-- Rapid repeated actions
-- Boundary limits
-- Missing optional data
-- Unusual combinations
-- Duplicate operations
-- State transitions
-
-------------------------------------------------------------
-
-3. POSITIVE
-
-Valid expected behavior using correct inputs.
-
-Examples:
-
-- Valid data submission
-- Successful save
-- Correct calculations
-- Correct navigation
-- Valid file upload
-- Expected business rules
-- Successful editing
-- Successful search/filter
+- Full business workflow / submit/save/approve/verify flows
+- Valid data submission / successful save
+- Correct calculations / correct navigation
+- Successful search/filter/import/export
 - Correct data persistence
 
-------------------------------------------------------------
-
-4. NEGATIVE
-
-Invalid input or prohibited behavior.
-
-Examples:
-
-- Invalid data
-- Missing required fields
-- Incorrect values
-- Unsupported file type
-- Unauthorized operation
-- Invalid state transition
-- Validation errors
-- Save/submit prevention
-- Incorrect business conditions
+Target: 10-15 cases whenever ticket scope allows.
 
 ------------------------------------------------------------
 
-5. UI
+2. NEGATIVE + EDGE
 
-Functional UI behavior and UI interaction.
-
-Examples:
-
-- Buttons
-- Fields
-- Dropdowns
-- Checkboxes
-- Radio buttons
-- Modals
-- Tables
-- Tabs
-- Navigation
-- Tooltips
-- Enabled/disabled states
-- Error messages
-- Dynamic UI behavior
-- Loading states
-
-UI tests should verify functional interface behavior.
-
-------------------------------------------------------------
-
-6. VISUAL
-
-Pure visual and visual-regression-oriented checks.
+Invalid input, prohibited behavior, boundaries, and unusual but
+valid conditions.
 
 Examples:
 
-- Alignment
-- Spacing
-- Typography
-- Colors
-- Icons
-- Borders
-- Component sizing
-- Responsive layout
-- Modal layout
-- Table alignment
-- Visual hierarchy
-- Empty states
-- Error-state styling
-- Button visual states
-- Visual consistency
+- Invalid data / missing required fields
+- Incorrect values / unsupported file type
+- Unauthorized operation / invalid state transition
+- Validation errors / save-submit prevention
+- Minimum/maximum values, empty states
+- Very large data, very long text, decimal values
+- Boundary limits, duplicate operations
+- Unusual combinations, rapid repeated actions
 
-Do not classify normal UI interaction as Visual unless the
-primary purpose of the test is visual appearance.
+Target: 10-15 cases depending on ticket scope.
+
+Both categories should carry roughly comparable weight — do not
+let the suite skew mostly positive.
 
 ============================================================
 CATEGORY COVERAGE
 ============================================================
 
-Try to provide meaningful coverage across ALL SIX categories.
+Try to provide meaningful coverage across BOTH categories.
 
-Do not put all test cases into Positive/Negative.
+Do not put nearly all test cases into just one category.
 
-A strong test suite should contain a reasonable mixture of:
+The exact distribution should depend on the ticket, but aim for
+roughly 10-15 in each category out of the 20-25 total.
 
-- E2E
-- Edge
-- Positive
-- Negative
-- UI
-- Visual
-
-The exact distribution should depend on the ticket.
-
-Do NOT force equal distribution if the ticket does not justify it.
+Do NOT force equal distribution if the ticket does not justify
+it — but a suite that is almost entirely one category is a sign
+something was missed.
 
 ============================================================
 TEST CASE STRUCTURE
@@ -362,7 +278,7 @@ Every test case MUST contain exactly these fields:
 {
   "id": "TC001",
   "title": "Short but sufficiently descriptive test case title",
-  "type": "Positive",
+  "type": "E2E + Positive",
   "priority": "P1",
   "preconditions": [],
   "steps": [],
@@ -551,7 +467,7 @@ Use exactly this top-level structure:
     {
       "id": "TC001",
       "title": "...",
-      "type": "E2E",
+      "type": "E2E + Positive",
       "priority": "P1",
       "preconditions": [],
       "steps": [],
@@ -582,11 +498,11 @@ Total Test Cases: ...
 
 ---
 
-## E2E Test Cases
+## E2E + Positive Test Cases
 
 ### TCxxx - Test Case Title
 
-- Type: E2E
+- Type: E2E + Positive
 - Priority: P1
 
 #### Preconditions
@@ -605,31 +521,7 @@ Total Test Cases: ...
 
 ---
 
-## Edge Cases
-
-...
-
----
-
-## Positive Cases
-
-...
-
----
-
-## Negative Cases
-
-...
-
----
-
-## UI Cases
-
-...
-
----
-
-## Visual Testing
+## Negative + Edge Test Cases
 
 ...
 
@@ -647,12 +539,9 @@ Before finishing verify:
 6. Every test case has a unique ID.
 7. IDs are sequential.
 8. Every type is one of:
-   E2E
-   Edge
-   Positive
-   Negative
-   UI
-   Visual
+   E2E + Positive
+   Negative + Edge
+8b. Total test case count is between 20 and 25 (never above 25).
 9. Every priority is one of:
    P0
    P1
@@ -674,15 +563,11 @@ FINAL QUALITY RULE
 
 Quality is more important than quantity.
 
-Approximately 50 test cases is acceptable.
-
-Generate as many meaningful test cases as the ticket warrants.
-
-Do not stop at 30.
-
-Do not artificially create cases just to reach 50.
+Generate 20-25 meaningful test cases, roughly 10-15 per category.
 
 Do not omit important scenarios just to keep the count low.
+
+Do not create artificial cases just to reach 25.
 `;
 }
 
@@ -771,13 +656,11 @@ function validateGeneratedTestCases() {
 
   const ids = new Set();
 
+  let seenNegativeEdge = false;
+
   const typeCounts = {
-    E2E: 0,
-    Edge: 0,
-    Positive: 0,
-    Negative: 0,
-    UI: 0,
-    Visual: 0,
+    "E2E + Positive": 0,
+    "Negative + Edge": 0,
   };
 
   data.testCases.forEach(
@@ -849,9 +732,56 @@ function validateGeneratedTestCases() {
         );
       }
 
+      // Enforce category grouping: all "E2E + Positive" cases must come
+      // before all "Negative + Edge" cases — no interleaving.
+      if (testCase.type === "Negative + Edge") {
+        seenNegativeEdge = true;
+      } else if (testCase.type === "E2E + Positive" && seenNegativeEdge) {
+        throw new Error(
+          `Test case ${testCase.id} is "E2E + Positive" but appears ` +
+          `after a "Negative + Edge" case. All E2E + Positive cases ` +
+          `must be grouped together before all Negative + Edge cases.`
+        );
+      }
+
       typeCounts[testCase.type]++;
     }
   );
+
+  const total = data.testCases.length;
+
+  // A non-empty dropped-testcases.json (written by ai-generate-testcases.yml's
+  // live-verification investigation step, if it ran) means invalidated
+  // candidates were genuinely backfilled and it still came up short —
+  // relax the floor rather than hard-failing a ticket whose live app
+  // simply doesn't support 20 valid scenarios. Mirrors the same
+  // relaxation in the workflow's own "Verify JSON structure" step.
+  let droppedCount = 0;
+  const droppedFile = path.join(DATA_DIR, "dropped-testcases.json");
+
+  if (fs.existsSync(droppedFile)) {
+    try {
+      const dropped = JSON.parse(fs.readFileSync(droppedFile, "utf8"));
+      if (Array.isArray(dropped)) {
+        droppedCount = dropped.length;
+      }
+    } catch (error) {
+      // Not this check's concern — ignore a malformed dropped file here.
+    }
+  }
+
+  const minimumRequired = droppedCount > 0 ? 15 : 20;
+
+  if (total < minimumRequired || total > 25) {
+    throw new Error(
+      droppedCount > 0
+        ? `${total} test cases generated, but at least ${minimumRequired} ` +
+          `are required after ${droppedCount} were dropped during live ` +
+          `verification.`
+        : `${total} test cases generated, but exactly 20-25 test cases ` +
+          `are required (roughly 10-15 per category).`
+    );
+  }
 
   console.log("");
   console.log(
@@ -881,27 +811,11 @@ function validateGeneratedTestCases() {
   console.log("CATEGORY SUMMARY");
 
   console.log(
-    `E2E:       ${typeCounts.E2E}`
+    `E2E + Positive:  ${typeCounts["E2E + Positive"]}`
   );
 
   console.log(
-    `Edge:      ${typeCounts.Edge}`
-  );
-
-  console.log(
-    `Positive:  ${typeCounts.Positive}`
-  );
-
-  console.log(
-    `Negative:  ${typeCounts.Negative}`
-  );
-
-  console.log(
-    `UI:        ${typeCounts.UI}`
-  );
-
-  console.log(
-    `Visual:    ${typeCounts.Visual}`
+    `Negative + Edge: ${typeCounts["Negative + Edge"]}`
   );
 
   console.log(

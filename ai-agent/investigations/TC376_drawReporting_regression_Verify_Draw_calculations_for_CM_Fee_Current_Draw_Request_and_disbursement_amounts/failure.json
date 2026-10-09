@@ -1,0 +1,24 @@
+{
+  "generatedAt": "2026-09-18T11:00:00.000Z",
+  "source": "Pasted by user from HTML report — no CI-generated failure.json/context.md/trace existed for this run; this file was hand-authored from the pasted report text, not auto-extracted.",
+  "test": {
+    "title": "TC376 @drawReporting @regression : Verify Draw calculations for CM Fee, Current Draw Request, and disbursement amounts",
+    "file": "tests/TC25_Draw_reporting.spec.js",
+    "line": 318,
+    "failureLine": 353,
+    "project": "chromium",
+    "tags": ["drawReporting", "regression"],
+    "expectedStatus": "passed",
+    "actualStatus": "failed",
+    "reportedDuration": "48.3s"
+  },
+  "failure": {
+    "message": "Error: Disbursement Total \"Current Draw\" must equal the raw invoice amount\n\nexpect(received).toBeCloseTo(expected, precision)\n\nExpected: 10\nReceived: 12\n\nExpected precision:    2\nExpected difference: < 0.005\nReceived difference:   2",
+    "errorLocation": {
+      "file": "tests/TC25_Draw_reporting.spec.js",
+      "line": 353,
+      "column": 118
+    },
+    "snippet": "351 |\n352 |         const totalAfterInclude = await drawReportingJob.readDisbursementRowValuesInEditor('Total');\n> 353 |         expect(totalAfterInclude.currentDraw, 'Disbursement Total \"Current Draw\" must equal the raw invoice amount').toBeCloseTo(10, 2);\n354 |         expect(totalAfterInclude.drawRemaining, 'Disbursement Total \"Draw Remaining\" must equal Budget Remaining − Current Draw').toBeCloseTo(totalBefore.budgetRemaining - 10, 2);\n355 |         await drawReportingJob.editInvoiceCmFeePercent(invoiceResult.invoiceNumberLabel, 30);\n356 |         const cmFeeAfterOverride = await drawReportingJob.readCmFeeInvoiceAmount();"
+  }
+}

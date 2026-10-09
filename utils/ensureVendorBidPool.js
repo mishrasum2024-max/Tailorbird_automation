@@ -11,11 +11,21 @@ const STABLE_PROPERTY = 'Test Property 1_Cottages on Elm';
 // IMPORTANT: `vendorsession.json` (the storageState every TC30-34 vendor-portal test runs
 // as) does NOT belong to process.env.VENDOR_EMAIL — live-verified 2026-09-20 via a CI
 // report's captured Profile page (TC498's error-context) that the actual logged-in vendor
-// is "sumit corp" / oct30sumit@yopmail.com (Vendor ID 237). This is the SAME vendor
-// contact TC454 (tests/TC20_Bid.spec.js) already invites via assertSendToVendorsFlowByEmail
-// as part of its own normal flow — reusing that exact, already-proven identity here rather
-// than the env var, which is only used for a separate, unrelated vendor login (TC01/TC31).
-const VENDOR_EMAIL = 'oct30sumit@yopmail.com';
+// is "sumit corp" (Vendor ID 237), which is the env var only used for a separate, unrelated
+// vendor login (TC01/TC31).
+//
+// MCP-verified live (2026-09-22): VENDOR_EMAIL below must be the vendor ORG's own "Primary
+// Contact Email" as shown in the ADMIN-side Send to Vendors dialog (what
+// assertSendToVendorsFlowByEmail actually searches/matches on), NOT the login email above.
+// Confirmed via the `ai_bid_vendor` table's own vendor_id join: the oct30sumit@yopmail.com
+// login is a different individual USER under the same "sumit corp" org (Vendor ID 237) —
+// the org's own directory-listed Primary Contact Email, which is what the admin dialog
+// displays and this file's row-matching relies on, is qa.vendor.user.1789477137786@yopmail.com.
+// The org has exactly one record named exactly "sumit corp" in the full 14,500+-row vendor
+// directory, so this is unambiguous. Using the login email here (as this constant did
+// previously) can never match any admin-side row — that mismatch, not a locator bug, is
+// what produces "no vendor row found containing the expected email" failures downstream.
+const VENDOR_EMAIL = 'qa.vendor.user.1789477137786@yopmail.com';
 const VENDOR_SEARCH_TERM = 'sumit corp';
 const VENDOR_NAME = 'sumit corp';
 

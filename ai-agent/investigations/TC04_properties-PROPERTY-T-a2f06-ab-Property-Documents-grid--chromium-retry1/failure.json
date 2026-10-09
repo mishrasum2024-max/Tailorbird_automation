@@ -1,0 +1,25 @@
+{
+  "generatedAt": "2026-08-19T06:44:32.469Z",
+  "testCase": "UNKNOWN_TEST",
+  "resultDirectory": "test-results/TC04_properties-PROPERTY-T-a2f06-ab-Property-Documents-grid--chromium-retry1",
+  "testFile": null,
+  "artifacts": {
+    "errorContext": null,
+    "screenshots": [
+      "test-results/TC04_properties-PROPERTY-T-a2f06-ab-Property-Documents-grid--chromium-retry1/test-failed-1.png"
+    ],
+    "traces": [
+      "test-results/TC04_properties-PROPERTY-T-a2f06-ab-Property-Documents-grid--chromium-retry1/trace.zip"
+    ],
+    "videos": []
+  },
+  "git": {
+    "commit": "d1e024fbecdb20d3e99bf59481d1a93fda1e3aa6",
+    "branch": "main",
+    "status": "M committed_ui_snapshots/TC14_manageVendor.spec.js/tc14-v-directory-page.png\n M committed_ui_snapshots/TC14_manageVendor.spec.js/tc14-v-filter-panel-open.png\n M committed_ui_snapshots/TC14_manageVendor.spec.js/tc14-v-invite-dialog-empty.png\n M committed_ui_snapshots/TC14_manageVendor.spec.js/tc14-v-manage-columns-drawer.png\n M committed_ui_snapshots/TC14_manageVendor.spec.js/tc14-v-vendor-detail-activity.png\n M committed_ui_snapshots/TC14_manageVendor.spec.js/tc14-v-vendor-detail-overview.png\n M data/approverRolesAndUsers.json\n M data/bidData.json\n M data/drawReportingPropertyData.json\n M data/fgaCreatedUsers.json\n M data/multiApproverInvoices.json\n M data/multiYearBudgetPropertyData.json\n M downloads/file_upload-data.csv\n M downloads/property-data.csv\n M downloads/property.json\n M package-lock.json\n M package.json\n M tests/TC01_login.spec.js\n M tests/TC04_properties.spec.js\n?? .claude/\n?? .mcp.json\n?? .playwright-mcp/\n?? All_TestCases_Documentation.csv\n?? Menu_coverage.xlsx\n?? MultiYearBudget_Coverage_Report.md\n?? TC03_Test_Coverage_Detailed_Report.md\n?? TC03_Test_Coverage_Summary.csv\n?? TC03_test_assertions.md\n?? TC04_Assertions_Report.md\n?? TC05_Project_Test_Coverage.md\n?? TC06_Assertion_Coverage.md\n?? ai-agent/\n?? all-approvals-response.json\n?? data/lastCreatedJob.json\n?? data/oooChainData.json\n?? data/projectData.json\n?? data/propertyData.json\n?? downloads/budget-data.csv\n?? downloads/category-data.csv\n?? downloads/drawReportingControlsSnapshot.json\n?? downloads/drawReportingExistingPropertySnapshot.json\n?? downloads/drawReportingUiSnapshot.json\n?? downloads/interior_paint_bid.xlsx\n?? downloads/interior_paint_bid_book.xlsx\n?? downloads/invoice-data.csv\n?? downloads/jobs-export.csv\n?? downloads/multi_year_budget_detail-data.csv\n?? downloads/myb_invalid_upload_1786436739998.csv\n?? downloads/myb_invalid_upload_1786437718213.csv\n?? downloads/myb_invalid_upload_1786442437538.csv\n?? downloads/myb_invalid_upload_1786444017674.csv\n?? downloads/myb_invalid_upload_1786445102503.csv\n?? downloads/myb_invalid_upload_1786446262542.csv\n?? downloads/myb_invalid_upload_1786514528064.csv\n?? downloads/myb_invalid_upload_1786515795681.csv\n?? downloads/organization-data.csv\n?? downloads/property_exterior_takeoff-data.csv\n?? downloads/property_interior_takeoff-data.csv\n?? downloads/site-data.csv\n?? downloads/table.csv\n?? downloads/tc410_valid_new_item_upload_1786436770857.csv\n?? downloads/tc410_valid_new_item_upload_1786437747546.csv\n?? downloads/tc410_valid_new_item_upload_1786442468078.csv\n?? downloads/tc410_valid_new_item_upload_1786444048928.csv\n?? downloads/tc410_valid_new_item_upload_1786445130936.csv\n?? downloads/tc410_valid_new_item_upload_1786446293616.csv\n?? downloads/tc410_valid_new_item_upload_1786514561730.csv\n?? downloads/tc410_valid_new_item_upload_1786515836341.csv\n?? \"files/Misora_Bid_Leveling_Reference_with data(Aggregate Summary).csv\"\n?? mvb-health-green-check.png\n?? mvb-health-positive-variance.png\n?? mvb-health-yellow-check.png\n?? mvb-health-zero-variance.png\n?? mvb-initial-table.png\n?? scripts/notion-agent.js\n?? scripts/notion-client.js\n?? scripts/notion-feature-parser.js\n?? scripts/slack-agent-step1.js\n?? scripts/slack-agent.js\n?? tc10_column_fix_run.log\n?? tc10_remaining_run1.log\n?? tc168_run.log\n?? tc168_run2.log\n?? tc205_run.log\n?? tc244_run.txt\n?? tc244_run1.txt\n?? tc244_run2.txt\n?? tc273_solo_run.log\n?? tc273_solo_run2.log\n?? tc273_tc272_run.log\n?? tc355_run.log\n?? tc360_run1.log\n?? tc372_run.log\n?? tc372_run2.log\n?? tc372_run3.log\n?? tc372_run4.log\n?? tc372_run5.log\n?? tests/multi_approver_happy_path.md\n?? tests/retainage_happy_path_pr978.md\n?? vendor_headed_run1.log\n?? vendor_headed_run2.log\n?? vendor_headless_run1.log\n?? vendor_headless_run2.log",
+    "recentCommits": "d1e024f | sumitmishra1712 | 2026-08-19 11:54:55 +0530 | fixes to test ai agent\neaf83cd | sumitmishra1712 | 2026-08-18 22:58:24 +0530 |  final push\n0f4f6b7 | sumitmishra1712 | 2026-08-18 18:08:17 +0530 | fixes\na7d9af0 | sumitmishra1712 | 2026-08-18 11:10:25 +0530 | full regression run\na4a8e0e | sumitmishra1712 | 2026-08-14 17:15:21 +0530 |  final fixes",
+    "recentDiff": ".github/workflows/playwright.yml | 14 +++++++++++---\n 1 file changed, 11 insertions(+), 3 deletions(-)"
+  },
+  "errorContext": "",
+  "testSource": null
+}

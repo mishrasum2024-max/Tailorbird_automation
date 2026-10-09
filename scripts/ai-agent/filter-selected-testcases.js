@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const playwrightMemory = require("../../utils/playwrightMemory");
 
 /*
  * ============================================================
@@ -174,18 +175,15 @@ if (missingIds.length) {
 // ------------------------------------------------------------
 
 const categoryOrder = [
-  "E2E",
-  "EDGE",
-  "POSITIVE",
-  "NEGATIVE",
-  "UI",
-  "VISUAL",
+  "E2E + POSITIVE",
+  "NEGATIVE + EDGE",
 ];
 
 selectedTestCases.sort((a, b) => {
   const categoryA =
     categoryOrder.indexOf(
       String(
+        a.type ||
         a.category ||
         a.testType ||
         ""
@@ -195,6 +193,7 @@ selectedTestCases.sort((a, b) => {
   const categoryB =
     categoryOrder.indexOf(
       String(
+        b.type ||
         b.category ||
         b.testType ||
         ""
@@ -256,6 +255,18 @@ fs.writeFileSync(
   JSON.stringify(output, null, 2),
   "utf8"
 );
+
+// ------------------------------------------------------------
+// 10b. Record the selection in memory
+// ------------------------------------------------------------
+
+selectedTestCases.forEach(testCase => {
+  playwrightMemory.recordTestCaseSelection(
+    data.ticketId || "UNKNOWN",
+    testCase.id,
+    "slack-approval"
+  );
+});
 
 // ------------------------------------------------------------
 // 11. Display result

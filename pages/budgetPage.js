@@ -1878,6 +1878,10 @@ exports.BudgetJob = class BudgetJob {
         }
         await searchBox.click();
         await searchBox.fill('Site Prep');
+        // MCP-verified live 2026-09-23: this listing does not filter on input alone —
+        // confirmed live with a non-matching search term that the grid stays fully
+        // unfiltered until Enter is pressed.
+        await searchBox.press('Enter').catch(() => {});
         await this.page.waitForTimeout(1000);
         await this.takeScreenshot('tc-new-03-search-active');
         const filteredRows = await this.page.locator('[role="row"]')
@@ -1885,14 +1889,17 @@ exports.BudgetJob = class BudgetJob {
         expect(filteredRows).toBeGreaterThan(0);
         Logger.success(`Search "Site Prep" filters to ${filteredRows} rows`);
         await searchBox.clear();
+        await searchBox.press('Enter').catch(() => {});
         await this.page.waitForTimeout(600);
         Logger.success('Search cleared – grid restored');
         await searchBox.fill('zzznomatch999');
+        await searchBox.press('Enter').catch(() => {});
         await this.page.waitForTimeout(800);
         await this.takeScreenshot('tc-new-03-search-empty');
         const emptyMsg = this.page.getByText(/No budgets added yet|no results/i).first();
         if (await emptyMsg.isVisible({ timeout: 5000 }).catch(() => false)) Logger.success('Empty state shown for no-match search');
         await searchBox.clear();
+        await searchBox.press('Enter').catch(() => {});
         await this.page.waitForTimeout(400);
     }
 

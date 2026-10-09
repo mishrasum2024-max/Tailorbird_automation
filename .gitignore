@@ -13,3 +13,6 @@ sessionState.json
 .env
 *.json.local
 *SessionState.json
+
+# Downloaded files from test runs
+/downloads/
