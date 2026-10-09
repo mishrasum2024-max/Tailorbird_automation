@@ -688,6 +688,15 @@ test.describe("Verify Bids", () => {
 
   test("TC454 @regression @bid @ai : Verify AI-generated bid book from bid_to_upload.csv creates a bid and sends invitation to sumit corp", async () => {
     test.setTimeout(480000); // 8 minutes max
+    // Hard cap under 10 minutes. Every retry below (asks, reload re-checks, fresh-bid retries)
+    // runs against one shared deadline, so the test always ends — pass or fail — within 9.5 min.
+    // A normal run takes ~1.5–2 minutes.
+    test.setTimeout(570000); // 9.5 minutes max
+    const TC454_STARTED_AT = Date.now();
+    // Table must exist by this point; the rest (toolbar/table checks, Send to Vendors, Manage
+    // Bids verification) needs ~2 minutes.
+    const TABLE_DEADLINE = TC454_STARTED_AT + 570000 - 120000;
+    const timeLeftForTable = () => TABLE_DEADLINE - Date.now();
     const bidData = loadBidData();
     const uniqueBidName = `AI_Bid_${Date.now()}`;
     const csvFile = path.resolve("./files/bid_to_upload.csv");
@@ -719,6 +728,12 @@ test.describe("Verify Bids", () => {
       priceBy: bidData.priceBy,
       bidDueDate: bidData.bidDueDate,
     };
+    // MCP-verified 2026-10-07 (bids 894, AI_Bid_1791368535047, 890): bidData.json's bidType is
+    // "Unit Interior", but bid_to_upload.csv is Roofing (CapEx) work. The Bid Book AI now refuses
+    // to mix job types ("this chat is set up as a Unit-Interior bid … start a new bid … with the
+    // Capex job type") — no table is ever generated, and that refusal often has no "Thought"
+    // button, so the old wait hung 240s. Create this bid as CapEx, exactly like TC319.
+    formData.bidType = "CapEx";
     await bidPage.fillAndSubmitCreateBidForm(formData);
     const bidId = await bidPage.waitForBidDetailPage();
     Logger.success(`TC454: Bid created — "${uniqueBidName}" (ID: ${bidId})`);
@@ -736,6 +751,104 @@ test.describe("Verify Bids", () => {
     // twice more with an explicit, data-repeating nudge, checking the panel after each ask.
     const MAX_ASKS = 3;
     let tableGenerated = false;
+    // Same opt-in as TC319 (pages/bidPage.js generateBidBookViaChat): a chat turn counts as done
+    // when the reply lands, whether or not a "Thought" button rendered — follow-up / refusal
+    // replies often have none (MCP-verified 2026-10-05 and 2026-10-07). The prompt already
+    // carries the CSV data inline, so no bidBookInlineData is set here.
+    bidPage.resilientBidBookChat = true;
+
+    // Time-boxed asks: every generateBidBookViaChat call in this test is ONE chat turn (no
+    // follow-ups typed inside it — the ask loops below send the follow-ups, each repeating the
+    // CSV data) and is cut off after at most 2.5 min or at TABLE_DEADLINE, whichever is first.
+    // One turn means a cut-off call can never type into the chat later. Instance-only
+    // (bidPage is recreated per test), so no other test is affected.
+    // MCP-verified 2026-10-07 (bid 897, CapEx): one turn — send → input disabled → table iframe +
+    // reply → input re-enabled — took ~27s. 2 min per turn leaves a >4x margin.
+    const singleTurnAsk = bidPage.generateBidBookViaChat.bind(bidPage);
+    bidPage.generateBidBookViaChat = async message => {
+      const budget = Math.min(120000, timeLeftForTable());
+      if (budget < 30000) {
+        Logger.info("TC454: Not enough time left for another AI ask — skipping it");
+        return false;
+      }
+      return Promise.race([
+        singleTurnAsk(message, 1).catch(() => false),
+        new Promise(resolve => setTimeout(() => resolve(false), budget)),
+      ]);
+    };
+
+    // Fail fast on the one precondition the AI depends on. MCP-verified 2026-10-07:
+    // GET /api/bids/:id returns bid_type ("capex" for bid 897 that got a table, "unit_interior"
+    // for bid 894 the AI refused). A wrong type would only end in minutes of refused chat.
+    const bidTypeResponse = await page.request.get(
+      `${new URL(page.url()).origin}/api/bids/${bidId}`,
+      { timeout: 30000 }
+    );
+    const createdBidType = bidTypeResponse.ok()
+      ? (await bidTypeResponse.json().catch(() => ({}))).bid_type
+      : undefined;
+    if (createdBidType !== undefined) {
+      expect(
+        createdBidType,
+        `FAIL: bid ${bidId} must be created as CapEx (bid_to_upload.csv is Roofing/CapEx work); the Bid Book AI refuses mismatched job types`
+      ).toBe("capex");
+      Logger.info(`TC454: Bid ${bidId} confirmed as "${createdBidType}" via /api/bids/${bidId}`);
+    }
+
+    // Once the AI refuses in a chat (MCP-verified bids 894 / AI_Bid_1791368535047: "can't mix job
+    // types" / "start a new bid"), later asks in that chat keep being refused — skip to a fresh bid.
+    const chatRefusedThisBid = async () => {
+      const chatText = await page
+        .getByRole("tabpanel", { name: "Bid Book AI Assisted" })
+        .innerText()
+        .catch(() => "");
+      return /can't mix job types|conflicts with the fixed session settings|start a new bid/i.test(chatText);
+    };
+
+    // Retry helpers — used ONLY when an ask ends without a table (AI replies differ run to run).
+    // 1) The table may have been generated while the panel did not refresh: reload and re-check
+    //    before asking again (never re-send to a chat whose table already exists).
+    const tableAppearsAfterReload = async () => {
+      Logger.info("TC454: No table yet — reloading the Bid Book tab to re-check for a generated table");
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await bidPage.navigateToBidBookTab();
+      return bidPage
+        .loc()
+        .bidBookIframe.waitFor({ state: "visible", timeout: 15000 })
+        .then(() => true)
+        .catch(() => false);
+    };
+    // 2) MCP-verified 2026-10-07: once the AI has refused in a chat (e.g. "can't mix job types"),
+    //    later messages in THAT chat keep being refused. A fresh CapEx bid starts a new AI
+    //    session — the last-resort retry when every ask on the current bid gave no table.
+    const askOnFreshBid = async freshTry => {
+      // A fresh bid needs ~1 min to create plus at least one AI turn: only start it with time left.
+      if (timeLeftForTable() < 150000) {
+        Logger.info(`TC454: Fresh-bid retry #${freshTry} skipped — not enough time left before the deadline`);
+        return false;
+      }
+      const freshBidName = `AI_Bid_${Date.now()}`;
+      Logger.step(`TC454: Fresh-bid retry #${freshTry} — creating "${freshBidName}" (new AI session)`);
+      await page.goto(process.env.BASE_URL, { waitUntil: "load" });
+      await page.waitForTimeout(2000);
+      await bidPage.navigateToBidsPageViaLeftNav();
+      await bidPage.openCreateBidModal();
+      await bidPage.fillAndSubmitCreateBidForm({ ...formData, bidName: freshBidName });
+      const freshBidId = await bidPage.waitForBidDetailPage();
+      Logger.success(`TC454: Fresh bid created — "${freshBidName}" (ID: ${freshBidId})`);
+      await bidPage.navigateToBidBookTab();
+      await bidPage.assertBidBookTabElements();
+      for (let freshAsk = 1; freshAsk <= 2; freshAsk++) {
+        const freshMessage =
+          freshAsk === 1
+            ? aiPrompt
+            : `The bid book table has not appeared in the right-hand panel yet. ${aiPrompt}`;
+        if (await bidPage.generateBidBookViaChat(freshMessage)) return true;
+        if (await tableAppearsAfterReload()) return true;
+      }
+      return false;
+    };
+
     for (let ask = 1; ask <= MAX_ASKS && !tableGenerated; ask++) {
       const message =
         ask === 1
@@ -752,6 +865,23 @@ test.describe("Verify Bids", () => {
           `TC454: No table in the right-hand panel after ask #${ask}.`
         );
       }
+      if (!tableGenerated) {
+        tableGenerated = await tableAppearsAfterReload();
+        if (tableGenerated) {
+          Logger.success(`TC454: Bid book table found after reload (ask #${ask}).`);
+        }
+      }
+      if (!tableGenerated && (await chatRefusedThisBid())) {
+        Logger.info(`TC454: The AI refused in this chat (ask #${ask}) — skipping further asks here; retrying on a fresh bid`);
+        break;
+      }
+    }
+    // Every ask on this bid gave no table: retry on up to 2 fresh CapEx bids (new AI sessions).
+    for (let freshTry = 1; freshTry <= 2 && !tableGenerated; freshTry++) {
+      tableGenerated = await askOnFreshBid(freshTry);
+      Logger.info(
+        `TC454: Fresh-bid retry #${freshTry}: table ${tableGenerated ? "generated" : "not generated"}`
+      );
     }
     expect(
       tableGenerated,

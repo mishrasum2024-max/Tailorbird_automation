@@ -651,6 +651,18 @@ test.describe("Vendors Directory", () => {
     );
 
     // ── 3. Open Edit dialog ──
+    // MCP-verified 2026-10-07 (vendor 237 "sumit corp"): opening Edit fires GET /api/trades;
+    // only after it returns does the dialog render the vendor's saved values (the "Plumbing"
+    // Trade chip, Service Area, POC) and the Trade options. Live: ~0.8s idle, longer under CI
+    // load — the checks below ran before it and saw an "empty" Trade, typed "Plumb" and found
+    // no option. Register the wait BEFORE the click so the response cannot be missed.
+    const editDialogDataLoaded = page
+      .waitForResponse(
+        response => /\/api\/trades(\?|$)/.test(response.url()) && response.ok(),
+        { timeout: 60000 }
+      )
+      .then(() => true)
+      .catch(() => false);
     await vendorPage.locators.editBtn.click();
     await page.waitForTimeout(1500);
     const dialog = vendorPage.locators.editDialog;
@@ -662,10 +674,18 @@ test.describe("Vendors Directory", () => {
       "Edit Vendor dialog heading should be visible"
     ).toBeVisible();
     Logger.info("TC241 step3: Edit Vendor dialog opened ✓");
+    const tradesApiReturned = await editDialogDataLoaded;
+    await page.waitForTimeout(500); // let React render the values from that response
+    Logger.info(
+      `TC241 step3: Edit Vendor data (GET /api/trades) ${tradesApiReturned ? "loaded" : "not observed — falling back to per-field waits"}`
+    );
 
     // ── 4. Fill every required field that is still empty (Trade / Service Area / POC) ──
     const tradeInput = dialog.getByRole("textbox", { name: "Trade" });
     const tradeChip = dialog.locator("text=Plumbing").first();
+    // The "already set?" check below is a one-shot isVisible (it does not wait): give an
+    // already-saved "Plumbing" chip time to render first.
+    await tradeChip.waitFor({ state: "visible", timeout: 10000 }).catch(() => {});
     const tradeAlreadySet = await tradeChip
       .isVisible({ timeout: 1000 })
       .catch(() => false);
@@ -677,6 +697,8 @@ test.describe("Vendors Directory", () => {
         name: "Plumbing",
         exact: true,
       });
+      // Options come from GET /api/trades — slower than 1.2s + 3s under CI load.
+      await tradeOption.waitFor({ state: "visible", timeout: 20000 }).catch(() => {});
       await expect(
         tradeOption,
         'Trade dropdown should offer "Plumbing" as a selectable option'
@@ -686,6 +708,21 @@ test.describe("Vendors Directory", () => {
       // Escape closes the ENTIRE Edit Vendor dialog here, not just the open listbox.
       await dialog.getByRole("heading", { name: "Edit Vendor" }).click();
       await page.waitForTimeout(400);
+      // MCP-verified 2026-10-07: if "Plumbing" was already selected (its chip rendered late),
+      // the dropdown lists it as selected and the click above TOGGLES IT OFF. Select it again.
+      const plumbingStillSelected = await tradeChip
+        .waitFor({ state: "visible", timeout: 3000 })
+        .then(() => true)
+        .catch(() => false);
+      if (!plumbingStillSelected) {
+        Logger.info('TC241 step4: "Plumbing" was toggled off (it was already selected) — selecting it again');
+        await tradeInput.click();
+        await tradeInput.fill("Plumb");
+        await tradeOption.waitFor({ state: "visible", timeout: 20000 });
+        await tradeOption.click();
+        await dialog.getByRole("heading", { name: "Edit Vendor" }).click();
+        await page.waitForTimeout(400);
+      }
     }
     await expect(
       tradeChip,
@@ -699,6 +736,8 @@ test.describe("Vendors Directory", () => {
       name: /Search and select cities or regions/i,
     });
     const serviceAreaChip = dialog.locator("text=Nationwide").first();
+    // Same late render as Trade: let an already-saved "Nationwide" appear before deciding.
+    await serviceAreaChip.waitFor({ state: "visible", timeout: 10000 }).catch(() => {});
     const serviceAreaEditable =
       (await serviceAreaInput
         .isVisible({ timeout: 1000 })
@@ -727,6 +766,12 @@ test.describe("Vendors Directory", () => {
     );
 
     const pocInput = dialog.getByRole("textbox", { name: "POC" });
+    // Same late render: give an already-saved POC time to fill in, so a slow load is never
+    // mistaken for an empty POC (which would pick a different contact and save it).
+    await expect
+      .poll(async () => pocInput.inputValue().catch(() => ""), { timeout: 10000 })
+      .not.toBe("")
+      .catch(() => {});
     const pocValueBefore = await pocInput.inputValue().catch(() => "");
     const pocWasEmpty =
       (await pocInput.isVisible({ timeout: 1000 }).catch(() => false)) &&

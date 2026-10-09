@@ -3,6 +3,10 @@ const { expect } = require('@playwright/test');
 const { oooLocators } = require('../locators/oooLocator');
 const { Logger } = require('../utils/logger');
 
+// Activate / Deactivate OOO can take more than 3 minutes on beta to
+// reflect in the UI: every wait around those two buttons allows 5 minutes.
+const OOO_ACTION_TIMEOUT_MS = 300000;
+
 class OOOPage {
     constructor(page) {
         this.page = page;
@@ -224,14 +228,53 @@ class OOOPage {
         Logger.success('[OOO] Date cleared — input is empty');
     }
 
+    /** true when `locator` becomes visible within `timeout`, else false (never throws). */
+    async _becomesVisible(locator, timeout) {
+        return locator.waitFor({ state: 'visible', timeout }).then(() => true).catch(() => false);
+    }
+
+    /** GET /api/ooo without failing the test on a transient error; undefined when unknown. */
+    async _oooApiStateOrUndefined() {
+        try {
+            return (await this.getOooApiState()).ooo;
+        } catch (error) {
+            Logger.error(`[OOO] Could not read /api/ooo before retrying: ${error.message}`);
+            return undefined;
+        }
+    }
+
+    /** Reloads /profile and reopens the OOO tab so the UI shows the backend's state. */
+    async _reloadOooTab() {
+        await this.page.reload({ waitUntil: 'domcontentloaded' });
+        await this.clickOooTab();
+    }
+
     async clickActivateOoo() {
         Logger.step('[OOO] Clicking "Activate OOO mode"');
         await expect(
             this.loc.btn_activate,
             '"Activate OOO mode" must be enabled before clicking'
-        ).toBeEnabled({ timeout: 180000 });
+        ).toBeEnabled({ timeout: OOO_ACTION_TIMEOUT_MS });
         await this.loc.btn_activate.click();
-        await this.loc.activeStatePara.waitFor({ state: 'visible', timeout: 180000 });
+
+        if (!(await this._becomesVisible(this.loc.activeStatePara, OOO_ACTION_TIMEOUT_MS))) {
+            // Retry once, only because the first click did not show the result.
+            // If the backend already activated OOO, only the UI is stale: reload
+            // (a second click must not activate twice). Otherwise click again.
+            Logger.error('[OOO] Active banner not visible 5 min after "Activate OOO mode" — retrying once');
+            const ooo = await this._oooApiStateOrUndefined();
+
+            if (ooo) {
+                Logger.info('[OOO] Backend already shows OOO active — reloading the OOO tab instead of clicking again');
+                await this._reloadOooTab();
+            } else if (await this.loc.btn_activate.isEnabled().catch(() => false)) {
+                Logger.info('[OOO] Backend still inactive — clicking "Activate OOO mode" again');
+                await this.loc.btn_activate.click();
+            }
+
+            await this.loc.activeStatePara.waitFor({ state: 'visible', timeout: OOO_ACTION_TIMEOUT_MS });
+        }
+
         Logger.success('[OOO] OOO activated — active state banner is visible');
     }
 
@@ -240,9 +283,26 @@ class OOOPage {
         await expect(
             this.loc.btn_deactivate,
             '"Deactivate OOO mode" button must be visible'
-        ).toBeVisible({ timeout: 180000 });
+        ).toBeVisible({ timeout: OOO_ACTION_TIMEOUT_MS });
         await this.loc.btn_deactivate.click();
-        await this.loc.btn_activate.waitFor({ state: 'visible', timeout: 180000 });
+
+        if (!(await this._becomesVisible(this.loc.btn_activate, OOO_ACTION_TIMEOUT_MS))) {
+            // Retry once, only because the first click did not show the result.
+            // Backend already inactive = stale UI: reload. Otherwise click again.
+            Logger.error('[OOO] Activate form not visible 5 min after "Deactivate OOO mode" — retrying once');
+            const ooo = await this._oooApiStateOrUndefined();
+
+            if (ooo === null) {
+                Logger.info('[OOO] Backend already shows OOO inactive — reloading the OOO tab instead of clicking again');
+                await this._reloadOooTab();
+            } else if (await this.loc.btn_deactivate.isVisible().catch(() => false)) {
+                Logger.info('[OOO] Backend still active — clicking "Deactivate OOO mode" again');
+                await this.loc.btn_deactivate.click();
+            }
+
+            await this.loc.btn_activate.waitFor({ state: 'visible', timeout: OOO_ACTION_TIMEOUT_MS });
+        }
+
         Logger.success('[OOO] OOO deactivated — activate form is visible again');
     }
 
@@ -262,8 +322,8 @@ class OOOPage {
      * Pass { withDateLine: true } to also assert the auto-deactivation date line is visible.
      */
     async assertIsActive({ withDateLine = false } = {}) {
-        await expect(this.loc.activeStatePara, 'Active state banner must be visible').toBeVisible({ timeout: 180000 });
-        await expect(this.loc.btn_deactivate, '"Deactivate OOO mode" button must be visible').toBeVisible({ timeout: 180000 });
+        await expect(this.loc.activeStatePara, 'Active state banner must be visible').toBeVisible({ timeout: OOO_ACTION_TIMEOUT_MS });
+        await expect(this.loc.btn_deactivate, '"Deactivate OOO mode" button must be visible').toBeVisible({ timeout: OOO_ACTION_TIMEOUT_MS });
         if (withDateLine) {
             await expect(
                 this.page.getByText(/Auto-deactivates on/i),

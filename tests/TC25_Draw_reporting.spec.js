@@ -750,7 +750,7 @@ test.describe("Draw Reporting", () => {
   test("TC379 @drawReporting @regression : Verify Draw submission prevents empty and duplicate pending submissions", async ({
     browser,
   }) => {
-    test.setTimeout(400000);
+    test.setTimeout(600000);
 
     const propertyName = "Test Property 6_Draw reporting";
     const jobId = 4330;

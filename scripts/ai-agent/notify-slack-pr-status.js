@@ -1,5 +1,7 @@
 require("dotenv").config();
 
+const fs = require("fs");
+const path = require("path");
 const { WebClient } = require("@slack/web-api");
 
 const slack = new WebClient(process.env.SLACK_BOT_TOKEN);
@@ -19,6 +21,49 @@ const FAILED_TEST_CASES = process.env.FAILED_TEST_CASES || "";
 const ARCHITECTURE_STATUS = process.env.ARCHITECTURE_STATUS || "unknown";
 
 const RUN_URL = process.env.RUN_URL || "";
+
+// "pr" (default) = automation run with a PR outcome;
+// "generation" = ai-generate-testcases.yml failed before its Slack
+// test-case selection message could be sent.
+const NOTIFY_KIND = process.env.NOTIFY_KIND || "pr";
+
+// Resume / retry (see build-resume-bundle.js + slack-http-agent.js)
+const JOB_STATUS = process.env.JOB_STATUS || "";
+const RESUME_WORKFLOW = process.env.RESUME_WORKFLOW || "";
+const RESUME_ARTIFACT_URL = process.env.RESUME_ARTIFACT_URL || "";
+const RUN_ID = process.env.RUN_ID || "";
+const GENERATION_RUN_ID = process.env.GENERATION_RUN_ID || "";
+const GH_REPO_FULL = process.env.GH_REPO_FULL || "";
+
+const RESUME_MANIFEST_FILE = path.join(
+  __dirname,
+  "..",
+  "..",
+  ".resume-bundle",
+  "manifest.json"
+);
+
+function readResumeManifest() {
+  try {
+    return JSON.parse(fs.readFileSync(RESUME_MANIFEST_FILE, "utf8"));
+  } catch (error) {
+    return null;
+  }
+}
+
+function runFailed() {
+  return JOB_STATUS === "failure" || JOB_STATUS === "cancelled";
+}
+
+// Offer retry whenever the run didn't end with verified, passing tests.
+function retryWorthOffering() {
+  return (
+    NOTIFY_KIND === "generation" ||
+    runFailed() ||
+    TEST_STATUS !== "passed" ||
+    !["created", "updated"].includes(PR_STATUS)
+  );
+}
 
 function describeTestStatus() {
   switch (TEST_STATUS) {
@@ -44,7 +89,7 @@ function describeArchitectureStatus() {
     case "clean":
       return "✅ No raw locator/page-interaction usage found in spec files";
     case "violations":
-      return "🧹 Spec file(s) contain raw locator/page usage — cleanup recommended, does not block merge";
+      return "⚠️ Spec file(s) contain raw page/locator usage — review needed";
     case "skipped":
       return "⚠️ Architecture check was not run";
     default:
@@ -67,10 +112,144 @@ function buildResultsLine() {
 }
 
 function needsReview() {
-  return TEST_STATUS !== "passed";
+  return (
+    TEST_STATUS !== "passed" ||
+    ARCHITECTURE_STATUS === "violations" ||
+    ARCHITECTURE_STATUS === "unknown"
+  );
+}
+
+/*
+ * "Saved data" section + Download / Retry buttons.
+ *
+ * Retry button value (parsed by slack-http-agent.js):
+ *   WORKFLOW_FILE|TICKET_ID|SELECTED_TEST_CASES|GENERATION_RUN_ID|FAILED_RUN_ID|owner/repo
+ */
+function buildResumeBlocks() {
+  if (!RESUME_WORKFLOW || !RUN_ID) {
+    return [];
+  }
+
+  const manifest = readResumeManifest();
+  const contents = manifest?.contents || {};
+  const hasBundle = Boolean(RESUME_ARTIFACT_URL && manifest);
+  const offerRetry = retryWorthOffering();
+
+  if (!hasBundle && !offerRetry) {
+    return [];
+  }
+
+  const blocks = [];
+
+  if (hasBundle) {
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text:
+          "*💾 Data saved from this run*\n" +
+          `• Generated code files: ${(contents.codeFiles || []).length}\n` +
+          `• Records / test data files: ${(contents.recordFiles || []).length}\n` +
+          `• Login sessions: ${(contents.sessionFiles || []).length}\n` +
+          `• Logs: ${(contents.logFiles || []).length}\n\n` +
+          "_Download needs GitHub access to this repo. It contains login " +
+          "session cookies — don't share the zip outside the team._",
+      },
+    });
+  }
+
+  const elements = [];
+
+  if (hasBundle) {
+    elements.push({
+      type: "button",
+      text: { type: "plain_text", text: "📦 Download data", emoji: true },
+      url: RESUME_ARTIFACT_URL,
+    });
+  }
+
+  if (offerRetry) {
+    const value = [
+      RESUME_WORKFLOW,
+      TICKET_ID,
+      SELECTED_TEST_CASES,
+      GENERATION_RUN_ID,
+      RUN_ID,
+      GH_REPO_FULL,
+    ].join("|");
+
+    if (hasBundle) {
+      elements.push({
+        type: "button",
+        text: {
+          type: "plain_text",
+          text: "♻️ Retry with previous data",
+          emoji: true,
+        },
+        style: "primary",
+        action_id: "resume_reuse",
+        value,
+      });
+    }
+
+    elements.push({
+      type: "button",
+      text: { type: "plain_text", text: "🆕 Start from scratch", emoji: true },
+      action_id: "resume_fresh",
+      value,
+    });
+  }
+
+  if (RUN_URL) {
+    elements.push({
+      type: "button",
+      text: { type: "plain_text", text: "View run", emoji: true },
+      url: RUN_URL,
+    });
+  }
+
+  if (elements.length) {
+    blocks.push({ type: "actions", elements });
+  }
+
+  return blocks;
+}
+
+function buildGenerationFailedBlocks() {
+  return [
+    {
+      type: "header",
+      text: {
+        type: "plain_text",
+        text:
+          JOB_STATUS === "cancelled"
+            ? "⚠️ Test-Case Generation Cancelled"
+            : "❌ Test-Case Generation Failed",
+      },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text:
+          `*Ticket:* ${TICKET_ID}\n\n` +
+          "The run stopped before the test cases could be sent for selection. " +
+          "Retry with the previous data (sessions, any test cases already " +
+          "generated) or start from scratch.",
+      },
+    },
+  ];
 }
 
 function buildBlocks() {
+  if (NOTIFY_KIND === "generation") {
+    return [...buildGenerationFailedBlocks(), ...buildResumeBlocks()];
+  }
+
+  return [...buildPrBlocks(), ...buildResumeBlocks()];
+}
+
+function buildPrBlocks() {
   const blocks = [];
 
   const testLine = describeTestStatus();
@@ -193,7 +372,9 @@ function buildBlocks() {
         type: "header",
         text: {
           type: "plain_text",
-          text: "❓ AI Automation Run Finished",
+          text: runFailed()
+            ? "❌ AI Automation Run Failed"
+            : "❓ AI Automation Run Finished",
         },
       });
 
@@ -232,10 +413,19 @@ async function main() {
 
     const blocks = buildBlocks();
 
-    const summaryText =
-      PR_STATUS === "skipped"
-        ? `No PR created for ${TICKET_ID}`
-        : `AI-generated test PR for ${TICKET_ID}: ${PR_STATUS}`;
+    let summaryText;
+
+    if (NOTIFY_KIND === "generation") {
+      summaryText = `Test-case generation failed for ${TICKET_ID}`;
+    } else if (PR_STATUS === "skipped") {
+      summaryText = `No PR created for ${TICKET_ID}`;
+    } else if (!["created", "updated"].includes(PR_STATUS)) {
+      summaryText = runFailed()
+        ? `AI automation run failed for ${TICKET_ID}`
+        : `AI automation run finished for ${TICKET_ID}`;
+    } else {
+      summaryText = `AI-generated test PR for ${TICKET_ID}: ${PR_STATUS}`;
+    }
 
     const response = await slack.chat.postMessage({
       channel: CHANNEL_ID,

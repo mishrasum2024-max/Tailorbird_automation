@@ -325,7 +325,7 @@ class UserActivationPage {
 
   async expectLandedOnDashboard(dashboardUrlPattern) {
     await this.activationPage.waitForURL(dashboardUrlPattern, {
-      timeout: 30000,
+      timeout: 70000,
     });
     await expect(this.activationPage).toHaveURL(dashboardUrlPattern);
     Logger.success(

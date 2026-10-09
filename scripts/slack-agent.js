@@ -1,10 +1,7 @@
-require("dotenv").config();
+require('dotenv').config();
 
-const fs = require("fs");
-const path = require("path");
-const { App } = require("@slack/bolt");
-const { Client } = require("@notionhq/client");
-const https = require("https");
+const crypto = require('crypto');
+const { App } = require('@slack/bolt');
 
 const app = new App({
   token: process.env.SLACK_BOT_TOKEN,
@@ -12,493 +9,460 @@ const app = new App({
   socketMode: true,
 });
 
-const notion = new Client({
-  auth: process.env.NOTION_API_KEY,
-});
-
-const TICKETS_FILE = path.join(
-  __dirname,
-  "..",
-  "data",
-  "notion-completed-tickets.json"
-);
-
-const APPROVED_TICKETS_FILE = path.join(
-  __dirname,
-  "..",
-  "data",
-  "approved-notion-tickets.json"
-);
-
 // --------------------------------------------------
-// Load tickets selected from Notion
+// POC TEST TICKETS
+// Later these will come from Notion.
 // --------------------------------------------------
 
-function loadNotionTickets() {
-  if (!fs.existsSync(TICKETS_FILE)) {
-    throw new Error(
-      `Notion ticket file not found: ${TICKETS_FILE}`
-    );
-  }
+const tickets = [
+  {
+    id: 'TB-101',
+    priority: 'P1',
+    title: 'Invoice Approval',
+  },
+  {
+    id: 'TB-103',
+    priority: 'P1',
+    title: 'Vendor Management',
+  },
+  {
+    id: 'TB-102',
+    priority: 'P2',
+    title: 'Budget Export',
+  },
+  {
+    id: 'TB-104',
+    priority: 'P0',
+    title: 'Approval Status',
+  },
+];
 
-  return JSON.parse(
-    fs.readFileSync(TICKETS_FILE, "utf8")
-  );
+// --------------------------------------------------
+// In-memory request state
+//
+// POC only.
+// Later this should be stored in a persistent store.
+// --------------------------------------------------
+
+const approvalRequests = new Map();
+
+// --------------------------------------------------
+// Create ticket checkbox options
+// --------------------------------------------------
+
+function createTicketOptions(priority) {
+  return tickets
+    .filter(ticket => ticket.priority === priority)
+    .map(ticket => ({
+      text: {
+        type: 'mrkdwn',
+        text: `*${ticket.id}* — ${ticket.title}`,
+      },
+      value: ticket.id,
+    }));
 }
 
 // --------------------------------------------------
-// Extract plain text from Notion rich text
+// Create unique request ID
 // --------------------------------------------------
 
-function extractRichText(richText = []) {
-  return richText
-    .map(item => item.plain_text || "")
-    .join("");
+function createRequestId() {
+  return `REQ-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
 }
 
 // --------------------------------------------------
-// Convert a Notion block to readable text
+// Send approval request to Slack
 // --------------------------------------------------
 
-function extractBlockText(block) {
-  if (!block) return "";
+async function sendTicketApprovalMessage() {
+  const requestId = createRequestId();
 
-  const type = block.type;
-  const content = block[type];
+  const result = await app.client.chat.postMessage({
+    token: process.env.SLACK_BOT_TOKEN,
+    channel: process.env.SLACK_CHANNEL_ID,
 
-  if (!content) return "";
+    text: `Ticket approval request ${requestId}`,
 
-  if (content.rich_text) {
-    return extractRichText(content.rich_text);
-  }
+    blocks: [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: '🤖 Ticket Automation Agent POC',
+        },
+      },
 
-  if (content.text) {
-    return extractRichText(content.text);
-  }
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text:
+            `*Request ID:* \`${requestId}\`\n\n` +
+            '*Features ready for test-case generation:*\n' +
+            'Please select the tickets you want the agent to process.',
+        },
+      },
 
-  return "";
+      // ---------------- P1 ----------------
+
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: '*P1 — High Priority*',
+        },
+      },
+
+      {
+        type: 'actions',
+        block_id: 'p1_tickets',
+        elements: [
+          {
+            type: 'checkboxes',
+            action_id: 'p1_selection',
+            options: createTicketOptions('P1'),
+          },
+        ],
+      },
+
+      // ---------------- P2 ----------------
+
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: '*P2 — Medium Priority*',
+        },
+      },
+
+      {
+        type: 'actions',
+        block_id: 'p2_tickets',
+        elements: [
+          {
+            type: 'checkboxes',
+            action_id: 'p2_selection',
+            options: createTicketOptions('P2'),
+          },
+        ],
+      },
+
+      // ---------------- P0 ----------------
+
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: '*P0 — Critical Priority*',
+        },
+      },
+
+      {
+        type: 'actions',
+        block_id: 'p0_tickets',
+        elements: [
+          {
+            type: 'checkboxes',
+            action_id: 'p0_selection',
+            options: createTicketOptions('P0'),
+          },
+        ],
+      },
+
+      {
+        type: 'divider',
+      },
+
+      // ---------------- APPROVE ----------------
+
+      {
+        type: 'actions',
+        block_id: 'ticket_approval',
+        elements: [
+          {
+            type: 'button',
+            action_id: 'approve_selected_tickets',
+            text: {
+              type: 'plain_text',
+              text: 'Approve Selected Tickets',
+            },
+            style: 'primary',
+            value: requestId,
+          },
+        ],
+      },
+    ],
+  });
+
+  // ------------------------------------------------
+  // Store request state
+  // ------------------------------------------------
+
+  approvalRequests.set(requestId, {
+    requestId,
+    messageTs: result.ts,
+    channelId: process.env.SLACK_CHANNEL_ID,
+    status: 'WAITING_FOR_APPROVAL',
+    selectedTickets: [],
+    approvedBy: null,
+    approvedAt: null,
+    createdAt: new Date().toISOString(),
+  });
+
+  console.log('\n📋 Approval request created.');
+  console.log(`Request ID: ${requestId}`);
+  console.log(`Status: WAITING_FOR_APPROVAL`);
+  console.log(`Message TS: ${result.ts}`);
+
+  return requestId;
 }
 
 // --------------------------------------------------
-// Fetch complete Notion page content
-// --------------------------------------------------
-
-async function getNotionPageContent(pageId) {
-  const blocks = [];
-
-  let cursor = undefined;
-
-  do {
-    const response = await notion.blocks.children.list({
-      block_id: pageId,
-      start_cursor: cursor,
-      page_size: 100,
-    });
-
-    blocks.push(...response.results);
-
-    cursor = response.has_more
-      ? response.next_cursor
-      : undefined;
-  } while (cursor);
-
-  return blocks
-    .map(extractBlockText)
-    .filter(Boolean)
-    .join("\n");
-}
-
-// --------------------------------------------------
-// Save approved tickets
-// --------------------------------------------------
-
-function saveApprovedTickets(tickets) {
-  const outputDir = path.dirname(APPROVED_TICKETS_FILE);
-
-  if (!fs.existsSync(outputDir)) {
-    fs.mkdirSync(outputDir, { recursive: true });
-  }
-
-  fs.writeFileSync(
-    APPROVED_TICKETS_FILE,
-    JSON.stringify(tickets, null, 2),
-    "utf8"
-  );
-}
-
-// --------------------------------------------------
-// Extract ALL checkbox selections from Slack
+// Extract selected tickets from Slack interaction
 // --------------------------------------------------
 
 function getSelectedTickets(body) {
-  const stateValues = body.state?.values || {};
+  const state = body.state?.values || {};
 
   const selectedTickets = [];
 
-  for (const blockId of Object.keys(stateValues)) {
-    const block = stateValues[blockId];
+  const p1Selections =
+    state.p1_tickets?.p1_selection?.selected_options || [];
 
-    for (const actionId of Object.keys(block)) {
-      const action = block[actionId];
+  const p2Selections =
+    state.p2_tickets?.p2_selection?.selected_options || [];
 
-      if (
-        action.type === "checkboxes" &&
-        Array.isArray(action.selected_options)
-      ) {
-        for (const option of action.selected_options) {
-          if (option.value) {
-            selectedTickets.push(option.value);
-          }
-        }
-      }
-    }
+  const p0Selections =
+    state.p0_tickets?.p0_selection?.selected_options || [];
+
+  const allSelections = [
+    ...p1Selections,
+    ...p2Selections,
+    ...p0Selections,
+  ];
+
+  for (const selection of allSelections) {
+    selectedTickets.push(selection.value);
   }
 
-  return [...new Set(selectedTickets)];
+  return selectedTickets;
 }
 
 // --------------------------------------------------
-// Trigger GitHub Actions workflow for approved ticket
+// Handle approval
 // --------------------------------------------------
 
-function triggerGitHubWorkflow(ticketId) {
-  return new Promise((resolve, reject) => {
-    const owner = process.env.GH_OWNER;
-    const repo = process.env.GH_REPO;
-    const token = process.env.GH_PAT;
+app.action('approve_selected_tickets', async ({ ack, body, client }) => {
+  // Acknowledge Slack immediately.
+  await ack();
 
-    if (!owner || !repo || !token) {
-      return reject(
-        new Error(
-          "Missing GITHUB_OWNER, GITHUB_REPO, or GITHUB_TOKEN environment variable."
-        )
-      );
-    }
+  console.log('\n🔔 Approval button clicked.');
 
-    const payload = JSON.stringify({
-      ref: "main",
-      inputs: {
-        ticket_id: ticketId,
-      },
-    });
+  const requestId = body.actions?.[0]?.value;
 
-    const options = {
-      hostname: "api.github.com",
-      path: `/repos/${owner}/${repo}/actions/workflows/ai-approved-ticket.yml/dispatches`,
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-        "User-Agent": "tailorbird-ai-ticket-agent",
-        "Content-Type": "application/json",
-        "Content-Length": Buffer.byteLength(payload),
-      },
-    };
+  console.log(`Request ID: ${requestId}`);
 
-    const request = https.request(options, response => {
-      let responseBody = "";
+  // ------------------------------------------------
+  // Validate request ID
+  // ------------------------------------------------
 
-      response.on("data", chunk => {
-        responseBody += chunk;
-      });
+  if (!requestId) {
+    console.error('❌ Missing request ID.');
 
-      response.on("end", () => {
-        if (response.statusCode >= 200 && response.statusCode < 300) {
-          console.log(
-            `✅ GitHub workflow triggered for ${ticketId}`
-          );
-
-          resolve();
-        } else {
-          reject(
-            new Error(
-              `GitHub workflow dispatch failed for ${ticketId}. ` +
-              `Status: ${response.statusCode}. ` +
-              `Response: ${responseBody}`
-            )
-          );
-        }
-      });
-    });
-
-    request.on("error", error => {
-      reject(error);
-    });
-
-    request.write(payload);
-    request.end();
-  });
-}
-// --------------------------------------------------
-// Approval button handler
-// --------------------------------------------------
-
-app.action(
-  "approve_tickets",
-  async ({ ack, body, client }) => {
-    // Always acknowledge Slack immediately.
-    await ack();
-
-    console.log("\n🔔 Approval button clicked.");
-
-    const requestId = body.actions?.[0]?.value;
-
-    console.log(`Request ID: ${requestId || "UNKNOWN"}`);
-
-    // ------------------------------------------------
-    // Get selected FEAT IDs
-    // ------------------------------------------------
-
-    const selectedTicketIds = getSelectedTickets(body);
-
-    console.log(
-      "Selected tickets:",
-      selectedTicketIds
-    );
-
-    // ------------------------------------------------
-    // Safety check
-    // ------------------------------------------------
-
-    if (selectedTicketIds.length === 0) {
-      console.log(
-        "⚠️ No tickets selected."
-      );
-
-      await client.chat.postMessage({
-        token: process.env.SLACK_BOT_TOKEN,
-        channel: body.channel.id,
-        text:
-          "⚠️ *No tickets were selected.*\n\n" +
-          "Nothing has been approved or processed.",
-      });
-
-      return;
-    }
-
-    // ------------------------------------------------
-    // Load tickets from Notion JSON
-    // ------------------------------------------------
-
-    const notionTickets = loadNotionTickets();
-
-    // ------------------------------------------------
-    // Match selected FEAT IDs
-    // ------------------------------------------------
-
-    const selectedTickets = notionTickets.filter(ticket =>
-      selectedTicketIds.includes(ticket.id)
-    );
-
-    console.log("\n✅ HUMAN APPROVAL RECEIVED");
-
-    console.log("Approved tickets:");
-
-    selectedTickets.forEach(ticket => {
-      console.log(
-        `   - ${ticket.id} | ${ticket.title}`
-      );
-    });
-    // --------------------------------------------------
-    // Trigger GitHub Actions for approved tickets
-    // --------------------------------------------------
-
-    console.log(
-      "\n🚀 Triggering GitHub Actions for approved tickets..."
-    );
-
-    for (const ticket of selectedTickets) {
-      try {
-        await triggerGitHubWorkflow(ticket.id);
-
-        console.log(
-          `   ✅ ${ticket.id} sent to GitHub Actions`
-        );
-      } catch (error) {
-        console.error(
-          `   ❌ Failed to trigger GitHub for ${ticket.id}:`,
-          error.message
-        );
-
-        await client.chat.postMessage({
-          token: process.env.SLACK_BOT_TOKEN,
-          channel: body.channel.id,
-          text:
-            `❌ Failed to start automation for *${ticket.id}*.\n\n` +
-            `Error: ${error.message}`,
-        });
-
-        return;
-      }
-    }
-
-    // ------------------------------------------------
-    // Fetch actual Notion page content
-    // ------------------------------------------------
-
-    console.log(
-      "\n📖 Fetching approved ticket details from Notion..."
-    );
-
-    const approvedTickets = [];
-
-    for (const ticket of selectedTickets) {
-      try {
-        console.log(
-          `   Reading ${ticket.id}...`
-        );
-
-        const pageContent =
-          await getNotionPageContent(
-            ticket.notionPageId
-          );
-
-        approvedTickets.push({
-          ...ticket,
-          pageContent,
-          approvedBy: body.user?.id || "UNKNOWN_USER",
-          approvedAt: new Date().toISOString(),
-        });
-
-        console.log(
-          `   ✅ ${ticket.id} details fetched`
-        );
-      } catch (error) {
-        console.error(
-          `   ❌ Failed to fetch ${ticket.id}:`,
-          error.body?.message ||
-          error.message ||
-          error
-        );
-
-        approvedTickets.push({
-          ...ticket,
-          pageContent: "",
-          detailsFetchError:
-            error.body?.message ||
-            error.message ||
-            "Unknown error",
-          approvedBy: body.user?.id || "UNKNOWN_USER",
-          approvedAt: new Date().toISOString(),
-        });
-      }
-    }
-
-    // ------------------------------------------------
-    // Save approved tickets
-    // ------------------------------------------------
-
-    saveApprovedTickets(approvedTickets);
-
-    console.log(
-      `\n💾 Saved approved tickets to:`
-    );
-
-    console.log(
-      APPROVED_TICKETS_FILE
-    );
-
-    // ------------------------------------------------
-    // Update original Slack message
-    // ------------------------------------------------
-
-    const approvedList = approvedTickets
-      .map(ticket =>
-        `• *${ticket.id}* — ${ticket.title}`
-      )
-      .join("\n");
-
-    await client.chat.update({
+    await client.chat.postMessage({
       token: process.env.SLACK_BOT_TOKEN,
       channel: body.channel.id,
-      ts: body.message.ts,
-
       text:
-        `Ticket approval completed for ${requestId}`,
-
-      blocks: [
-        {
-          type: "header",
-          text: {
-            type: "plain_text",
-            text: "✅ Ticket Approval Completed",
-          },
-        },
-
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text:
-              `*Request ID:* \`${requestId || "N/A"}\`\n` +
-              `*Status:* \`APPROVED\`\n` +
-              `*Approved by:* <@${body.user?.id || "UNKNOWN_USER"}>`,
-          },
-        },
-
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text:
-              "*Approved tickets:*\n" +
-              approvedList,
-          },
-        },
-
-        {
-          type: "context",
-          elements: [
-            {
-              type: "mrkdwn",
-              text:
-                "🔒 Approval completed. " +
-                "Ticket details have been fetched from Notion.",
-            },
-          ],
-        },
-      ],
+        '❌ *Approval rejected.*\n\n' +
+        'The approval request ID was missing.',
     });
 
+    return;
+  }
+
+  // ------------------------------------------------
+  // Find request
+  // ------------------------------------------------
+
+  const request = approvalRequests.get(requestId);
+
+  if (!request) {
+    console.error(`❌ Request not found: ${requestId}`);
+
+    await client.chat.postMessage({
+      token: process.env.SLACK_BOT_TOKEN,
+      channel: body.channel.id,
+      text:
+        '❌ *Approval rejected.*\n\n' +
+        `Request \`${requestId}\` was not found or has expired.`,
+    });
+
+    return;
+  }
+
+  // ------------------------------------------------
+  // Duplicate approval protection
+  // ------------------------------------------------
+
+  if (request.status !== 'WAITING_FOR_APPROVAL') {
     console.log(
-      "\n🎉 Notion → Slack approval completed."
+      `⚠️ Request already processed. Current status: ${request.status}`,
     );
 
-    console.log(
-      "➡️ Approved ticket details are now ready for the next agent step."
-    );
+    await client.chat.postMessage({
+      token: process.env.SLACK_BOT_TOKEN,
+      channel: body.channel.id,
+      text:
+        '⚠️ *Approval already processed.*\n\n' +
+        `Request \`${requestId}\` is already in status ` +
+        `\`${request.status}\`.\n\n` +
+        'No additional processing was performed.',
+    });
+
+    return;
   }
-);
+
+  // ------------------------------------------------
+  // Extract selections
+  // ------------------------------------------------
+
+  const selectedTickets = getSelectedTickets(body);
+
+  console.log('Selected tickets:', selectedTickets);
+
+  // ------------------------------------------------
+  // No-selection safety check
+  // ------------------------------------------------
+
+  if (selectedTickets.length === 0) {
+    console.log(
+      '⚠️ No tickets selected. Request remains WAITING_FOR_APPROVAL.',
+    );
+
+    await client.chat.postMessage({
+      token: process.env.SLACK_BOT_TOKEN,
+      channel: body.channel.id,
+      text:
+        '⚠️ *No tickets were selected.*\n\n' +
+        'Nothing has been approved or processed.\n\n' +
+        `Request \`${requestId}\` remains ` +
+        '`WAITING_FOR_APPROVAL`.',
+    });
+
+    return;
+  }
+
+  // ------------------------------------------------
+  // Record human approval
+  // ------------------------------------------------
+
+  const approvedBy = body.user?.id || 'UNKNOWN_USER';
+  const approvedAt = new Date().toISOString();
+
+  request.selectedTickets = selectedTickets;
+  request.approvedBy = approvedBy;
+  request.approvedAt = approvedAt;
+  request.status = 'APPROVED';
+
+  console.log('\n✅ HUMAN APPROVAL RECEIVED');
+  console.log(`Request ID: ${requestId}`);
+  console.log(`Approved by: ${approvedBy}`);
+  console.log(`Approved at: ${approvedAt}`);
+  console.log('Approved tickets:');
+
+  selectedTickets.forEach(ticket => {
+    console.log(`   - ${ticket}`);
+  });
+
+  // ------------------------------------------------
+  // Update the original Slack message
+  // ------------------------------------------------
+
+  await client.chat.update({
+    token: process.env.SLACK_BOT_TOKEN,
+    channel: request.channelId,
+    ts: request.messageTs,
+
+    text: `Approval completed for ${requestId}`,
+
+    blocks: [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: '✅ Ticket Approval Completed',
+        },
+      },
+
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text:
+            `*Request ID:* \`${requestId}\`\n` +
+            `*Status:* \`APPROVED\`\n` +
+            `*Approved by:* <@${approvedBy}>\n` +
+            `*Approved at:* ${approvedAt}`,
+        },
+      },
+
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text:
+            '*Approved tickets:*\n' +
+            selectedTickets.map(ticket => `• ${ticket}`).join('\n'),
+        },
+      },
+
+      {
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text:
+              '🔒 This approval request is locked. ' +
+              'No additional approval can be submitted.',
+          },
+        ],
+      },
+    ],
+  });
+
+  console.log('🔒 Approval request locked.');
+});
 
 // --------------------------------------------------
-// Start Slack listener
+// Start application
 // --------------------------------------------------
 
 async function start() {
   try {
     await app.start();
 
-    console.log(
-      "🤖 Slack Agent is connected."
-    );
+    console.log('🤖 Slack Agent is connected.');
 
-    console.log(
-      "👂 Waiting for ticket approval..."
-    );
+    await sendTicketApprovalMessage();
+
+    console.log('✅ Waiting for human approval...');
   } catch (error) {
-    console.error(
-      "❌ Slack Agent failed to start."
-    );
-
-    console.error(
-      error.data?.error ||
-      error.message ||
-      error
-    );
-
+    console.error('❌ Slack Agent failed to start.');
+    console.error(error);
     process.exit(1);
   }
 }
+
+// --------------------------------------------------
+// Global error handling
+// --------------------------------------------------
+
+process.on('unhandledRejection', error => {
+  console.error('❌ Unhandled promise rejection:', error);
+});
+
+process.on('uncaughtException', error => {
+  console.error('❌ Uncaught exception:', error);
+});
 
 start();
