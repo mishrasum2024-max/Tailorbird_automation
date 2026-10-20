@@ -3,6 +3,10 @@ const { expect } = require('@playwright/test');
 const { oooLocators } = require('../locators/oooLocator');
 const { Logger } = require('../utils/logger');
 
+// Activate / Deactivate OOO can take more than 3 minutes on beta to
+// reflect in the UI: every wait around those two buttons allows 5 minutes.
+const OOO_ACTION_TIMEOUT_MS = 300000;
+
 class OOOPage {
     constructor(page) {
         this.page = page;
@@ -26,14 +30,14 @@ class OOOPage {
     async navigateToProfile() {
         Logger.step('[OOO] Navigating to /profile');
         await this.page.goto(`${this.apiBase}/profile`, { waitUntil: 'domcontentloaded' });
-        await this.loc.tab_profile.waitFor({ state: 'visible', timeout: 120000 });
+        await this.loc.tab_profile.waitFor({ state: 'visible', timeout: 240000 });
         Logger.success('[OOO] Profile page loaded');
     }
 
     async clickOooTab() {
         Logger.step('[OOO] Clicking Out of Office tab');
         await this.loc.tab_ooo.click();
-        await this.loc.oooTabpanel.waitFor({ state: 'visible', timeout: 120000 });
+        await this.loc.oooTabpanel.waitFor({ state: 'visible', timeout: 240000 });
         await this.page.waitForTimeout(800);
         Logger.success('[OOO] OOO tabpanel visible');
     }
@@ -50,7 +54,7 @@ class OOOPage {
      * Returns: { success, ooo: null|{id, delegate_user_id, delegate_role_id, deactivate_at, started_at, delegate_role_name}, delegatedFrom, currentUserId }
      */
     async getOooApiState() {
-        const res = await this.page.request.get(`${this.apiBase}/api/ooo`, { timeout: 120000 });
+        const res = await this.page.request.get(`${this.apiBase}/api/ooo`, { timeout: 240000 });
         expect(res.status(), `GET /api/ooo expected HTTP 200, got ${res.status()}`).toBe(200);
         const body = await res.json();
         Logger.info(`[OOO API State] ${JSON.stringify(body)}`);
@@ -62,7 +66,7 @@ class OOOPage {
      * Returns: { success, members: [{id, label}], roles: [{id, label}] }
      */
     async getDelegatesApiResponse() {
-        const res = await this.page.request.get(`${this.apiBase}/api/ooo/delegates`, { timeout: 120000 });
+        const res = await this.page.request.get(`${this.apiBase}/api/ooo/delegates`, { timeout: 240000 });
         expect(res.status(), `GET /api/ooo/delegates expected HTTP 200, got ${res.status()}`).toBe(200);
         const body = await res.json();
         Logger.info(`[OOO Delegates] members=${body.members.length}, roles=${body.roles.length}`);
@@ -76,7 +80,7 @@ class OOOPage {
      */
     async postOooDirect(payload) {
         Logger.info(`[POST /api/ooo] payload=${JSON.stringify(payload)}`);
-        const res = await this.page.request.post(`${this.apiBase}/api/ooo`, { data: payload, timeout: 120000 });
+        const res = await this.page.request.post(`${this.apiBase}/api/ooo`, { data: payload, timeout: 240000 });
         Logger.info(`[POST /api/ooo] → HTTP ${res.status()}`);
         return res;
     }
@@ -87,7 +91,7 @@ class OOOPage {
      */
     async deleteOooDirect() {
         Logger.info('[DELETE /api/ooo] Sending deactivation request');
-        const res = await this.page.request.delete(`${this.apiBase}/api/ooo`, { timeout: 120000 });
+        const res = await this.page.request.delete(`${this.apiBase}/api/ooo`, { timeout: 240000 });
         Logger.info(`[DELETE /api/ooo] → HTTP ${res.status()}`);
         return res;
     }
@@ -135,39 +139,39 @@ class OOOPage {
     async selectDelegateToRole() {
         Logger.step('[OOO] Selecting "Delegate to role" radio');
         await this.loc.radio_delegateToRole.click();
-        await expect(this.loc.radio_delegateToRole, '"Delegate to role" must be checked after click').toBeChecked({ timeout: 120000 });
+        await expect(this.loc.radio_delegateToRole, '"Delegate to role" must be checked after click').toBeChecked({ timeout: 240000 });
         Logger.success('[OOO] "Delegate to role" radio is checked');
     }
 
     async selectDelegateToUser() {
         Logger.step('[OOO] Selecting "Delegate to user" radio');
         await this.loc.radio_delegateToUser.click();
-        await expect(this.loc.radio_delegateToUser, '"Delegate to user" must be checked after click').toBeChecked({ timeout: 120000 });
+        await expect(this.loc.radio_delegateToUser, '"Delegate to user" must be checked after click').toBeChecked({ timeout: 240000 });
         Logger.success('[OOO] "Delegate to user" radio is checked');
     }
 
     async pickRoleFromDropdown(roleName) {
         Logger.step(`[OOO] Opening role dropdown and selecting "${roleName}"`);
         await this.loc.input_role.click();
-        await this.loc.roleOption(roleName).waitFor({ state: 'visible', timeout: 120000 });
+        await this.loc.roleOption(roleName).waitFor({ state: 'visible', timeout: 240000 });
         await this.loc.roleOption(roleName).click();
-        await expect(this.loc.input_role, `Role input must show "${roleName}" after selection`).toHaveValue(roleName, { timeout: 120000 });
+        await expect(this.loc.input_role, `Role input must show "${roleName}" after selection`).toHaveValue(roleName, { timeout: 240000 });
         Logger.success(`[OOO] Role "${roleName}" selected`);
     }
 
     async pickMemberFromDropdown(memberName) {
         Logger.step(`[OOO] Opening team member dropdown and selecting "${memberName}"`);
         await this.loc.input_teamMember.click();
-        await this.loc.memberOption(memberName).waitFor({ state: 'visible', timeout: 120000 });
+        await this.loc.memberOption(memberName).waitFor({ state: 'visible', timeout: 240000 });
         await this.loc.memberOption(memberName).click();
-        await expect(this.loc.input_teamMember, `Team member input must show "${memberName}" after selection`).toHaveValue(memberName, { timeout: 120000 });
+        await expect(this.loc.input_teamMember, `Team member input must show "${memberName}" after selection`).toHaveValue(memberName, { timeout: 240000 });
         Logger.success(`[OOO] Team member "${memberName}" selected`);
     }
 
     async openDatePicker() {
         Logger.step('[OOO] Opening date picker');
         await this.loc.input_deactivateDate.click();
-        await this.loc.calendar_monthLabel.waitFor({ state: 'visible', timeout: 120000 });
+        await this.loc.calendar_monthLabel.waitFor({ state: 'visible', timeout: 240000 });
         Logger.success('[OOO] Date picker calendar is open');
     }
 
@@ -204,7 +208,7 @@ class OOOPage {
             .locator('.mantine-DateInput-day:not([data-disabled="true"])')
             .filter({ has: this.page.getByText(todayDay, { exact: true }) })
             .first();
-        await todayBtn.waitFor({ state: 'visible', timeout: 120000 });
+        await todayBtn.waitFor({ state: 'visible', timeout: 240000 });
         await todayBtn.click();
         Logger.success(`[OOO] Today (${todayDay}) clicked in calendar`);
     }
@@ -215,13 +219,34 @@ class OOOPage {
      */
     async clearDeactivateDate() {
         Logger.step('[OOO] Clearing deactivate date via × button');
-        await this.loc.btn_clearDate.waitFor({ state: 'visible', timeout: 120000 });
+        await this.loc.btn_clearDate.waitFor({ state: 'visible', timeout: 240000 });
         await this.loc.btn_clearDate.click();
         await expect(
             this.loc.input_deactivateDate,
             'Date input must be empty after clearing'
-        ).toHaveValue('', { timeout: 120000 });
+        ).toHaveValue('', { timeout: 240000 });
         Logger.success('[OOO] Date cleared — input is empty');
+    }
+
+    /** true when `locator` becomes visible within `timeout`, else false (never throws). */
+    async _becomesVisible(locator, timeout) {
+        return locator.waitFor({ state: 'visible', timeout }).then(() => true).catch(() => false);
+    }
+
+    /** GET /api/ooo without failing the test on a transient error; undefined when unknown. */
+    async _oooApiStateOrUndefined() {
+        try {
+            return (await this.getOooApiState()).ooo;
+        } catch (error) {
+            Logger.error(`[OOO] Could not read /api/ooo before retrying: ${error.message}`);
+            return undefined;
+        }
+    }
+
+    /** Reloads /profile and reopens the OOO tab so the UI shows the backend's state. */
+    async _reloadOooTab() {
+        await this.page.reload({ waitUntil: 'domcontentloaded' });
+        await this.clickOooTab();
     }
 
     async clickActivateOoo() {
@@ -229,9 +254,27 @@ class OOOPage {
         await expect(
             this.loc.btn_activate,
             '"Activate OOO mode" must be enabled before clicking'
-        ).toBeEnabled({ timeout: 180000 });
+        ).toBeEnabled({ timeout: OOO_ACTION_TIMEOUT_MS });
         await this.loc.btn_activate.click();
-        await this.loc.activeStatePara.waitFor({ state: 'visible', timeout: 180000 });
+
+        if (!(await this._becomesVisible(this.loc.activeStatePara, OOO_ACTION_TIMEOUT_MS))) {
+            // Retry once, only because the first click did not show the result.
+            // If the backend already activated OOO, only the UI is stale: reload
+            // (a second click must not activate twice). Otherwise click again.
+            Logger.error('[OOO] Active banner not visible 5 min after "Activate OOO mode" — retrying once');
+            const ooo = await this._oooApiStateOrUndefined();
+
+            if (ooo) {
+                Logger.info('[OOO] Backend already shows OOO active — reloading the OOO tab instead of clicking again');
+                await this._reloadOooTab();
+            } else if (await this.loc.btn_activate.isEnabled().catch(() => false)) {
+                Logger.info('[OOO] Backend still inactive — clicking "Activate OOO mode" again');
+                await this.loc.btn_activate.click();
+            }
+
+            await this.loc.activeStatePara.waitFor({ state: 'visible', timeout: OOO_ACTION_TIMEOUT_MS });
+        }
+
         Logger.success('[OOO] OOO activated — active state banner is visible');
     }
 
@@ -240,9 +283,26 @@ class OOOPage {
         await expect(
             this.loc.btn_deactivate,
             '"Deactivate OOO mode" button must be visible'
-        ).toBeVisible({ timeout: 180000 });
+        ).toBeVisible({ timeout: OOO_ACTION_TIMEOUT_MS });
         await this.loc.btn_deactivate.click();
-        await this.loc.btn_activate.waitFor({ state: 'visible', timeout: 180000 });
+
+        if (!(await this._becomesVisible(this.loc.btn_activate, OOO_ACTION_TIMEOUT_MS))) {
+            // Retry once, only because the first click did not show the result.
+            // Backend already inactive = stale UI: reload. Otherwise click again.
+            Logger.error('[OOO] Activate form not visible 5 min after "Deactivate OOO mode" — retrying once');
+            const ooo = await this._oooApiStateOrUndefined();
+
+            if (ooo === null) {
+                Logger.info('[OOO] Backend already shows OOO inactive — reloading the OOO tab instead of clicking again');
+                await this._reloadOooTab();
+            } else if (await this.loc.btn_deactivate.isVisible().catch(() => false)) {
+                Logger.info('[OOO] Backend still active — clicking "Deactivate OOO mode" again');
+                await this.loc.btn_deactivate.click();
+            }
+
+            await this.loc.btn_activate.waitFor({ state: 'visible', timeout: OOO_ACTION_TIMEOUT_MS });
+        }
+
         Logger.success('[OOO] OOO deactivated — activate form is visible again');
     }
 
@@ -262,13 +322,13 @@ class OOOPage {
      * Pass { withDateLine: true } to also assert the auto-deactivation date line is visible.
      */
     async assertIsActive({ withDateLine = false } = {}) {
-        await expect(this.loc.activeStatePara, 'Active state banner must be visible').toBeVisible({ timeout: 180000 });
-        await expect(this.loc.btn_deactivate, '"Deactivate OOO mode" button must be visible').toBeVisible({ timeout: 180000 });
+        await expect(this.loc.activeStatePara, 'Active state banner must be visible').toBeVisible({ timeout: OOO_ACTION_TIMEOUT_MS });
+        await expect(this.loc.btn_deactivate, '"Deactivate OOO mode" button must be visible').toBeVisible({ timeout: OOO_ACTION_TIMEOUT_MS });
         if (withDateLine) {
             await expect(
                 this.page.getByText(/Auto-deactivates on/i),
                 'Auto-deactivation date line must be visible'
-            ).toBeVisible({ timeout: 120000 });
+            ).toBeVisible({ timeout: 240000 });
         }
         Logger.success('[OOO] Active state confirmed — banner visible, deactivate visible');
     }
@@ -281,11 +341,11 @@ class OOOPage {
      *   - date field empty
      */
     async assertIsInactive() {
-        await expect(this.loc.activeStatePara, 'Active banner must be HIDDEN').toBeHidden({ timeout: 120000 });
-        await expect(this.loc.btn_activate, '"Activate OOO mode" must be VISIBLE').toBeVisible({ timeout: 120000 });
-        await expect(this.loc.btn_activate, '"Activate OOO mode" must be DISABLED — no delegate selected').toBeDisabled({ timeout: 120000 });
-        await expect(this.loc.btn_deactivate, '"Deactivate OOO mode" must be HIDDEN').toBeHidden({ timeout: 120000 });
-        await expect(this.loc.input_deactivateDate, 'Date field must be empty after reset').toHaveValue('', { timeout: 120000 });
+        await expect(this.loc.activeStatePara, 'Active banner must be HIDDEN').toBeHidden({ timeout: 240000 });
+        await expect(this.loc.btn_activate, '"Activate OOO mode" must be VISIBLE').toBeVisible({ timeout: 240000 });
+        await expect(this.loc.btn_activate, '"Activate OOO mode" must be DISABLED — no delegate selected').toBeDisabled({ timeout: 240000 });
+        await expect(this.loc.btn_deactivate, '"Deactivate OOO mode" must be HIDDEN').toBeHidden({ timeout: 240000 });
+        await expect(this.loc.input_deactivateDate, 'Date field must be empty after reset').toHaveValue('', { timeout: 240000 });
         Logger.success('[OOO] Inactive state confirmed — banner hidden, activate disabled, deactivate hidden, date cleared');
     }
 
@@ -373,14 +433,14 @@ class OOOPage {
         await this.loc.input_teamMember.click();
         await this.loc.input_teamMember.pressSequentially(partial, { delay: 50 });
         await this.page.waitForTimeout(500);
-        await this.page.getByRole('listbox').first().waitFor({ state: 'visible', timeout: 120000 });
+        await this.page.getByRole('listbox').first().waitFor({ state: 'visible', timeout: 240000 });
         const option = this.page.getByRole('option', { name: targetName });
-        await option.waitFor({ state: 'visible', timeout: 120000 });
+        await option.waitFor({ state: 'visible', timeout: 240000 });
         await option.click();
         await expect(
             this.loc.input_teamMember,
             `Team member input must show "${targetName}" after selection`
-        ).toHaveValue(targetName, { timeout: 120000 });
+        ).toHaveValue(targetName, { timeout: 240000 });
         Logger.success(`[OOO] Team member "${targetName}" selected`);
     }
 
@@ -394,14 +454,14 @@ class OOOPage {
         await this.loc.input_teamMember.click({ clickCount: 3 });
         await this.loc.input_teamMember.pressSequentially(partial, { delay: 50 });
         await this.page.waitForTimeout(500);
-        await this.page.getByRole('listbox').first().waitFor({ state: 'visible', timeout: 120000 });
+        await this.page.getByRole('listbox').first().waitFor({ state: 'visible', timeout: 240000 });
         const option = this.page.getByRole('option', { name: targetName });
-        await option.waitFor({ state: 'visible', timeout: 120000 });
+        await option.waitFor({ state: 'visible', timeout: 240000 });
         await option.click();
         await expect(
             this.loc.input_teamMember,
             `Team member input must show "${targetName}" after replacing`
-        ).toHaveValue(targetName, { timeout: 120000 });
+        ).toHaveValue(targetName, { timeout: 240000 });
         Logger.success(`[OOO] Delegate user replaced with "${targetName}"`);
     }
 

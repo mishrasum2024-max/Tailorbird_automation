@@ -8,6 +8,20 @@ const slack = new WebClient(process.env.SLACK_BOT_TOKEN);
 
 const CHANNEL_ID = process.env.SLACK_CHANNEL_ID;
 
+/*
+ * Repository this run belongs to ("owner/repo").
+ *
+ * Stamped onto the button value so the shared Slack listener
+ * can dispatch the next workflow to the correct repository.
+ */
+const GH_REPO_FULL = process.env.GH_REPO_FULL || "";
+
+/*
+ * ============================================================
+ * FILE PATHS
+ * ============================================================
+ */
+
 const TESTCASES_FILE = path.join(
   __dirname,
   "..",
@@ -16,62 +30,64 @@ const TESTCASES_FILE = path.join(
   "generated-testcases.json"
 );
 
+const TESTCASES_MD_FILE = path.join(
+  __dirname,
+  "..",
+  "..",
+  "data",
+  "generated-testcases.md"
+);
+
+const DROPPED_TESTCASES_FILE = path.join(
+  __dirname,
+  "..",
+  "..",
+  "data",
+  "dropped-testcases.json"
+);
+
+const INVESTIGATION_STATUS_FILE = path.join(
+  __dirname,
+  "..",
+  "..",
+  "data",
+  "investigation-status.json"
+);
+
 /*
  * ============================================================
  * CONFIGURATION
  * ============================================================
+ *
+ * Keep 45 as the workflow safety limit.
+ *
+ * Slack's current documentation allows up to 50 blocks in a
+ * message, but this workflow previously failed at 45 and the
+ * existing implementation explicitly enforced 45.
+ *
+ * We therefore keep 45 as the safe application limit.
+ */
+
+const SLACK_MAX_BLOCKS = 45;
+
+/*
+ * Categories must remain in this order.
+ *
+ * Matches the two-category system in
+ * .claude/skills/automation-testcase-generation/SKILL.md:
+ * "E2E + Positive" and "Negative + Edge".
  */
 
 const CATEGORIES = [
   {
-    key: "e2e",
-    label: "🔄 E2E TEST CASES",
+    key: "e2e_positive",
+    label: "✅ E2E + POSITIVE TEST CASES",
   },
   {
-    key: "edge",
-    label: "⚠️ EDGE CASES",
-  },
-  {
-    key: "positive",
-    label: "✅ POSITIVE CASES",
-  },
-  {
-    key: "negative",
-    label: "❌ NEGATIVE CASES",
-  },
-  {
-    key: "ui",
-    label: "🖥️ UI CASES",
-  },
-  {
-    key: "visual",
-    label: "👁️ VISUAL TESTING",
+    key: "negative_edge",
+    label: "⚠️ NEGATIVE + EDGE TEST CASES",
   },
 ];
-
-/*
- * Slack Block Kit has a limit on the number of options
- * inside one checkbox element.
- *
- * We therefore split each CATEGORY into groups of 10.
- *
- * IMPORTANT:
- * This is ONLY a Slack rendering limit.
- * There is NO limit on the total number of generated
- * test cases.
- */
-const OPTIONS_PER_CHECKBOX_GROUP = 10;
-
-/*
- * Slack has a maximum number of blocks per message.
- *
- * If there are many test cases, multiple Slack messages
- * may be required.
- *
- * However, we keep the final "Automate Selected Test Cases"
- * button in the final message.
- */
-const SLACK_MAX_BLOCKS = 45;
 
 /*
  * ============================================================
@@ -87,24 +103,14 @@ function normalizeCategory(value) {
   return String(value)
     .trim()
     .toLowerCase()
-    .replace(/[\s_-]+/g, "");
+    .replace(/[^a-z0-9]+/g, "");
 }
 
-function getCategory(testCase) {
-  /*
-   * Preferred field:
-   *
-   * testCase.type
-   *
-   * Also support:
-   *
-   * category
-   * testType
-   *
-   * This makes the script compatible with slightly different
-   * generated-testcases.json structures.
-   */
+/*
+ * Resolve the category from the generated testcase object.
+ */
 
+function getCategory(testCase) {
   const rawCategory =
     testCase.type ||
     testCase.category ||
@@ -114,55 +120,29 @@ function getCategory(testCase) {
   const normalized = normalizeCategory(rawCategory);
 
   if (
+    normalized === "e2epositive" ||
     normalized === "e2e" ||
-    normalized === "endtoend" ||
-    normalized === "endtoendtesting"
-  ) {
-    return "e2e";
-  }
-
-  if (
-    normalized === "edge" ||
-    normalized === "edgecase" ||
-    normalized === "edgecases"
-  ) {
-    return "edge";
-  }
-
-  if (
     normalized === "positive" ||
-    normalized === "positivecase" ||
-    normalized === "positivecases"
+    normalized === "endtoendpositive"
   ) {
-    return "positive";
+    return "e2e_positive";
   }
 
   if (
+    normalized === "negativeedge" ||
+    normalized === "edgenegative" ||
     normalized === "negative" ||
-    normalized === "negativecase" ||
-    normalized === "negativecases"
+    normalized === "edge"
   ) {
-    return "negative";
-  }
-
-  if (
-    normalized === "ui" ||
-    normalized === "uicase" ||
-    normalized === "uicases"
-  ) {
-    return "ui";
-  }
-
-  if (
-    normalized === "visual" ||
-    normalized === "visualtesting" ||
-    normalized === "visualtest"
-  ) {
-    return "visual";
+    return "negative_edge";
   }
 
   return "";
 }
+
+/*
+ * Resolve testcase ID.
+ */
 
 function getTestCaseId(testCase, index) {
   return (
@@ -173,33 +153,39 @@ function getTestCaseId(testCase, index) {
   );
 }
 
+/*
+ * Resolve testcase title.
+ *
+ * IMPORTANT:
+ * Do NOT truncate this value.
+ *
+ * The complete title from generated-testcases.json is passed
+ * to Slack.
+ */
+
 function getTestCaseTitle(testCase) {
-  return (
+  const title =
     testCase.title ||
     testCase.name ||
     testCase.testCase ||
-    "Untitled test case"
-  );
+    "Untitled test case";
+
+  return String(title).trim();
 }
 
-function getShortSlackText(text, maxLength = 75) {
-  const value = String(text || "").trim();
+/*
+ * Escape Slack mrkdwn-sensitive characters without changing
+ * the visible testcase title.
+ *
+ * This prevents titles containing <, >, or & from accidentally
+ * being interpreted as Slack markup.
+ */
 
-  if (value.length <= maxLength) {
-    return value;
-  }
-
-  return `${value.substring(0, maxLength - 3)}...`;
-}
-
-function chunkArray(array, size) {
-  const chunks = [];
-
-  for (let i = 0; i < array.length; i += size) {
-    chunks.push(array.slice(i, i + size));
-  }
-
-  return chunks;
+function escapeSlackText(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 /*
@@ -244,18 +230,62 @@ function loadTestCases() {
 
 /*
  * ============================================================
+ * LOAD LIVE-INVESTIGATION RESULTS (OPTIONAL)
+ * ============================================================
+ *
+ * Written by ai-generate-testcases.yml's investigation step (if it
+ * ran). Both files are optional — older tickets, or a run where live
+ * validation was skipped/fell back, simply won't have them.
+ */
+
+function loadDroppedTestCases() {
+  if (!fs.existsSync(DROPPED_TESTCASES_FILE)) {
+    return [];
+  }
+
+  try {
+    const dropped = JSON.parse(
+      fs.readFileSync(DROPPED_TESTCASES_FILE, "utf8")
+    );
+
+    return Array.isArray(dropped) ? dropped : [];
+  } catch (error) {
+    console.warn(
+      `⚠️ Could not parse dropped-testcases.json: ${error.message}`
+    );
+
+    return [];
+  }
+}
+
+function loadInvestigationStatus() {
+  if (!fs.existsSync(INVESTIGATION_STATUS_FILE)) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(
+      fs.readFileSync(INVESTIGATION_STATUS_FILE, "utf8")
+    );
+  } catch (error) {
+    console.warn(
+      `⚠️ Could not parse investigation-status.json: ${error.message}`
+    );
+
+    return null;
+  }
+}
+
+/*
+ * ============================================================
  * GROUP TEST CASES BY CATEGORY
  * ============================================================
  */
 
 function groupTestCases(testCases) {
   const grouped = {
-    e2e: [],
-    edge: [],
-    positive: [],
-    negative: [],
-    ui: [],
-    visual: [],
+    e2e_positive: [],
+    negative_edge: [],
   };
 
   const uncategorized = [];
@@ -274,13 +304,9 @@ function groupTestCases(testCases) {
     };
 
     if (category && grouped[category]) {
-      grouped[category].push(
-        normalizedTestCase
-      );
+      grouped[category].push(normalizedTestCase);
     } else {
-      uncategorized.push(
-        normalizedTestCase
-      );
+      uncategorized.push(normalizedTestCase);
     }
   });
 
@@ -292,96 +318,185 @@ function groupTestCases(testCases) {
 
 /*
  * ============================================================
- * CREATE CHECKBOX BLOCKS
+ * CREATE INDIVIDUAL TESTCASE BLOCK
+ * ============================================================
+ *
+ * IMPORTANT:
+ *
+ * Each testcase gets its own section block.
+ *
+ * The checkbox is kept as the section accessory so the visual
+ * interaction remains the same as the current Slack message.
+ *
+ * The COMPLETE testcase title is used.
+ *
+ * No substring().
+ * No maxLength.
+ * No "...".
+ *
+ * expand: true is used so Slack can render the complete section
+ * expanded rather than collapsing long text where supported.
+ */
+
+function createTestCaseRowBlock(testCase, runId) {
+  const fullTitle = getTestCaseTitle(testCase);
+
+  return {
+    type: "section",
+
+    block_id: `tc_${testCase.id}`,
+
+    expand: true,
+
+    text: {
+      type: "mrkdwn",
+
+      text:
+        `*${escapeSlackText(testCase.id)}* | ` +
+        `${escapeSlackText(fullTitle)}`,
+    },
+
+    accessory: {
+      type: "checkboxes",
+
+      action_id: `selected_testcase_${runId}_${testCase.id}`,
+
+      options: [
+        {
+          text: {
+            type: "plain_text",
+            text: testCase.id,
+            emoji: true,
+          },
+
+          value: testCase.id,
+        },
+      ],
+    },
+  };
+}
+
+/*
+ * ============================================================
+ * CREATE CATEGORY HEADER
  * ============================================================
  */
 
-function createCategoryBlocks(
-  category,
-  testCases
-) {
-  const blocks = [];
-
-  if (!testCases.length) {
-    return blocks;
-  }
-
-  const categoryConfig =
-    CATEGORIES.find(
-      item => item.key === category
-    );
+function createCategoryHeaderBlock(category, testCases) {
+  const categoryConfig = CATEGORIES.find(
+    item => item.key === category
+  );
 
   if (!categoryConfig) {
-    return blocks;
+    throw new Error(
+      `Unknown category: ${category}`
+    );
   }
 
-  /*
-   * Category heading
-   */
-
-  blocks.push({
+  return {
     type: "section",
 
     text: {
       type: "mrkdwn",
 
       text:
-        `*${categoryConfig.label}*` +
-        `\n_${testCases.length} test case${
-          testCases.length === 1
-            ? ""
-            : "s"
-        }_`,
+        `*${categoryConfig.label}*\n` +
+        `*${testCases.length} test case${
+          testCases.length === 1 ? "" : "s"
+        }*`,
     },
+  };
+}
+
+/*
+ * ============================================================
+ * CREATE CATEGORY MESSAGE
+ * ============================================================
+ *
+ * Every category gets its own Slack message.
+ *
+ * This prevents one large 50-testcase message from exceeding
+ * the Slack block limit.
+ */
+
+function createVerificationBannerBlock(investigationStatus) {
+  // No investigation-status.json at all means the live-verification
+  // step never ran for this ticket (older ticket, or the feature was
+  // skipped) — say nothing rather than claiming a verification state
+  // we have no evidence for either way.
+  if (!investigationStatus) {
+    return null;
+  }
+
+  if (investigationStatus.verified === false) {
+    return {
+      type: "section",
+
+      text: {
+        type: "mrkdwn",
+
+        text:
+          `⚠️ *Unverified candidates* — ${escapeSlackText(
+            investigationStatus.note ||
+            "Live verification could not complete this run."
+          )}`,
+      },
+    };
+  }
+
+  if (investigationStatus.verified === true) {
+    return {
+      type: "section",
+
+      text: {
+        type: "mrkdwn",
+
+        text:
+          "✅ *Live-verified* — every test case below was checked " +
+          "against the real application (not just the ticket text) " +
+          "before being sent here.",
+      },
+    };
+  }
+
+  return null;
+}
+
+function createDroppedTestCaseBlocks(droppedTestCases) {
+  if (!droppedTestCases.length) {
+    return [];
+  }
+
+  const blocks = [
+    {
+      type: "section",
+
+      text: {
+        type: "mrkdwn",
+
+        text:
+          `*⚠️ Not automatable — dropped after live verification*\n` +
+          `*${droppedTestCases.length} candidate${
+            droppedTestCases.length === 1 ? "" : "s"
+          }*`,
+      },
+    },
+  ];
+
+  droppedTestCases.forEach(dropped => {
+    blocks.push({
+      type: "section",
+
+      text: {
+        type: "mrkdwn",
+
+        text:
+          `⚠️ *${escapeSlackText(dropped.id || "?")}* | ` +
+          `${escapeSlackText(dropped.title || "Untitled")} — ` +
+          `${escapeSlackText(dropped.reason || "no reason recorded")}`,
+      },
+    });
   });
-
-  /*
-   * Split only for Slack's checkbox option limit.
-   */
-
-  const groups = chunkArray(
-    testCases,
-    OPTIONS_PER_CHECKBOX_GROUP
-  );
-
-  groups.forEach(
-    (group, groupIndex) => {
-      const options = group.map(
-        testCase => ({
-          text: {
-            type: "plain_text",
-
-            text:
-              `${testCase.id} | ` +
-              getShortSlackText(
-                testCase.title,
-                65
-              ),
-          },
-
-          value: testCase.id,
-        })
-      );
-
-      blocks.push({
-        type: "actions",
-
-        block_id:
-          `testcase_${category}_${groupIndex + 1}`,
-
-        elements: [
-          {
-            type: "checkboxes",
-
-            action_id:
-              `selected_testcases_${category}_${groupIndex + 1}`,
-
-            options,
-          },
-        ],
-      });
-    }
-  );
 
   blocks.push({
     type: "divider",
@@ -390,76 +505,46 @@ function createCategoryBlocks(
   return blocks;
 }
 
-/*
- * ============================================================
- * CREATE SLACK MESSAGE
- * ============================================================
- */
-
-function createBlocks(
+function createTopBlocks(
   ticketId,
   ticketTitle,
-  testCases,
+  totalTestCases,
   grouped,
-  uncategorized,
-  runId
+  droppedTestCases,
+  investigationStatus
 ) {
-  const blocks = [];
+  const blocks = [
+    {
+      type: "header",
 
-  /*
-   * Header
-   */
+      text: {
+        type: "plain_text",
 
-  blocks.push({
-    type: "header",
+        text: "🧪 AI Generated Test Cases",
 
-    text: {
-      type: "plain_text",
-
-      text: "🧪 AI Generated Test Cases",
+        emoji: true,
+      },
     },
-  });
 
-  /*
-   * Ticket information
-   */
+    {
+      type: "section",
 
-  blocks.push({
-    type: "section",
+      text: {
+        type: "mrkdwn",
 
-    text: {
-      type: "mrkdwn",
-
-      text:
-        `*Ticket:* ${ticketId}\n` +
-        `*Title:* ${ticketTitle}\n\n` +
-        `*Total Test Cases:* ${testCases.length}\n\n` +
-        `*Select the test cases you want to automate:*`,
+        text:
+          `*Ticket:* ${escapeSlackText(ticketId)}\n` +
+          `*Title:* ${escapeSlackText(ticketTitle)}\n\n` +
+          `*Total Test Cases:* ${totalTestCases}\n\n` +
+          `*Select the test cases you want to automate:*`,
+      },
     },
-  });
+  ];
 
-  blocks.push({
-    type: "divider",
-  });
+  const bannerBlock = createVerificationBannerBlock(investigationStatus);
 
-  /*
-   * Category summary
-   */
-
-  const summaryLines = [];
-
-  CATEGORIES.forEach(
-    category => {
-      summaryLines.push(
-        `${category.label}: *${grouped[category.key].length}*`
-      );
-    }
-  );
-
-  if (uncategorized.length) {
-    summaryLines.push(
-      `⚠️ Uncategorized: *${uncategorized.length}*`
-    );
+  if (bannerBlock) {
+    blocks.push(bannerBlock);
   }
 
   blocks.push({
@@ -470,199 +555,282 @@ function createBlocks(
 
       text:
         "*Test Case Distribution*\n" +
-        summaryLines.join("\n"),
+        CATEGORIES.map(categoryItem => {
+          const count =
+            grouped[categoryItem.key].length;
+
+          return `${categoryItem.label}: *${count}*`;
+        }).join("\n"),
     },
   });
+
+  blocks.push(
+    ...createDroppedTestCaseBlocks(droppedTestCases)
+  );
 
   blocks.push({
     type: "divider",
   });
 
-  /*
-   * Add all six categories.
-   *
-   * IMPORTANT:
-   * No slice() is used here.
-   *
-   * Therefore 30, 40, 50, 60, 100+ generated
-   * test cases can all be processed.
-   */
+  return blocks;
+}
 
-  CATEGORIES.forEach(
-    category => {
-      const categoryBlocks =
-        createCategoryBlocks(
-          category.key,
-          grouped[category.key]
-        );
-
-      blocks.push(
-        ...categoryBlocks
-      );
-    }
+function createCategoryBlocks(
+  category,
+  categoryTestCases,
+  runId
+) {
+  const categoryConfig = CATEGORIES.find(
+    item => item.key === category
   );
 
-  /*
-   * If Claude generated an unknown category,
-   * display those separately instead of silently
-   * throwing them away.
-   */
+  if (!categoryConfig) {
+    throw new Error(
+      `Unknown category: ${category}`
+    );
+  }
 
-  if (uncategorized.length) {
-    blocks.push({
+  const blocks = [];
+
+  blocks.push(
+    createCategoryHeaderBlock(
+      category,
+      categoryTestCases
+    )
+  );
+
+  categoryTestCases.forEach(testCase => {
+    blocks.push(
+      createTestCaseRowBlock(
+        testCase,
+        runId
+      )
+    );
+  });
+
+  return blocks;
+}
+
+function createFinalActionBlocks(ticketId, runId) {
+  return [
+    {
+      type: "divider",
+    },
+
+    {
       type: "section",
 
       text: {
         type: "mrkdwn",
 
         text:
-          "*⚠️ UNCATEGORIZED TEST CASES*\n" +
-          "_These test cases did not contain a recognized category._",
+          "When you are finished selecting test cases, " +
+          "click the button below. Only the selected test cases " +
+          "will be automated.",
       },
-    });
-
-    const groups = chunkArray(
-      uncategorized,
-      OPTIONS_PER_CHECKBOX_GROUP
-    );
-
-    groups.forEach(
-      (group, groupIndex) => {
-        blocks.push({
-          type: "actions",
-
-          block_id:
-            `testcase_uncategorized_${groupIndex + 1}`,
-
-          elements: [
-            {
-              type: "checkboxes",
-
-              action_id:
-                `selected_testcases_uncategorized_${groupIndex + 1}`,
-
-              options: group.map(
-                testCase => ({
-                  text: {
-                    type: "plain_text",
-
-                    text:
-                      `${testCase.id} | ` +
-                      getShortSlackText(
-                        testCase.title,
-                        65
-                      ),
-                  },
-
-                  value: testCase.id,
-                })
-              ),
-            },
-          ],
-        });
-      }
-    );
-
-    blocks.push({
-      type: "divider",
-    });
-  }
-
-  /*
-   * Final automation button.
-   *
-   * Send ticket + GitHub run ID.
-   */
-
-  blocks.push({
-    type: "section",
-
-    text: {
-      type: "mrkdwn",
-
-      text:
-        "When you are finished selecting test cases, " +
-        "click the button below. Only the selected test cases " +
-        "will be automated.",
     },
-  });
 
-  blocks.push({
-    type: "actions",
+    {
+      type: "actions",
 
-    block_id:
-      "automate_testcases_action",
+      block_id: "automate_testcases_final",
 
-    elements: [
-      {
-        type: "button",
+      elements: [
+        {
+          type: "button",
 
-        text: {
-          type: "plain_text",
+          text: {
+            type: "plain_text",
 
-          text:
-            "Automate Selected Test Cases",
+            text: "Automate Selected Test Cases",
+
+            emoji: true,
+          },
+
+          style: "primary",
+
+          action_id: "automate_testcases",
+
+          value: GH_REPO_FULL
+            ? `${ticketId}|${runId}|${GH_REPO_FULL}`
+            : `${ticketId}|${runId}`,
         },
-
-        style: "primary",
-
-        action_id:
-          "automate_testcases",
-
-        /*
-         * Example:
-         *
-         * FEAT-1191|32470304965
-         */
-
-        value:
-          `${ticketId}|${runId}`,
-      },
-    ],
-  });
-
-  return blocks;
+      ],
+    },
+  ];
 }
 
 /*
  * ============================================================
- * SEND BLOCKS TO SLACK
+ * VALIDATE SLACK BLOCK COUNT
  * ============================================================
- *
- * Slack has a maximum block count per message.
- *
- * The selection controls themselves need to remain together
- * with the final automation button.
- *
- * For normal 50-60 testcase runs this will generally fit.
- *
- * If a very large run exceeds the limit, we fail clearly
- * rather than silently losing test cases.
  */
 
-async function sendToSlack(
-  ticketId,
-  ticketTitle,
-  blocks
-) {
+function validateBlockCount(category, blocks) {
   if (blocks.length > SLACK_MAX_BLOCKS) {
     throw new Error(
-      `Slack message requires ${blocks.length} blocks, ` +
-      `but Slack allows a maximum of ${SLACK_MAX_BLOCKS}. ` +
-      `The generated test case count is too large for one ` +
-      `interactive Slack message.`
+      `${category} requires ${blocks.length} Slack blocks, ` +
+      `but the configured maximum is ${SLACK_MAX_BLOCKS}. ` +
+      `The category cannot be safely sent as one Slack message.`
     );
   }
+
+  console.log(
+    `   ✅ ${category}: ${blocks.length}/${SLACK_MAX_BLOCKS} blocks`
+  );
+}
+
+/*
+ * ============================================================
+ * SEND CATEGORY TO SLACK
+ * ============================================================
+ */
+
+async function sendCategoryToSlack(
+  category,
+  categoryTestCases,
+  runId,
+  includeTopBlocks,
+  ticketId,
+  ticketTitle,
+  totalTestCases,
+  grouped,
+  droppedTestCases,
+  investigationStatus
+) {
+  const categoryConfig = CATEGORIES.find(
+    item => item.key === category
+  );
+
+  if (!categoryConfig) {
+    throw new Error(
+      `Unknown category: ${category}`
+    );
+  }
+
+  const blocks = [];
+
+  if (includeTopBlocks) {
+    blocks.push(
+      ...createTopBlocks(
+        ticketId,
+        ticketTitle,
+        totalTestCases,
+        grouped,
+        droppedTestCases,
+        investigationStatus
+      )
+    );
+  }
+
+  blocks.push(
+    ...createCategoryBlocks(
+      category,
+      categoryTestCases,
+      runId
+    )
+  );
+
+  validateBlockCount(
+    categoryConfig.label,
+    blocks
+  );
+
+  console.log(
+    `\n📤 Sending ${categoryConfig.label}`
+  );
+
+  console.log(
+    `   Test cases: ${categoryTestCases.length}`
+  );
+
+  console.log(
+    `   Slack blocks: ${blocks.length}`
+  );
 
   const response =
     await slack.chat.postMessage({
       channel: CHANNEL_ID,
 
       text:
-        `AI Test Cases Ready - ${ticketId}`,
+        `${categoryConfig.label} - ` +
+        `${ticketId}`,
 
       blocks,
     });
+
+  console.log(
+    `   ✅ ${categoryConfig.label} sent successfully.`
+  );
+
+  console.log(
+    `   Message TS: ${response.ts}`
+  );
+
+  return response;
+}
+
+/*
+ * ============================================================
+ * UPLOAD GENERATED MARKDOWN TO SLACK
+ * ============================================================
+ *
+ * Upload the complete generated-testcases.md file once.
+ *
+ * The file is uploaded as a thread reply to the first category
+ * message so the user has a single downloadable full record.
+ */
+
+async function uploadGeneratedMarkdown(
+  ticketId,
+  messageTs
+) {
+  if (
+    !fs.existsSync(TESTCASES_MD_FILE)
+  ) {
+    throw new Error(
+      `Generated Markdown file not found: ${TESTCASES_MD_FILE}`
+    );
+  }
+
+  const stats =
+    fs.statSync(TESTCASES_MD_FILE);
+
+  if (stats.size === 0) {
+    throw new Error(
+      `Generated Markdown file is empty: ${TESTCASES_MD_FILE}`
+    );
+  }
+
+  const filename =
+    `${ticketId || "generated"}-generated-testcases.md`;
+
+  console.log(
+    `\n📄 Uploading generated Markdown to Slack: ${filename}`
+  );
+
+  const response =
+    await slack.filesUploadV2({
+      channel_id: CHANNEL_ID,
+
+      thread_ts: messageTs,
+
+      initial_comment:
+        `📄 *Generated test cases record*\n` +
+        `Download this Markdown file to keep an offline copy ` +
+        `of the complete generated test cases for *${ticketId}*.`,
+
+      file: TESTCASES_MD_FILE,
+
+      filename,
+
+      title:
+        `${ticketId} - Generated Test Cases`,
+    });
+
+  console.log(
+    "✅ Generated Markdown uploaded to Slack successfully."
+  );
 
   return response;
 }
@@ -680,7 +848,9 @@ async function main() {
     );
 
     /*
-     * Validate environment variables.
+     * ----------------------------------------------------------
+     * VALIDATE ENVIRONMENT VARIABLES
+     * ----------------------------------------------------------
      */
 
     if (!process.env.SLACK_BOT_TOKEN) {
@@ -696,7 +866,9 @@ async function main() {
     }
 
     /*
-     * Load generated test cases.
+     * ----------------------------------------------------------
+     * LOAD GENERATED TEST CASES
+     * ----------------------------------------------------------
      */
 
     const {
@@ -716,9 +888,31 @@ async function main() {
     );
 
     /*
-     * GitHub Actions run ID.
-     *
-     * This identifies the exact generation run.
+     * ----------------------------------------------------------
+     * LOAD LIVE-INVESTIGATION RESULTS (OPTIONAL)
+     * ----------------------------------------------------------
+     */
+
+    const droppedTestCases = loadDroppedTestCases();
+    const investigationStatus = loadInvestigationStatus();
+
+    if (droppedTestCases.length) {
+      console.log(
+        `⚠️ ${droppedTestCases.length} candidate(s) were dropped ` +
+        `during live verification.`
+      );
+    }
+
+    if (investigationStatus && investigationStatus.verified === false) {
+      console.log(
+        `⚠️ Live verification did not complete — candidates are unverified.`
+      );
+    }
+
+    /*
+     * ----------------------------------------------------------
+     * GITHUB ACTIONS RUN ID
+     * ----------------------------------------------------------
      */
 
     const runId =
@@ -735,7 +929,9 @@ async function main() {
     );
 
     /*
-     * Group test cases by category.
+     * ----------------------------------------------------------
+     * GROUP TEST CASES
+     * ----------------------------------------------------------
      */
 
     const {
@@ -744,7 +940,9 @@ async function main() {
     } = groupTestCases(testCases);
 
     /*
-     * Display category summary in GitHub logs.
+     * ----------------------------------------------------------
+     * CATEGORY SUMMARY
+     * ----------------------------------------------------------
      */
 
     console.log(
@@ -759,27 +957,23 @@ async function main() {
       "======================================"
     );
 
-    CATEGORIES.forEach(
-      category => {
-        console.log(
-          `${category.label}: ` +
-          `${grouped[category.key].length}`
-        );
-      }
-    );
+    CATEGORIES.forEach(category => {
+      console.log(
+        `${category.label}: ` +
+        `${grouped[category.key].length}`
+      );
+    });
 
     if (uncategorized.length) {
       console.log(
         `⚠️ Uncategorized: ${uncategorized.length}`
       );
 
-      uncategorized.forEach(
-        testCase => {
-          console.log(
-            `   - ${testCase.id} | ${testCase.title}`
-          );
-        }
-      );
+      uncategorized.forEach(testCase => {
+        console.log(
+          `   - ${testCase.id} | ${testCase.title}`
+        );
+      });
     }
 
     console.log(
@@ -787,39 +981,167 @@ async function main() {
     );
 
     /*
-     * Create Slack blocks.
+     * ----------------------------------------------------------
+     * IMPORTANT VALIDATION
+     * ----------------------------------------------------------
+     *
+     * Uncategorized test cases are NOT silently sent into one
+     * large message.
+     *
+     * If generated data contains an unknown category, fail
+     * clearly so the workflow does not lose test cases.
      */
 
-    const blocks = createBlocks(
-      ticketId,
-      ticketTitle,
-      testCases,
-      grouped,
-      uncategorized,
-      runId
-    );
+    if (uncategorized.length) {
+      throw new Error(
+        `Found ${uncategorized.length} uncategorized test case(s). ` +
+        `All test cases must belong to one of the two supported categories ` +
+        `("E2E + Positive" or "Negative + Edge").`
+      );
+    }
+
+    /*
+     * ----------------------------------------------------------
+     * SEND EACH CATEGORY AS A SEPARATE SLACK MESSAGE
+     * ----------------------------------------------------------
+     */
+
+    const sentMessages = [];
+
+    for (const category of CATEGORIES) {
+      const categoryTestCases =
+        grouped[category.key];
+
+      if (!categoryTestCases.length) {
+        console.log(
+          `⏭️ Skipping ${category.label}: no test cases`
+        );
+
+        continue;
+      }
+
+      const response =
+        await sendCategoryToSlack(
+          category.key,
+          categoryTestCases,
+          runId,
+          sentMessages.length === 0,
+          ticketId,
+          ticketTitle,
+          testCases.length,
+          grouped,
+          droppedTestCases,
+          investigationStatus
+        );
+
+      sentMessages.push({
+        category: category.key,
+        response,
+      });
+    }
+
+    /*
+     * ----------------------------------------------------------
+     * VERIFY THAT ALL TEST CASES WERE SENT
+     * ----------------------------------------------------------
+     */
+
+    const sentTestCaseCount =
+      CATEGORIES.reduce(
+        (total, category) =>
+          total +
+          grouped[category.key].length,
+        0
+      );
+
+    if (
+      sentTestCaseCount !==
+      testCases.length
+    ) {
+      throw new Error(
+        `Test case count mismatch. ` +
+        `Loaded ${testCases.length}, ` +
+        `but categorized ${sentTestCaseCount}.`
+      );
+    }
 
     console.log(
-      `📦 Generated ${blocks.length} Slack blocks.`
+      `\n✅ All ${sentTestCaseCount} test cases were sent to Slack.`
     );
 
     /*
-     * Send Slack message.
+     * ----------------------------------------------------------
+     * FINAL AUTOMATION ACTION
+     * ----------------------------------------------------------
+     *
+     * Keep the final instruction and automate button in one
+     * separate message so they appear only once at the bottom.
      */
 
-    const response =
-      await sendToSlack(
+    const finalBlocks =
+      createFinalActionBlocks(
         ticketId,
-        ticketTitle,
-        blocks
+        runId
       );
 
-    console.log(
-      "\n✅ Test-case selection message sent to Slack."
+    validateBlockCount(
+      "FINAL AUTOMATION ACTION",
+      finalBlocks
     );
 
     console.log(
-      `Message TS: ${response.ts}`
+      "\n📤 Sending final automation action..."
+    );
+
+    const finalResponse =
+      await slack.chat.postMessage({
+        channel: CHANNEL_ID,
+
+        text:
+          `Automation selection complete - ${ticketId}`,
+
+        blocks: finalBlocks,
+      });
+
+    console.log(
+      "   ✅ Final automation button sent successfully."
+    );
+
+    console.log(
+      `   Message TS: ${finalResponse.ts}`
+    );
+
+    /*
+     * ----------------------------------------------------------
+     * UPLOAD COMPLETE MARKDOWN FILE
+     * ----------------------------------------------------------
+     *
+     * Upload only once, attached to the first category message.
+     */
+
+    if (sentMessages.length > 0) {
+      await uploadGeneratedMarkdown(
+        ticketId,
+        sentMessages[0].response.ts
+      );
+    }
+
+    /*
+     * ----------------------------------------------------------
+     * FINAL SUMMARY
+     * ----------------------------------------------------------
+     */
+
+    console.log(
+      "\n======================================"
+    );
+
+    console.log(
+      "SLACK TEST CASE SELECTION COMPLETE"
+    );
+
+    console.log(
+      "======================================"
     );
 
     console.log(
@@ -831,20 +1153,20 @@ async function main() {
     );
 
     console.log(
-      `GitHub run ID: ${runId}`
+      `Category messages sent: ${sentMessages.length}`
     );
 
-    console.log(
-      "\nCategory counts:"
-    );
-
-    CATEGORIES.forEach(
-      category => {
+    CATEGORIES.forEach(category => {
+      if (grouped[category.key].length) {
         console.log(
           `  ${category.label}: ` +
           `${grouped[category.key].length}`
         );
       }
+    });
+
+    console.log(
+      "\n📄 Complete generated-testcases.md uploaded to Slack."
     );
 
     console.log(
@@ -852,6 +1174,9 @@ async function main() {
       "will be sent to the automation workflow."
     );
 
+    console.log(
+      "======================================\n"
+    );
   } catch (error) {
     console.error(
       "\n❌ Failed to send test cases to Slack."

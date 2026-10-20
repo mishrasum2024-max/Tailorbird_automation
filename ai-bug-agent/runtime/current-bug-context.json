@@ -1,0 +1,49 @@
+{
+  "id": "BUG-1458",
+  "number": 1458,
+  "title": "MYB - shows current budget items and does not allow to select from all available categories or add new ones.",
+  "status": "Validating",
+  "priority": "P1",
+  "reportedBy": "Tailorbird",
+  "customers": [],
+  "tags": [],
+  "property": "",
+  "update": "",
+  "featureEnvUrl": "",
+  "appUrl": "https://app.tailorbird.com/financials/multi-year-budget?propertyId=276&budgetYear=2026&budgetVersion=2979",
+  "notionUrl": "https://app.notion.com/p/MYB-shows-current-budget-items-and-does-not-allow-to-select-from-all-available-categories-or-add-n-3d0aef2070518081baa4e837c13166c5",
+  "files": [],
+  "relatedPageIds": [],
+  "createdTime": "2026-09-03T17:14:00.000Z",
+  "lastEditedTime": "2026-09-11T13:49:00.000Z",
+  "notionPageId": "3d0aef20-7051-8081-baa4-e837c13166c5",
+  "issueType": "Bug",
+  "sections": {
+    "description": "Snippet min 12:57: https://us-96835.app.gong.io/e/c-share/?tkn=fwwrl6pciuzoo4ugr7iw1wn6\nBug present across Orgs but example in gong is from Berkshire - 2020 Lawrence property. \nOrganization: Berkshire \nLogged in user email:",
+    "urls": "https://app.tailorbird.com/financials/multi-year-budget?propertyId=276&budgetYear=2026&budgetVersion=2979",
+    "stepsToReproduce": "1. Go to MYB feature\n2. Select a property that doesn´t have a MYB created\n3. Notice how user is only able to select the budget items created for that property\n4. User should be able to see the entire category items available to select\n5. User should also be able to add new budget items"
+  },
+  "attachments": [
+    {
+      "file": "ai-bug-agent/runtime/attachments/01.png",
+      "originalName": "body-1",
+      "caption": ""
+    },
+    {
+      "file": "ai-bug-agent/runtime/attachments/02.png",
+      "originalName": "body-2",
+      "caption": ""
+    }
+  ],
+  "comments": [],
+  "commentsNote": "Comments unavailable: enable 'Read comments' on the Notion integration.",
+  "relatedBugs": [],
+  "quality": {
+    "hasDescription": true,
+    "hasSteps": true,
+    "hasAppUrl": true,
+    "attachmentCount": 2,
+    "warnings": []
+  },
+  "processedAt": "2026-09-29T08:04:49.699Z"
+}

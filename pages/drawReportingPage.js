@@ -1192,9 +1192,11 @@ exports.DrawReportingJob = class DrawReportingJob {
                 }
             }
 
-            const colIndex = await draw.invoiceAmountColumnHeader.evaluate((el) => el.getAttribute('data-rgcol') || el.getAttribute('aria-colindex'));
+            const { attr, colIndex } = await draw.invoiceAmountColumnHeader.evaluate((el) => (el.getAttribute('data-rgcol') !== null
+                ? { attr: 'data-rgcol', colIndex: el.getAttribute('data-rgcol') }
+                : { attr: 'aria-colindex', colIndex: el.getAttribute('aria-colindex') }));
             if (!colIndex) throw new Error('Could not resolve Invoice Amount column index');
-            const amountCell = draw.invoiceGridDataCellByColIndex(colIndex);
+            const amountCell = draw.invoiceGridDataCellByColIndex(colIndex, attr);
             await amountCell.scrollIntoViewIfNeeded().catch(() => { });
             await amountCell.dblclick();
             const amountEditor = draw.invoiceAmountEditorInput;
@@ -1477,7 +1479,7 @@ exports.DrawReportingJob = class DrawReportingJob {
         const textStatusCell = row.first().locator('[role="gridcell"]').filter({ hasText: /Pending Approval|Approved|Rejected/ });
         const statusColIndex = await draw.allApprovalsStatusColumnHeader.getAttribute('data-rgcol', { timeout: 5000 }).catch(() => null);
         const statusCell = (statusColIndex !== null
-            ? textStatusCell.or(row.first().locator(`[role="gridcell"][data-rgcol="${statusColIndex}"], [role="gridcell"][aria-colindex="${statusColIndex}"]`))
+            ? textStatusCell.or(row.first().locator(`[role="gridcell"][data-rgcol="${statusColIndex}"]`))
             : textStatusCell
         ).first();
         const statusCellVisible = await statusCell.waitFor({ state: 'visible', timeout: 45000 }).then(() => true).catch(() => false);

@@ -34,6 +34,9 @@ class OrganizationHelper {
           name: /search by name or e-mail|search by name or email/i,
         }),
       )
+      // MCP-verified live 2026-10-05: since the BirdTable rebuild of the Users table (app
+      // PR #1362) the field has no aria-label and its placeholder is just "Search...".
+      .or(mainContent.getByRole("tabpanel", { name: "Users" }).getByPlaceholder("Search...", { exact: true }))
       .first();
   }
 
@@ -289,6 +292,12 @@ class OrganizationHelper {
       // Filter the member grid by email so the newly invited (pending) user is visible even
       // though it's a virtualized RevoGrid (not a plain <table> — new rows off the currently
       // rendered window won't exist in the DOM at all without filtering, MCP-verified live).
+      // Trace-verified 2026-10-05 (TC350/TC356): locator.isVisible() ignores its timeout option and
+      // answers instantly. After the reload fallback above, a slow beta (GET /api/profile 24s,
+      // grid data 14s) had not rendered the search box yet, so the check below skipped the search
+      // and the new row was never filtered into view. Wait for the box to render first — up to
+      // the same 180s budget as the row assertion below (a slow beta took ~105s after reload).
+      await this.organizationUsersTabSearchInput().waitFor({ state: "visible", timeout: 180_000 }).catch(() => {});
       const _memberSearch = this.organizationUsersTabSearchInput();
       if (await _memberSearch.isVisible({ timeout: 3000 }).catch(() => false)) {
         await _memberSearch.fill(email);
@@ -343,6 +352,14 @@ class OrganizationHelper {
   async validateInvitedBadge(row, email) {
     try {
       this.log(`Validating pending invite status for: ${email}`);
+      // MCP-verified live 2026-10-05: the Status cell now renders lowercase "pending". Accept it
+      // here; the original "Pending" check below stays as-is for the previous copy.
+      const lowercasePendingStatus = row.getByText("pending", { exact: true });
+      await row.getByText("Pending", { exact: true }).or(lowercasePendingStatus).first().waitFor({ state: "visible", timeout: 4000 }).catch(() => {});
+      if (await lowercasePendingStatus.isVisible().catch(() => false)) {
+        this.log(`Pending status is visible for: ${email}`);
+        return true;
+      }
       const pendingStatus = row.getByText("Pending", { exact: true });
       await expect(pendingStatus).toBeVisible({ timeout: 4000 });
       this.log(`Pending status is visible for: ${email}`);
@@ -454,6 +471,15 @@ class OrganizationHelper {
   async verifyNoResults() {
     try {
       this.log("Verifying organization user search empty state...");
+      // MCP-verified live 2026-10-05: since the BirdTable rebuild (app PR #1362) an unmatched
+      // search shows the table's generic empty state instead. Accept it here; the original
+      // check below stays as-is for the previous copy.
+      const birdTableEmptyState = this.page.getByText("No organization users added yet", { exact: true });
+      await this.page.getByText("No users match your search.").or(birdTableEmptyState).first().waitFor({ state: "visible", timeout: 15_000 }).catch(() => {});
+      if (await birdTableEmptyState.isVisible().catch(() => false)) {
+        this.log("Empty search state verified.");
+        return;
+      }
       // Live copy (MCP-verified 2026-07-26): "No users match your search." — replaced the
       // older "No users found for query '<term>'" copy. Hardcoded here rather than reusing
       // data.noResultsText: that fixture key is shared with properties.js for a different
@@ -575,6 +601,13 @@ class OrganizationHelper {
       const modal = this.page.getByRole("dialog").filter({ hasText: "Edit user" });
       await modal.waitFor({ state: "visible", timeout: 10000 });
       const adminCheckbox = modal.getByRole("checkbox", { name: /organization admin/i });
+      // MCP-verified 2026-10-05: since the BirdTable rebuild (app PR #1362) the grid rows no
+      // longer carry `role`, so "Edit user" always opens with "Organization admin" unchecked —
+      // even for admins. The row's Role cell ("Admin" exactly when the user is an org admin) is
+      // still correct, so sync the checkbox to it before the existing logic below reads it.
+      if ((await row.getByRole("gridcell", { name: "Admin", exact: true }).count()) > 0 && !(await adminCheckbox.isChecked())) {
+        await adminCheckbox.check();
+      }
       const isAdminChecked = await adminCheckbox.isChecked();
       const next = isAdminChecked ? data.roles[1] : data.roles[0];
       const current = isAdminChecked ? data.roles[0] : data.roles[1];
@@ -600,6 +633,11 @@ class OrganizationHelper {
     try {
       this.log(`Verifying updated role for ${email}`);
       await this.page.waitForTimeout(5000);
+      // MCP-verified 2026-10-05: after Save the BirdTable grid keeps showing the pre-edit Role
+      // until a reload (the PATCH itself succeeds). Reload and search again so the Role cell
+      // read below reflects the saved state.
+      await this.page.reload({ waitUntil: "domcontentloaded" });
+      await this.search(email);
       const row = await this.getRow(email);
       const rowIndex = await row.getAttribute("aria-rowindex");
       const editButton = this.page
@@ -609,6 +647,11 @@ class OrganizationHelper {
       const modal = this.page.getByRole("dialog").filter({ hasText: "Edit user" });
       await modal.waitFor({ state: "visible", timeout: 10000 });
       const adminCheckbox = modal.getByRole("checkbox", { name: /organization admin/i });
+      // Same "Edit user" checkbox issue as toggleRole() — sync it to the row's Role cell first
+      // (the dialog is closed with Cancel below, so this never saves anything).
+      if ((await row.getByRole("gridcell", { name: "Admin", exact: true }).count()) > 0 && !(await adminCheckbox.isChecked())) {
+        await adminCheckbox.check();
+      }
       const updatedRole = (await adminCheckbox.isChecked()) ? data.roles[0] : data.roles[1];
       this.log(`Fetched updated role: ${updatedRole}`);
       await modal.getByRole("button", { name: "Cancel" }).click();

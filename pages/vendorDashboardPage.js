@@ -160,11 +160,18 @@ class VendorDashboardPage {
         const badgeText = (await badge.innerText().catch(() => '')).trim();
         expect(badgeText, `FAIL: "New Bid Invitations" count badge "${badgeText}" is not numeric.`).toMatch(/^\d+$/);
 
+        // MCP-verified live 2026-10-19 (/api/vendor-dashboard): the badge is the TOTAL
+        // (stats.newInvitations = 6) while the panel only lists a preview capped at 5 items
+        // (invites.length = 5; the same response's approvals list is likewise capped at 5 with
+        // 252 + 327 items pending). So the panel shows min(badge, 5) "Review Bid" rows — still an
+        // exact match against the badge whenever it is 5 or fewer.
+        const PANEL_PREVIEW_LIMIT = 5;
+        const expectedReviewBidCount = Math.min(Number(badgeText), PANEL_PREVIEW_LIMIT);
         const reviewBidCount = await this.reviewBidButtons.count();
         expect(
             reviewBidCount,
-            `FAIL: expected ${badgeText} "Review Bid" button(s) to match the panel's own count badge, found ${reviewBidCount}.`,
-        ).toBe(Number(badgeText));
+            `FAIL: expected ${expectedReviewBidCount} "Review Bid" button(s) (badge ${badgeText}, panel preview capped at ${PANEL_PREVIEW_LIMIT}), found ${reviewBidCount}.`,
+        ).toBe(expectedReviewBidCount);
         for (let i = 0; i < reviewBidCount; i++) {
             await expect(this.reviewBidButtons.nth(i), `FAIL: "Review Bid" button[${i}] not visible.`).toBeVisible();
         }

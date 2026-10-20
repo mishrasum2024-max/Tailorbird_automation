@@ -15,6 +15,9 @@ class LoginPage {
 
     this.emailInput = healingLocator(this._elementStrategies.emailInput);
     this.passwordInput = healingLocator(this._elementStrategies.passwordInput);
+    // MCP-verified: AuthKit password step now renders an icon button aria-label="Show password",
+    // which getByLabel('Password') also matches (strict-mode violation). Keep only the <input>.
+    this.passwordInput = this.passwordInput.and(page.locator('input'));
     this.continueButton = healingLocator(this._elementStrategies.continueButton);
     this.signInButton = healingLocator(this._elementStrategies.signInButton);
     this.errorMessage = healingLocator(this._elementStrategies.errorMessage);

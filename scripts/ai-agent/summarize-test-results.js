@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const playwrightMemory = require("../../utils/playwrightMemory");
 
 /*
  * ============================================================
@@ -36,6 +37,7 @@ const path = require("path");
  */
 
 const RESULTS_FILE = process.env.RESULTS_FILE || "/tmp/new-tests-result.json";
+const TICKET_ID = process.env.TICKET_ID || "UNKNOWN";
 const SELECTED_TEST_CASES = (process.env.SELECTED_TEST_CASES || "")
   .split(",")
   .map((s) => s.trim())
@@ -114,14 +116,18 @@ function main() {
   const failureDetails = {};
 
   for (const id of SELECTED_TEST_CASES) {
+    playwrightMemory.recordTestStart(TICKET_ID, id);
+
     const matches = allTests.filter((t) => t.title.includes(id));
 
     if (!matches.length) {
       missingIds.push(id);
-      failureDetails[id] =
+      const message =
         "No matching test was found in the results for this ID. " +
         "It may not have been implemented, or its title doesn't " +
         "contain the test-case ID as expected.";
+      failureDetails[id] = message;
+      playwrightMemory.recordTestResult(TICKET_ID, id, false, message);
       continue;
     }
 
@@ -129,10 +135,13 @@ function main() {
 
     if (failing) {
       failedIds.push(id);
-      failureDetails[id] =
+      const message =
         failing.error || `Test status: ${failing.status} (no error message captured)`;
+      failureDetails[id] = message;
+      playwrightMemory.recordTestResult(TICKET_ID, id, false, message);
     } else {
       passedIds.push(id);
+      playwrightMemory.recordTestResult(TICKET_ID, id, true);
     }
   }
 

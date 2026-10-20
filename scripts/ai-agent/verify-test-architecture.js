@@ -1,14 +1,6 @@
+const { execSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
-const { execSync } = require("child_process");
-
-const VIOLATIONS_FILE = path.join(
-  __dirname,
-  "..",
-  "..",
-  "data",
-  "architecture-violations.json"
-);
 
 /*
  * ============================================================
@@ -64,12 +56,30 @@ function getChangedSpecFiles() {
     return [];
   }
 
+  // `git status --porcelain` reports paths relative to the REPO ROOT,
+  // not the current working directory (CI-verified 2026-09-22 — this
+  // silently made getChangedSpecFiles() return [] on every real run,
+  // since this job's working-directory is a subdirectory of the repo:
+  // the porcelain path and fs.existsSync()'s CWD-relative check never
+  // agreed). Resolving through the repo root fixes that regardless of
+  // which directory this script is invoked from.
+  let repoRoot;
+  try {
+    repoRoot = execSync("git rev-parse --show-toplevel", { encoding: "utf8" }).trim();
+  } catch (error) {
+    console.error("❌ Failed to resolve repo root:", error.message);
+    return [];
+  }
+  const cwd = process.cwd();
+
   return output
     .split("\n")
     .map(line => line.trim())
     .filter(Boolean)
     .map(line => line.split(/\s+/).pop())
     .filter(file => file.endsWith(".js"))
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- repoRelativePath comes from this same CI job's own `git status --porcelain` output for the repository it just checked out, not external/attacker-controlled input; repoRoot is resolved via `git rev-parse --show-toplevel` on that same checkout, so the joined path can only ever land inside this job's own working copy.
+    .map(repoRelativePath => path.relative(cwd, path.join(repoRoot, repoRelativePath)))
     .filter(file => fs.existsSync(file));
 }
 
@@ -111,6 +121,28 @@ function scanFile(filePath) {
   return violations;
 }
 
+const VIOLATIONS_FILE = path.join(
+  __dirname,
+  "..",
+  "..",
+  "data",
+  "architecture-violations.json"
+);
+
+function writeViolationsFile(violations) {
+  const outputDir = path.dirname(VIOLATIONS_FILE);
+
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+
+  fs.writeFileSync(
+    VIOLATIONS_FILE,
+    JSON.stringify(violations, null, 2),
+    "utf8"
+  );
+}
+
 function main() {
   console.log("======================================");
   console.log("VERIFYING TEST ARCHITECTURE");
@@ -140,11 +172,6 @@ function main() {
     console.log("All interactions appear to go through page-object methods.");
     console.log("");
     console.log("architecture_status=clean");
-
-    if (fs.existsSync(VIOLATIONS_FILE)) {
-      fs.unlinkSync(VIOLATIONS_FILE);
-    }
-
     return;
   }
 
@@ -152,6 +179,8 @@ function main() {
     `⚠️ Found ${allViolations.length} possible architecture violation(s):`
   );
   console.log("");
+
+  writeViolationsFile(allViolations);
 
   allViolations.forEach(v => {
     console.log(`${v.file}:${v.lineNumber}`);
@@ -170,12 +199,14 @@ function main() {
   console.log("");
   console.log("architecture_status=violations");
   console.log(`architecture_violation_count=${allViolations.length}`);
-
-  fs.writeFileSync(
-    VIOLATIONS_FILE,
-    JSON.stringify(allViolations, null, 2),
-    "utf8"
-  );
 }
 
-main();
+module.exports = {
+  getChangedSpecFiles,
+  scanFile,
+  VIOLATIONS_FILE,
+};
+
+if (require.main === module) {
+  main();
+}

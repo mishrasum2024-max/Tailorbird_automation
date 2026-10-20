@@ -26,12 +26,31 @@ class ManageTeamRolesHelper {
   async landManageTeamViaMenu(dashboardUrl) {
     await this.organizationHelper.goto(dashboardUrl);
     await this.organizationHelper.goToUserRoleManagement();
+    // Trace-verified 2026-10-05: /user-role-management treats ANY failed GET /api/profile as
+    // "not admin" and router.replace("/")s back to the dashboard — an intermittent 400 from the
+    // auth middleware bounced the page to CapEx right after the URL check above passed. If that
+    // happens, take the same menu path once more.
+    const addRoleButton = this.page.getByRole("button", { name: roleManagementUiLabels.addRoleButtonText });
+    const stayedOnApprovers = await addRoleButton.waitFor({ state: "visible", timeout: 15_000 }).then(() => true).catch(() => false);
+    if (!stayedOnApprovers && !/user-role-management/i.test(this.page.url())) {
+      await this.organizationHelper.goToUserRoleManagement();
+    }
   }
 
   /** Dashboard → user menu → Manage Organization (Users / Property access). */
   async landOrganizationWorkspaceViaMenu(dashboardUrl) {
     await this.organizationHelper.goto(dashboardUrl);
     await this.organizationHelper.goToOrganization();
+    // Trace-verified 2026-10-05: /organization renders only the breadcrumb + a skeleton until
+    // GET /api/profile confirms admin, and router.replace("/")s on ANY failed response — an
+    // intermittent 400 bounced the page to CapEx right after the breadcrumb/URL checks above
+    // passed. The tabs render only once admin is confirmed, so wait for them and take the same
+    // menu path once more if the page bounced.
+    const usersTab = this.page.getByRole("tab", { name: roleManagementUiLabels.tabUsers });
+    const stayedOnOrganization = await usersTab.waitFor({ state: "visible", timeout: 15_000 }).then(() => true).catch(() => false);
+    if (!stayedOnOrganization && !/\/organization/i.test(this.page.url())) {
+      await this.organizationHelper.goToOrganization();
+    }
   }
 
   async openRolesTab() {

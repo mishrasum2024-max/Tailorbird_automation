@@ -12,24 +12,41 @@ const DATA_SOURCE_ID =
   process.env.NOTION_DATA_SOURCE_ID ||
   "201aef20-7051-80c9-96fe-000b582249cd";
 
-const TARGET_STATUS = "Complete";
+/*
+ * Notion filter: only these two Status values (OR-ed together).
+ *
+ * Replaces the earlier Status = "Complete" + Priority = "P1" filter.
+ * No priority filter is applied anymore.
+ */
+const TARGET_STATUSES = ["Ready to Release", "Released"];
 
 /*
- * Only pull tickets at this priority.
- *
- * Was not filtered by priority at all before — whatever priority the
- * newest tickets happened to have (often P0) is what got picked.
- * Now explicitly restricted to P1, configurable via env var.
+ * Publish window, applied in this script (not in Notion):
+ * only tickets whose "last edited time" falls between the start of
+ * (today - LOOKBACK_DAYS) and now are published to Slack.
  */
-const TARGET_PRIORITY = process.env.TARGET_PRIORITY || "P1";
+const LOOKBACK_DAYS = parseInt(
+  process.env.LOOKBACK_DAYS || "10",
+  10
+);
+
+function getCutoffDate() {
+  const cutoff = new Date();
+  cutoff.setUTCHours(0, 0, 0, 0);
+  cutoff.setUTCDate(cutoff.getUTCDate() - LOOKBACK_DAYS);
+  return cutoff;
+}
 
 /*
  * How many tickets to pull per run.
  *
- * Was hard-coded to exactly 1. Now configurable, defaulting to 5.
+ * Was hard-coded to exactly 1, then defaulted to 5. Now defaults to 10 —
+ * matching Slack's radio_buttons element limit (MAX_RADIO_OPTIONS in
+ * send-ticket-approval.js), so every fetched ticket is guaranteed to be
+ * selectable rather than silently truncated.
  */
 const MAX_TICKETS = parseInt(
-  process.env.MAX_TICKETS || "5",
+  process.env.MAX_TICKETS || "10",
   10
 );
 
@@ -110,6 +127,8 @@ function mapTicket(page) {
       properties["Created time"]
         ?.created_time || "",
 
+    lastEditedTime: page.last_edited_time || "",
+
     url:
       getUrl(properties["URL"]) ||
       page.url,
@@ -118,11 +137,11 @@ function mapTicket(page) {
   };
 }
 
-async function getAvailableTickets() {
-  console.log(
-    `🔎 Looking for up to ${MAX_TICKETS} newest Notion tickets with status "${TARGET_STATUS}" and priority "${TARGET_PRIORITY}"...`
-  );
-
+/*
+ * Fetch every ticket matching the two Notion status filters,
+ * newest "last edited" first.
+ */
+async function getAllMatchingTickets() {
   const tickets = [];
 
   let cursor = undefined;
@@ -136,25 +155,17 @@ async function getAvailableTickets() {
       page_size: 100,
 
       filter: {
-        and: [
-          {
-            property: "Status",
-            status: {
-              equals: TARGET_STATUS,
-            },
+        or: TARGET_STATUSES.map((status) => ({
+          property: "Status",
+          status: {
+            equals: status,
           },
-          {
-            property: "Priority",
-            select: {
-              equals: TARGET_PRIORITY,
-            },
-          },
-        ],
+        })),
       },
 
       sorts: [
         {
-          property: "Created time",
+          timestamp: "last_edited_time",
           direction: "descending",
         },
       ],
@@ -162,17 +173,6 @@ async function getAvailableTickets() {
 
     for (const page of response.results) {
       tickets.push(mapTicket(page));
-
-      /*
-       * Stop as soon as we have enough.
-       *
-       * Because Notion returns results in descending
-       * Created time order, these are always the
-       * MAX_TICKETS newest available tickets.
-       */
-      if (tickets.length >= MAX_TICKETS) {
-        return tickets;
-      }
     }
 
     cursor = response.has_more
@@ -182,6 +182,58 @@ async function getAvailableTickets() {
   } while (cursor);
 
   return tickets;
+}
+
+async function getAvailableTickets() {
+  const cutoff = getCutoffDate();
+
+  console.log(
+    `🔎 Fetching Notion tickets with status ${TARGET_STATUSES.map((s) => `"${s}"`).join(" or ")}, sorted by last edited time (newest first)...`
+  );
+
+  const allTickets = await getAllMatchingTickets();
+
+  console.log(
+    `📥 Notion returned ${allTickets.length} ticket(s). Keeping only those last edited on/after ${cutoff.toISOString()} (today - ${LOOKBACK_DAYS} days)...`
+  );
+
+  /*
+   * Check every ticket returned by Notion and keep only
+   * those whose last edited time is inside the window.
+   */
+  const recentTickets = allTickets.filter((ticket) => {
+    const edited = new Date(ticket.lastEditedTime);
+    return !Number.isNaN(edited.getTime()) && edited >= cutoff;
+  });
+
+  /*
+   * Log every fetched ticket with its priority. Priority is informational
+   * only — tickets are never filtered by it; they are published with
+   * whatever priority they have (or "No priority" when it is blank).
+   */
+  allTickets.forEach((ticket) => {
+    const inWindow = recentTickets.includes(ticket);
+    console.log(
+      `   • ${ticket.id} | Priority: ${ticket.priority || "No priority"} | Status: ${ticket.status} | Edited: ${ticket.lastEditedTime} | ${inWindow ? "within window" : "outside window — skipped"}`
+    );
+  });
+
+  console.log(
+    `🗓️ ${recentTickets.length} ticket(s) fall within the last ${LOOKBACK_DAYS} days.`
+  );
+
+  /*
+   * Slack's radio_buttons element shows at most 10 options
+   * (MAX_RADIO_OPTIONS in send-ticket-approval.js), so only the
+   * MAX_TICKETS most recently edited ones are published.
+   */
+  if (recentTickets.length > MAX_TICKETS) {
+    console.log(
+      `ℹ️ Publishing the ${MAX_TICKETS} most recently edited of them (Slack selection limit).`
+    );
+  }
+
+  return recentTickets.slice(0, MAX_TICKETS);
 }
 
 async function main() {
@@ -207,7 +259,8 @@ async function main() {
     /*
      * Find up to MAX_TICKETS available tickets.
      *
-     * Only Status = Complete is allowed.
+     * Only Status = "Ready to Release" or "Released",
+     * last edited within the past LOOKBACK_DAYS days.
      */
     const tickets = await getAvailableTickets();
 
@@ -216,11 +269,25 @@ async function main() {
      */
     if (!tickets.length) {
       console.log(
-        `\nℹ️ No tickets with status "${TARGET_STATUS}" and priority "${TARGET_PRIORITY}" are available.`
+        "\nℹ️ No ticket found."
       );
 
       console.log(
-        "Nothing will be sent to Slack."
+        `(No tickets with status ${TARGET_STATUSES.map((s) => `"${s}"`).join(" or ")} were edited in the last ${LOOKBACK_DAYS} days.) Nothing will be sent to Slack.`
+      );
+
+      /*
+       * Overwrite the output file with an empty list so the Slack step
+       * never posts stale data — data/notion-completed-tickets.json is
+       * committed to git (as `[ {} ]`), so without this the next step
+       * would read that leftover copy and post an empty "undefined" ticket.
+       */
+      const emptyOutputDir = path.join(__dirname, "..", "..", "data");
+      fs.mkdirSync(emptyOutputDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(emptyOutputDir, "notion-completed-tickets.json"),
+        "[]\n",
+        "utf8"
       );
 
       /*
@@ -310,6 +377,10 @@ async function main() {
 
       console.log(
         `    Created:  ${ticket.createdTime}`
+      );
+
+      console.log(
+        `    Edited:   ${ticket.lastEditedTime}`
       );
 
       console.log(

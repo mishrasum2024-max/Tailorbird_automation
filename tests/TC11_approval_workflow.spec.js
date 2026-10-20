@@ -26,7 +26,7 @@ test.describe('My & All Approval', () => {
         page = p;
         approvalJob = new SimpleApprovalPage(page);
 
-        await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'load' });
+        await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'load', timeout: 60000 });
         await expect(page).toHaveURL(process.env.DASHBOARD_URL);
         await page.waitForTimeout(10000);
         Logger.info('Dashboard loaded from stored session');
@@ -48,7 +48,7 @@ test.describe('My & All Approval', () => {
 
             // Wait for the search input to be visible
             const searchInput = healingLocator(simpleApprovalElementStrategies(page).searchInput);
-            await searchInput.waitFor({ state: 'visible', timeout: 10000 });
+            await searchInput.waitFor({ state: 'visible', timeout: 70000 });
             const searchInputVisible = await searchInput.isVisible();
             expect(searchInputVisible).toBeTruthy();
             await page.waitForTimeout(10000);

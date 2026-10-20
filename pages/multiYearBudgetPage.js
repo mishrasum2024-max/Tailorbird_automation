@@ -1,6 +1,7 @@
 const { expect } = require('@playwright/test');
 const { Logger } = require('../utils/logger');
-const { multiYearBudgetLocators } = require('../locators/multiYearBudgetLocator');
+const { multiYearBudgetLocators, yearGroupHeaderStrategies, multiYearBudgetToolbarButtonStrategies } = require('../locators/multiYearBudgetLocator');
+const { healingLocator } = require('../utils/locatorHealer');
 
 let myb;
 
@@ -23,6 +24,23 @@ exports.MultiYearBudgetJob = class MultiYearBudgetJob {
     constructor(page) {
         this.page = page;
         myb = multiYearBudgetLocators(page);
+        // Toolbar icon buttons hardened with a healingLocator fallback (see
+        // multiYearBudgetToolbarButtonStrategies' doc comment) — every other call site
+        // keeps using the plain `myb.*` locators from multiYearBudgetLocators() above,
+        // this only reassigns the specific keys that now have a verified fallback.
+        const toolbarStrategies = multiYearBudgetToolbarButtonStrategies(page);
+        myb.uploadCsvBtn = healingLocator(toolbarStrategies.uploadCsvBtn);
+        myb.addBudgetItemBtn = healingLocator(toolbarStrategies.addBudgetItemBtn);
+        myb.exportCsvBtn = healingLocator(toolbarStrategies.exportCsvBtn);
+        myb.resetBudgetBtn = healingLocator(toolbarStrategies.resetBudgetBtn);
+        myb.settingsBtn = healingLocator(toolbarStrategies.settingsBtn);
+        myb.historyBtn = healingLocator(toolbarStrategies.historyBtn);
+    }
+
+    /** Hardened, multi-locator version of myb.yearGroupHeader(year) — see
+     * yearGroupHeaderStrategies' doc comment in locators/multiYearBudgetLocator.js. */
+    _yearGroupHeader(year) {
+        return healingLocator(yearGroupHeaderStrategies(this.page, year));
     }
 
     // ===================== Navigation =====================
@@ -127,7 +145,7 @@ exports.MultiYearBudgetJob = class MultiYearBudgetJob {
     }
 
     async verifyYearVisible(year) {
-        await expect(myb.yearGroupHeader(year).first()).toBeVisible({ timeout: 10000 });
+        await expect(this._yearGroupHeader(year).first()).toBeVisible({ timeout: 10000 });
     }
 
     /**
@@ -145,12 +163,24 @@ exports.MultiYearBudgetJob = class MultiYearBudgetJob {
      * the year is already mounted (e.g. 2026/2027, reachable without any of this).
      */
     async _ensureYearMountedInGrid(year) {
-        const yearLabel = myb.yearGroupHeader(year).first();
+        // The plan table can still be mid-fetch/mid-render when this is called (e.g. right
+        // after a fresh navigateToMultiYearBudget()+selectPropertyByName(), which is a full
+        // page reload) — MCP/CI-verified 2026-09-22: on a slower render, the grid's own
+        // `revogr-scroll-virtual.horizontal` scroll container doesn't exist in the DOM yet
+        // either, so the old code's "if no scroll container, nothing to do, return" fallback
+        // was indistinguishable from "grid still loading" and gave up before the grid ever
+        // appeared — the caller's own scrollIntoViewIfNeeded() then had nothing to find and
+        // ran out the full action timeout. Waiting for the treegrid itself first (bounded,
+        // generous) turns that silent give-up into a real, patient wait tied to an actual
+        // ready signal instead of a blind sleep.
+        await myb.treegrid.first().waitFor({ state: 'visible', timeout: 30000 }).catch(() => {});
+
+        const yearLabel = this._yearGroupHeader(year).first();
         // A generous wait here (rather than a single-shot isVisible check) matters even for
         // already-close years like 2026/2027: right after navigation the grid can still be
         // mid-render, and a single-shot check racing that render was itself the cause of one
         // regression already (MCP-verified 2026-08-11).
-        const alreadyVisible = await yearLabel.waitFor({ state: 'visible', timeout: 5000 }).then(() => true).catch(() => false);
+        const alreadyVisible = await yearLabel.waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false);
         if (alreadyVisible) return;
 
         const scrollContainer = this.page.locator('revogr-scroll-virtual.horizontal').first();
@@ -192,8 +222,11 @@ exports.MultiYearBudgetJob = class MultiYearBudgetJob {
      */
     async _headerForYear(headersLocator, year) {
         await this._ensureYearMountedInGrid(year);
-        const yearLabel = myb.yearGroupHeader(year).first();
-        await yearLabel.scrollIntoViewIfNeeded();
+        const yearLabel = this._yearGroupHeader(year).first();
+        // Explicit timeout (rather than the global 55s action timeout) so a genuinely missing
+        // year column fails fast with a clear signal instead of silently eating the full
+        // per-action budget after _ensureYearMountedInGrid has already done everything it can.
+        await yearLabel.scrollIntoViewIfNeeded({ timeout: 20000 });
         await expect(yearLabel).toBeVisible({ timeout: 15000 });
         const yearBox = await yearLabel.boundingBox();
         if (!yearBox) throw new Error(`Bounding box not available for year label: ${year}`);

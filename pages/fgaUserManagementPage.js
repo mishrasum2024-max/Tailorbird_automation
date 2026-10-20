@@ -219,6 +219,22 @@ class FgaUserManagementPage {
         const checkbox = row.getByRole('checkbox');
         await expect(checkbox).toBeVisible({ timeout: 5000 });
 
+        // Root cause of the KNOWN ISSUE above (MCP + trace verified 2026-10-05): when the invite
+        // wizard's Property access step already picked this same property, the user's checkbox
+        // here opens CHECKED — so the click below UN-assigns (DELETE /api/user-property-access)
+        // and the POST it waits for never comes. Un-assign first and wait for that DELETE, so the
+        // click below performs a real assign (POST) exactly like it does for an unassigned user.
+        if (await checkbox.isChecked()) {
+            Logger.info(`"${email}" already has access to "${propertyName}" from the invite — un-assigning first so the assign below fires its POST`);
+            const unassignResponsePromise = this.page.waitForResponse(
+                (res) => res.url().endsWith('/api/user-property-access') && res.request().method() === 'DELETE',
+                { timeout: 15000 },
+            );
+            await checkbox.click();
+            await unassignResponsePromise;
+            await expect(checkbox).not.toBeChecked({ timeout: 10000 });
+        }
+
         const assignResponsePromise = this.page.waitForResponse(
             (res) => res.url().endsWith('/api/user-property-access') && res.request().method() === 'POST',
             { timeout: 15000 },

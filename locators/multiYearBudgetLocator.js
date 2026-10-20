@@ -65,6 +65,9 @@ function multiYearBudgetLocators(page) {
         varianceColumnHeaders: page.locator('revogr-viewport-scroll.scroll-rgCol').getByRole('columnheader', { name: 'Variance' }),
         totalRow: page.locator('[role="row"]').filter({ hasText: 'Total' }),
         itemRow: (itemName) => page.locator('[role="row"]').filter({ hasText: itemName }),
+        // Original unscoped exact-text lookup kept for callers that don't go through
+        // healingLocator (see yearGroupHeaderStrategies below for the hardened version
+        // used by pages/multiYearBudgetPage.js).
         yearGroupHeader: (year) => page.getByText(String(year), { exact: true }),
 
         // --- Toolbar icon buttons (no accessible names in this app; identified by their
@@ -121,4 +124,84 @@ function multiYearBudgetLocators(page) {
     };
 }
 
-module.exports = { multiYearBudgetLocators };
+/**
+ * Multi-locator strategies for the plan table's year-group header (e.g. "2026").
+ * MCP-verified live (2026-09-22): the header renders as a bare, non-semantic
+ * `<div class="header-content">2026</div>` inside `.rgHeaderCell.myb-year-group-*` —
+ * revo-grid gives it no role/aria-label/testid at all, so an element-based strategy
+ * (getByRole/getByLabel/getByTestId) genuinely isn't available here; both strategies
+ * below are text-based, matching this file's existing convention (§5/§23: only add an
+ * independently-verified fallback, never a fabricated attribute).
+ * Strategy 0 is the original, unchanged, unscoped exact-text lookup (kept for any other
+ * caller still using multiYearBudgetLocators().yearGroupHeader directly). Strategy 1
+ * scopes the same text match to the grid's own header-cell structure, so it can't
+ * accidentally resolve to an unrelated "2026" elsewhere on the page (a date, a footer
+ * year, etc.) the way the unscoped page-wide strategy could.
+ */
+function yearGroupHeaderStrategies(page, year) {
+    return [
+        { name: 'text:exact(original)', locator: page.getByText(String(year), { exact: true }) },
+        { name: 'css:.rgHeaderCell .header-content(scoped)', locator: page.locator('.rgHeaderCell .header-content').filter({ hasText: String(year) }) },
+    ];
+}
+
+/**
+ * Multi-locator strategies for the Multi-Year Budget toolbar's icon-only buttons.
+ * MCP-verified live (2026-09-22): none of these six buttons carry an aria-label, title,
+ * or visible text — the lucide icon class is genuinely the only accessible-name-style
+ * signal available.
+ *
+ * Both the unscoped `button:has(svg.lucide-upload)` CSS strategy AND a naive
+ * `toolbarGroup.locator('button').nth(N)` position strategy are broken: the same
+ * `.mantine-Group-root` that holds these six icon buttons ALSO holds a "View"
+ * (saved-views) toggle and a "Table" toggle as its first two children — two extra,
+ * text-labelled buttons a previous position-based fallback here didn't account for
+ * (it indexed nth(0)..nth(5) expecting Upload first, which actually lands on "View"
+ * and "Table"). Live-verified via CI: that "View" button can itself render with an
+ * `svg.lucide-upload` icon in some state, which the unscoped CSS strategy then matched
+ * ALONGSIDE the real Upload CSV button — two different DOM nodes, so healingLocator's
+ * `.or()` union produced a strict-mode violation (locator.click: resolved to 2 elements).
+ *
+ * Fix: scope both strategies to `button.mantine-ActionIcon-root` within the toolbar
+ * group. MCP-verified live: the six real icon buttons are Mantine `ActionIcon`
+ * components (`mantine-ActionIcon-root`), while "View"/"Table" are Mantine `Button`
+ * components (`mantine-Button-root`) — a different component, structurally excluded
+ * by this class regardless of which icon "View"/"Table" ever render. Scoped this way,
+ * `actionIcons` resolves to exactly the six icon buttons in DOM order (Upload, Plus,
+ * Download, RotateCcw, Settings, History), so both the icon-class filter and the
+ * position index now always agree on the same element.
+ */
+function multiYearBudgetToolbarButtonStrategies(page) {
+    const toolbarGroup = page.locator(
+        '.mantine-Group-root:has(svg.lucide-upload):has(svg.lucide-plus):has(svg.lucide-download):has(svg.lucide-rotate-ccw):has(svg.lucide-settings):has(svg.lucide-history)'
+    );
+    const actionIcons = toolbarGroup.locator('button.mantine-ActionIcon-root');
+    return {
+        uploadCsvBtn: [
+            { name: 'css:ActionIcon+svg.lucide-upload(scoped)', locator: actionIcons.filter({ has: page.locator('svg.lucide-upload') }) },
+            { name: 'position:actionIcons.nth(0)', locator: actionIcons.nth(0) },
+        ],
+        addBudgetItemBtn: [
+            { name: 'css:ActionIcon+svg.lucide-plus(scoped)', locator: actionIcons.filter({ has: page.locator('svg.lucide-plus') }) },
+            { name: 'position:actionIcons.nth(1)', locator: actionIcons.nth(1) },
+        ],
+        exportCsvBtn: [
+            { name: 'css:ActionIcon+svg.lucide-download(scoped)', locator: actionIcons.filter({ has: page.locator('svg.lucide-download') }) },
+            { name: 'position:actionIcons.nth(2)', locator: actionIcons.nth(2) },
+        ],
+        resetBudgetBtn: [
+            { name: 'css:ActionIcon+svg.lucide-rotate-ccw(scoped)', locator: actionIcons.filter({ has: page.locator('svg.lucide-rotate-ccw') }) },
+            { name: 'position:actionIcons.nth(3)', locator: actionIcons.nth(3) },
+        ],
+        settingsBtn: [
+            { name: 'css:ActionIcon+svg.lucide-settings(scoped)', locator: actionIcons.filter({ has: page.locator('svg.lucide-settings') }) },
+            { name: 'position:actionIcons.nth(4)', locator: actionIcons.nth(4) },
+        ],
+        historyBtn: [
+            { name: 'css:ActionIcon+svg.lucide-history(scoped)', locator: actionIcons.filter({ has: page.locator('svg.lucide-history') }) },
+            { name: 'position:actionIcons.nth(5)', locator: actionIcons.nth(5) },
+        ],
+    };
+}
+
+module.exports = { multiYearBudgetLocators, yearGroupHeaderStrategies, multiYearBudgetToolbarButtonStrategies };

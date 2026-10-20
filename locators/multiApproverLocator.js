@@ -38,9 +38,15 @@ function multiApproverLocators(page) {
 
         // Invoice line-item grid (inside invoice details dialog)
         invoiceAmountColumnHeader: page.getByRole('columnheader', { name: 'Invoice Amount', exact: true }),
-        invoiceGridDataCellByColIndex: (colIndex) =>
+        // `attr` (optional) = the attribute colIndex was read from on the header. MCP-verified live
+        // 2026-10-19: revo-grid now renders a 0-based data-rgcol AND a 1-based aria-colindex on every
+        // cell, so matching either attribute with the same number + .first() hit the column to the LEFT
+        // (Status instead of Invoice Amount). Callers that pass `attr` match only that attribute.
+        invoiceGridDataCellByColIndex: (colIndex, attr) =>
             page
-                .locator(`[role="gridcell"][data-rgcol="${colIndex}"], [role="gridcell"][aria-colindex="${colIndex}"]`)
+                .locator(attr
+                    ? `[role="gridcell"][${attr}="${colIndex}"]`
+                    : `[role="gridcell"][data-rgcol="${colIndex}"], [role="gridcell"][aria-colindex="${colIndex}"]`)
                 .first(),
         invoiceAmountEditorInput: page.getByTestId('bird-table-currency-input'),
 

@@ -58,6 +58,10 @@ class VendorContractPage {
         const search = this.page.getByRole('textbox', { name: 'Search...', exact: true });
         await expect(search, 'FAIL: Contracts search input not visible.').toBeVisible({ timeout: 10000 });
         await search.fill(contractRowText);
+        // MCP-verified live 2026-09-23: this listing does not filter on input alone —
+        // confirmed live with a non-matching search term that the grid stays fully
+        // unfiltered until Enter is pressed.
+        await search.press('Enter').catch(() => {});
         await this.page.waitForTimeout(1000);
 
         const row = this.page.locator('[role="row"][data-rgrow]').filter({ hasText: contractRowText }).first();

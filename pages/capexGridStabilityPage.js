@@ -22,7 +22,10 @@ class CapexGridStabilityPage {
             return Array.from(document.querySelectorAll('[role="gridcell"]'))
                 .filter(c => {
                     const indent = c.querySelector('[style*="margin-left"]');
-                    return indent && parseInt(indent.style.marginLeft, 10) >= 20;
+                    // Computed style, not the inline string — MCP-verified live 2026-10-19 the
+                    // indent is now `calc(1 * var(--rg-tree-indent-size, 20px))`, which
+                    // parseInt() turns into NaN; getComputedStyle resolves it to "20px".
+                    return indent && parseFloat(getComputedStyle(indent).marginLeft) >= 20;
                 }).length;
         });
     }
@@ -146,7 +149,7 @@ class CapexGridStabilityPage {
                 // Must check >= 20 — !!querySelector('[style*="margin-left"]') returns
                 // true for parent cells too (they carry a 0px spacer span).
                 const nextEl = cells[i + 1].querySelector('[style*="margin-left"]');
-                const nextIsChildRow = nextEl && parseInt(nextEl.style.marginLeft, 10) >= 20;
+                const nextIsChildRow = nextEl && parseFloat(getComputedStyle(nextEl).marginLeft) >= 20;
                 if (toggle && nextIsChildRow) {
                     // Return index among ALL tree-toggle buttons so the caller can use
                     // Playwright's .nth(index).click() — JS click does not work on

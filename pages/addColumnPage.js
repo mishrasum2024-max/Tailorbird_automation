@@ -1,1027 +1,1294 @@
-const { expect } = require('@playwright/test');
-const { Logger } = require('../utils/logger');
-const { addColumnLocators, ADD_COLUMN_TYPES } = require('../locators/addColumnLocator');
+const { expect } = require("@playwright/test");
+const { Logger } = require("../utils/logger");
+const {
+  addColumnLocators,
+  ADD_COLUMN_TYPES,
+} = require("../locators/addColumnLocator");
 
 const MONTH_NAMES = [
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December',
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 
 class AddColumnPage {
-    /**
-     * @param {import('@playwright/test').Page} page
-     * @param {{ scope?: import('@playwright/test').Locator }} [options]
-     */
-    constructor(page, options = {}) {
-        this.page = page;
-        this.loc = addColumnLocators(page);
-        this.scope = options.scope || page.locator('main');
+  /**
+   * @param {import('@playwright/test').Page} page
+   * @param {{ scope?: import('@playwright/test').Locator }} [options]
+   */
+  constructor(page, options = {}) {
+    this.page = page;
+    this.loc = addColumnLocators(page);
+    this.scope = options.scope || page.locator("main");
+  }
+
+  async _dismissOverlays() {
+    await this.page.keyboard.press("Escape").catch(() => {});
+    await this.page.waitForTimeout(300);
+  }
+
+  /**
+   * Fallback for _dismissOverlays(): CI-observed 2026-08-18 that Escape does not always
+   * dismiss a still-open Manage Columns dialog between successive column deletions,
+   * leaving it blocking the table menu button underneath and exhausting every retry in
+   * _openTableMenu() until the whole test times out. If a dialog is still visible after
+   * Escape, click its own close ("X") button instead.
+   */
+  async _dismissOverlaysViaCrossButton() {
+    const crossButton = this.loc.openDialogCloseButton;
+    if (await crossButton.isVisible({ timeout: 5000 }).catch(() => false)) {
+      await crossButton.click({ force: true }).catch(() => {});
+      await this.page.waitForTimeout(300);
+    }
+  }
+
+  async _waitForTableMenuOpen() {
+    const portalItemProbe = this.loc.hideShowColumnsMenuItem
+      .first()
+      .or(this.loc.addColumnMenuItem.first());
+    const menuShell = this.page
+      .locator(".mantine-Menu-dropdown")
+      .or(this.page.locator(".mantine-Popover-dropdown"))
+      .or(this.page.locator('[role="menu"]'))
+      .first();
+
+    await portalItemProbe
+      .waitFor({ state: "visible", timeout: 12000 })
+      .catch(async () => {
+        await menuShell.waitFor({ state: "visible", timeout: 8000 });
+      });
+  }
+
+  async _openTableMenu(retries = 3) {
+    await this._dismissOverlays();
+    await this._dismissOverlaysViaCrossButton();
+
+    for (let attempt = 0; attempt < retries; attempt++) {
+      const tableBtn = this.loc.tableMenuBtn(this.scope).first();
+      await tableBtn.waitFor({ state: "visible", timeout: 10000 });
+      await tableBtn.scrollIntoViewIfNeeded().catch(() => {});
+
+      await this.page
+        .locator("body")
+        .click({ position: { x: 10, y: 10 }, force: true })
+        .catch(() => {});
+      await this.page.waitForTimeout(200);
+
+      await tableBtn.click({ force: true });
+      await this.page.waitForTimeout(500);
+
+      const menuOpen =
+        (await this.loc.hideShowColumnsMenuItem
+          .isVisible({ timeout: 1500 })
+          .catch(() => false)) ||
+        (await this.loc.addColumnMenuItem
+          .isVisible({ timeout: 500 })
+          .catch(() => false));
+
+      if (menuOpen) return;
+
+      await this._dismissOverlays();
+      await this._dismissOverlaysViaCrossButton();
+      await this.page.waitForTimeout(400);
     }
 
-    async _dismissOverlays() {
-        await this.page.keyboard.press('Escape').catch(() => {});
-        await this.page.waitForTimeout(300);
-    }
+    await this._waitForTableMenuOpen();
+  }
 
-    /**
-     * Fallback for _dismissOverlays(): CI-observed 2026-08-18 that Escape does not always
-     * dismiss a still-open Manage Columns dialog between successive column deletions,
-     * leaving it blocking the table menu button underneath and exhausting every retry in
-     * _openTableMenu() until the whole test times out. If a dialog is still visible after
-     * Escape, click its own close ("X") button instead.
-     */
-    async _dismissOverlaysViaCrossButton() {
-        const crossButton = this.loc.openDialogCloseButton;
-        if (await crossButton.isVisible({ timeout: 5000 }).catch(() => false)) {
-            await crossButton.click({ force: true }).catch(() => {});
-            await this.page.waitForTimeout(300);
+  /** Table menu → Add column → wait for panel. */
+  async openAddColumnPanel() {
+    await this._openTableMenu();
+    await expect(this.loc.addColumnMenuItem).toBeVisible({ timeout: 10000 });
+    await this.loc.addColumnMenuItem.click();
+    await expect(this.loc.columnNameInput).toBeVisible({ timeout: 10000 });
+    await expect(this.loc.columnDescInput).toBeVisible({ timeout: 10000 });
+    await expect(this.loc.columnTypeGrid).toBeVisible({ timeout: 10000 });
+  }
+
+  /**
+   * Add one custom column.
+   * @param {string} columnName
+   * @param {string} description
+   * @param {number} typeIndex - 0 = Text, 1 = Number, 2 = Select, ...
+   */
+  async addColumn(columnName, description, typeIndex = 0) {
+    await this.openAddColumnPanel();
+    await this.loc.columnNameInput.fill(columnName);
+    await this.loc.columnDescInput.fill(description);
+    await this.loc.columnTypeGrid.locator("button").nth(typeIndex).click();
+
+    const typeName = ADD_COLUMN_TYPES[typeIndex];
+    if (typeName === "Select" || typeName === "Multi-select") {
+      const optionInput = this.loc.selectOptionInput;
+      if (await optionInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await optionInput.fill("Option A");
+        await this.page.keyboard.press("Enter");
+        if (typeName === "Multi-select") {
+          await optionInput.fill("Option B");
+          await this.page.keyboard.press("Enter");
         }
+      }
     }
 
-    async _waitForTableMenuOpen() {
-        const portalItemProbe = this.loc.hideShowColumnsMenuItem
-            .first()
-            .or(this.loc.addColumnMenuItem.first());
-        const menuShell = this.page
-            .locator('.mantine-Menu-dropdown')
-            .or(this.page.locator('.mantine-Popover-dropdown'))
-            .or(this.page.locator('[role="menu"]'))
-            .first();
+    await expect(this.loc.addColumnSubmitBtn).toBeEnabled({ timeout: 5000 });
+    await this.loc.addColumnSubmitBtn.click();
+    await expect(this.loc.columnNameInput).toBeHidden({ timeout: 15000 });
+    await this.page.keyboard.press("Escape").catch(() => {});
+    await this._waitForColumnHeader(columnName);
+    Logger.success(`Added column "${columnName}" (${typeName})`);
+  }
 
-        await portalItemProbe.waitFor({ state: 'visible', timeout: 12000 }).catch(async () => {
-            await menuShell.waitFor({ state: 'visible', timeout: 8000 });
-        });
-    }
+  /** Open Manage Columns, confirm column exists, then verify grid accepts the column type input. */
+  async verifyColumnAdded(columnName, typeName) {
+    await this.openManageColumns();
+    await expect(
+      this.loc.manageColumnsDialog
+        .locator("p")
+        .filter({ hasText: columnName })
+        .first()
+    ).toBeVisible({ timeout: 8000 });
+    await this.closeManageColumns();
+    Logger.success(`Verified column "${columnName}" in Manage Columns`);
+    await this.verifyColumnTypeInput(columnName, typeName);
+  }
 
-    async _openTableMenu(retries = 3) {
-        await this._dismissOverlays();
-        await this._dismissOverlaysViaCrossButton();
-
-        for (let attempt = 0; attempt < retries; attempt++) {
-            const tableBtn = this.loc.tableMenuBtn(this.scope).first();
-            await tableBtn.waitFor({ state: 'visible', timeout: 10000 });
-            await tableBtn.scrollIntoViewIfNeeded().catch(() => {});
-
-            await this.page.locator('body').click({ position: { x: 10, y: 10 }, force: true }).catch(() => {});
-            await this.page.waitForTimeout(200);
-
-            await tableBtn.click({ force: true });
-            await this.page.waitForTimeout(500);
-
-            const menuOpen =
-                (await this.loc.hideShowColumnsMenuItem.isVisible({ timeout: 1500 }).catch(() => false)) ||
-                (await this.loc.addColumnMenuItem.isVisible({ timeout: 500 }).catch(() => false));
-
-            if (menuOpen) return;
-
-            await this._dismissOverlays();
-            await this._dismissOverlaysViaCrossButton();
-            await this.page.waitForTimeout(400);
+  async _scrollGridRight(stepPx = 500) {
+    const treegrid = this.scope.locator('[role="treegrid"]').first();
+    await this.page.evaluate(px => {
+      const scrollNode = node => {
+        if (!node) return;
+        if (node.scrollWidth > node.clientWidth + 5) {
+          node.scrollLeft = Math.min(node.scrollLeft + px, node.scrollWidth);
         }
+        for (const child of node.children || []) scrollNode(child);
+        if (node.shadowRoot) scrollNode(node.shadowRoot);
+      };
+      document
+        .querySelectorAll(
+          'revo-grid, [role="treegrid"], revogr-viewport-scroll'
+        )
+        .forEach(scrollNode);
+    }, stepPx);
 
-        await this._waitForTableMenuOpen();
+    if (await treegrid.isVisible().catch(() => false)) {
+      await treegrid.hover({ force: true }).catch(() => {});
+      await this.page.mouse.wheel(stepPx, 0);
+    }
+  }
+
+  async _waitForColumnHeader(columnName) {
+    const header = this.page
+      .locator('[role="columnheader"]')
+      .filter({ hasText: columnName })
+      .first();
+
+    // MCP-verified live (2026-08-25): grids that accumulate many custom columns over repeated
+    // runs (e.g. Images/Property Documents, both shared org-wide state) push a freshly-added
+    // column far enough right that _scrollGridRight()'s real hover+mouse-wheel step (on top of
+    // the direct scrollLeft write) can take noticeably longer than the 250ms poll interval per
+    // iteration, so 25000ms's nominal ~100 iterations doesn't reliably translate into that many
+    // real scroll steps. Bumped for headroom rather than changing the scroll mechanism itself.
+    await expect
+      .poll(
+        async () => {
+          if ((await header.count()) > 0) return true;
+          await this._scrollGridRight();
+          return (await header.count()) > 0;
+        },
+        { timeout: 120000, intervals: [250] }
+      )
+      .toBe(true);
+
+    await header.scrollIntoViewIfNeeded();
+    await expect(header).toBeVisible({ timeout: 120000 });
+    return header;
+  }
+
+  /**
+   * Forces the revo-grid within this page object's scope to a large width so it mounts
+   * every column instead of virtualizing rightmost ones out of the DOM. MCP-verified live
+   * (2026-07-28): each newly-added custom column pushes the total column count further
+   * right — by the time a 6th column (e.g. "Checkbox") is added, its aria-colindex sits
+   * past the grid's default rendering width and the gridcell never mounts at all, so
+   * scrollIntoViewIfNeeded() times out waiting for a locator that will never resolve
+   * (not a real feature bug — the same checkbox toggle works fine once the cell exists).
+   */
+  async _forceGridFullWidth() {
+    const grid = this.scope.locator("revo-grid").first();
+    if (await grid.count().catch(() => 0)) {
+      await grid
+        .evaluate(g => {
+          g.style.setProperty("width", "4000px", "important");
+          g.style.setProperty("min-width", "4000px", "important");
+        })
+        .catch(() => {});
+      await this.page.waitForTimeout(400);
+    }
+  }
+
+  async _getFirstDataCellForColumn(columnName) {
+    await this._forceGridFullWidth();
+    const header = await this._waitForColumnHeader(columnName);
+    const colIndex = await header.getAttribute("aria-colindex");
+    expect(
+      colIndex,
+      `Column "${columnName}" must have aria-colindex`
+    ).toBeTruthy();
+
+    const dataRow = this.scope
+      .locator('[role="treegrid"] [role="row"], [role="grid"] [role="row"]')
+      .filter({ has: this.page.locator('[role="gridcell"]') })
+      .first();
+    const cell = dataRow.locator(
+      `[role="gridcell"][aria-colindex="${colIndex}"]`
+    );
+    await cell.scrollIntoViewIfNeeded();
+    return cell;
+  }
+
+  async _openCellEditor(cell) {
+    await cell.scrollIntoViewIfNeeded();
+    await cell.dblclick({ force: true });
+    await this.page.waitForTimeout(800);
+
+    if (
+      !(await this.page
+        .locator("revogr-edit")
+        .first()
+        .isVisible({ timeout: 1500 })
+        .catch(() => false))
+    ) {
+      await this.page.keyboard.press("F2");
+      await this.page.waitForTimeout(800);
+    }
+  }
+
+  async _activeInput() {
+    return this.page
+      .locator("revogr-edit input, revogr-edit textarea")
+      .first()
+      .or(this.page.locator("input:focus, textarea:focus").first());
+  }
+
+  async _commitCellEdit() {
+    await this.page.keyboard.press("Enter");
+    const editor = this.page.locator("revogr-edit").first();
+    // Enter usually closes the editor immediately, but under load the grid can take
+    // longer to commit — wait for it to actually close instead of a flat timeout,
+    // so a slow commit doesn't race with the next step's Escape (which would cancel
+    // the edit instead of just dismissing an already-closed editor).
+    const closed = await editor
+      .waitFor({ state: "hidden", timeout: 3000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!closed) {
+      await this.page.keyboard.press("Tab");
+      await editor.waitFor({ state: "hidden", timeout: 2000 }).catch(() => {});
+    }
+  }
+
+  /** Strip newlines and grid chrome (e.g. clear ✕ buttons) from cell text before logging. */
+  _sanitizeCellText(text) {
+    return String(text || "")
+      .split(/[\n\r]+/)
+      .map(line => line.trim())
+      .filter(line => line && line !== "✕" && line !== "—" && line !== "-")
+      .join(" ")
+      .trim();
+  }
+
+  async _readCellText(cell) {
+    return this._sanitizeCellText(await cell.innerText());
+  }
+
+  async _assertCellShows(cell, pattern, columnName, typeName, insertedValue) {
+    await this._dismissEditor();
+    let cellText = "";
+    // CI (headless Linux runner) commits a cell edit noticeably slower than local — the
+    // grid's persist round-trip (PATCH to the backend, then re-render) that finishes well
+    // inside 10s locally can still be in flight there. This is a brand-new column too (the
+    // rightmost, just-created one), so it's already paying the cost of the scroll-right +
+    // re-render from _waitForColumnHeader before this poll even starts. Give it more room
+    // rather than a fixed budget tuned to local timing.
+    await expect
+      .poll(
+        async () => {
+          cellText = await this._readCellText(cell);
+          return cellText || "";
+        },
+        { timeout: 20000 }
+      )
+      .toMatch(pattern);
+    this._logCellResult(columnName, typeName, insertedValue, cellText);
+  }
+
+  async _fillActiveInputAndAssertCell(
+    cell,
+    value,
+    cellPattern,
+    columnName,
+    typeName
+  ) {
+    await this._openCellEditor(cell);
+    const input = await this._activeInput();
+    await expect(input).toBeVisible({ timeout: 5000 });
+    await input.fill(value);
+    await this._commitCellEdit();
+    await this._assertCellShows(cell, cellPattern, columnName, typeName, value);
+  }
+
+  async _dismissEditor() {
+    // Only escape when a cell editor is actually open — Escape cancels an in-progress
+    // edit, so pressing it against an already-committed cell risks wiping out a value
+    // that just hasn't finished closing yet (race with _commitCellEdit's Enter/Tab).
+    const editorOpen = await this.page
+      .locator("revogr-edit")
+      .first()
+      .isVisible({ timeout: 500 })
+      .catch(() => false);
+    if (editorOpen) {
+      await this.page.keyboard.press("Escape").catch(() => {});
+    }
+    await this.page.waitForTimeout(300);
+  }
+
+  _logCellResult(columnName, typeName, insertedValue, displayValue) {
+    Logger.info(
+      `Inserted value for ${typeName} column "${columnName}": ${insertedValue}`
+    );
+    Logger.info(
+      `Verified cell display for ${typeName} column "${columnName}": ${displayValue}`
+    );
+  }
+
+  _randomFutureDate(minDays = 7, maxDays = 180) {
+    const offset =
+      Math.floor(Math.random() * (maxDays - minDays + 1)) + minDays;
+    const targetDate = new Date();
+    targetDate.setDate(targetDate.getDate() + offset);
+
+    const yyyy = targetDate.getFullYear();
+    const mm = String(targetDate.getMonth() + 1).padStart(2, "0");
+    const dd = String(targetDate.getDate()).padStart(2, "0");
+
+    return {
+      iso: `${yyyy}-${mm}-${dd}`,
+      us: `${mm}/${dd}/${yyyy}`,
+      cellPattern: new RegExp(
+        `${mm}.*${dd}.*${yyyy}|${yyyy}.*${mm}.*${dd}`,
+        "i"
+      ), // nosemgrep: detect-non-literal-regexp — mm/dd/yyyy are purely numeric strings from Date(), no user input; OR pattern cannot be expressed as a static literal
+      targetDate,
+    };
+  }
+
+  _toCalendarButtonName(date) {
+    return `${date.getDate()} ${MONTH_NAMES[date.getMonth()]} ${date.getFullYear()}`;
+  }
+
+  async _pickDateInCalendar(targetDate) {
+    const targetLabel = `${MONTH_NAMES[targetDate.getMonth()]} ${targetDate.getFullYear()}`;
+    const dayButtonName = this._toCalendarButtonName(targetDate);
+
+    const calendarDialog = this.page
+      .getByRole("dialog")
+      .filter({ has: this.page.locator("table") })
+      .last();
+    await expect(calendarDialog).toBeVisible({ timeout: 8000 });
+
+    const monthLabel = calendarDialog.getByRole("button", {
+      name: /^(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}$/,
+    });
+    const headerRow = monthLabel.locator("xpath=..");
+    const prevBtn = headerRow.getByRole("button").first();
+    const nextBtn = headerRow.getByRole("button").last();
+
+    for (let attempt = 0; attempt < 36; attempt++) {
+      const current = ((await monthLabel.textContent()) || "").trim();
+      if (current === targetLabel) break;
+
+      const [curMonth, curYear] = current.split(" ");
+      const curMonthDate = new Date(
+        Number(curYear),
+        MONTH_NAMES.indexOf(curMonth),
+        1
+      );
+      const targetMonthDate = new Date(
+        targetDate.getFullYear(),
+        targetDate.getMonth(),
+        1
+      );
+
+      await (targetMonthDate > curMonthDate ? nextBtn : prevBtn).click();
+      await this.page.waitForTimeout(300);
     }
 
-    /** Table menu → Add column → wait for panel. */
-    async openAddColumnPanel() {
-        await this._openTableMenu();
-        await expect(this.loc.addColumnMenuItem).toBeVisible({ timeout: 10000 });
-        await this.loc.addColumnMenuItem.click();
-        await expect(this.loc.columnNameInput).toBeVisible({ timeout: 10000 });
-        await expect(this.loc.columnDescInput).toBeVisible({ timeout: 10000 });
-        await expect(this.loc.columnTypeGrid).toBeVisible({ timeout: 10000 });
+    const dayBtn = calendarDialog.getByRole("button", {
+      name: dayButtonName,
+      exact: true,
+    });
+    if (await dayBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await dayBtn.click();
+      return;
     }
 
-    /**
-     * Add one custom column.
-     * @param {string} columnName
-     * @param {string} description
-     * @param {number} typeIndex - 0 = Text, 1 = Number, 2 = Select, ...
-     */
-    async addColumn(columnName, description, typeIndex = 0) {
-        await this.openAddColumnPanel();
-        await this.loc.columnNameInput.fill(columnName);
-        await this.loc.columnDescInput.fill(description);
-        await this.loc.columnTypeGrid.locator('button').nth(typeIndex).click();
+    await calendarDialog
+      .locator("button")
+      .filter({
+        has: this.page.getByText(String(targetDate.getDate()), { exact: true }),
+      })
+      .first()
+      .click();
+  }
 
-        const typeName = ADD_COLUMN_TYPES[typeIndex];
-        if (typeName === 'Select' || typeName === 'Multi-select') {
-            const optionInput = this.loc.selectOptionInput;
-            if (await optionInput.isVisible({ timeout: 2000 }).catch(() => false)) {
-                await optionInput.fill('Option A');
-                await this.page.keyboard.press('Enter');
-                if (typeName === 'Multi-select') {
-                    await optionInput.fill('Option B');
-                    await this.page.keyboard.press('Enter');
-                }
-            }
-        }
+  async _fillDateCell(cell, columnName, typeName) {
+    const { iso, us, cellPattern, targetDate } = this._randomFutureDate();
+    await this._openCellEditor(cell);
 
-        await expect(this.loc.addColumnSubmitBtn).toBeEnabled({ timeout: 5000 });
-        await this.loc.addColumnSubmitBtn.click();
-        await expect(this.loc.columnNameInput).toBeHidden({ timeout: 15000 });
-        await this.page.keyboard.press('Escape').catch(() => {});
-        await this._waitForColumnHeader(columnName);
-        Logger.success(`Added column "${columnName}" (${typeName})`);
+    const dateInput = this.page
+      .locator(
+        'input[type="date"]:visible, input[type="datetime-local"]:visible'
+      )
+      .or(
+        this.page
+          .locator('revogr-edit input:visible:not([type="hidden"])')
+          .first()
+      );
+
+    if (
+      await dateInput
+        .first()
+        .isVisible({ timeout: 1500 })
+        .catch(() => false)
+    ) {
+      const input = dateInput.first();
+      const value = (await input.getAttribute("type")) === "date" ? iso : us;
+      await input.fill(value);
+      await this.page.keyboard.press("Enter");
+      await this.page.waitForTimeout(300);
+      await this._commitCellEdit();
+      await this._assertCellShows(
+        cell,
+        cellPattern,
+        columnName,
+        typeName,
+        value
+      );
+      return;
     }
 
-    /** Open Manage Columns, confirm column exists, then verify grid accepts the column type input. */
-    async verifyColumnAdded(columnName, typeName) {
-        await this.openManageColumns();
-        await expect(
-            this.loc.manageColumnsDialog.locator('p').filter({ hasText: columnName }).first(),
-        ).toBeVisible({ timeout: 8000 });
-        await this.closeManageColumns();
-        Logger.success(`Verified column "${columnName}" in Manage Columns`);
-        await this.verifyColumnTypeInput(columnName, typeName);
+    // Clicking a day in the calendar already commits the value and closes both the
+    // calendar and the cell editor (MCP-verified on beta.tailorbird.com, 2026-07-26).
+    // Pressing Enter afterwards (as _commitCellEdit does) re-opens the cell into edit
+    // mode — RevoGrid treats Enter on a focused, already-committed cell as "start
+    // editing" — which re-opens the calendar and blocks _assertCellShows from ever
+    // reading the committed value. No further commit step is needed here.
+    await this._pickDateInCalendar(targetDate);
+    await this.page.waitForTimeout(300);
+    await this._assertCellShows(cell, cellPattern, columnName, typeName, us);
+  }
+
+  async _waitForDropdownOptions(timeout = 8000) {
+    const options = this.page.locator(
+      '[role="option"]:visible, [data-combobox-option]:visible, [role="listbox"] [role="option"]:visible'
+    );
+    await expect
+      .poll(async () => await options.count(), { timeout, intervals: [300] })
+      .toBeGreaterThan(0);
+    return options;
+  }
+
+  async _selectUserFromCell(cell, columnName, typeName) {
+    await cell.scrollIntoViewIfNeeded();
+
+    const openUserMenu = async () => {
+      const userTrigger = cell.getByText(/Select a user/i).first();
+      if (await userTrigger.isVisible({ timeout: 1500 }).catch(() => false)) {
+        await userTrigger.click({ force: true });
+        return;
+      }
+
+      await cell.dblclick({ force: true });
+      await this.page.waitForTimeout(500);
+
+      const triggerAfterEdit = cell.getByText(/Select a user/i).first();
+      if (
+        await triggerAfterEdit.isVisible({ timeout: 2000 }).catch(() => false)
+      ) {
+        await triggerAfterEdit.click({ force: true });
+      }
+    };
+
+    await openUserMenu();
+    await this.page.waitForTimeout(800);
+
+    const userMenu = this.page
+      .getByRole("menu", { name: /Select a user/i })
+      .filter({ has: this.page.getByPlaceholder(/Search users/i) });
+    await expect(userMenu).toBeVisible({ timeout: 10000 });
+
+    const firstUserLabel = userMenu
+      .locator("p")
+      .filter({ hasText: /@/ })
+      .first();
+    await expect(firstUserLabel).toBeVisible({ timeout: 8000 });
+
+    const firstUserRow = firstUserLabel.locator(
+      'xpath=ancestor::*[@cursor="pointer" or contains(@style,"cursor")][1]'
+    );
+    const selectedText = (await firstUserLabel.innerText()).trim();
+
+    if (await firstUserRow.isVisible({ timeout: 1000 }).catch(() => false)) {
+      await firstUserRow.click({ force: true });
+    } else {
+      await firstUserLabel.click({ force: true });
     }
 
-    async _scrollGridRight(stepPx = 500) {
-        const treegrid = this.scope.locator('[role="treegrid"]').first();
-        await this.page.evaluate((px) => {
-            const scrollNode = (node) => {
-                if (!node) return;
-                if (node.scrollWidth > node.clientWidth + 5) {
-                    node.scrollLeft = Math.min(node.scrollLeft + px, node.scrollWidth);
-                }
-                for (const child of node.children || []) scrollNode(child);
-                if (node.shadowRoot) scrollNode(node.shadowRoot);
-            };
-            document.querySelectorAll('revo-grid, [role="treegrid"], revogr-viewport-scroll').forEach(scrollNode);
-        }, stepPx);
-
-        if (await treegrid.isVisible().catch(() => false)) {
-            await treegrid.hover({ force: true }).catch(() => {});
-            await this.page.mouse.wheel(stepPx, 0);
-        }
-    }
-
-    async _waitForColumnHeader(columnName) {
-        const header = this.page.locator('[role="columnheader"]').filter({ hasText: columnName }).first();
-
-        // MCP-verified live (2026-08-25): grids that accumulate many custom columns over repeated
-        // runs (e.g. Images/Property Documents, both shared org-wide state) push a freshly-added
-        // column far enough right that _scrollGridRight()'s real hover+mouse-wheel step (on top of
-        // the direct scrollLeft write) can take noticeably longer than the 250ms poll interval per
-        // iteration, so 25000ms's nominal ~100 iterations doesn't reliably translate into that many
-        // real scroll steps. Bumped for headroom rather than changing the scroll mechanism itself.
-        await expect
-            .poll(
-                async () => {
-                    if ((await header.count()) > 0) return true;
-                    await this._scrollGridRight();
-                    return (await header.count()) > 0;
-                },
-                { timeout: 120000, intervals: [250] },
-            )
-            .toBe(true);
-
-        await header.scrollIntoViewIfNeeded();
-        await expect(header).toBeVisible({ timeout: 120000 });
-        return header;
-    }
-
-    /**
-     * Forces the revo-grid within this page object's scope to a large width so it mounts
-     * every column instead of virtualizing rightmost ones out of the DOM. MCP-verified live
-     * (2026-07-28): each newly-added custom column pushes the total column count further
-     * right — by the time a 6th column (e.g. "Checkbox") is added, its aria-colindex sits
-     * past the grid's default rendering width and the gridcell never mounts at all, so
-     * scrollIntoViewIfNeeded() times out waiting for a locator that will never resolve
-     * (not a real feature bug — the same checkbox toggle works fine once the cell exists).
-     */
-    async _forceGridFullWidth() {
-        const grid = this.scope.locator('revo-grid').first();
-        if (await grid.count().catch(() => 0)) {
-            await grid.evaluate((g) => {
-                g.style.setProperty('width', '4000px', 'important');
-                g.style.setProperty('min-width', '4000px', 'important');
-            }).catch(() => {});
-            await this.page.waitForTimeout(400);
-        }
-    }
-
-    async _getFirstDataCellForColumn(columnName) {
-        await this._forceGridFullWidth();
-        const header = await this._waitForColumnHeader(columnName);
-        const colIndex = await header.getAttribute('aria-colindex');
-        expect(colIndex, `Column "${columnName}" must have aria-colindex`).toBeTruthy();
-
-        const dataRow = this.scope
-            .locator('[role="treegrid"] [role="row"], [role="grid"] [role="row"]')
-            .filter({ has: this.page.locator('[role="gridcell"]') })
-            .first();
-        const cell = dataRow.locator(`[role="gridcell"][aria-colindex="${colIndex}"]`);
-        await cell.scrollIntoViewIfNeeded();
-        return cell;
-    }
-
-    async _openCellEditor(cell) {
-        await cell.scrollIntoViewIfNeeded();
-        await cell.dblclick({ force: true });
-        await this.page.waitForTimeout(800);
-
-        if (!(await this.page.locator('revogr-edit').first().isVisible({ timeout: 1500 }).catch(() => false))) {
-            await this.page.keyboard.press('F2');
-            await this.page.waitForTimeout(800);
-        }
-    }
-
-    async _activeInput() {
-        return this.page
-            .locator('revogr-edit input, revogr-edit textarea')
-            .first()
-            .or(this.page.locator('input:focus, textarea:focus').first());
-    }
-
-    async _commitCellEdit() {
-        await this.page.keyboard.press('Enter');
-        const editor = this.page.locator('revogr-edit').first();
-        // Enter usually closes the editor immediately, but under load the grid can take
-        // longer to commit — wait for it to actually close instead of a flat timeout,
-        // so a slow commit doesn't race with the next step's Escape (which would cancel
-        // the edit instead of just dismissing an already-closed editor).
-        const closed = await editor
-            .waitFor({ state: 'hidden', timeout: 3000 })
-            .then(() => true)
-            .catch(() => false);
-        if (!closed) {
-            await this.page.keyboard.press('Tab');
-            await editor.waitFor({ state: 'hidden', timeout: 2000 }).catch(() => {});
-        }
-    }
-
-    /** Strip newlines and grid chrome (e.g. clear ✕ buttons) from cell text before logging. */
-    _sanitizeCellText(text) {
-        return String(text || '')
-            .split(/[\n\r]+/)
-            .map((line) => line.trim())
-            .filter((line) => line && line !== '✕' && line !== '—' && line !== '-')
-            .join(' ')
-            .trim();
-    }
-
-    async _readCellText(cell) {
-        return this._sanitizeCellText(await cell.innerText());
-    }
-
-    async _assertCellShows(cell, pattern, columnName, typeName, insertedValue) {
-        await this._dismissEditor();
-        let cellText = '';
-        // CI (headless Linux runner) commits a cell edit noticeably slower than local — the
-        // grid's persist round-trip (PATCH to the backend, then re-render) that finishes well
-        // inside 10s locally can still be in flight there. This is a brand-new column too (the
-        // rightmost, just-created one), so it's already paying the cost of the scroll-right +
-        // re-render from _waitForColumnHeader before this poll even starts. Give it more room
-        // rather than a fixed budget tuned to local timing.
-        await expect
-            .poll(
-                async () => {
-                    cellText = await this._readCellText(cell);
-                    return cellText || '';
-                },
-                { timeout: 20000 },
-            )
-            .toMatch(pattern);
-        this._logCellResult(columnName, typeName, insertedValue, cellText);
-    }
-
-    async _fillActiveInputAndAssertCell(cell, value, cellPattern, columnName, typeName) {
-        await this._openCellEditor(cell);
-        const input = await this._activeInput();
-        await expect(input).toBeVisible({ timeout: 5000 });
-        await input.fill(value);
-        await this._commitCellEdit();
-        await this._assertCellShows(cell, cellPattern, columnName, typeName, value);
-    }
-
-    async _dismissEditor() {
-        // Only escape when a cell editor is actually open — Escape cancels an in-progress
-        // edit, so pressing it against an already-committed cell risks wiping out a value
-        // that just hasn't finished closing yet (race with _commitCellEdit's Enter/Tab).
-        const editorOpen = await this.page.locator('revogr-edit').first().isVisible({ timeout: 500 }).catch(() => false);
-        if (editorOpen) {
-            await this.page.keyboard.press('Escape').catch(() => {});
-        }
-        await this.page.waitForTimeout(300);
-    }
-
-    _logCellResult(columnName, typeName, insertedValue, displayValue) {
-        Logger.info(`Inserted value for ${typeName} column "${columnName}": ${insertedValue}`);
-        Logger.info(`Verified cell display for ${typeName} column "${columnName}": ${displayValue}`);
-    }
-
-    _randomFutureDate(minDays = 7, maxDays = 180) {
-        const offset = Math.floor(Math.random() * (maxDays - minDays + 1)) + minDays;
-        const targetDate = new Date();
-        targetDate.setDate(targetDate.getDate() + offset);
-
-        const yyyy = targetDate.getFullYear();
-        const mm = String(targetDate.getMonth() + 1).padStart(2, '0');
-        const dd = String(targetDate.getDate()).padStart(2, '0');
-
-        return {
-            iso: `${yyyy}-${mm}-${dd}`,
-            us: `${mm}/${dd}/${yyyy}`,
-            cellPattern: new RegExp(`${mm}.*${dd}.*${yyyy}|${yyyy}.*${mm}.*${dd}`, 'i'), // nosemgrep: detect-non-literal-regexp — mm/dd/yyyy are purely numeric strings from Date(), no user input; OR pattern cannot be expressed as a static literal
-            targetDate,
-        };
-    }
-
-    _toCalendarButtonName(date) {
-        return `${date.getDate()} ${MONTH_NAMES[date.getMonth()]} ${date.getFullYear()}`;
-    }
-
-    async _pickDateInCalendar(targetDate) {
-        const targetLabel = `${MONTH_NAMES[targetDate.getMonth()]} ${targetDate.getFullYear()}`;
-        const dayButtonName = this._toCalendarButtonName(targetDate);
-
-        const calendarDialog = this.page
-            .getByRole('dialog')
-            .filter({ has: this.page.locator('table') })
-            .last();
-        await expect(calendarDialog).toBeVisible({ timeout: 8000 });
-
-        const monthLabel = calendarDialog.getByRole('button', {
-            name: /^(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}$/,
-        });
-        const headerRow = monthLabel.locator('xpath=..');
-        const prevBtn = headerRow.getByRole('button').first();
-        const nextBtn = headerRow.getByRole('button').last();
-
-        for (let attempt = 0; attempt < 36; attempt++) {
-            const current = ((await monthLabel.textContent()) || '').trim();
-            if (current === targetLabel) break;
-
-            const [curMonth, curYear] = current.split(' ');
-            const curMonthDate = new Date(Number(curYear), MONTH_NAMES.indexOf(curMonth), 1);
-            const targetMonthDate = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
-
-            await (targetMonthDate > curMonthDate ? nextBtn : prevBtn).click();
-            await this.page.waitForTimeout(300);
-        }
-
-        const dayBtn = calendarDialog.getByRole('button', { name: dayButtonName, exact: true });
-        if (await dayBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-            await dayBtn.click();
-            return;
-        }
-
-        await calendarDialog
-            .locator('button')
-            .filter({ has: this.page.getByText(String(targetDate.getDate()), { exact: true }) })
-            .first()
-            .click();
-    }
-
-    async _fillDateCell(cell, columnName, typeName) {
-        const { iso, us, cellPattern, targetDate } = this._randomFutureDate();
-        await this._openCellEditor(cell);
-
-        const dateInput = this.page
-            .locator('input[type="date"]:visible, input[type="datetime-local"]:visible')
-            .or(this.page.locator('revogr-edit input:visible:not([type="hidden"])').first());
-
-        if (await dateInput.first().isVisible({ timeout: 1500 }).catch(() => false)) {
-            const input = dateInput.first();
-            const value = (await input.getAttribute('type')) === 'date' ? iso : us;
-            await input.fill(value);
-            await this.page.keyboard.press('Enter');
-            await this.page.waitForTimeout(300);
-            await this._commitCellEdit();
-            await this._assertCellShows(cell, cellPattern, columnName, typeName, value);
-            return;
-        }
-
-        // Clicking a day in the calendar already commits the value and closes both the
-        // calendar and the cell editor (MCP-verified on beta.tailorbird.com, 2026-07-26).
-        // Pressing Enter afterwards (as _commitCellEdit does) re-opens the cell into edit
-        // mode — RevoGrid treats Enter on a focused, already-committed cell as "start
-        // editing" — which re-opens the calendar and blocks _assertCellShows from ever
-        // reading the committed value. No further commit step is needed here.
-        await this._pickDateInCalendar(targetDate);
-        await this.page.waitForTimeout(300);
-        await this._assertCellShows(cell, cellPattern, columnName, typeName, us);
-    }
-
-    async _waitForDropdownOptions(timeout = 8000) {
-        const options = this.page.locator(
-            '[role="option"]:visible, [data-combobox-option]:visible, [role="listbox"] [role="option"]:visible',
-        );
-        await expect
-            .poll(async () => await options.count(), { timeout, intervals: [300] })
-            .toBeGreaterThan(0);
-        return options;
-    }
-
-    async _selectUserFromCell(cell, columnName, typeName) {
-        await cell.scrollIntoViewIfNeeded();
-
-        const openUserMenu = async () => {
-            const userTrigger = cell.getByText(/Select a user/i).first();
-            if (await userTrigger.isVisible({ timeout: 1500 }).catch(() => false)) {
-                await userTrigger.click({ force: true });
-                return;
-            }
-
-            await cell.dblclick({ force: true });
-            await this.page.waitForTimeout(500);
-
-            const triggerAfterEdit = cell.getByText(/Select a user/i).first();
-            if (await triggerAfterEdit.isVisible({ timeout: 2000 }).catch(() => false)) {
-                await triggerAfterEdit.click({ force: true });
-            }
-        };
-
-        await openUserMenu();
-        await this.page.waitForTimeout(800);
-
-        const userMenu = this.page
-            .getByRole('menu', { name: /Select a user/i })
-            .filter({ has: this.page.getByPlaceholder(/Search users/i) });
-        await expect(userMenu).toBeVisible({ timeout: 10000 });
-
-        const firstUserLabel = userMenu.locator('p').filter({ hasText: /@/ }).first();
-        await expect(firstUserLabel).toBeVisible({ timeout: 8000 });
-
-        const firstUserRow = firstUserLabel.locator(
-            'xpath=ancestor::*[@cursor="pointer" or contains(@style,"cursor")][1]',
-        );
-        const selectedText = (await firstUserLabel.innerText()).trim();
-
-        if (await firstUserRow.isVisible({ timeout: 1000 }).catch(() => false)) {
-            await firstUserRow.click({ force: true });
-        } else {
-            await firstUserLabel.click({ force: true });
-        }
-
-        await userMenu.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {});
-        await this.page.waitForTimeout(400);
-        await this._commitCellEdit();
-
-        await expect
-            .poll(async () => this._sanitizeCellText(await cell.innerText()), { timeout: 10000 })
-            .toMatch(/@|yopmail|tailorbird/i);
-
-        this._logCellResult(columnName, typeName, selectedText, selectedText);
-        return selectedText;
-    }
-
-    async _pickVisibleDropdownOption(optionName) {
-        const options = this.page.locator(
-            '[role="option"]:visible, [data-combobox-option]:visible, [role="listbox"] [role="option"]:visible',
-        );
-
-        if (!optionName) {
-            const first = options.filter({ hasNotText: /^\s*$/ }).first();
-            if (await first.isVisible({ timeout: 500 }).catch(() => false)) {
-                await first.click();
-                return true;
-            }
-            return false;
-        }
-
-        const match = options.filter({ hasText: optionName }).first();
-        if (await match.isVisible({ timeout: 500 }).catch(() => false)) {
-            await match.click();
-            return true;
-        }
-
-        return false;
-    }
-
-    /**
-     * Double-click cell, try to pick a dropdown option.
-     * @returns {Promise<boolean>} true when an option was selected
-     */
-    async _openCellDropdownAndSelect(cell, optionName = 'Option A') {
-        await cell.scrollIntoViewIfNeeded();
-        await cell.dblclick({ force: true });
-        await this.page.waitForTimeout(800);
-        await this.page.keyboard.press('ArrowDown').catch(() => {});
-        await this.page.waitForTimeout(500);
-
-        try {
-            await this._waitForDropdownOptions(optionName ? 6000 : 12000);
-        } catch {
-            Logger.info('no option found');
-            await this._dismissEditor();
-            return false;
-        }
-
-        if (await this._pickVisibleDropdownOption(optionName)) {
-            return true;
-        }
-
-        Logger.info('no option found');
-        await this._dismissEditor();
-        return false;
-    }
-
-    /**
-     * Open first row cell, enter a value, and confirm it appears in the grid after commit.
-     * @param {string} columnName
-     * @param {string} typeName
-     */
-    async verifyColumnTypeInput(columnName, typeName) {
-        const cell = await this._getFirstDataCellForColumn(columnName);
-
-        switch (typeName) {
-            case 'Text':
-                await this._fillActiveInputAndAssertCell(cell, 'Sample text', /Sample text/i, columnName, typeName);
-                break;
-            case 'Number':
-                await this._fillActiveInputAndAssertCell(cell, '42', /42/, columnName, typeName);
-                break;
-            case 'Select': {
-                const selectValue = 'Option A';
-                if (await this._openCellDropdownAndSelect(cell, selectValue)) {
-                    await this._commitCellEdit();
-                    await this._assertCellShows(cell, /Option A/i, columnName, typeName, selectValue);
-                } else {
-                    Logger.info(`Inserted value for ${typeName} column "${columnName}": (no option available)`);
-                }
-                break;
-            }
-            case 'Multi-select': {
-                const selectedA = await this._openCellDropdownAndSelect(cell, 'Option A');
-                if (!selectedA) {
-                    Logger.info(`Inserted value for ${typeName} column "${columnName}": (no option available)`);
-                    break;
-                }
-                await this.page.waitForTimeout(400);
-                const selectedB = await this._openCellDropdownAndSelect(cell, 'Option B');
-                const insertedValue = selectedB ? 'Option A, Option B' : 'Option A';
-                await this._commitCellEdit();
-                await this._assertCellShows(
-                    cell,
-                    selectedB ? /Option B|Option A/i : /Option A/i,
-                    columnName,
-                    typeName,
-                    insertedValue,
-                );
-                break;
-            }
-            case 'Date':
-                await this._fillDateCell(cell, columnName, typeName);
-                break;
-            case 'Checkbox': {
-                // The rendered checkbox is a read-only display element (readonly,
-                // pointer-events: none) from the moment the cell renders — it is always
-                // "visible", so clicking the <input> itself (even with force) does
-                // nothing. Toggling only works by double-clicking the cell, same as
-                // opening any other cell type's editor (MCP-verified on
-                // beta.tailorbird.com, 2026-07-26).
-                const checkbox = cell.locator('input[type="checkbox"]').first();
-                await expect(checkbox).toBeVisible({ timeout: 5000 });
-                // A virtualized grid column can still be settling into place right after
-                // scrollIntoViewIfNeeded(); force-dblclick skips Playwright's own
-                // scroll/stability wait, so retry a couple of times instead of assuming
-                // the first click lands correctly.
-                for (let attempt = 0; attempt < 3; attempt++) {
-                    if (await checkbox.isChecked().catch(() => false)) break;
-                    await cell.scrollIntoViewIfNeeded();
-                    await cell.dblclick({ force: true });
-                    await this.page.waitForTimeout(500);
-                }
-                await expect(checkbox).toBeChecked({ timeout: 8000 });
-                await this._dismissEditor();
-                this._logCellResult(columnName, typeName, 'checked', 'checked');
-                break;
-            }
-            case 'URL':
-                await this._fillActiveInputAndAssertCell(
-                    cell,
-                    'https://tailorbird.com',
-                    /tailorbird\.com/i,
-                    columnName,
-                    typeName,
-                );
-                break;
-            case 'Email':
-                await this._fillActiveInputAndAssertCell(
-                    cell,
-                    'test@tailorbird.com',
-                    /test@tailorbird\.com/i,
-                    columnName,
-                    typeName,
-                );
-                break;
-            case 'Phone':
-                await this._fillActiveInputAndAssertCell(
-                    cell,
-                    '5551234567',
-                    /555.*123.*4567|5551234567/,
-                    columnName,
-                    typeName,
-                );
-                break;
-            case 'Currency':
-                await this._fillActiveInputAndAssertCell(cell, '100', /\$?\s*100/, columnName, typeName);
-                break;
-            case 'Thumbnail': {
-                await this._openCellEditor(cell);
-                await expect(this.page.locator('revogr-edit').first()).toBeVisible({ timeout: 5000 });
-                Logger.info(`Inserted value for ${typeName} column "${columnName}": (image upload editor — no file attached)`);
-                await this._dismissEditor();
-                break;
-            }
-            case 'Attachments': {
-                await this._openCellEditor(cell);
-                await expect(this.page.locator('revogr-edit').first()).toBeVisible({ timeout: 5000 });
-                Logger.info(`Inserted value for ${typeName} column "${columnName}": (file upload editor — no text value)`);
-                await this._dismissEditor();
-                break;
-            }
-            case 'User': {
-                await this._selectUserFromCell(cell, columnName, typeName);
-                break;
-            }
-            default:
-                throw new Error(`No input verification defined for column type "${typeName}"`);
-        }
-
-        Logger.success(`Verified ${typeName} input behaviour for column "${columnName}"`);
-    }
-
-    async openManageColumns() {
-        for (let attempt = 0; attempt < 3; attempt++) {
-            await this._openTableMenu();
-            const hideShowItem = this.loc.hideShowColumnsMenuItem.first();
-            if (await hideShowItem.isVisible({ timeout: 3000 }).catch(() => false)) {
-                await hideShowItem.click();
-                await expect(this.loc.manageColumnsDialog).toBeVisible({ timeout: 10000 });
-                await this._waitForManageColumnsReady();
-                return;
-            }
-            await this._dismissOverlays();
-            await this.page.waitForTimeout(500);
-        }
-
-        await expect(this.loc.hideShowColumnsMenuItem).toBeVisible({ timeout: 8000 });
-        await this.loc.hideShowColumnsMenuItem.click();
-        await expect(this.loc.manageColumnsDialog).toBeVisible({ timeout: 10000 });
-        await this._waitForManageColumnsReady();
-    }
-
-    async closeManageColumns() {
-        // Guarded like the wait below: if the outer test's own timeout tears the page down mid-run
-        // (long multi-column flows can brush up against it under CI load — see TC430), this would
-        // otherwise throw "Target page, context or browser has been closed" here instead of letting
-        // the real test-timeout error surface.
-        await this.page.keyboard.press('Escape').catch(() => {});
-        await this.loc.manageColumnsDialog.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {});
-        await this.page.waitForTimeout(300);
-    }
-
-    async _waitForManageColumnsReady() {
-        await expect(this.loc.manageColumnsDialog).toBeVisible({ timeout: 10000 });
-        await this.page.waitForTimeout(600);
-        await this._ensureCustomColumnsExpanded();
-        await expect
-            .poll(
-                async () =>
-                    (await this.loc.manageColumnsDialog
-                        .locator('[data-loading="true"], .mantine-Loader-root')
-                        .count()) === 0,
-                { timeout: 10000, intervals: [300] },
-            )
-            .toBe(true)
-            .catch(() => {});
-    }
-
-    _customColumnsHeader() {
-        return this.loc.manageColumnsDialog.getByText('Custom Columns', { exact: true });
-    }
-
-    _customColumnsHeaderRow() {
-        return this._customColumnsHeader().locator('xpath=../..');
-    }
-
-    _customColumnsToggle() {
-        return this._customColumnsHeaderRow().locator('button').last();
-    }
-
-    _customColumnsContent() {
-        return this._customColumnsHeaderRow().locator('xpath=following-sibling::div[1]');
-    }
-
-    _customColumnRowFromDescription(desc) {
-        return desc.locator('xpath=ancestor::div[contains(@style,"cursor")][1]');
-    }
-
-    async _readColumnNameFromDescription(desc) {
-        return desc.evaluate((el) => el.previousElementSibling?.textContent?.trim() || '');
-    }
-
-    /**
-     * @param {{ fullScan?: boolean }} [options] - fullScan scrolls entire panel (startup/verify); default is faster single-pass for delete loop
-     */
-    async _getAutomationColumnEntries(options = {}) {
-        const { fullScan = false } = options;
-        await this._ensureManageColumnsOpen();
-        await this._openCustomColumnsDropdown();
-
-        const descriptions = this.loc.manageColumnsDialog.locator('p').filter({ hasText: /^Automation / });
-        const entries = [];
-        const seen = new Set();
-        const maxPasses = fullScan ? 12 : 2;
-
-        await this._scrollCustomColumnsContent('start');
-        let stablePasses = 0;
-
-        for (let pass = 0; pass < maxPasses; pass++) {
-            const count = await descriptions.count();
-            let foundNew = false;
-
-            for (let i = 0; i < count; i++) {
-                const desc = descriptions.nth(i);
-                try {
-                    await desc.scrollIntoViewIfNeeded().catch(() => {});
-                    const name = await this._readColumnNameFromDescription(desc);
-                    if (!name || seen.has(name)) continue;
-
-                    const row = this._customColumnRowFromDescription(desc);
-                    if (!(await row.isVisible({ timeout: 1000 }).catch(() => false))) continue;
-
-                    seen.add(name);
-                    entries.push({ name, row });
-                    foundNew = true;
-                } catch (e) {
-                    Logger.info(`Skipping column at index ${i}: ${e.message}`);
-                }
-            }
-
-            if (!foundNew) {
-                stablePasses++;
-                if (stablePasses >= 2) break;
-            } else {
-                stablePasses = 0;
-            }
-
-            await this._scrollCustomColumnsContent('end');
-        }
-
-        return entries;
-    }
-
-    async _findRowByColumnName(columnName) {
-        await this._openCustomColumnsDropdown();
-
-        const descriptions = this.loc.manageColumnsDialog.locator('p').filter({ hasText: /^Automation / });
-
-        for (const scrollPosition of ['start', 'end']) {
-            await this._scrollCustomColumnsContent(scrollPosition);
-            const count = await descriptions.count();
-
-            for (let i = 0; i < count; i++) {
-                const desc = descriptions.nth(i);
-                await desc.scrollIntoViewIfNeeded().catch(() => {});
-                const name = await this._readColumnNameFromDescription(desc);
-                if (name !== columnName) continue;
-
-                const row = this._customColumnRowFromDescription(desc);
-                if (await row.isVisible({ timeout: 1000 }).catch(() => false)) {
-                    return row;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    async _deleteAutomationColumnEntry(name) {
-        await this._ensureManageColumnsOpen();
-        await this._openCustomColumnsDropdown();
-
-        const row = await this._findRowByColumnName(name);
-        if (!row) {
-            throw new Error(`Column row "${name}" not found in Manage Columns`);
-        }
-
-        await row.scrollIntoViewIfNeeded().catch(() => {});
-
-        const deleteBtn = row
-            .locator('button:has(svg.lucide-trash-2), button:has(svg[class*="lucide-trash"])')
-            .first();
-        await expect(deleteBtn).toBeVisible({ timeout: 8000 });
-        await deleteBtn.click({ force: true });
-        await this.page.waitForTimeout(400);
-
-        const confirmBtn = this.loc.deleteConfirmBtn;
-        if (await confirmBtn.isVisible({ timeout: 8000 }).catch(() => false)) {
-            await confirmBtn.click();
-            await confirmBtn.waitFor({ state: 'hidden', timeout: 10000 }).catch(() => {});
-        }
-
-        try {
-            await expect(row).toBeHidden({ timeout: 20000 });
-        } catch (visibilityError) {
-            // Under concurrent test runs that mutate the same shared custom-columns list at
-            // once, deleting one entry can shift list positions so this row's locator resolves
-            // to a different, still-visible entry that just took the same spot — a false
-            // negative on visibility, not a failed delete (MCP/CI-verified 2026-08-14, same
-            // signature as a real CI failure on TC67). Confirm by name against the live list
-            // before concluding the delete actually failed.
-            const stillPresent = (await this._getCustomColumnNames()).includes(name);
-            if (stillPresent) throw visibilityError;
-        }
-        Logger.success(`Deleted column "${name}"`);
+    await userMenu.waitFor({ state: "hidden", timeout: 5000 }).catch(() => {});
+    await this.page.waitForTimeout(400);
+    await this._commitCellEdit();
+
+    await expect
+      .poll(async () => this._sanitizeCellText(await cell.innerText()), {
+        timeout: 10000,
+      })
+      .toMatch(/@|yopmail|tailorbird/i);
+
+    this._logCellResult(columnName, typeName, selectedText, selectedText);
+    return selectedText;
+  }
+
+  async _pickVisibleDropdownOption(optionName) {
+    const options = this.page.locator(
+      '[role="option"]:visible, [data-combobox-option]:visible, [role="listbox"] [role="option"]:visible'
+    );
+
+    if (!optionName) {
+      const first = options.filter({ hasNotText: /^\s*$/ }).first();
+      if (await first.isVisible({ timeout: 500 }).catch(() => false)) {
+        await first.click();
         return true;
+      }
+      return false;
     }
 
-    async _scrollCustomColumnsContent(position = 'end') {
-        const dialog = this.loc.manageColumnsDialog;
-        if (!(await dialog.isVisible().catch(() => false))) return;
-
-        await dialog.evaluate((dialogEl, scrollPosition) => {
-            const scrollables = [dialogEl, ...dialogEl.querySelectorAll('div')].filter(
-                (el) => el.scrollHeight > el.clientHeight + 5,
-            );
-            for (const el of scrollables) {
-                el.scrollTop = scrollPosition === 'start' ? 0 : el.scrollHeight;
-            }
-        }, position);
-        await this.page.waitForTimeout(300);
+    const match = options.filter({ hasText: optionName }).first();
+    if (await match.isVisible({ timeout: 500 }).catch(() => false)) {
+      await match.click();
+      return true;
     }
 
-    async _getCustomColumnNames() {
-        try {
-            return (await this._getAutomationColumnEntries({ fullScan: true })).map((entry) => entry.name);
-        } catch (error) {
-            Logger.error(`Error getting custom column names: ${error.message}`);
-            return [];
+    return false;
+  }
+
+  /**
+   * Double-click cell, try to pick a dropdown option.
+   * @returns {Promise<boolean>} true when an option was selected
+   */
+  async _openCellDropdownAndSelect(cell, optionName = "Option A") {
+    await cell.scrollIntoViewIfNeeded();
+    await cell.dblclick({ force: true });
+    await this.page.waitForTimeout(800);
+    await this.page.keyboard.press("ArrowDown").catch(() => {});
+    await this.page.waitForTimeout(500);
+
+    try {
+      await this._waitForDropdownOptions(optionName ? 6000 : 12000);
+    } catch {
+      Logger.info("no option found");
+      await this._dismissEditor();
+      return false;
+    }
+
+    if (await this._pickVisibleDropdownOption(optionName)) {
+      return true;
+    }
+
+    Logger.info("no option found");
+    await this._dismissEditor();
+    return false;
+  }
+
+  /**
+   * Open first row cell, enter a value, and confirm it appears in the grid after commit.
+   * @param {string} columnName
+   * @param {string} typeName
+   */
+  async verifyColumnTypeInput(columnName, typeName) {
+    const cell = await this._getFirstDataCellForColumn(columnName);
+
+    switch (typeName) {
+      case "Text":
+        await this._fillActiveInputAndAssertCell(
+          cell,
+          "Sample text",
+          /Sample text/i,
+          columnName,
+          typeName
+        );
+        break;
+      case "Number":
+        await this._fillActiveInputAndAssertCell(
+          cell,
+          "42",
+          /42/,
+          columnName,
+          typeName
+        );
+        break;
+      case "Select": {
+        const selectValue = "Option A";
+        if (await this._openCellDropdownAndSelect(cell, selectValue)) {
+          await this._commitCellEdit();
+          await this._assertCellShows(
+            cell,
+            /Option A/i,
+            columnName,
+            typeName,
+            selectValue
+          );
+        } else {
+          Logger.info(
+            `Inserted value for ${typeName} column "${columnName}": (no option available)`
+          );
         }
+        break;
+      }
+      case "Multi-select": {
+        const selectedA = await this._openCellDropdownAndSelect(
+          cell,
+          "Option A"
+        );
+        if (!selectedA) {
+          Logger.info(
+            `Inserted value for ${typeName} column "${columnName}": (no option available)`
+          );
+          break;
+        }
+        await this.page.waitForTimeout(400);
+        const selectedB = await this._openCellDropdownAndSelect(
+          cell,
+          "Option B"
+        );
+        const insertedValue = selectedB ? "Option A, Option B" : "Option A";
+        await this._commitCellEdit();
+        await this._assertCellShows(
+          cell,
+          selectedB ? /Option B|Option A/i : /Option A/i,
+          columnName,
+          typeName,
+          insertedValue
+        );
+        break;
+      }
+      case "Date":
+        await this._fillDateCell(cell, columnName, typeName);
+        break;
+      case "Checkbox": {
+        // The rendered checkbox is a read-only display element (readonly,
+        // pointer-events: none) from the moment the cell renders — it is always
+        // "visible", so clicking the <input> itself (even with force) does
+        // nothing. Toggling only works by double-clicking the cell, same as
+        // opening any other cell type's editor (MCP-verified on
+        // beta.tailorbird.com, 2026-07-26).
+        const checkbox = cell.locator('input[type="checkbox"]').first();
+        await expect(checkbox).toBeVisible({ timeout: 5000 });
+        // A virtualized grid column can still be settling into place right after
+        // scrollIntoViewIfNeeded(); force-dblclick skips Playwright's own
+        // scroll/stability wait, so retry a couple of times instead of assuming
+        // the first click lands correctly.
+        for (let attempt = 0; attempt < 3; attempt++) {
+          if (await checkbox.isChecked().catch(() => false)) break;
+          await cell.scrollIntoViewIfNeeded();
+          await cell.dblclick({ force: true });
+          await this.page.waitForTimeout(500);
+        }
+        await expect(checkbox).toBeChecked({ timeout: 8000 });
+        await this._dismissEditor();
+        this._logCellResult(columnName, typeName, "checked", "checked");
+        break;
+      }
+      case "URL":
+        await this._fillActiveInputAndAssertCell(
+          cell,
+          "https://tailorbird.com",
+          /tailorbird\.com/i,
+          columnName,
+          typeName
+        );
+        break;
+      case "Email":
+        await this._fillActiveInputAndAssertCell(
+          cell,
+          "test@tailorbird.com",
+          /test@tailorbird\.com/i,
+          columnName,
+          typeName
+        );
+        break;
+      case "Phone":
+        await this._fillActiveInputAndAssertCell(
+          cell,
+          "5551234567",
+          /555.*123.*4567|5551234567/,
+          columnName,
+          typeName
+        );
+        break;
+      case "Currency":
+        await this._fillActiveInputAndAssertCell(
+          cell,
+          "100",
+          /\$?\s*100/,
+          columnName,
+          typeName
+        );
+        break;
+      case "Thumbnail": {
+        await this._openCellEditor(cell);
+        await expect(this.page.locator("revogr-edit").first()).toBeVisible({
+          timeout: 5000,
+        });
+        Logger.info(
+          `Inserted value for ${typeName} column "${columnName}": (image upload editor — no file attached)`
+        );
+        await this._dismissEditor();
+        break;
+      }
+      case "Attachments": {
+        await this._openCellEditor(cell);
+        await expect(this.page.locator("revogr-edit").first()).toBeVisible({
+          timeout: 5000,
+        });
+        Logger.info(
+          `Inserted value for ${typeName} column "${columnName}": (file upload editor — no text value)`
+        );
+        await this._dismissEditor();
+        break;
+      }
+      case "User": {
+        await this._selectUserFromCell(cell, columnName, typeName);
+        break;
+      }
+      default:
+        throw new Error(
+          `No input verification defined for column type "${typeName}"`
+        );
     }
 
-    async getCustomColumnCount() {
-        return this._getCustomColumnNames().then((names) => names.length);
+    Logger.success(
+      `Verified ${typeName} input behaviour for column "${columnName}"`
+    );
+  }
+
+  async openManageColumns() {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await this._openTableMenu();
+      const hideShowItem = this.loc.hideShowColumnsMenuItem.first();
+      if (await hideShowItem.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await hideShowItem.click();
+        await expect(this.loc.manageColumnsDialog).toBeVisible({
+          timeout: 10000,
+        });
+        await this._waitForManageColumnsReady();
+        return;
+      }
+      await this._dismissOverlays();
+      await this.page.waitForTimeout(500);
     }
 
-    async deleteColumn(columnName) {
+    await expect(this.loc.hideShowColumnsMenuItem).toBeVisible({
+      timeout: 8000,
+    });
+    await this.loc.hideShowColumnsMenuItem.click();
+    await expect(this.loc.manageColumnsDialog).toBeVisible({ timeout: 10000 });
+    await this._waitForManageColumnsReady();
+  }
+
+  async closeManageColumns() {
+    // Guarded like the wait below: if the outer test's own timeout tears the page down mid-run
+    // (long multi-column flows can brush up against it under CI load — see TC430), this would
+    // otherwise throw "Target page, context or browser has been closed" here instead of letting
+    // the real test-timeout error surface.
+    await this.page.keyboard.press("Escape").catch(() => {});
+    await this.loc.manageColumnsDialog
+      .waitFor({ state: "hidden", timeout: 5000 })
+      .catch(() => {});
+    await this.page.waitForTimeout(300);
+  }
+
+  async _waitForManageColumnsReady() {
+    await expect(this.loc.manageColumnsDialog).toBeVisible({ timeout: 10000 });
+    await this.page.waitForTimeout(600);
+    await this._ensureCustomColumnsExpanded();
+    await expect
+      .poll(
+        async () =>
+          (await this.loc.manageColumnsDialog
+            .locator('[data-loading="true"], .mantine-Loader-root')
+            .count()) === 0,
+        { timeout: 10000, intervals: [300] }
+      )
+      .toBe(true)
+      .catch(() => {});
+  }
+
+  _customColumnsHeader() {
+    return this.loc.manageColumnsDialog.getByText("Custom Columns", {
+      exact: true,
+    });
+  }
+
+  _customColumnsHeaderRow() {
+    return this._customColumnsHeader().locator("xpath=../..");
+  }
+
+  _customColumnsToggle() {
+    return this._customColumnsHeaderRow().locator("button").last();
+  }
+
+  _customColumnsContent() {
+    return this._customColumnsHeaderRow().locator(
+      "xpath=following-sibling::div[1]"
+    );
+  }
+
+  _customColumnRowFromDescription(desc) {
+    return desc.locator('xpath=ancestor::div[contains(@style,"cursor")][1]');
+  }
+
+  async _readColumnNameFromDescription(desc) {
+    return desc.evaluate(
+      el => el.previousElementSibling?.textContent?.trim() || ""
+    );
+  }
+
+  /**
+   * @param {{ fullScan?: boolean }} [options] - fullScan scrolls entire panel (startup/verify); default is faster single-pass for delete loop
+   */
+  async _getAutomationColumnEntries(options = {}) {
+    const { fullScan = false } = options;
+    await this._ensureManageColumnsOpen();
+    await this._openCustomColumnsDropdown();
+
+    const descriptions = this.loc.manageColumnsDialog
+      .locator("p")
+      .filter({ hasText: /^Automation / });
+    const entries = [];
+    const seen = new Set();
+    const maxPasses = fullScan ? 12 : 2;
+
+    await this._scrollCustomColumnsContent("start");
+    let stablePasses = 0;
+
+    for (let pass = 0; pass < maxPasses; pass++) {
+      const count = await descriptions.count();
+      let foundNew = false;
+
+      for (let i = 0; i < count; i++) {
+        const desc = descriptions.nth(i);
         try {
-            return await this._deleteAutomationColumnEntry(columnName);
+          await desc.scrollIntoViewIfNeeded().catch(() => {});
+          const name = await this._readColumnNameFromDescription(desc);
+          if (!name || seen.has(name)) continue;
+
+          const row = this._customColumnRowFromDescription(desc);
+          if (!(await row.isVisible({ timeout: 1000 }).catch(() => false)))
+            continue;
+
+          seen.add(name);
+          entries.push({ name, row });
+          foundNew = true;
+        } catch (e) {
+          Logger.info(`Skipping column at index ${i}: ${e.message}`);
+        }
+      }
+
+      if (!foundNew) {
+        stablePasses++;
+        if (stablePasses >= 2) break;
+      } else {
+        stablePasses = 0;
+      }
+
+      await this._scrollCustomColumnsContent("end");
+    }
+
+    return entries;
+  }
+
+  async _findRowByColumnName(columnName) {
+    await this._openCustomColumnsDropdown();
+
+    const descriptions = this.loc.manageColumnsDialog
+      .locator("p")
+      .filter({ hasText: /^Automation / });
+
+    for (const scrollPosition of ["start", "end"]) {
+      await this._scrollCustomColumnsContent(scrollPosition);
+      const count = await descriptions.count();
+
+      for (let i = 0; i < count; i++) {
+        const desc = descriptions.nth(i);
+        await desc.scrollIntoViewIfNeeded().catch(() => {});
+        const name = await this._readColumnNameFromDescription(desc);
+        if (name !== columnName) continue;
+
+        const row = this._customColumnRowFromDescription(desc);
+        if (await row.isVisible({ timeout: 1000 }).catch(() => false)) {
+          return row;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * NEW, additive-only fast alternative to _getAutomationColumnEntries()/
+   * _findRowByColumnName(): reads every Custom Columns description's name in ONE evaluate()
+   * call instead of iterating with a separate scrollIntoViewIfNeeded()+evaluate() Playwright
+   * round-trip per item. MCP-verified live 2026-09-22 on the Images page: the Manage
+   * Columns dialog's Custom Columns list is NOT virtualized (every <p> description is
+   * already present in the DOM at once — confirmed via a direct bulk query returning all 66
+   * accumulated entries instantly, no scrolling required). The existing per-item scan was
+   * paying that per-item round-trip cost for nothing, and on a page whose Custom Columns
+   * list keeps growing from every past automation run (66+ entries observed live), that
+   * cost compounds across every call into the ~280s test-timeout TC425 was hitting. Neither
+   * of the existing functions above is modified — this is a separate, faster code path.
+   */
+  async _getAutomationColumnNamesFast() {
+    await this._ensureManageColumnsOpen();
+    await this._openCustomColumnsDropdown();
+    const dialog = this.loc.manageColumnsDialog;
+    return dialog.evaluate(dialogEl =>
+      Array.from(dialogEl.querySelectorAll("p"))
+        .filter(p => /^Automation /.test(p.textContent.trim()))
+        .map(p => p.previousElementSibling?.textContent?.trim() || "")
+        .filter(Boolean)
+    );
+  }
+
+  /**
+   * Row locator anchored to the column's exact NAME rather than its list position.
+   * MCP-verified live 2026-09-28 (Projects grid): the old `descriptions.nth(index)` anchor
+   * re-resolved to the NEXT "Automation" entry as soon as the deleted row left the list, so
+   * the post-delete toBeHidden() could never pass and burned its full 20s on every delete.
+   * Column names are unique (timestamp-suffixed), so this stays on the same row.
+   */
+  _customColumnRowByName(columnName) {
+    return this.loc.manageColumnsDialog
+      .getByText(columnName, { exact: true })
+      .first()
+      .locator('xpath=ancestor::div[contains(@style,"cursor")][1]');
+  }
+
+  /** Fast alternative to _findRowByColumnName(): confirms the column exists via a single bulk
+   * name read (_getAutomationColumnNamesFast), then returns a name-anchored row locator. */
+  async _findRowByColumnNameFast(columnName) {
+    const names = await this._getAutomationColumnNamesFast();
+    if (!names.includes(columnName)) return null;
+
+    const row = this._customColumnRowByName(columnName);
+    await row.scrollIntoViewIfNeeded().catch(() => {});
+    return (await row.isVisible().catch(() => false)) ? row : null;
+  }
+
+  async _deleteAutomationColumnEntry(name) {
+    const row = await this._findRowByColumnNameFast(name);
+    if (!row) {
+      throw new Error(`Column row "${name}" not found in Manage Columns`);
+    }
+
+    const deleteBtn = row
+      .locator(
+        'button:has(svg.lucide-trash-2), button:has(svg[class*="lucide-trash"])'
+      )
+      .first();
+    await expect(deleteBtn).toBeVisible({ timeout: 8000 });
+
+    // MCP-verified live 2026-09-28: confirming fires `DELETE /api/bird-table/columns` (200).
+    // Listen before the first click so the response can't be missed; `.catch` keeps an
+    // early failure below from surfacing as an unhandled rejection.
+    const deleteResponse = this.page
+      .waitForResponse(
+        res =>
+          res.request().method() === "DELETE" && res.url().includes("/columns"),
+        { timeout: 30000 }
+      )
+      .catch(e => e);
+
+    await deleteBtn.click({ force: true });
+
+    // isVisible() ignores its timeout and returns immediately, so the old check could miss
+    // a slow-rendering confirm popover and never click Delete — the column then stayed,
+    // and the next trash click just toggled the popover closed. Really wait for it.
+    const confirmBtn = this.loc.deleteConfirmBtn;
+    const confirmShown = await confirmBtn
+      .waitFor({ state: "visible", timeout: 8000 })
+      .then(() => true)
+      .catch(() => false);
+    if (confirmShown) {
+      await confirmBtn.click();
+      await confirmBtn
+        .waitFor({ state: "hidden", timeout: 10000 })
+        .catch(() => {});
+    }
+
+    const response = await deleteResponse;
+    if (response instanceof Error) {
+      throw new Error(
+        `Delete API for column "${name}" was not observed: ${response.message}`
+      );
+    }
+    expect(
+      response.status(),
+      `FAIL: Delete column API for "${name}" returned ${response.status()}`
+    ).toBeLessThan(300);
+
+    try {
+      await expect(row).toBeHidden({ timeout: 20000 });
+    } catch (visibilityError) {
+      // Under concurrent test runs that mutate the same shared custom-columns list at
+      // once, deleting one entry can shift list positions so this row's locator resolves
+      // to a different, still-visible entry that just took the same spot — a false
+      // negative on visibility, not a failed delete (MCP/CI-verified 2026-08-14, same
+      // signature as a real CI failure on TC67). Confirm by name against the live list
+      // before concluding the delete actually failed.
+      const stillPresent = (await this._getCustomColumnNames()).includes(name);
+      if (stillPresent) throw visibilityError;
+    }
+    Logger.success(`Deleted column "${name}"`);
+    return true;
+  }
+
+  async _scrollCustomColumnsContent(position = "end") {
+    const dialog = this.loc.manageColumnsDialog;
+    if (!(await dialog.isVisible().catch(() => false))) return;
+
+    await dialog.evaluate((dialogEl, scrollPosition) => {
+      const scrollables = [
+        dialogEl,
+        ...dialogEl.querySelectorAll("div"),
+      ].filter(el => el.scrollHeight > el.clientHeight + 5);
+      for (const el of scrollables) {
+        el.scrollTop = scrollPosition === "start" ? 0 : el.scrollHeight;
+      }
+    }, position);
+    await this.page.waitForTimeout(300);
+  }
+
+  async _getCustomColumnNames() {
+    try {
+      return await this._getAutomationColumnNamesFast();
+    } catch (error) {
+      Logger.error(`Error getting custom column names: ${error.message}`);
+      return [];
+    }
+  }
+
+  async getCustomColumnCount() {
+    return this._getCustomColumnNames().then(names => names.length);
+  }
+
+  async deleteColumn(columnName) {
+    try {
+      return await this._deleteAutomationColumnEntry(columnName);
+    } catch (error) {
+      if (error.message.includes("not found")) {
+        Logger.info(
+          `Column "${columnName}" not found in Manage Columns, skipping`
+        );
+        return false;
+      }
+      Logger.error(`Failed to delete "${columnName}": ${error.message}`);
+      throw error;
+    }
+  }
+
+  async _isCustomColumnsSectionExpanded() {
+    const header = this._customColumnsHeader();
+    if (!(await header.isVisible({ timeout: 2000 }).catch(() => false)))
+      return false;
+
+    const visibleAutomationRows = await this.loc.manageColumnsDialog
+      .locator("p")
+      .filter({ hasText: /^Automation / })
+      .locator("visible=true")
+      .count();
+    if (visibleAutomationRows > 0) return true;
+
+    return this._customColumnsContent()
+      .isVisible({ timeout: 500 })
+      .catch(() => false);
+  }
+
+  /** Expand the Custom Columns accordion when it is collapsed in Manage Columns. */
+  async _openCustomColumnsDropdown() {
+    const dialog = this.loc.manageColumnsDialog;
+    if (!(await dialog.isVisible().catch(() => false))) return;
+    if (
+      !(await this._customColumnsHeader()
+        .isVisible({ timeout: 3000 })
+        .catch(() => false))
+    )
+      return;
+    if (await this._isCustomColumnsSectionExpanded()) return;
+
+    Logger.info("Custom Columns dropdown closed — opening section");
+    await this._customColumnsToggle().click({ force: true });
+    await expect(this._customColumnsContent()).toBeVisible({ timeout: 8000 });
+  }
+
+  async _ensureCustomColumnsExpanded() {
+    await this._openCustomColumnsDropdown();
+  }
+
+  async _ensureManageColumnsOpen() {
+    if (await this.loc.manageColumnsDialog.isVisible().catch(() => false)) {
+      // Already open (and already waited-for-ready when it was opened) — only make sure
+      // Custom Columns is expanded; skip the fixed settle wait on every repeat call.
+      await this._openCustomColumnsDropdown();
+      return;
+    }
+    await this._dismissOverlays();
+    await this.page.waitForTimeout(300);
+    await this.openManageColumns();
+    await this._waitForManageColumnsReady();
+  }
+
+  async deleteAllCustomColumns() {
+    let deleted = 0;
+    let consecutiveFailures = 0;
+    // Bumped from 3 (CI-observed, TC67): under concurrent test runs mutating this same
+    // shared custom-columns list, a real delete can legitimately take more than 3
+    // consecutive rounds to land cleanly once row positions keep shifting underneath it —
+    // same documented root cause as the toBeHidden() fallback below, just needing a bit
+    // more headroom at this caller level too.
+    const maxConsecutiveFailures = 5;
+
+    try {
+      // Bulk single-evaluate() name read instead of the per-item scroll/evaluate scan of
+      // _getAutomationColumnEntries() — the Custom Columns list is not virtualized
+      // (MCP-verified, see _getAutomationColumnNamesFast), and only names are needed here.
+      const initial = await this._getAutomationColumnNamesFast();
+      if (initial.length === 0) {
+        Logger.info("No automation custom columns to delete");
+      } else {
+        Logger.info(
+          `Found ${initial.length} automation custom column(s) to delete`
+        );
+      }
+
+      for (let round = 0; round < 300; round++) {
+        const names =
+          round === 0 ? initial : await this._getAutomationColumnNamesFast();
+        if (names.length === 0) {
+          if (deleted > 0) {
+            Logger.success(`All custom columns deleted (total: ${deleted})`);
+          }
+          break;
+        }
+
+        const name = names[0];
+        Logger.info(
+          `Deleting custom column "${name}" (${names.length} remaining)`
+        );
+
+        try {
+          await this._deleteAutomationColumnEntry(name);
+          deleted++;
+          consecutiveFailures = 0;
         } catch (error) {
-            if (error.message.includes('not found')) {
-                Logger.info(`Column "${columnName}" not found in Manage Columns, skipping`);
-                return false;
-            }
-            Logger.error(`Failed to delete "${columnName}": ${error.message}`);
+          consecutiveFailures++;
+          Logger.error(
+            `Failed to delete "${name}" (${consecutiveFailures}/${maxConsecutiveFailures}): ${error.message}`
+          );
+          if (consecutiveFailures >= maxConsecutiveFailures) {
             throw error;
+          }
+          // Close any confirm popover left open so the retry's trash click opens it
+          // fresh instead of toggling it shut (Manage Columns is reopened if needed).
+          await this._dismissOverlays();
         }
-    }
-
-    async _isCustomColumnsSectionExpanded() {
-        const header = this._customColumnsHeader();
-        if (!(await header.isVisible({ timeout: 2000 }).catch(() => false))) return false;
-
-        const visibleAutomationRows = await this.loc.manageColumnsDialog
-            .locator('p')
-            .filter({ hasText: /^Automation / })
-            .locator('visible=true')
-            .count();
-        if (visibleAutomationRows > 0) return true;
-
-        return this._customColumnsContent().isVisible({ timeout: 500 }).catch(() => false);
-    }
-
-    /** Expand the Custom Columns accordion when it is collapsed in Manage Columns. */
-    async _openCustomColumnsDropdown() {
-        const dialog = this.loc.manageColumnsDialog;
-        if (!(await dialog.isVisible().catch(() => false))) return;
-        if (!(await this._customColumnsHeader().isVisible({ timeout: 3000 }).catch(() => false))) return;
-        if (await this._isCustomColumnsSectionExpanded()) return;
-
-        Logger.info('Custom Columns dropdown closed — opening section');
-        await this._customColumnsToggle().click({ force: true });
-        await expect(this._customColumnsContent()).toBeVisible({ timeout: 8000 });
-    }
-
-    async _ensureCustomColumnsExpanded() {
-        await this._openCustomColumnsDropdown();
-    }
-
-    async _ensureManageColumnsOpen() {
-        if (await this.loc.manageColumnsDialog.isVisible().catch(() => false)) {
-            await this._waitForManageColumnsReady();
-            return;
-        }
-        await this._dismissOverlays();
-        await this.page.waitForTimeout(300);
-        await this.openManageColumns();
-        await this._waitForManageColumnsReady();
-    }
-
-    async deleteAllCustomColumns() {
-        let deleted = 0;
-        let consecutiveFailures = 0;
-        const maxConsecutiveFailures = 3;
-
-        try {
-            await this._ensureManageColumnsOpen();
-            const initial = await this._getAutomationColumnEntries({ fullScan: true });
-            if (initial.length === 0) {
-                Logger.info('No automation custom columns to delete');
-            } else {
-                Logger.info(`Found ${initial.length} automation custom column(s) to delete`);
-            }
-
-            for (let round = 0; round < 300; round++) {
-                const entries = await this._getAutomationColumnEntries();
-                if (entries.length === 0) {
-                    if (deleted > 0) {
-                        Logger.success(`All custom columns deleted (total: ${deleted})`);
-                    }
-                    break;
-                }
-
-                const entry = entries[0];
-                Logger.info(`Deleting custom column "${entry.name}" (${entries.length} remaining)`);
-
-                try {
-                    await this._deleteAutomationColumnEntry(entry.name);
-                    deleted++;
-                    consecutiveFailures = 0;
-                } catch (error) {
-                    consecutiveFailures++;
-                    Logger.error(
-                        `Failed to delete "${entry.name}" (${consecutiveFailures}/${maxConsecutiveFailures}): ${error.message}`,
-                    );
-                    if (consecutiveFailures >= maxConsecutiveFailures) {
-                        throw error;
-                    }
-                    await this.page.waitForTimeout(1000);
-                }
-            }
-        } finally {
-            try {
-                await this.closeManageColumns();
-            } catch (e) {
-                Logger.info(`Error closing manage columns: ${e.message}`);
-            }
-        }
-
-        Logger.success(`Deleted ${deleted} custom column(s)`);
-        return deleted;
-    }
-
-    async verifyNoCustomColumnsRemain() {
-        await this.openManageColumns();
-        await this._waitForManageColumnsReady();
-        let finalCount = await this.getCustomColumnCount();
-
-        if (finalCount > 0) {
-            Logger.info(`${finalCount} columns still present — running final cleanup`);
-            await this.closeManageColumns();
-            await this.deleteAllCustomColumns();
-            finalCount = await this.getCustomColumnCount();
-        }
-
-        expect(finalCount).toBe(0, `Expected 0 custom columns, but found ${finalCount}`);
-        Logger.success('No custom columns remain');
+      }
+    } finally {
+      try {
         await this.closeManageColumns();
+      } catch (e) {
+        Logger.info(`Error closing manage columns: ${e.message}`);
+      }
     }
 
-    /**
-     * Reusable flow: add each column type (Text → User), verify each, then delete all.
-     * @returns {Promise<string[]>} names of columns that were created
-     */
-    async addAndVerifyAllColumnTypes() {
-        Logger.info('Step 1: Delete leftover automation columns from previous runs');
-        const removedAtStart = await this.deleteAllCustomColumns();
-        Logger.info(`Startup cleanup removed ${removedAtStart} column(s)`);
+    Logger.success(`Deleted ${deleted} custom column(s)`);
+    return deleted;
+  }
 
-        const createdColumns = [];
-        const runId = Date.now();
+  async verifyNoCustomColumnsRemain() {
+    await this.openManageColumns();
+    await this._waitForManageColumnsReady();
+    let finalCount = await this.getCustomColumnCount();
 
-        Logger.info('Step 2: Create and verify all 13 column types');
-        for (let i = 0; i < ADD_COLUMN_TYPES.length; i++) {
-            const typeName = ADD_COLUMN_TYPES[i];
-            const columnName = `${typeName.replace(/[^a-zA-Z0-9]/g, '')}${runId + i}`;
-            const description = `Automation ${typeName} column`;
-
-            await this.addColumn(columnName, description, i);
-            await this.verifyColumnAdded(columnName, typeName);
-            createdColumns.push(columnName);
-        }
-
-        Logger.info(`Step 3: Delete all ${createdColumns.length} columns created in this run`);
-        await this.deleteAllCustomColumns();
-
-        Logger.info('Step 4: Verify no automation custom columns remain');
-        await this.verifyNoCustomColumnsRemain();
-        return createdColumns;
+    if (finalCount > 0) {
+      Logger.info(
+        `${finalCount} columns still present — running final cleanup`
+      );
+      await this.closeManageColumns();
+      await this.deleteAllCustomColumns();
+      finalCount = await this.getCustomColumnCount();
     }
+
+    expect(finalCount).toBe(
+      0,
+      `Expected 0 custom columns, but found ${finalCount}`
+    );
+    Logger.success("No custom columns remain");
+    await this.closeManageColumns();
+  }
+
+  /**
+   * Reusable flow: add each column type (Text → User), verify each, then delete all.
+   * @returns {Promise<string[]>} names of columns that were created
+   */
+  async addAndVerifyAllColumnTypes() {
+    Logger.info(
+      "Step 1: Delete leftover automation columns from previous runs"
+    );
+    const removedAtStart = await this.deleteAllCustomColumns();
+    Logger.info(`Startup cleanup removed ${removedAtStart} column(s)`);
+
+    const createdColumns = [];
+    const runId = Date.now();
+
+    Logger.info("Step 2: Create and verify all 13 column types");
+    for (let i = 0; i < ADD_COLUMN_TYPES.length; i++) {
+      const typeName = ADD_COLUMN_TYPES[i];
+      const columnName = `${typeName.replace(/[^a-zA-Z0-9]/g, "")}${runId + i}`;
+      const description = `Automation ${typeName} column`;
+
+      await this.addColumn(columnName, description, i);
+      await this.verifyColumnAdded(columnName, typeName);
+      createdColumns.push(columnName);
+    }
+
+    Logger.info(
+      `Step 3: Delete all ${createdColumns.length} columns created in this run`
+    );
+    await this.deleteAllCustomColumns();
+
+    Logger.info("Step 4: Verify no automation custom columns remain");
+    await this.verifyNoCustomColumnsRemain();
+    return createdColumns;
+  }
 }
 
 module.exports = { AddColumnPage, ADD_COLUMN_TYPES };
