@@ -28,6 +28,11 @@ jobs:
   process-approved-ticket:
     runs-on: ubuntu-latest
 
+    # ubuntu-latest is now Ubuntu 26.04, which Playwright 1.56 has no browser builds for —
+    # treat the host as 24.04 so install + test runs use the supported 24.04 builds.
+    env:
+      PLAYWRIGHT_HOST_PLATFORM_OVERRIDE: ubuntu24.04-x64
+
     steps:
 
       - name: Checkout repository

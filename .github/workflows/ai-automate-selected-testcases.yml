@@ -30,6 +30,9 @@ jobs:
     env:
       TICKET_ID: ${{ inputs.ticket_id }}
       SELECTED_TEST_CASES: ${{ inputs.test_case_ids }}
+      # ubuntu-latest is now Ubuntu 26.04, which Playwright 1.56 has no browser builds for —
+      # treat the host as 24.04 so install + test runs use the supported 24.04 builds.
+      PLAYWRIGHT_HOST_PLATFORM_OVERRIDE: ubuntu24.04-x64
 
     steps:
       # ============================================================
