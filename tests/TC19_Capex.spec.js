@@ -7,6 +7,7 @@ const {
 const { CapexGridStabilityPage } = require("../pages/capexGridStabilityPage");
 const { Logger } = require("../utils/logger");
 const { ensureLeftPanelExpanded } = require("../utils/leftPanelExpander");
+const { armCsvExportChoice } = require("../utils/exportMenu");
 
 test.use({
   storageState: "sessionState.json",
@@ -654,9 +655,15 @@ test.describe("CapEx Page", () => {
 
     const totalRow = await capex.getTotalRowValues();
     const kpiVal = capex.parseMoney(kpi.remainingBudget);
-    const gridVal = totalRow?.["Budget Remaining"]?.value;
+    // Pro Forma orgs: card 2 = Total Funds Remaining (matches that column's Total).
+    // All other orgs: card 2 = Remaining Budget (matches Budget Remaining Total).
+    const gridCol =
+      kpi.remainingBudgetLabel === "Total Funds Remaining"
+        ? "Total Funds Remaining"
+        : "Budget Remaining";
+    const gridVal = totalRow?.[gridCol]?.value;
     Logger.info(
-      `TC298: Remaining Budget — KPI=${kpiVal}, Total row=${gridVal}`
+      `TC298: ${kpi.remainingBudgetLabel} — KPI=${kpiVal}, Total row (${gridCol})=${gridVal}`
     );
     if (!isNaN(kpiVal) && gridVal !== null) {
       expect(Math.abs(kpiVal - gridVal)).toBeLessThanOrEqual(15);
@@ -1039,7 +1046,13 @@ test.describe("CapEx Page", () => {
   }) => {
     Logger.step("TC305: Export CSV");
 
+    // Export now opens a menu (MCP-verified 2026-10-28) — pick "Export CSV" when it opens.
+    const fullCsvChoice = armCsvExportChoice(page);
     const full = await capex.validateAndDownloadExport();
+    expect(
+      await fullCsvChoice,
+      'FAIL: "Export CSV" was not chosen from the Export menu'
+    ).toBe(true);
     Logger.info(
       `TC305: Full portfolio export — filename="${full.filename}", size=${full.sizeBytes}B, dataRows=${full.dataRowCount}`
     );
@@ -1060,7 +1073,12 @@ test.describe("CapEx Page", () => {
     Logger.info(
       `TC305: Filtered to ${await capex.getDataRowCount()} rows before export`
     );
+    const filteredCsvChoice = armCsvExportChoice(page);
     const filtered = await capex.validateAndDownloadExport();
+    expect(
+      await filteredCsvChoice,
+      'FAIL: "Export CSV" was not chosen from the Export menu'
+    ).toBe(true);
     expect.soft(filtered.sizeBytes).toBeGreaterThan(0);
     Logger.info(
       `TC305: Filtered export — ${filtered.sizeBytes}B, ${filtered.dataRowCount} rows ✓`

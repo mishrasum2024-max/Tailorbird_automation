@@ -508,7 +508,49 @@ class VendorProfilePage {
     const deleteButton = healingLocator(
       userRowDeleteButtonByRowGrowStrategies(this.page, rowGrow)
     ).first();
+    // Verified 2026-11-10 and re-verified 2026-11-11 (headed vendor session, rows 56/57): Delete on
+    // a vendor user row no longer asks for confirmation — POST /api/bird-table/pre-delete-check 200
+    // then DELETE /api/bird-table/rows 200, no dialog, and the user is gone after a reload. Wait for
+    // the row's real "Delete" button first (the Actions column renders separately and can lag a
+    // just-added row, so the locator above fell back to the hidden "Clear selection" button).
+    await this.waitForUserRowDeleteButton(rowGrow);
+    const directDeleteResponse = this.page
+      .waitForResponse(
+        res =>
+          res.url().includes("/api/bird-table/rows") &&
+          res.request().method() === "DELETE",
+        { timeout: 15000 }
+      )
+      .catch(() => null);
     await deleteButton.click();
+    // Only a real dialog with a Cancel button counts: deleteRowDialogStrategies' text match also
+    // hits the trash button's "Delete Row" hover tooltip (trace 2026-11-10).
+    const confirmationOrDelete = await Promise.race([
+      this.page
+        .getByRole("dialog")
+        .filter({ hasText: "Delete Row" })
+        .filter({
+          has: this.page.getByRole("button", { name: "Cancel", exact: true }),
+        })
+        .first()
+        .waitFor({ state: "visible", timeout: 15000 })
+        .then(
+          () => "dialog",
+          () => null
+        ),
+      directDeleteResponse,
+    ]);
+    if (confirmationOrDelete && confirmationOrDelete !== "dialog") {
+      expect(
+        confirmationOrDelete.status(),
+        `FAIL: deleting user "${email}" (DELETE /api/bird-table/rows) did not succeed`
+      ).toBe(200);
+      this.deletedWithoutConfirmation = email;
+      Logger.info(
+        `VendorProfilePage: no delete confirmation offered — "${email}" was deleted directly (DELETE ${confirmationOrDelete.status()}), so there is no Cancel step to assert.`
+      );
+      return;
+    }
 
     const dialog = healingLocator(deleteRowDialogStrategies(this.page)).first();
     await expect(
@@ -538,6 +580,25 @@ class VendorProfilePage {
    */
   async deleteUserAndAssertRemoved(email) {
     Logger.step(`VendorProfilePage: deleting user "${email}"...`);
+    // Already deleted by the confirmation-less Delete in assertDeleteUserConfirmDialogThenCancel:
+    // re-check from fresh data. The Users "Search..." box does not match emails (live: 0 hits for
+    // an existing one), so scroll the virtualized grid to the bottom (newest users sort last) and
+    // look for the row (live: the newest existing user is found, a deleted one is not).
+    if (this.deletedWithoutConfirmation === email) {
+      await this.page.reload({ waitUntil: "domcontentloaded" });
+      await this.openVendorProfileTab();
+      await this.#scrollUsersGridToBottom();
+      await this.page.waitForTimeout(1000);
+      await this.#scrollUsersGridToBottom();
+      await expect(
+        healingLocator(userRowByEmailStrategies(this.page, email)).first(),
+        `FAIL: user "${email}" is still listed after the direct delete.`
+      ).toBeHidden({ timeout: 15000 });
+      Logger.success(
+        `VendorProfilePage: user "${email}" is no longer in the Users table (deleted without confirmation).`
+      );
+      return;
+    }
     const row = healingLocator(
       userRowByEmailStrategies(this.page, email)
     ).first();
@@ -584,6 +645,42 @@ class VendorProfilePage {
     Logger.success(
       `VendorProfilePage: user "${email}" deleted and removed from the Users table.`
     );
+  }
+
+  /**
+   * Waits until the row's real "Delete" button (Actions column) is rendered. Verified 2026-11-10/11:
+   * the Actions column is virtualized separately from the data columns and can lag a just-added
+   * user's row; re-scroll while waiting, reload and reopen the tab once if it still is not there.
+   */
+  async waitForUserRowDeleteButton(rowGrow) {
+    const realDelete = this.page
+      .locator(`[data-rgrow="${rowGrow}"]`)
+      .getByRole("button", { name: "Delete", exact: true })
+      .first();
+    const appeared = async () =>
+      expect
+        .poll(
+          async () => {
+            await this.#scrollUsersGridToBottom();
+            return await realDelete.isVisible().catch(() => false);
+          },
+          { timeout: 20000, intervals: [500, 1000, 2000] }
+        )
+        .toBe(true)
+        .then(
+          () => true,
+          () => false
+        );
+    if (await appeared()) return;
+    Logger.info(
+      `VendorProfilePage: Delete button for row ${rowGrow} not rendered yet — reloading the Users table once.`
+    );
+    await this.page.reload({ waitUntil: "domcontentloaded" });
+    await this.openVendorProfileTab();
+    expect(
+      await appeared(),
+      `FAIL: "Delete" button for user row ${rowGrow} never rendered in the Actions column.`
+    ).toBe(true);
   }
 
   /** @param {{ firstName: string, lastName: string, phone: string, email: string }} user */

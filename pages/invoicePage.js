@@ -164,6 +164,12 @@ class InvoicePage {
         .or(this.page.getByPlaceholder(/enter title/i))
         .or(this.page.locator('input[placeholder*="title" i]'))
         .first();
+      // 2026-11-11: under a 4-worker CI run the invoice form took >25s to render (TC369/TC371
+      // attempt 1), while 1-worker headed runs pass first time. Allow a slow form first;
+      // resolves immediately when it is already visible.
+      await formReady
+        .waitFor({ state: "visible", timeout: 60000 })
+        .catch(() => {});
       await formReady.waitFor({ state: "visible", timeout: 25000 });
 
       Logger.success("Create / Add Invoice clicked; invoice form visible.");
@@ -404,6 +410,12 @@ class InvoicePage {
     try {
       Logger.step("Navigating to Invoice tab...");
       const invoiceTab = this.page.getByRole("tab", { name: "Invoice" });
+      // 2026-11-11: under a 4-worker CI run (several suites creating invoices on the same beta
+      // jobs) the job page took >10s to render this tab (TC369 retry), while 1-worker runs pass.
+      // Allow a slow page first; resolves immediately when the tab is already there.
+      await invoiceTab
+        .waitFor({ state: "visible", timeout: 45000 })
+        .catch(() => {});
       await invoiceTab.waitFor({ state: "visible", timeout: 10000 });
       await invoiceTab.click();
       await this.page.waitForLoadState("load");
@@ -2287,7 +2299,10 @@ class InvoicePage {
         .evaluate(el =>
           el.getAttribute("data-rgcol") !== null
             ? { attr: "data-rgcol", value: el.getAttribute("data-rgcol") }
-            : { attr: "aria-colindex", value: el.getAttribute("aria-colindex") || "" }
+            : {
+                attr: "aria-colindex",
+                value: el.getAttribute("aria-colindex") || "",
+              }
         )
         .then(r => {
           budgetColAttr = r.attr;
@@ -2315,7 +2330,10 @@ class InvoicePage {
               .evaluate(el =>
                 el.getAttribute("data-rgcol") !== null
                   ? { attr: "data-rgcol", value: el.getAttribute("data-rgcol") }
-                  : { attr: "aria-colindex", value: el.getAttribute("aria-colindex") || "" }
+                  : {
+                      attr: "aria-colindex",
+                      value: el.getAttribute("aria-colindex") || "",
+                    }
               )
               .catch(() => ({ attr: "data-rgcol", value: "" }));
             if (attrVal.value) {
@@ -2402,7 +2420,9 @@ class InvoicePage {
           let catCell;
           if (budgetColIndex) {
             catCell = row
-              .locator(`[role="gridcell"][${budgetColAttr}="${budgetColIndex}"]`)
+              .locator(
+                `[role="gridcell"][${budgetColAttr}="${budgetColIndex}"]`
+              )
               .first();
           } else if (budgetHeaderPos >= 0) {
             catCell = row.locator('[role="gridcell"]').nth(budgetHeaderPos);

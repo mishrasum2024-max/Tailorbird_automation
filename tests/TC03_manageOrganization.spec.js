@@ -612,6 +612,39 @@ test.describe("Manage Organization", () => {
     Logger.success("[TC33] ✅ Invite user button visible in workspace");
   });
 
+  test("TC556 @regression @organization BUG-1577-TC01 : Edit Role icon opens Property Access breakdown selection first", async () => {
+    const invitedEmail = `member_${Date.now()}@yopmail.com`;
+    Logger.info(
+      `[BUG-1577-TC01] Inviting Member with property access — ${invitedEmail}`
+    );
+    await organizationHelper.inviteUser(invitedEmail, "Member");
+    await applyWorkspaceZoom(sharedPage);
+    await organizationHelper.search(invitedEmail);
+    const userRow = await organizationHelper.getRow(invitedEmail);
+    const rowIndex = await userRow.getAttribute("aria-rowindex");
+    await sharedPage
+      .locator(`[role="row"][aria-rowindex="${rowIndex}"]`)
+      .getByRole("button", { name: "Edit user" })
+      .click();
+    const modal = sharedPage
+      .getByRole("dialog")
+      .filter({ hasText: "Edit user" });
+    await expect(modal).toBeVisible({ timeout: 10_000 });
+    Logger.info(
+      "[BUG-1577-TC01] Asserting: Edit user opens on the role step, not Property access"
+    );
+    await expect(
+      modal.getByRole("checkbox", { name: /organization admin/i })
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(
+      modal.getByText("Organization role", { exact: true })
+    ).toBeVisible();
+    await expect(modal.getByRole("button", { name: "Next" })).toBeVisible();
+    await expect(modal.getByRole("button", { name: "Back" })).toHaveCount(0);
+    Logger.success(
+      "[BUG-1577-TC01] ✅ Edit user opens on the organization role step first"
+    );
+  });
 });
 
 // ─── Text Agent ───────────────────────────────────────────────────────────────
@@ -670,13 +703,19 @@ test.describe("Manage Organization", () => {
         const hiddenByAncestorSelectors = await page.evaluate(() => {
           const hint = el => {
             if (el.id) return `#${el.id}`;
-            if (el.getAttribute("name")) return `[name="${el.getAttribute("name")}"]`;
+            if (el.getAttribute("name"))
+              return `[name="${el.getAttribute("name")}"]`;
             const cls = (el.className || "").split(" ").filter(Boolean)[0];
             return cls ? `.${cls}` : el.tagName.toLowerCase();
           };
           const ancestorTransparent = el => {
-            for (let node = el.parentElement; node && node !== document.body; node = node.parentElement) {
-              if (parseFloat(window.getComputedStyle(node).opacity) === 0) return true;
+            for (
+              let node = el.parentElement;
+              node && node !== document.body;
+              node = node.parentElement
+            ) {
+              if (parseFloat(window.getComputedStyle(node).opacity) === 0)
+                return true;
             }
             return false;
           };
@@ -689,8 +728,13 @@ test.describe("Manage Organization", () => {
         });
         snapshot.buttons.forEach(btn => {
           const unlabeled =
-            !(btn.text && btn.text.trim()) && !(btn.ariaLabel && btn.ariaLabel.trim());
-          if (btn.visible && unlabeled && hiddenByAncestorSelectors.includes(btn.selector)) {
+            !(btn.text && btn.text.trim()) &&
+            !(btn.ariaLabel && btn.ariaLabel.trim());
+          if (
+            btn.visible &&
+            unlabeled &&
+            hiddenByAncestorSelectors.includes(btn.selector)
+          ) {
             btn.visible = false;
           }
         });
@@ -712,7 +756,7 @@ test.describe("Manage Organization", () => {
           expect(
             hasText,
             `FAIL [org-workspace]: Button[${i}] has no text or aria-label. Button: ${JSON.stringify(btn)}`
-          ).toBe(true,{timeout: 30000});
+          ).toBe(true, { timeout: 30000 });
         });
 
         const visibleInputs = snapshot.inputs.filter(inp => inp.visible);

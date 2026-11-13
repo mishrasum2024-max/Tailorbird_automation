@@ -15,6 +15,7 @@ const { ApprovalJob } = require("../pages/approvalPage");
 const { InvoicePage } = require("../pages/invoicePage");
 const { Logger } = require("../utils/logger");
 const { ensureLeftPanelExpanded } = require("../utils/leftPanelExpander");
+const { AddColumnPage } = require("../pages/addColumnPage");
 
 test.use({
   storageState: "sessionState.json",
@@ -256,27 +257,21 @@ test.describe.serial("Finalize contract UI flow", () => {
     Logger.step(
       "TC224 Scenario 2: Table → Manage Columns → hide Cost Item → assert hidden → restore"
     );
-    const tableMenuBtn = page.getByRole("button", { name: "Table" });
-    await expect(tableMenuBtn).toBeVisible({ timeout: 10000 });
-    await tableMenuBtn.click();
-    await page.waitForTimeout(500);
-    await page.getByText(/hide \/ show columns/i).click();
-    await page.waitForTimeout(1000);
-    const manageColumnsDialog = page.getByRole("dialog", {
-      name: "Manage Columns",
+    // "Table settings" drawer replaced Table → Hide / show columns → Manage Columns (MCP-verified
+    // 2026-10-30, job Contracts grid, "Contract" table): Cost Item has its own Hide/Show eye.
+    const contractColumns = new AddColumnPage(page, {
+      scope: page.locator("main"),
     });
-    await expect(manageColumnsDialog).toBeVisible({ timeout: 10000 });
-    await manageColumnsDialog.getByText("Cost Item", { exact: true }).click();
-    await page.waitForTimeout(1000);
+    await contractColumns.openTableSettings({ addColumn: false });
+    await contractColumns.setColumnVisibility("Cost Item", false);
+    await contractColumns.closeTableSettings();
     await expect(
       page.getByRole("columnheader", { name: "Cost Item", exact: true }),
       '"Cost Item" column header must be hidden after unchecking in Manage Columns'
     ).not.toBeVisible({ timeout: 5000 });
     Logger.success("TC224 Scenario 2: Cost Item column is hidden ✓");
-    await manageColumnsDialog.getByText("Cost Item", { exact: true }).click();
-    await page.waitForTimeout(1000);
-    await manageColumnsDialog.getByRole("banner").getByRole("button").click();
-    await page.waitForTimeout(500);
+    await contractColumns.setColumnVisibility("Cost Item", true);
+    await contractColumns.closeTableSettings();
     await expect(
       page.getByRole("columnheader", { name: "Cost Item", exact: true }),
       '"Cost Item" column header must be visible after re-enabling in Manage Columns'

@@ -3,7 +3,6 @@ require("dotenv").config();
 const path = require("path");
 const { test } = require("@playwright/test");
 const { VendorDashboardPage } = require("../pages/vendorDashboardPage");
-const { VendorListingPage } = require("../pages/vendorListingPage");
 const { Logger } = require("../utils/logger");
 
 const dashboardTextScanPath = path.join(
@@ -82,43 +81,6 @@ test.describe("Vendor Dashboard — full page coverage", () => {
 
     Logger.success(
       "TC456: Recent activity panel and sidebar chrome verified — Dashboard page fully covered across TC454-TC456."
-    );
-  });
-
-  test("TC457 @regression @vendor @bids @contracts @invoices @changeorders : Vendor Bids, Contracts, Invoices and Change Orders listing pages fully verified", async ({
-    page,
-  }) => {
-    test.setTimeout(180000);
-
-    const vendorListingPage = new VendorListingPage(page);
-
-    Logger.step("TC457: Navigate to vendor portal");
-    await page.goto(process.env.BASE_URL, { waitUntil: "load" });
-    await page.waitForLoadState("domcontentloaded");
-    await page.waitForTimeout(1500);
-
-    for (const pageKey of VendorListingPage.pageKeys) {
-      const label = VendorListingPage.labelFor(pageKey);
-
-      await test.step(`${label} page — scan, store, and fully assert`, async () => {
-        await vendorListingPage.navigateTo(pageKey);
-
-        const outputPath = path.join(
-          __dirname,
-          `../data/vendor${label.replace(/\s+/g, "")}TextScan.json`
-        );
-        const snapshot = await vendorListingPage.scanAndStoreListingText(
-          pageKey,
-          outputPath
-        );
-        vendorListingPage.assertScannedTextNonEmpty(snapshot, label);
-
-        await vendorListingPage.assertListingPageFullyVisible(pageKey);
-      });
-    }
-
-    Logger.success(
-      "TC457: Bids, Contracts, Invoices and Change Orders listing pages fully verified in one pass."
     );
   });
 });

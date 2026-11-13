@@ -3,6 +3,11 @@ require("dotenv").config();
 const { WebClient } = require("@slack/web-api");
 const fs = require("fs");
 const path = require("path");
+const {
+  buildHiddenContextBlock,
+  buildHideBlocks,
+  hiddenIds,
+} = require("./lib/notAutomatableList");
 
 const slack = new WebClient(process.env.SLACK_BOT_TOKEN);
 
@@ -72,7 +77,9 @@ function buildTicketDetailBlock(ticket, index) {
   if (automation && automation.label) {
     lines.push(
       `${automation.icon || "✅"} *${automation.label}*` +
-        (automation.prUrl ? ` — <${automation.prUrl}|${automation.prText || "View PR"}>` : "")
+        (automation.prUrl
+          ? ` — <${automation.prUrl}|${automation.prText || "View PR"}>`
+          : "")
     );
   }
 
@@ -99,7 +106,9 @@ function buildTicketDetailBlock(ticket, index) {
 const MAX_RADIO_LABEL_LENGTH = 75;
 
 function buildRadioLabel(ticket) {
-  const tag = ticket.automationStatus?.icon ? `${ticket.automationStatus.icon} ` : "";
+  const tag = ticket.automationStatus?.icon
+    ? `${ticket.automationStatus.icon} `
+    : "";
   const prefix = `${tag}${ticket.priority || "No priority"} | ${ticket.id} | `;
   const titleRoom = Math.max(10, MAX_RADIO_LABEL_LENGTH - prefix.length);
   return getShortSlackText(
@@ -109,15 +118,13 @@ function buildRadioLabel(ticket) {
 }
 
 function buildRadioOptions(tickets) {
-  return tickets.slice(0, MAX_RADIO_OPTIONS).map((ticket) => ({
+  return tickets.slice(0, MAX_RADIO_OPTIONS).map(ticket => ({
     text: {
       type: "plain_text",
       text: buildRadioLabel(ticket),
       emoji: true,
     },
-    value: GH_REPO_FULL
-      ? `${ticket.id}|${GH_REPO_FULL}`
-      : ticket.id,
+    value: GH_REPO_FULL ? `${ticket.id}|${GH_REPO_FULL}` : ticket.id,
   }));
 }
 
@@ -143,7 +150,7 @@ async function main() {
       : [];
 
     const tickets = (Array.isArray(loadedTickets) ? loadedTickets : []).filter(
-      (ticket) => ticket && ticket.id
+      ticket => ticket && ticket.id
     );
 
     if (!tickets.length) {
@@ -151,9 +158,7 @@ async function main() {
       return;
     }
 
-    console.log(
-      `📋 Loaded ${tickets.length} ticket(s) from Notion.`
-    );
+    console.log(`📋 Loaded ${tickets.length} ticket(s) from Notion.`);
 
     tickets.forEach((ticket, index) => {
       console.log(
@@ -164,8 +169,8 @@ async function main() {
     if (tickets.length > MAX_RADIO_OPTIONS) {
       console.warn(
         `⚠️ ${tickets.length} tickets were loaded, but Slack radio_buttons ` +
-        `only supports up to ${MAX_RADIO_OPTIONS}. Only the first ` +
-        `${MAX_RADIO_OPTIONS} will be shown.`
+          `only supports up to ${MAX_RADIO_OPTIONS}. Only the first ` +
+          `${MAX_RADIO_OPTIONS} will be shown.`
       );
     }
 
@@ -186,12 +191,16 @@ async function main() {
         type: "section",
         text: {
           type: "mrkdwn",
-          text:
-            `*${tickets.length} completed Notion ticket${
-              tickets.length === 1 ? "" : "s"
-            } ready for automation:*`,
+          text: `*${tickets.length} completed Notion ticket${
+            tickets.length === 1 ? "" : "s"
+          } ready for automation:*`,
         },
       },
+
+      // "🙈 N tickets marked not automatable are hidden" (only when N > 0).
+      ...[buildHiddenContextBlock("ticket", hiddenIds("ticket").size)].filter(
+        Boolean
+      ),
 
       {
         type: "divider",
@@ -257,6 +266,22 @@ async function main() {
     });
 
     // -----------------------------------------
+    // 4b. "Can't be automated?" checkboxes + Hide button
+    //     (scripts/ai-agent/lib/notAutomatableList.js)
+    // -----------------------------------------
+
+    blocks.push(
+      ...buildHideBlocks(
+        "ticket",
+        tickets.slice(0, MAX_RADIO_OPTIONS).map(ticket => ({
+          id: ticket.id,
+          label: buildRadioLabel(ticket),
+        })),
+        GH_REPO_FULL
+      )
+    );
+
+    // -----------------------------------------
     // 5. Send Slack approval message
     // -----------------------------------------
 
@@ -270,38 +295,23 @@ async function main() {
 
     console.log("\n✅ Slack approval message created.");
 
-    console.log(
-      `Message TS: ${response.ts}`
-    );
+    console.log(`Message TS: ${response.ts}`);
 
-    console.log(
-      `Tickets shown: ${tickets.length}`
-    );
+    console.log(`Tickets shown: ${tickets.length}`);
 
     console.log(
       "\n➡️ Waiting for the user to select one ticket and click " +
-      "'Start Automation for Selected Ticket'."
+        "'Start Automation for Selected Ticket'."
     );
-
   } catch (error) {
-    console.error(
-      "\n❌ Failed to create Slack approval."
-    );
+    console.error("\n❌ Failed to create Slack approval.");
 
-    console.error(
-      error.data?.error ||
-      error.message ||
-      error
-    );
+    console.error(error.data?.error || error.message || error);
 
     if (error.data) {
-      console.error(
-        "\nSlack API response:"
-      );
+      console.error("\nSlack API response:");
 
-      console.error(
-        JSON.stringify(error.data, null, 2)
-      );
+      console.error(JSON.stringify(error.data, null, 2));
     }
 
     process.exit(1);

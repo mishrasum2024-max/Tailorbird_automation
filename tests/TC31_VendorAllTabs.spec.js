@@ -59,9 +59,16 @@ test.describe("Vendor Phase 3 — Bids, Read Views & Admin/Compliance", () => {
   // a shared, persistent resource that other tests elsewhere in the suite can permanently
   // consume (e.g. a real Accept). Ensure one exists once, up front, rather than each test
   // failing or skipping on a precondition the codebase already knows how to create.
+  // Verified 2026-11-11 (headed vendor session): no bid named "Automation test" exists any more —
+  // the vendor's Bids list holds only auto-created bids (Auto_Invited_…, AI_Bid_…, E2E_BidBook_…)
+  // that change run to run, so TC460's fixed search term matched nothing. Keep the name of the
+  // Invited bid this hook guarantees (a 2nd call is idempotent: it finds the existing one).
+  let ensuredInvitedBidName = null;
   test.beforeAll(async ({ browser }) => {
     test.setTimeout(480000); // 8 minutes max
     await ensureInvitedBidForVendor(browser);
+    ensuredInvitedBidName =
+      (await ensureInvitedBidForVendor(browser))?.bidName || null;
   });
 
   test("TC458 @e2e @sanity @vendor @bids : Vendor can access Bids landing page with its daily-briefing panel, view invited bids, open one, and validate the complete bid workspace", async ({
@@ -153,6 +160,43 @@ test.describe("Vendor Phase 3 — Bids, Read Views & Admin/Compliance", () => {
     // MCP-verified live 2026-09-23: this listing does not filter on input alone (or on
     // clearing alone) — confirmed live with a non-matching search term that the grid
     // stays fully unfiltered until Enter is pressed, both for searching and clearing.
+    // Search for a bid that is actually listed (see the beforeAll note). Verified live: searching a
+    // listed Bid Name (e.g. "Auto_Invited_1794300837222") returns exactly that row.
+    const liveBidNameCell = healingLocator([
+      {
+        name: "revo-grid row[data-rgrow] >> first gridcell",
+        locator: page
+          .locator('revo-grid [role="row"][data-rgrow]')
+          .first()
+          .locator('[role="gridcell"]')
+          .first(),
+      },
+      {
+        name: "role:row >> role:gridcell (first)",
+        locator: page
+          .locator("revo-grid")
+          .getByRole("row")
+          .filter({ has: page.getByRole("gridcell") })
+          .first()
+          .getByRole("gridcell")
+          .first(),
+      },
+    ]).first();
+    if (!ensuredInvitedBidName) {
+      await expect(
+        liveBidNameCell,
+        "FAIL: vendor Bids listing has no rows to search"
+      ).toBeVisible({ timeout: 20000 });
+    }
+    const liveSearchTerm =
+      ensuredInvitedBidName ||
+      ((await liveBidNameCell.textContent()) || "").replace(/✕/g, "").trim();
+    expect(
+      liveSearchTerm,
+      "FAIL: no listed bid name to search for"
+    ).toBeTruthy();
+    bidWorkspaceData.searchValidTerm = liveSearchTerm;
+    Logger.info(`TC460: searching listed bid "${liveSearchTerm}"`);
     await search.fill(bidWorkspaceData.searchValidTerm);
     await search.press("Enter").catch(() => {});
     await page.waitForTimeout(1000);
@@ -585,7 +629,9 @@ test.describe("Vendor Phase 3 — Bids, Read Views & Admin/Compliance", () => {
         // reads (CI: 1 vs listing 0). A reload forces a fresh /api/vendor-dashboard read.
         await Promise.all([
           page
-            .waitForResponse(r => /\/api\/vendor-dashboard/.test(r.url()), { timeout: 30000 })
+            .waitForResponse(r => /\/api\/vendor-dashboard/.test(r.url()), {
+              timeout: 30000,
+            })
             .catch(() => null),
           page.reload({ waitUntil: "load" }),
         ]);
@@ -600,7 +646,13 @@ test.describe("Vendor Phase 3 — Bids, Read Views & Admin/Compliance", () => {
         // A reload forces a fresh bird-table read before exporting.
         await Promise.all([
           page
-            .waitForResponse(r => /\/api\/bird-table\?table_name=bids_and_contracts/.test(r.url()), { timeout: 30000 })
+            .waitForResponse(
+              r =>
+                /\/api\/bird-table\?table_name=bids_and_contracts/.test(
+                  r.url()
+                ),
+              { timeout: 30000 }
+            )
             .catch(() => null),
           page.reload({ waitUntil: "load" }),
         ]);
@@ -618,9 +670,9 @@ test.describe("Vendor Phase 3 — Bids, Read Views & Admin/Compliance", () => {
           .readFileSync(retryCsvPath, "utf8")
           .split(/\r?\n/)
           .filter(l => l.trim().length > 0);
-        const retryStatusIdx = VendorBidPage._parseCsvLine(retryLines[0]).findIndex(h =>
-          /^status$/i.test(h)
-        );
+        const retryStatusIdx = VendorBidPage._parseCsvLine(
+          retryLines[0]
+        ).findIndex(h => /^status$/i.test(h));
         return retryLines
           .slice(1)
           .filter(line =>

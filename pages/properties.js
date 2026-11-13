@@ -956,6 +956,14 @@ class PropertiesHelper {
     console.log(`🔍 Searching for property: ${name}`);
     await this.recoverPropertiesDataIfErrored();
     const input = this.page.locator(propertyLocators.searchInput).first();
+    // Trace + MCP verified 2026-11-10 (TC371): isVisible({ timeout }) below does not wait, so when
+    // the list's search box had not rendered yet it re-ran goToProperties() while ALREADY on
+    // /properties — clicking the Properties nav there fires no properties API call at all (live:
+    // 0 calls vs 2 from a job page), so goToProperties waited its full 60s each time (4x in TC371,
+    // pushing it past the 10-minute limit). On the Properties list, wait for the box first.
+    if (/^\/properties\/?$/.test(new URL(this.page.url()).pathname)) {
+      await input.waitFor({ state: "visible", timeout: 20000 }).catch(() => {});
+    }
     const inputVisible = await input
       .isVisible({ timeout: 4000 })
       .catch(() => false);

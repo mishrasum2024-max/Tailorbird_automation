@@ -1006,7 +1006,10 @@ test.describe("Change Order tab", () => {
     const { colAttr, colRaw } = await header.evaluate(el =>
       el.getAttribute("data-rgcol") !== null
         ? { colAttr: "data-rgcol", colRaw: el.getAttribute("data-rgcol") }
-        : { colAttr: "aria-colindex", colRaw: el.getAttribute("aria-colindex") || "" }
+        : {
+            colAttr: "aria-colindex",
+            colRaw: el.getAttribute("aria-colindex") || "",
+          }
     );
     const colIdx = colRaw ? String(colRaw) : "6";
     const firstAmt = grid

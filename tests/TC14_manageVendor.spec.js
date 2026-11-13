@@ -7,6 +7,7 @@ const { AddColumnPage } = require("../pages/addColumnPage");
 const { Logger } = require("../utils/logger");
 const { ensureLeftPanelExpanded } = require("../utils/leftPanelExpander");
 const leftPanel = require("../pages/leftPanel");
+const { healingLocator } = require("../utils/locatorHealer");
 
 const TC14_SNAPSHOT_DIR = path.join(
   process.cwd(),
@@ -76,7 +77,8 @@ test.describe("Vendors Directory", () => {
   test("TC230 @vendor @regression : Verify Vendor Directory table views, columns, and export", async () => {
     await vendorPage.goToDirectory();
     await vendorPage.waitForDirectoryReady();
-    await vendorPage.viewColumnExportFlow();
+    // The gear button now opens the "Table settings" drawer (MCP-verified 2026-10-30).
+    await vendorPage.viewColumnExportFlowViaTableSettings();
     Logger.success("TC230 passed");
   });
 
@@ -365,19 +367,21 @@ test.describe("Vendors Directory", () => {
     const addColumnPage = new AddColumnPage(page, {
       scope: page.locator("main"),
     });
-    await addColumnPage.openManageColumns();
+    // "Table settings" drawer replaced Table → Hide/Show columns → Manage Columns (MCP-verified
+    // 2026-10-30, "Organization" table): every column is a row with its own Hide/Show eye.
+    await addColumnPage.openTableSettings({ addColumn: false });
 
-    const manageColsDrawer = addColumnPage.loc.manageColumnsDialog;
+    const manageColsDrawer = addColumnPage._tableSettings().drawer;
     const drawerOpen = await manageColsDrawer
       .isVisible({ timeout: 5000 })
       .catch(() => false);
     if (drawerOpen) {
-      // Verify total column checkboxes ≥ 10
-      const colCheckboxes = manageColsDrawer.locator('input[type="checkbox"]');
-      const colCount = await colCheckboxes.count();
+      // Verify total columns (each with its Hide/Show control) ≥ 10
+      const colNames = await addColumnPage.verifyColumnVisibilityControls();
+      const colCount = colNames.length;
       expect(colCount).toBeGreaterThanOrEqual(10);
       Logger.info(
-        `TC239 step1: Manage Columns drawer shows ${colCount} columns ✓`
+        `TC239 step1: Table settings drawer shows ${colCount} columns ✓`
       );
 
       // Verify 4 scroll-hidden columns are listed in the drawer
@@ -389,9 +393,9 @@ test.describe("Vendors Directory", () => {
       ];
       let foundHidden = 0;
       for (const colName of hiddenCols) {
-        const colEntry = manageColsDrawer
-          .locator('[class*="Group"], label')
-          .filter({ hasText: colName });
+        const colEntry = addColumnPage
+          ._tableSettings()
+          .columnDisplayName(colName);
         if (await colEntry.isVisible({ timeout: 1500 }).catch(() => false)) {
           foundHidden++;
           Logger.info(
@@ -404,7 +408,7 @@ test.describe("Vendors Directory", () => {
         }
       }
       expect(foundHidden).toBeGreaterThanOrEqual(0); // best-effort; drawer may paginate
-      await addColumnPage.closeManageColumns();
+      await addColumnPage.closeTableSettings();
     } else {
       Logger.info(
         "TC239: Manage Columns drawer not available; skipping column-count assertions"
@@ -466,6 +470,11 @@ test.describe("Vendors Directory", () => {
   });
 
   test("TC240 @vendor @visual : Verify Vendor Directory screens match visual snapshots", async () => {
+    // Added 2026-11-11 (insert-only): reproduced with 4 parallel workers — both runs hit the 280s
+    // config timeout while the (long) Vendor Directory loaded twice; the trace shows ~160s spent
+    // waiting for its "Search..." box, which the failure snapshot shows did render, just late.
+    // One worker passes in ~1.5m. Give the test headroom instead of failing on load time.
+    test.setTimeout(600000);
     if (!fs.existsSync(TC14_SNAPSHOT_DIR))
       fs.mkdirSync(TC14_SNAPSHOT_DIR, { recursive: true });
 
@@ -570,6 +579,9 @@ test.describe("Vendors Directory", () => {
   });
 
   test("TC241 @vendor @regression : Verify vendor Website can be updated and saved", async () => {
+    // Added 2026-11-11 (insert-only): same slow Vendor Directory load as TC240 under parallel
+    // workers (flaky in CI) — give the test headroom over the 280s config default.
+    test.setTimeout(600000);
     Logger.step(
       "TC241: Edit vendor Website with a random URL and verify persistence via modal"
     );
@@ -598,6 +610,10 @@ test.describe("Vendors Directory", () => {
         .first()
         .click();
     }
+    // Added 2026-11-11 (insert-only): longer pre-wait for the slow directory route under load.
+    await page
+      .waitForURL(/vendors\/directory/, { timeout: 60000 })
+      .catch(() => {});
     await page.waitForURL(/vendors\/directory/, { timeout: 15000 });
     await vendorPage.waitForDirectoryReady();
     await expect(
@@ -616,6 +632,25 @@ test.describe("Vendors Directory", () => {
     await vendorPage.locators.searchInput.fill("Sumit corp");
     await page.keyboard.press("Enter");
     await page.waitForTimeout(1200);
+    // Added 2026-11-11 (insert-only): wait (up to 45s, multi-locator) for the filtered "Sumit corp"
+    // row before the existing 8s check — the search result renders late under parallel load.
+    await healingLocator([
+      {
+        name: "dataRows filtered Sumit corp",
+        locator: vendorPage.locators.dataRows.filter({
+          hasText: /Sumit corp/i,
+        }),
+      },
+      {
+        name: 'css:[role="row"][data-rgrow] Sumit corp',
+        locator: page
+          .locator('[role="row"][data-rgrow]')
+          .filter({ hasText: /Sumit corp/i }),
+      },
+    ])
+      .first()
+      .waitFor({ state: "visible", timeout: 45000 })
+      .catch(() => {});
     const firstRow = vendorPage.locators.dataRows.first();
     await expect(
       firstRow,
@@ -685,7 +720,9 @@ test.describe("Vendors Directory", () => {
     const tradeChip = dialog.locator("text=Plumbing").first();
     // The "already set?" check below is a one-shot isVisible (it does not wait): give an
     // already-saved "Plumbing" chip time to render first.
-    await tradeChip.waitFor({ state: "visible", timeout: 10000 }).catch(() => {});
+    await tradeChip
+      .waitFor({ state: "visible", timeout: 10000 })
+      .catch(() => {});
     const tradeAlreadySet = await tradeChip
       .isVisible({ timeout: 1000 })
       .catch(() => false);
@@ -698,7 +735,9 @@ test.describe("Vendors Directory", () => {
         exact: true,
       });
       // Options come from GET /api/trades — slower than 1.2s + 3s under CI load.
-      await tradeOption.waitFor({ state: "visible", timeout: 20000 }).catch(() => {});
+      await tradeOption
+        .waitFor({ state: "visible", timeout: 20000 })
+        .catch(() => {});
       await expect(
         tradeOption,
         'Trade dropdown should offer "Plumbing" as a selectable option'
@@ -715,7 +754,9 @@ test.describe("Vendors Directory", () => {
         .then(() => true)
         .catch(() => false);
       if (!plumbingStillSelected) {
-        Logger.info('TC241 step4: "Plumbing" was toggled off (it was already selected) — selecting it again');
+        Logger.info(
+          'TC241 step4: "Plumbing" was toggled off (it was already selected) — selecting it again'
+        );
         await tradeInput.click();
         await tradeInput.fill("Plumb");
         await tradeOption.waitFor({ state: "visible", timeout: 20000 });
@@ -737,7 +778,9 @@ test.describe("Vendors Directory", () => {
     });
     const serviceAreaChip = dialog.locator("text=Nationwide").first();
     // Same late render as Trade: let an already-saved "Nationwide" appear before deciding.
-    await serviceAreaChip.waitFor({ state: "visible", timeout: 10000 }).catch(() => {});
+    await serviceAreaChip
+      .waitFor({ state: "visible", timeout: 10000 })
+      .catch(() => {});
     const serviceAreaEditable =
       (await serviceAreaInput
         .isVisible({ timeout: 1000 })
@@ -769,7 +812,9 @@ test.describe("Vendors Directory", () => {
     // Same late render: give an already-saved POC time to fill in, so a slow load is never
     // mistaken for an empty POC (which would pick a different contact and save it).
     await expect
-      .poll(async () => pocInput.inputValue().catch(() => ""), { timeout: 10000 })
+      .poll(async () => pocInput.inputValue().catch(() => ""), {
+        timeout: 10000,
+      })
       .not.toBe("")
       .catch(() => {});
     const pocValueBefore = await pocInput.inputValue().catch(() => "");
@@ -912,7 +957,9 @@ test.describe("Vendors Directory", () => {
         .then(() => true)
         .catch(() => false);
       if (!editEnabledOnFirstLoad) {
-        Logger.info(`TC242: Vendor #${i + 1} — Edit stayed disabled (permission check failed) — reloading once`);
+        Logger.info(
+          `TC242: Vendor #${i + 1} — Edit stayed disabled (permission check failed) — reloading once`
+        );
         await page.reload({ waitUntil: "domcontentloaded" });
         await vendorPage.waitForVendorDetailReady();
         await expect(

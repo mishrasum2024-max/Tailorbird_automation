@@ -9,6 +9,7 @@ const { DrawReportingJob } = require("../pages/drawReportingPage");
 const { CMFeeDrawPdfPage } = require("../pages/cmFeeDrawPdfPage");
 const { Logger } = require("../utils/logger");
 const { ensureLeftPanelExpanded } = require("../utils/leftPanelExpander");
+const { healingLocator } = require("../utils/locatorHealer");
 
 test.use({
   storageState: "sessionState.json",
@@ -81,10 +82,9 @@ test.describe.serial("CM Fee Configuration", () => {
     await budgetJob.waitForPageLoad();
     // Registered before the property is selected so the response can't be missed (see below).
     const budgetVersionLoaded = setupPage
-      .waitForResponse(
-        res => res.url().includes("/api/budget-version"),
-        { timeout: 60000 }
-      )
+      .waitForResponse(res => res.url().includes("/api/budget-version"), {
+        timeout: 60000,
+      })
       .catch(() => null);
     await budgetJob.selectPropertyByName(sharedPropertyName);
     // Trace + MCP verified 2026-10-06: selecting the property loads /api/budget-version and then
@@ -95,7 +95,9 @@ test.describe.serial("CM Fee Configuration", () => {
     // openRevisionEditor(): let the page settle, then prove it responds by opening the dialog
     // (retrying an ignored click) and closing it with Cancel — Cancel creates nothing.
     await budgetVersionLoaded;
-    await setupPage.waitForURL(/budgetYear=/, { timeout: 30000 }).catch(() => {});
+    await setupPage
+      .waitForURL(/budgetYear=/, { timeout: 30000 })
+      .catch(() => {});
     const reviseOrCreateBudgetButton = setupPage
       .getByRole("button", { name: /Revise Budgets|Create First Budget/i })
       .first();
@@ -302,6 +304,383 @@ let cmFeeInvoiceA, cmFeeInvoiceB;
 let mainDrawName, mainDrawExpected;
 let mainDrawUiInvoices;
 
+// ── Added 2026-11-11 (insert-only): source job for the CM Fee invoices ──────────────────────
+// Code- and MCP-verified: app commit 7da1a4810 (2026-11-09, "Support manual CM Fee invoices on
+// draws without treating them as fee-bearing") excludes invoices on a "Construction Management
+// Fee" job from the auto CM Fee base. Job 4767 IS this property's Construction Management Fee job
+// (GET /api/jobs?propertyId=11063 → job_type "construction-management-fee"; it is also where the
+// app files the generated "CM Fee – <draw>" invoice, which TC439 checks), and it was the only job
+// on the property — so invoices created on it can no longer produce a CM Fee and TC438 failed.
+// The source invoices must live on a normal (Capex, Contract, finalized) job on the same property.
+// This finds such a job (created by this helper earlier) or creates one in the property's existing
+// project (3792 "CM_Fee_Project_automation") with the framework's own job/contract methods.
+const CM_FEE_SOURCE_JOB_PREFIX = "CMFee_SourceJob_";
+const CM_FEE_PROJECT_ID = 3792;
+const CM_FEE_PROJECT_NAME = "CM_Fee_Project_automation";
+let cmFeeSourceJobId = null;
+
+async function findCmFeeSourceJobId(anyPage) {
+  const jobs = await anyPage
+    .evaluate(async propertyId => {
+      const res = await fetch(
+        `/api/jobs?propertyId=${propertyId}&isContractFinalized=true`
+      );
+      return res.ok ? res.json() : [];
+    }, CM_FEE_PROPERTY_ID)
+    .catch(() => []);
+  const sourceJob = (Array.isArray(jobs) ? jobs : []).find(
+    j =>
+      j &&
+      j.job_type !== "construction-management-fee" &&
+      Number(j.id) !== CM_FEE_JOB_ID &&
+      String(j.title || "").startsWith(CM_FEE_SOURCE_JOB_PREFIX)
+  );
+  return sourceJob ? Number(sourceJob.id) : null;
+}
+
+async function listCmFeeSourceJobs(anyPage, finalizedOnly) {
+  const jobs = await anyPage
+    .evaluate(
+      async ({ propertyId, finalized }) => {
+        const query = finalized
+          ? "&isContractFinalized=true"
+          : "&includeNonContractJobs=true";
+        const res = await fetch(`/api/jobs?propertyId=${propertyId}${query}`);
+        return res.ok ? res.json() : [];
+      },
+      { propertyId: CM_FEE_PROPERTY_ID, finalized: finalizedOnly }
+    )
+    .catch(() => []);
+  return (Array.isArray(jobs) ? jobs : []).filter(
+    j =>
+      j &&
+      j.job_type !== "construction-management-fee" &&
+      Number(j.id) !== CM_FEE_JOB_ID &&
+      String(j.title || "").startsWith(CM_FEE_SOURCE_JOB_PREFIX)
+  );
+}
+
+async function ensureCmFeeSourceJob(callerPage) {
+  await callerPage.goto(process.env.BASE_URL, { waitUntil: "load" });
+  await callerPage.waitForTimeout(2000);
+  const existingId = await findCmFeeSourceJobId(callerPage);
+  if (existingId) {
+    Logger.info(
+      `CM Fee source job already exists on "${CM_FEE_PROPERTY_NAME}": job ${existingId}`
+    );
+    return existingId;
+  }
+  // Run-verified: a browser.newContext() made in beforeAll does not get the config viewport
+  // (screenshot showed 1280x720) — work on the job in a 1920x1080 owner context.
+  const jobContext = await callerPage
+    .context()
+    .browser()
+    .newContext({
+      storageState: "sessionState.json",
+      viewport: { width: 1920, height: 1080 },
+      baseURL: process.env.BASE_URL,
+    });
+  try {
+    const jobPage = await jobContext.newPage();
+    await jobPage.goto(process.env.BASE_URL, { waitUntil: "load" });
+    await jobPage.waitForTimeout(2000);
+    // Reuse a source job an interrupted run created but did not finalize, before creating another.
+    const unfinalized = await listCmFeeSourceJobs(jobPage, false);
+    const jobId = unfinalized.length
+      ? Number(unfinalized[unfinalized.length - 1].id)
+      : await createCmFeeSourceJob(jobPage);
+    await finalizeCmFeeSourceJobContract(jobPage, jobId);
+    await jobPage.goto(process.env.BASE_URL, { waitUntil: "load" });
+    await expect
+      .poll(() => findCmFeeSourceJobId(jobPage), {
+        message: `FAIL: CM Fee source job ${jobId} is not a finalized job on the property`,
+        timeout: 120000,
+        intervals: [2000, 5000, 10000],
+      })
+      .toBeTruthy();
+    const finalizedId = await findCmFeeSourceJobId(jobPage);
+    Logger.success(`CM Fee source job ready (finalized): job ${finalizedId}`);
+    return finalizedId;
+  } finally {
+    await jobContext.close().catch(() => {});
+  }
+}
+
+async function createCmFeeSourceJob(setupPage) {
+  const { ProjectPage } = require("../pages/projectPage");
+  const projectPage = new ProjectPage(setupPage);
+  const sourceJobTitle = `${CM_FEE_SOURCE_JOB_PREFIX}${Date.now()}`;
+  Logger.step(
+    `Creating CM Fee source job "${sourceJobTitle}" in project ${CM_FEE_PROJECT_ID} ("${CM_FEE_PROJECT_NAME}")`
+  );
+  await setupPage.goto(
+    `${process.env.BASE_URL}/projects/${CM_FEE_PROJECT_ID}?tab=jobs`,
+    {
+      waitUntil: "load",
+    }
+  );
+  await ensureLeftPanelExpanded(setupPage);
+  await projectPage.openCreateJobModal();
+  const today = new Date();
+  const jobEnd = new Date(today);
+  jobEnd.setFullYear(today.getFullYear() + 1);
+  await projectPage.fillJobForm({
+    title: sourceJobTitle,
+    jobType: "Capex",
+    financialType: "Contract",
+    vendor: "Sumit_Corp",
+    description: "Source job for CM Fee invoices (TC28)",
+    estimatedBudget: 25000,
+    startDate: projectPage.formatDate(today),
+    endDate: projectPage.formatDate(jobEnd),
+    selectBudgetCategory: true,
+  });
+  await projectPage.submitJob();
+  await setupPage.waitForURL(/\/jobs\/\d+/, { timeout: 60000 });
+  const jobId = Number((setupPage.url().match(/\/jobs\/(\d+)/) || [])[1]);
+  expect(
+    jobId,
+    "FAIL: could not read the new source job id from the URL"
+  ).toBeGreaterThan(0);
+  Logger.info(`CM Fee source job created: job ${jobId}`);
+  return jobId;
+}
+
+/**
+ * MCP-verified 2026-11-12 on a new Capex job of this property (job 6746): the Contracts grid starts
+ * with one automatic row that already carries the job's Budget Category ("Bathroom fixtures
+ * install"); double-clicking its Scope / Schedule of Value / Contract amount cells opens an inline
+ * editor (type + Enter saves). Any other row is removed with its "Delete" action (the last row
+ * cannot be removed: the app recreates an empty one). "Finalize Contract" then shows a budget
+ * warning dialog ("Complete the following before finalizing ... Proceed Anyway"); proceeding
+ * finalizes the contract and enables the Change Orders / Invoice tabs.
+ */
+async function finalizeCmFeeSourceJobContract(jobPage, jobId) {
+  Logger.step(
+    `Filling and finalizing the contract of CM Fee source job ${jobId}`
+  );
+  await jobPage.goto(`${process.env.BASE_URL}/jobs/${jobId}?tab=contracts`, {
+    waitUntil: "load",
+  });
+  const finalizeBtn = healingLocator([
+    {
+      name: "role:button Finalize Contract",
+      locator: jobPage.getByRole("button", {
+        name: "Finalize Contract",
+        exact: true,
+      }),
+    },
+    {
+      name: "text:Finalize Contract",
+      locator: jobPage
+        .locator("main button")
+        .filter({ hasText: /^Finalize Contract$/ }),
+    },
+  ]).first();
+  await expect(finalizeBtn, "FAIL: Contracts tab did not render").toBeVisible({
+    timeout: 60000,
+  });
+  const dataRows = () =>
+    jobPage
+      .locator('[role="row"][data-rgrow]')
+      .filter({ has: jobPage.locator('[role="gridcell"]') })
+      .filter({ hasNotText: /^\s*Total/ });
+  await expect(
+    dataRows().first(),
+    "FAIL: contract grid has no row"
+  ).toBeVisible({ timeout: 30000 });
+  await jobPage.waitForTimeout(2000);
+  // Probe-verified: the grid virtualizes columns horizontally — at a narrower width the Scope
+  // column (and the Total row's "Total" label) are not in the DOM, so rows can't be told apart.
+  // Force the grid wide (same approach as the TC224 Jobs-grid fix) so every column renders.
+  const forceContractGridWide = async () => {
+    await jobPage
+      .locator('main [role="treegrid"], main revo-grid')
+      .evaluateAll(grids =>
+        grids.forEach(g => {
+          g.style.setProperty("width", "3000px", "important");
+          g.style.setProperty("min-width", "3000px", "important");
+        })
+      )
+      .catch(() => {});
+    await jobPage.waitForTimeout(1000);
+  };
+  await forceContractGridWide();
+
+  const colIndexOf = async name =>
+    healingLocator([
+      {
+        name: `role:columnheader ${name}`,
+        locator: jobPage.getByRole("columnheader", { name, exact: true }),
+      },
+      {
+        name: `css:columnheader ${name}`,
+        locator: jobPage
+          .locator('[role="columnheader"]')
+          .filter({ hasText: name }),
+      },
+    ])
+      .first()
+      .getAttribute("aria-colindex");
+  const scopeCol = await colIndexOf("Scope");
+  const sovCol = await colIndexOf("Schedule of Value");
+  const amountCol = await colIndexOf("Contract amount");
+
+  // Contract rows = main-grid rows that have a Scope cell (revo-grid repeats data-rgrow in its
+  // pinned checkbox / Actions sections, which have no Scope cell). Keep exactly one row: delete the
+  // bottom-most extra row, re-count, repeat. Never delete the last row — if the app warns "You are
+  // removing all contracts for this job", Cancel.
+  const contractRows = () =>
+    dataRows().filter({
+      has: jobPage.locator(`[role="gridcell"][aria-colindex="${scopeCol}"]`),
+    });
+  for (let guard = 0; guard < 10; guard++) {
+    const rgrows = (
+      await contractRows().evaluateAll(rows =>
+        rows.map(r => r.getAttribute("data-rgrow"))
+      )
+    )
+      .filter(g => g !== null)
+      .sort((a, b) => Number(b) - Number(a));
+    if (rgrows.length <= 1) break;
+    const rgrow = rgrows[0];
+    const deleteBtn = healingLocator([
+      {
+        name: "rgrow role:button Delete",
+        locator: jobPage
+          .locator(`[data-rgrow="${rgrow}"]`)
+          .getByRole("button", { name: /^Delete( row)?$/i }),
+      },
+      {
+        name: "rgrow trash icon",
+        locator: jobPage.locator(
+          `[data-rgrow="${rgrow}"] button:has(svg.lucide-trash2)`
+        ),
+      },
+    ]).first();
+    await expect(
+      deleteBtn,
+      `FAIL: no Delete action for extra contract row ${rgrow}`
+    ).toBeVisible({ timeout: 15000 });
+    await deleteBtn.click();
+    const removeAllWarning = jobPage
+      .getByRole("dialog")
+      .filter({ hasText: /removing all contracts/i })
+      .first();
+    if (
+      await removeAllWarning
+        .waitFor({ state: "visible", timeout: 2500 })
+        .then(() => true)
+        .catch(() => false)
+    ) {
+      await removeAllWarning.getByRole("button", { name: "Cancel" }).click();
+      break;
+    }
+    await expect
+      .poll(async () => contractRows().count(), {
+        timeout: 20000,
+        intervals: [500, 1000, 2000],
+      })
+      .toBeLessThan(rgrows.length);
+  }
+  await jobPage.reload({ waitUntil: "load" });
+  await expect(finalizeBtn).toBeVisible({ timeout: 60000 });
+  await jobPage.waitForTimeout(2000);
+  await forceContractGridWide();
+  const budgetRow = () => contractRows().first();
+  await expect(
+    budgetRow(),
+    `FAIL: no contract row with Budget Category "${CM_FEE_BUDGET_ITEM}"`
+  ).toContainText(CM_FEE_BUDGET_ITEM, { timeout: 30000 });
+
+  const fillCell = async (colIndex, value) => {
+    const cell = budgetRow().locator(
+      `[role="gridcell"][aria-colindex="${colIndex}"]`
+    );
+    await cell.scrollIntoViewIfNeeded().catch(() => {});
+    const saved = jobPage
+      .waitForResponse(
+        res =>
+          res.url().includes("/api/bird-table/") &&
+          ["PUT", "POST", "PATCH"].includes(res.request().method()),
+        { timeout: 20000 }
+      )
+      .catch(() => null);
+    await cell.dblclick();
+    const editor = healingLocator([
+      {
+        name: "revogr-edit input",
+        locator: jobPage.locator("revogr-edit input, revogr-edit textarea"),
+      },
+      {
+        name: "focused input",
+        locator: jobPage.locator("input:focus, textarea:focus"),
+      },
+    ]).first();
+    await expect(
+      editor,
+      `FAIL: inline editor did not open for column ${colIndex}`
+    ).toBeVisible({ timeout: 15000 });
+    await editor.fill(value);
+    await editor.press("Enter");
+    await saved;
+    await jobPage.waitForTimeout(800);
+  };
+  await fillCell(scopeCol, "Bid with material");
+  await fillCell(sovCol, "15000");
+  await fillCell(amountCol, "25000");
+  await expect(
+    budgetRow(),
+    "FAIL: contract row did not keep its Scope"
+  ).toContainText("Bid with material", { timeout: 15000 });
+  await expect(
+    budgetRow(),
+    "FAIL: contract row did not keep its Contract amount"
+  ).toContainText("25,000", { timeout: 15000 });
+
+  await finalizeBtn.click();
+  const proceedFinalize = healingLocator([
+    {
+      name: "finalize dialog role:button Proceed Anyway",
+      locator: jobPage
+        .getByRole("dialog")
+        .filter({ hasText: /before finalizing/i })
+        .getByRole("button", { name: "Proceed Anyway" }),
+    },
+    {
+      name: "finalize dialog role:button Confirm/Finalize",
+      locator: jobPage
+        .getByRole("dialog")
+        .filter({ hasText: /finaliz/i })
+        .getByRole("button", { name: /^(Confirm|Finalize)$/ }),
+    },
+  ]).first();
+  if (
+    await proceedFinalize
+      .waitFor({ state: "visible", timeout: 15000 })
+      .then(() => true)
+      .catch(() => false)
+  ) {
+    await proceedFinalize.click();
+  }
+  await expect(
+    healingLocator([
+      {
+        name: "role:button Void/Cancel Contract",
+        locator: jobPage.getByRole("button", { name: "Void/Cancel Contract" }),
+      },
+      {
+        name: "text:Void/Cancel Contract",
+        locator: jobPage
+          .locator("main button")
+          .filter({ hasText: /Void\/Cancel Contract/ }),
+      },
+    ]).first(),
+    "FAIL: contract was not finalized (no Void/Cancel Contract action)"
+  ).toBeVisible({ timeout: 60000 });
+  Logger.success(`CM Fee source job ${jobId}: contract finalized`);
+}
+
 test.describe("CM Fee — Invoice, Draw Calculation & Generated PDF (Test_property7_CM_Fee_Automation)", () => {
   test.describe.configure({ mode: "serial", retries: 1 });
 
@@ -328,6 +707,25 @@ test.describe("CM Fee — Invoice, Draw Calculation & Generated PDF (Test_proper
     await cmFeeSetup.saveChanges();
     Logger.success("Suite setup: CM Fee configuration applied");
 
+    // Added 2026-11-11 (insert-only): create the source invoices on a normal job of this property
+    // (see ensureCmFeeSourceJob above) — invoices on the CM Fee job 4767 are no longer fee-bearing.
+    test.setTimeout(900000);
+    cmFeeSourceJobId = await ensureCmFeeSourceJob(setupPage);
+    {
+      const createOnJob =
+        cmFeeDrawPdfSetup.createInvoiceWithAmount.bind(cmFeeDrawPdfSetup);
+      cmFeeDrawPdfSetup.createInvoiceWithAmount = (
+        jobId,
+        invoiceTitle,
+        amount
+      ) =>
+        createOnJob(
+          jobId === CM_FEE_JOB_ID ? cmFeeSourceJobId : jobId,
+          invoiceTitle,
+          amount
+        );
+    }
+
     const suffix = Date.now();
     cmFeeInvoiceA = await cmFeeDrawPdfSetup.createInvoiceWithAmount(
       CM_FEE_JOB_ID,
@@ -351,8 +749,76 @@ test.describe("CM Fee — Invoice, Draw Calculation & Generated PDF (Test_proper
     cmFeePage = new CMFeePage(page);
     drawReportingJob = new DrawReportingJob(page);
     cmFeeDrawPdfPage = new CMFeeDrawPdfPage(page);
+    // Added 2026-11-11 (insert-only): the suite's source invoices live on the normal source job
+    // (ensureCmFeeSourceJob), not on the CM Fee job 4767. MCP-verified that
+    // /jobs/4767/invoices/<id of another job's invoice> renders an empty "Invoice Details" dialog,
+    // so send those invoice-detail URLs (TC437) and new source invoices (TC448) to the source job.
+    // Every other URL — including /jobs/4767?tab=invoices for the generated CM Fee invoice — is
+    // passed through untouched.
+    if (cmFeeSourceJobId) {
+      const createOnJob =
+        cmFeeDrawPdfPage.createInvoiceWithAmount.bind(cmFeeDrawPdfPage);
+      cmFeeDrawPdfPage.createInvoiceWithAmount = (
+        jobId,
+        invoiceTitle,
+        amount
+      ) =>
+        createOnJob(
+          jobId === CM_FEE_JOB_ID ? cmFeeSourceJobId : jobId,
+          invoiceTitle,
+          amount
+        );
+      const sourceInvoiceIds = [cmFeeInvoiceA, cmFeeInvoiceB]
+        .filter(Boolean)
+        .map(inv => String(inv.invoiceNumber));
+      const gotoOriginal = page.goto.bind(page);
+      page.goto = (url, options) => {
+        const match =
+          typeof url === "string" &&
+          url.match(/\/jobs\/(\d+)\/invoices\/(\d+)/);
+        if (
+          match &&
+          Number(match[1]) === CM_FEE_JOB_ID &&
+          sourceInvoiceIds.includes(match[2])
+        ) {
+          url = url.replace(
+            `/jobs/${CM_FEE_JOB_ID}/invoices/`,
+            `/jobs/${cmFeeSourceJobId}/invoices/`
+          );
+        }
+        return gotoOriginal(url, options);
+      };
+    }
     await page.goto(process.env.BASE_URL, { waitUntil: "load" });
     await page.waitForTimeout(1500);
+    // Trace-verified 2026-11-11 (TC438 retry): GET / returned 200 but three /_next/static/chunks/*.js
+    // files returned 404 (beta redeployed mid-run), so the app never rendered — navigation, banner
+    // and main were empty and ensureLeftPanelExpanded hunted 3×45s for a "Pin sidebar" button that
+    // could not exist. Confirm the shell rendered; reload once (fresh HTML → current chunks) if not.
+    const appShellRendered = healingLocator([
+      {
+        name: "img:Tailorbird Logo",
+        locator: page.getByRole("img", { name: "Tailorbird Logo" }),
+      },
+      {
+        name: "nav text:Properties",
+        locator: page.locator("nav").getByText("Properties", { exact: true }),
+      },
+    ]).first();
+    const shellOk = await appShellRendered
+      .waitFor({ state: "visible", timeout: 20000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!shellOk) {
+      Logger.info(
+        "App shell did not render after load (stale deploy assets?) — reloading once."
+      );
+      await page.reload({ waitUntil: "load" });
+      await expect(
+        appShellRendered,
+        "FAIL: app shell (sidebar) did not render even after a reload"
+      ).toBeVisible({ timeout: 45000 });
+    }
     await ensureLeftPanelExpanded(page);
   });
 
@@ -901,7 +1367,9 @@ test.describe("CM Fee — Invoice, Draw Calculation & Generated PDF (Test_proper
 
     // Flexible: read the Appendix Total and require it to cover at least this draw's own total
     // (equal when the Appendix lists only this draw's invoices, larger when it lists more).
-    const appendixTotalMatch = pdfNormalized.match(/APPENDIXTOTAL\$([\d,]+\.\d{2})/);
+    const appendixTotalMatch = pdfNormalized.match(
+      /APPENDIXTOTAL\$([\d,]+\.\d{2})/
+    );
     expect(
       appendixTotalMatch,
       "PDF Invoice Appendix must show an APPENDIX TOTAL amount"

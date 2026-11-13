@@ -4,6 +4,13 @@ const {
   addColumnLocators,
   ADD_COLUMN_TYPES,
 } = require("../locators/addColumnLocator");
+const { tableSettingsLocators } = require("../locators/tableSettingsLocator");
+
+/** Columns TC253 itself creates on the Budget grid: `TestCol-${Date.now()}` (13-digit ms). */
+const TC253_SELF_CREATED_COLUMN = /^TestCol-\d{13}$/;
+/** Columns addAndVerifyAllColumnTypes(ViaTableSettings) creates: `${type without symbols}${ms}`. */
+const ALL_TYPES_SELF_CREATED_COLUMN =
+  /^(Text|Number|Select|Multiselect|Date|Checkbox|URL|Email|Phone|Currency|Thumbnail|Attachments|User)\d{13}$/;
 
 const MONTH_NAMES = [
   "January",
@@ -1287,6 +1294,857 @@ class AddColumnPage {
 
     Logger.info("Step 4: Verify no automation custom columns remain");
     await this.verifyNoCustomColumnsRemain();
+    return createdColumns;
+  }
+
+  // ===================== "Table settings" drawer (new UI) =====================
+  // The table-action button now opens a "Table settings" drawer instead of a menu + "Manage
+  // Columns" dialog (MCP-verified 2026-10-30, see locators/tableSettingsLocator.js). These methods
+  // drive that drawer; the methods above are left untouched for grids not yet moved over.
+
+  _tableSettings() {
+    if (!this._tableSettingsLoc)
+      this._tableSettingsLoc = tableSettingsLocators(this.page);
+    return this._tableSettingsLoc;
+  }
+
+  /** Opens the drawer if it is not open yet (no UI assertions). */
+  async _ensureTableSettingsOpen() {
+    const ts = this._tableSettings();
+    if (await ts.drawer.isVisible().catch(() => false)) return;
+    const tableBtn = this.loc.tableMenuBtn(this.scope).first();
+    await expect(
+      tableBtn,
+      "FAIL: Table settings button (bt-table-action) is not visible"
+    ).toBeVisible({ timeout: 30000 });
+    await tableBtn.scrollIntoViewIfNeeded().catch(() => {});
+    await tableBtn.click();
+    await expect(
+      ts.drawer,
+      'FAIL: "Table settings" drawer did not open'
+    ).toBeVisible({ timeout: 15000 });
+  }
+
+  /**
+   * Table-action button → "Table settings" drawer, with every static element asserted.
+   * `addColumn: false` for tables that do not allow custom columns — their drawer has no
+   * "+ Add column" (MCP-verified 2026-10-30: Approval Template, Organization/Vendor Directory and
+   * the job Contract grid); it is then asserted absent.
+   * @param {{ addColumn?: boolean }} [options]
+   */
+  async openTableSettings({ addColumn = true } = {}) {
+    Logger.step('Opening "Table settings"');
+    await this._ensureTableSettingsOpen();
+    await this.verifyTableSettingsUi({ addColumn });
+  }
+
+  async verifyTableSettingsUi({ addColumn = true } = {}) {
+    const ts = this._tableSettings();
+    if (addColumn) {
+      await expect(
+        ts.addColumnTrigger,
+        'FAIL: Table settings "+ Add column" button missing'
+      ).toBeVisible({ timeout: 15000 });
+      await expect(
+        ts.addColumnTrigger,
+        'FAIL: "+ Add column" must be enabled'
+      ).toBeEnabled();
+    } else {
+      await expect(
+        ts.addColumnTrigger,
+        'FAIL: this table does not allow custom columns — "+ Add column" must be absent'
+      ).toHaveCount(0);
+    }
+    for (const [label, locator] of [
+      ['title "Table settings"', ts.title],
+      ['subtitle "… changes preview live in the table"', ts.subtitle],
+      ['tag "Organization default"', ts.organizationDefaultTag],
+      ['section "Columns"', ts.columnsHeading],
+      ["Columns hint", ts.columnsHint],
+      ['section "Rows & sections"', ts.rowsSectionsHeading],
+      ["Rows & sections hint", ts.rowsSectionsHint],
+      ['"Close" button', ts.closeButton],
+      ['"+ Add section" button', ts.addSectionButton],
+      ['footer "Cancel" button', ts.footerCancelButton],
+      ['footer "Save for everyone" button', ts.saveForEveryoneButton],
+      ['footer "Save changes" button', ts.saveChangesButton],
+    ]) {
+      await expect(
+        locator,
+        `FAIL: Table settings ${label} missing`
+      ).toBeVisible({ timeout: 15000 });
+    }
+    await expect(
+      ts.addSectionButton,
+      'FAIL: "+ Add section" must be enabled'
+    ).toBeEnabled();
+    // Nothing is pending when the drawer opens, so neither save button can be used yet.
+    await expect(
+      ts.saveChangesButton,
+      'FAIL: "Save changes" must be disabled with no pending change'
+    ).toBeDisabled();
+    await expect(
+      ts.saveForEveryoneButton,
+      'FAIL: "Save for everyone" must be disabled with no pending change'
+    ).toBeDisabled();
+    expect(
+      await ts.columnNameTextboxes.count(),
+      "FAIL: Table settings lists no columns"
+    ).toBeGreaterThan(0);
+    Logger.success(
+      `Table settings drawer verified (${await ts.columnNameTextboxes.count()} column rows)`
+    );
+  }
+
+  async closeTableSettings() {
+    const ts = this._tableSettings();
+    if (!(await ts.drawer.isVisible().catch(() => false))) return;
+    // 4-worker run (2026-10-30, TC424): right after ⋮ → Delete column, Escape went to the
+    // still-closing "Delete Column" dialog / ⋮ menu and its overlay blocked the drawer's X for
+    // 55s. Let those finish closing first, then retry Escape before falling back to the X.
+    await ts.deleteColumnDialog
+      .waitFor({ state: "hidden", timeout: 10000 })
+      .catch(() => {});
+    await ts.columnMenu
+      .waitFor({ state: "hidden", timeout: 5000 })
+      .catch(() => {});
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await this.page.keyboard.press("Escape").catch(() => {});
+      const closed = await ts.drawer
+        .waitFor({ state: "hidden", timeout: 5000 })
+        .then(() => true)
+        .catch(() => false);
+      if (closed) return;
+    }
+    await ts.closeButton.click({ timeout: 15000 });
+    await expect(
+      ts.drawer,
+      'FAIL: "Table settings" drawer did not close'
+    ).toBeHidden({ timeout: 10000 });
+  }
+
+  /** Names of the columns listed in the drawer that match `pattern` (read in one call). */
+  async _tableSettingsColumnNames(pattern) {
+    const labels = await this._tableSettings().columnNameTextboxes.evaluateAll(
+      els => els.map(e => e.getAttribute("aria-label") || "")
+    );
+    return labels
+      .map(l => l.replace(/ display name$/, ""))
+      .filter(name => pattern.test(name));
+  }
+
+  /**
+   * Deletes, through the drawer, only the columns this test itself creates (`pattern`), so the
+   * grid never accumulates them across runs. Returns how many were deleted.
+   * Parallel-safe: a self-created name embeds its creation time (Date.now(), 13 digits), and only
+   * columns older than `minAgeMs` are deleted — a column another worker created moments ago for
+   * the same test family is never touched (fullyParallel: true in playwright.config.js).
+   */
+  async deleteSelfCreatedColumns(
+    pattern = TC253_SELF_CREATED_COLUMN,
+    { minAgeMs = 10 * 60 * 1000 } = {}
+  ) {
+    await this._ensureTableSettingsOpen();
+    // minAgeMs <= 0: delete every match — for fixed, timestamp-less names (e.g. "Test Column").
+    const isOldEnough = name => {
+      if (minAgeMs <= 0) return true;
+      const stamp = Number((name.match(/\d{13}/) || [])[0]);
+      return Boolean(stamp) && Date.now() - stamp >= minAgeMs;
+    };
+    const matching = await this._tableSettingsColumnNames(pattern);
+    const names = matching.filter(isOldEnough);
+    Logger.info(
+      `Self-created columns to delete before adding: ${names.length}${names.length ? ` (${names.join(", ")})` : ""}${matching.length > names.length ? ` — kept ${matching.length - names.length} newer than ${minAgeMs / 60000} min (may belong to a parallel run)` : ""}`
+    );
+    for (const name of names) {
+      await this.deleteColumnViaTableSettings(name);
+    }
+    expect(
+      (await this._tableSettingsColumnNames(pattern)).filter(isOldEnough),
+      "FAIL: self-created columns still listed after cleanup"
+    ).toEqual([]);
+    return names.length;
+  }
+
+  /**
+   * Adds one custom column through the drawer, the same flow as addColumn(): first deletes this
+   * test's own leftover columns, then opens "+ Add column", asserts the form, adds the column
+   * (POST /api/bird-table/columns 200), checks its new row, closes the drawer and waits for the
+   * column header in the grid.
+   * @param {string} columnName
+   * @param {string} description
+   * @param {number} typeIndex - 0 = Text, 1 = Number, 2 = Select, ...
+   * @param {{ selfCreatedPattern?: RegExp, cleanup?: boolean, minAgeMs?: number }} [options]
+   */
+  async addColumnViaTableSettings(
+    columnName,
+    description,
+    typeIndex = 0,
+    {
+      selfCreatedPattern = TC253_SELF_CREATED_COLUMN,
+      cleanup = true,
+      minAgeMs,
+    } = {}
+  ) {
+    const ts = this._tableSettings();
+    const typeName = ADD_COLUMN_TYPES[typeIndex];
+    await this.openTableSettings();
+    // cleanup: false when a caller adds several columns in one run and cleaned up once up front.
+    if (cleanup)
+      await this.deleteSelfCreatedColumns(
+        selfCreatedPattern,
+        minAgeMs === undefined ? {} : { minAgeMs }
+      );
+
+    Logger.step('Table settings → "+ Add column"');
+    await ts.addColumnTrigger.scrollIntoViewIfNeeded();
+    await ts.addColumnTrigger.click();
+    await expect(
+      ts.addColumnForm,
+      "FAIL: Add column form did not open"
+    ).toBeVisible({ timeout: 10000 });
+    await expect(
+      ts.nameLabel,
+      'FAIL: "Column name" must be a required field'
+    ).toHaveText(/Column name\s*\*/);
+    await expect(
+      ts.descriptionLabel,
+      'FAIL: "Description" must be a required field'
+    ).toHaveText(/Description\s*\*/);
+    await expect(
+      ts.nameInput,
+      'FAIL: Column name placeholder must be "e.g. Site Contact"'
+    ).toHaveAttribute("placeholder", "e.g. Site Contact");
+    await expect(
+      ts.descriptionInput,
+      'FAIL: Description placeholder must be "Enter column description"'
+    ).toHaveAttribute("placeholder", "Enter column description");
+    await expect(
+      ts.columnTypeLabel,
+      'FAIL: "Column type" label missing'
+    ).toBeVisible();
+    for (let i = 0; i < ADD_COLUMN_TYPES.length; i++) {
+      await expect(
+        ts.typeButton(i),
+        `FAIL: Column type "${ADD_COLUMN_TYPES[i]}" missing`
+      ).toBeVisible();
+    }
+    // The selected type is the one rendered with data-variant="light"; Text is the default.
+    await expect(
+      ts.typeButton(0),
+      "FAIL: Text must be the default column type"
+    ).toHaveAttribute("data-variant", "light");
+    await expect(
+      ts.formCancelButton,
+      "FAIL: Add column form has no Cancel"
+    ).toBeVisible();
+    await expect(
+      ts.formSubmitButton,
+      "FAIL: Add column must be disabled while the form is empty"
+    ).toBeDisabled();
+
+    await ts.nameInput.fill(columnName);
+    await expect(
+      ts.formSubmitButton,
+      "FAIL: Add column must stay disabled without a description"
+    ).toBeDisabled();
+    await ts.descriptionInput.fill(description);
+    await ts.typeButton(typeIndex).click();
+    await expect(
+      ts.typeButton(typeIndex),
+      `FAIL: Column type "${typeName}" was not selected`
+    ).toHaveAttribute("data-variant", "light");
+    await expect(
+      ts.formSubmitButton,
+      "FAIL: Add column must be enabled once name and description are filled"
+    ).toBeEnabled();
+
+    const [response] = await Promise.all([
+      this.page.waitForResponse(
+        r =>
+          r.request().method() === "POST" &&
+          r.url().includes("/api/bird-table/columns"),
+        { timeout: 30000 }
+      ),
+      ts.formSubmitButton.click(),
+    ]);
+    expect(
+      response.status(),
+      `FAIL: Add column API for "${columnName}" returned ${response.status()}`
+    ).toBe(200);
+    const sent = JSON.parse(response.request().postData() || "{}");
+    expect(
+      [sent.column_name, sent.description],
+      "FAIL: Add column API did not receive the entered name and description"
+    ).toEqual([columnName, description]);
+
+    await expect(
+      ts.nameInput,
+      "FAIL: Add column form did not close after adding"
+    ).toBeHidden({ timeout: 15000 });
+    await this.verifyColumnInTableSettings(columnName);
+    await this.closeTableSettings();
+    await this._waitForColumnHeader(columnName);
+    Logger.success(`Added column "${columnName}" (${typeName})`);
+  }
+
+  /** The column is listed in the drawer with its name, Edit column, ⋮ menu and Hide controls. */
+  async verifyColumnInTableSettings(columnName) {
+    const ts = this._tableSettings();
+    await this._ensureTableSettingsOpen();
+    const nameBox = ts.columnDisplayName(columnName);
+    await nameBox.scrollIntoViewIfNeeded();
+    await expect(
+      nameBox,
+      `FAIL: Column "${columnName}" is not listed in Table settings`
+    ).toHaveValue(columnName, { timeout: 15000 });
+    for (const [label, locator] of [
+      ['"Edit column"', ts.rowEditButton(columnName)],
+      ["⋮ menu", ts.rowMenuButton(columnName)],
+      [`"Hide ${columnName}"`, ts.rowHideButton(columnName)],
+    ]) {
+      await expect(
+        locator,
+        `FAIL: ${label} missing on column "${columnName}"`
+      ).toBeVisible();
+    }
+    Logger.success(`Column "${columnName}" listed in Table settings`);
+  }
+
+  /**
+   * ⋮ → "Delete column" → "Delete Column" dialog → Delete (DELETE /api/bird-table/columns 200);
+   * the row must leave the drawer. `menuItems` are the ⋮ entries asserted before deleting.
+   * @param {string} columnName
+   * @param {{ menuItems?: string[] }} [options]
+   */
+  async deleteColumnViaTableSettings(
+    columnName,
+    { menuItems = ["Delete column"] } = {}
+  ) {
+    const ts = this._tableSettings();
+    await this._ensureTableSettingsOpen();
+    const nameBox = ts.columnDisplayName(columnName);
+    await nameBox.scrollIntoViewIfNeeded();
+    await expect(
+      nameBox,
+      `FAIL: Column "${columnName}" is not listed in Table settings`
+    ).toBeVisible({ timeout: 15000 });
+
+    await ts.rowMenuButton(columnName).click();
+    await expect(
+      ts.columnMenu,
+      `FAIL: ⋮ menu of "${columnName}" did not open`
+    ).toBeVisible({ timeout: 10000 });
+    for (const item of menuItems) {
+      await expect(
+        ts.columnMenuItem(item),
+        `FAIL: ⋮ menu item "${item}" missing`
+      ).toBeVisible();
+    }
+    await ts.columnMenuItem("Delete column").click();
+
+    await expect(
+      ts.deleteColumnDialog,
+      'FAIL: "Delete Column" confirmation did not open'
+    ).toBeVisible({ timeout: 10000 });
+    await expect(
+      ts.deleteColumnHeading,
+      'FAIL: "Delete Column" heading missing'
+    ).toBeVisible();
+    await expect(
+      ts.deleteColumnMessage(columnName),
+      `FAIL: confirmation must name the column "${columnName}"`
+    ).toBeVisible();
+    await expect(
+      ts.deleteColumnCancel,
+      "FAIL: confirmation has no Cancel"
+    ).toBeEnabled();
+
+    const [response] = await Promise.all([
+      this.page.waitForResponse(
+        r =>
+          r.request().method() === "DELETE" &&
+          r.url().includes("/api/bird-table/columns") &&
+          (r.request().postData() || "").includes(JSON.stringify(columnName)),
+        { timeout: 30000 }
+      ),
+      ts.deleteColumnConfirm.click(),
+    ]);
+    expect(
+      response.status(),
+      `FAIL: Delete column API for "${columnName}" returned ${response.status()}`
+    ).toBe(200);
+    await expect(
+      ts.deleteColumnDialog,
+      'FAIL: "Delete Column" confirmation did not close'
+    ).toBeHidden({ timeout: 10000 });
+    await expect(
+      nameBox,
+      `FAIL: Column "${columnName}" is still listed after delete`
+    ).toHaveCount(0, { timeout: 15000 });
+    Logger.success(`Deleted column "${columnName}"`);
+  }
+
+  /**
+   * "+ Add column" form validation without adding anything (replaces the old Add column panel
+   * check): fields, required labels, all 13 types, Add disabled when empty / name-only and enabled
+   * with both, then Cancel — asserting no POST /api/bird-table/columns was sent.
+   */
+  async verifyAddColumnFormValidation() {
+    const ts = this._tableSettings();
+    await this._ensureTableSettingsOpen();
+    const posts = [];
+    const onRequest = r => {
+      if (r.method() === "POST" && r.url().includes("/api/bird-table/columns"))
+        posts.push(r.url());
+    };
+    this.page.on("request", onRequest);
+    try {
+      await ts.addColumnTrigger.scrollIntoViewIfNeeded();
+      await ts.addColumnTrigger.click();
+      await expect(
+        ts.addColumnForm,
+        "FAIL: Add column form did not open"
+      ).toBeVisible({ timeout: 10000 });
+      await expect(
+        ts.nameLabel,
+        'FAIL: "Column name" must be a required field'
+      ).toHaveText(/Column name\s*\*/);
+      await expect(
+        ts.descriptionLabel,
+        'FAIL: "Description" must be a required field'
+      ).toHaveText(/Description\s*\*/);
+      for (let i = 0; i < ADD_COLUMN_TYPES.length; i++) {
+        await expect(
+          ts.typeButton(i),
+          `FAIL: Column type "${ADD_COLUMN_TYPES[i]}" missing`
+        ).toBeVisible();
+      }
+      await expect(
+        ts.formSubmitButton,
+        "FAIL: Add column must be disabled while the form is empty"
+      ).toBeDisabled();
+      await ts.nameInput.fill("TestName");
+      await expect(
+        ts.formSubmitButton,
+        "FAIL: Add column must stay disabled with a name only"
+      ).toBeDisabled();
+      await ts.descriptionInput.fill("Test description");
+      await expect(
+        ts.formSubmitButton,
+        "FAIL: Add column must be enabled when both fields are filled"
+      ).toBeEnabled();
+      await ts.formCancelButton.click();
+      await expect(
+        ts.nameInput,
+        "FAIL: Cancel must close the Add column form"
+      ).toBeHidden({ timeout: 10000 });
+      await expect(
+        ts.addColumnTrigger,
+        '"+ Add column" must be back after Cancel'
+      ).toBeVisible();
+    } finally {
+      this.page.off("request", onRequest);
+    }
+    expect(posts, "FAIL: Cancel must not create a column").toEqual([]);
+    Logger.success(
+      "Add column form validated (required fields, 13 types, Add enabled only when complete)"
+    );
+  }
+
+  /**
+   * Special characters in the column name: the Column name field strips every character outside
+   * letters/digits/space/hyphen as it is typed (MCP-verified 2026-10-30 on the Budget grid:
+   * "###@@@!!!" leaves the field empty), so Add stays disabled. Cancels; no POST may be sent.
+   */
+  async verifySpecialCharacterNameRejected(value = "###@@@!!!") {
+    const ts = this._tableSettings();
+    await this._ensureTableSettingsOpen();
+    const posts = [];
+    const onRequest = r => {
+      if (r.method() === "POST" && r.url().includes("/api/bird-table/columns"))
+        posts.push(r.url());
+    };
+    this.page.on("request", onRequest);
+    try {
+      await ts.addColumnTrigger.scrollIntoViewIfNeeded();
+      await ts.addColumnTrigger.click();
+      await expect(
+        ts.addColumnForm,
+        "FAIL: Add column form did not open"
+      ).toBeVisible({ timeout: 10000 });
+      await ts.nameInput.pressSequentially(value, { delay: 20 });
+      await ts.descriptionInput.fill("Valid description");
+      await expect(
+        ts.nameInput,
+        `FAIL: special characters "${value}" must be stripped from the column name`
+      ).toHaveValue("");
+      await expect(
+        ts.formSubmitButton,
+        "FAIL: Add column must stay disabled for a special-character-only name"
+      ).toBeDisabled();
+      await ts.formCancelButton.click();
+      await expect(ts.nameInput).toBeHidden({ timeout: 10000 });
+    } finally {
+      this.page.off("request", onRequest);
+    }
+    expect(posts, "FAIL: no column may be created").toEqual([]);
+    Logger.success(
+      `Special-character column name "${value}" stripped; Add column stayed disabled`
+    );
+  }
+
+  /** Every name in `columnNames` is listed in the drawer. */
+  async verifyColumnsListedInTableSettings(columnNames) {
+    const ts = this._tableSettings();
+    await this._ensureTableSettingsOpen();
+    for (const name of columnNames) {
+      await expect(
+        ts.columnDisplayName(name),
+        `FAIL: Column "${name}" is not listed in Table settings`
+      ).toHaveCount(1, { timeout: 15000 });
+    }
+    Logger.success(
+      `Table settings lists: ${columnNames.map(n => `"${n}"`).join(", ")}`
+    );
+  }
+
+  /**
+   * Clicks a column's eye twice — the change saves immediately (PUT /api/table-view-config 200,
+   * MCP-verified 2026-10-30) — asserting each click flips Hide ↔ Show, and ends in the original
+   * state, as the old Manage Columns toggle off/on did.
+   */
+  async toggleColumnVisibilityAndRestore(columnName) {
+    await this._ensureTableSettingsOpen();
+    const drawer = this._tableSettings().drawer;
+    const hide = drawer.getByRole("button", {
+      name: `Hide ${columnName}`,
+      exact: true,
+    });
+    const show = drawer.getByRole("button", {
+      name: `Show ${columnName}`,
+      exact: true,
+    });
+    const wasVisible = (await hide.count()) > 0;
+    const sequence = wasVisible
+      ? [
+          [hide, show],
+          [show, hide],
+        ]
+      : [
+          [show, hide],
+          [hide, show],
+        ];
+    for (const [click, expectAfter] of sequence) {
+      await click.scrollIntoViewIfNeeded();
+      const [response] = await Promise.all([
+        this.page.waitForResponse(
+          r =>
+            r.request().method() === "PUT" &&
+            r.url().includes("/api/table-view-config"),
+          { timeout: 30000 }
+        ),
+        click.click(),
+      ]);
+      expect(
+        response.status(),
+        `FAIL: visibility change of "${columnName}" was not saved`
+      ).toBe(200);
+      await expect(
+        expectAfter,
+        `FAIL: "${columnName}" eye did not flip`
+      ).toBeVisible({ timeout: 10000 });
+    }
+    Logger.success(
+      `"${columnName}" visibility toggled and restored to ${wasVisible ? "shown" : "hidden"}`
+    );
+  }
+
+  /** Every column listed in the drawer has its Hide/Show (eye) control; returns the column names. */
+  async verifyColumnVisibilityControls() {
+    await this._ensureTableSettingsOpen();
+    const drawer = this._tableSettings().drawer;
+    const names = await this._tableSettingsColumnNames(/.+/);
+    expect(
+      names.length,
+      "FAIL: Table settings lists no columns"
+    ).toBeGreaterThan(0);
+    for (const name of names) {
+      await expect(
+        drawer
+          .getByRole("button", { name: `Hide ${name}`, exact: true })
+          .or(
+            drawer.getByRole("button", { name: `Show ${name}`, exact: true })
+          ),
+        `FAIL: Column "${name}" has no Hide/Show control`
+      ).toHaveCount(1);
+    }
+    Logger.success(
+      `Hide/Show control present on all ${names.length} columns: ${names.join(", ")}`
+    );
+    return names;
+  }
+
+  /**
+   * Shows (`visible` true) or hides a column through its eye; clicks only when the state differs.
+   * The change saves immediately (PUT /api/table-view-config 200, MCP-verified 2026-10-30).
+   */
+  async setColumnVisibility(columnName, visible) {
+    await this._ensureTableSettingsOpen();
+    const drawer = this._tableSettings().drawer;
+    const eye = verb =>
+      drawer.getByRole("button", {
+        name: `${verb} ${columnName}`,
+        exact: true,
+      });
+    const [from, to] = visible ? ["Show", "Hide"] : ["Hide", "Show"];
+    await expect(
+      eye(from).or(eye(to)),
+      `FAIL: Column "${columnName}" has no Hide/Show control`
+    ).toHaveCount(1, { timeout: 15000 });
+    if ((await eye(from).count()) === 0) {
+      Logger.info(
+        `"${columnName}" already ${visible ? "shown" : "hidden"} — no change`
+      );
+      return;
+    }
+    await eye(from).scrollIntoViewIfNeeded();
+    const [response] = await Promise.all([
+      this.page.waitForResponse(
+        r =>
+          r.request().method() === "PUT" &&
+          r.url().includes("/api/table-view-config"),
+        { timeout: 30000 }
+      ),
+      eye(from).click(),
+    ]);
+    expect(
+      response.status(),
+      `FAIL: ${from} "${columnName}" was not saved`
+    ).toBe(200);
+    await expect(
+      eye(to),
+      `FAIL: "${columnName}" eye did not flip to ${to}`
+    ).toBeVisible({ timeout: 10000 });
+    Logger.success(`"${columnName}" ${visible ? "shown" : "hidden"}`);
+  }
+
+  /** Hides every column of `columnNames` that is currently shown; returns the ones it hid. */
+  async hideShownColumns(columnNames) {
+    await this._ensureTableSettingsOpen();
+    const drawer = this._tableSettings().drawer;
+    const hidden = [];
+    for (const name of columnNames) {
+      const hide = drawer.getByRole("button", {
+        name: `Hide ${name}`,
+        exact: true,
+      });
+      if ((await hide.count()) === 0) continue;
+      await this.setColumnVisibility(name, false);
+      hidden.push(name);
+    }
+    return hidden;
+  }
+
+  /** Shows every column of `columnNames` that is listed in the drawer (no-op for shown ones). */
+  async showColumns(columnNames) {
+    await this._ensureTableSettingsOpen();
+    const listed = await this._tableSettingsColumnNames(/.+/);
+    for (const name of columnNames) {
+      if (listed.includes(name)) await this.setColumnVisibility(name, true);
+    }
+  }
+
+  /** Toggles the visibility of the first `count` columns and restores each (see toggleColumnVisibilityAndRestore). */
+  async toggleFirstColumnsVisibilityAndRestore(count = 2) {
+    await this._ensureTableSettingsOpen();
+    const names = (await this._tableSettingsColumnNames(/.+/)).slice(0, count);
+    for (const name of names) await this.toggleColumnVisibilityAndRestore(name);
+    return names;
+  }
+
+  /**
+   * Hides every currently shown column, then shows them all again (each click saves:
+   * PUT /api/table-view-config 200), asserting every eye flips — the old "uncheck all / check
+   * all back" Manage Columns flow. Ends with the same columns shown as before.
+   */
+  async hideAllColumnsThenShowAll() {
+    await this._ensureTableSettingsOpen();
+    const drawer = this._tableSettings().drawer;
+    const eye = (verb, name) =>
+      drawer.getByRole("button", { name: `${verb} ${name}`, exact: true });
+    const names = await this._tableSettingsColumnNames(/.+/);
+    const shown = [];
+    for (const name of names) {
+      if ((await eye("Hide", name).count()) > 0) shown.push(name);
+    }
+    expect(shown.length, "FAIL: no shown column to hide").toBeGreaterThan(0);
+    const clickAndSave = async (verb, name, flippedVerb) => {
+      await eye(verb, name).scrollIntoViewIfNeeded();
+      const [response] = await Promise.all([
+        this.page.waitForResponse(
+          r =>
+            r.request().method() === "PUT" &&
+            r.url().includes("/api/table-view-config"),
+          { timeout: 30000 }
+        ),
+        eye(verb, name).click(),
+      ]);
+      expect(response.status(), `FAIL: ${verb} "${name}" was not saved`).toBe(
+        200
+      );
+      await expect(
+        eye(flippedVerb, name),
+        `FAIL: "${name}" eye did not flip to ${flippedVerb}`
+      ).toBeVisible({ timeout: 10000 });
+    };
+    for (const name of shown) await clickAndSave("Hide", name, "Show");
+    Logger.info(`All ${shown.length} shown columns hidden`);
+    for (const name of shown) await clickAndSave("Show", name, "Hide");
+    Logger.success(`All ${shown.length} columns shown again`);
+    return shown;
+  }
+
+  /** Name-scoped presence check through the drawer (opens it, reads, closes it again). */
+  async isColumnInTableSettings(columnName) {
+    await this._ensureTableSettingsOpen();
+    const present =
+      (await this._tableSettings().columnDisplayName(columnName).count()) > 0;
+    await this.closeTableSettings();
+    return present;
+  }
+
+  /**
+   * Restores columns that an earlier run left hidden in this user's saved view. Visibility is
+   * stored per user on the server (GET /api/table-view-config → __defaultConfig.columnVisibility),
+   * so a test that failed between "Hide" and "Show" leaves the column hidden for every later run
+   * (MCP-verified 2026-11-05: Approval Template showed "Show Template Type" in the drawer). Reads
+   * the config first and only opens the drawer when something is hidden; each "Show" click saves
+   * immediately (PUT /api/table-view-config 200). Returns the column keys that were hidden.
+   * @param {string} tableName e.g. "approval_template"
+   */
+  async showHiddenColumns(tableName) {
+    // The config GET intermittently answers 400 (seen 2026-11-05 before TC178, 200 on re-query);
+    // retry, and skip this housekeeping rather than fail the caller's test if it never succeeds.
+    let response;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      response = await this.page.request.get(
+        `/api/table-view-config?tableName=${encodeURIComponent(tableName)}`
+      );
+      if (response.status() === 200) break;
+      await this.page.waitForTimeout(1500 * attempt);
+    }
+    if (response.status() !== 200) {
+      Logger.info(
+        `[showHiddenColumns] GET /api/table-view-config for "${tableName}" returned ${response.status()} — skipping column restore`
+      );
+      return [];
+    }
+    const body = await response.json().catch(() => null);
+    const visibility = body?.config?.__defaultConfig?.columnVisibility || {};
+    const hidden = Object.keys(visibility).filter(
+      key => visibility[key] === false
+    );
+    if (!hidden.length) {
+      Logger.info(
+        `[showHiddenColumns] No hidden columns saved for "${tableName}"`
+      );
+      return [];
+    }
+    Logger.step(
+      `[showHiddenColumns] "${tableName}" has hidden column(s) ${hidden.join(", ")} — showing them`
+    );
+    await this._ensureTableSettingsOpen();
+    const showButtons = this._tableSettings().drawer.getByRole("button", {
+      name: /^Show /,
+    });
+    while ((await showButtons.count()) > 0) {
+      const button = showButtons.first();
+      const label = await button.getAttribute("aria-label");
+      await button.scrollIntoViewIfNeeded();
+      const [saved] = await Promise.all([
+        this.page.waitForResponse(
+          r =>
+            r.request().method() === "PUT" &&
+            r.url().includes("/api/table-view-config"),
+          { timeout: 30000 }
+        ),
+        button.click(),
+      ]);
+      expect(saved.status(), `FAIL: "${label}" was not saved`).toBe(200);
+      await expect(
+        this._tableSettings().drawer.getByRole("button", {
+          name: String(label).replace(/^Show /, "Hide "),
+          exact: true,
+        }),
+        `FAIL: "${label}" eye did not flip to Hide`
+      ).toBeVisible({ timeout: 10000 });
+    }
+    await this.closeTableSettings();
+    Logger.success(
+      `[showHiddenColumns] Restored ${hidden.join(", ")} on "${tableName}"`
+    );
+    return hidden;
+  }
+
+  /**
+   * Replacement for addAndVerifyAllColumnTypes() on grids that now use the "Table settings"
+   * drawer — same flow, same column names/descriptions, same per-type cell check:
+   * 1. deletes only this method's own leftover columns (`<Type><13-digit time>`, older than 10 min);
+   * 2. adds each of the 13 types through the drawer and verifies its grid cell input with the
+   *    existing, unmodified verifyColumnTypeInput();
+   * 3. deletes every column it created through ⋮ → Delete column;
+   * 4. asserts none of them is still listed.
+   * @param {{ menuItems?: string[] }} [options] - ⋮ entries asserted before each delete
+   * @returns {Promise<string[]>} names of columns that were created
+   */
+  async addAndVerifyAllColumnTypesViaTableSettings({
+    menuItems = ["Delete column"],
+  } = {}) {
+    Logger.info(
+      "Step 1: Delete this method's own leftover columns from previous runs"
+    );
+    await this.openTableSettings();
+    const removedAtStart = await this.deleteSelfCreatedColumns(
+      ALL_TYPES_SELF_CREATED_COLUMN
+    );
+    Logger.info(`Startup cleanup removed ${removedAtStart} column(s)`);
+
+    const createdColumns = [];
+    const runId = Date.now();
+
+    Logger.info("Step 2: Create and verify all 13 column types");
+    for (let i = 0; i < ADD_COLUMN_TYPES.length; i++) {
+      const typeName = ADD_COLUMN_TYPES[i];
+      const columnName = `${typeName.replace(/[^a-zA-Z0-9]/g, "")}${runId + i}`;
+      const description = `Automation ${typeName} column`;
+
+      await this.addColumnViaTableSettings(columnName, description, i, {
+        cleanup: false,
+      });
+      createdColumns.push(columnName);
+      await this.verifyColumnTypeInput(columnName, typeName);
+    }
+
+    Logger.info(
+      `Step 3: Delete all ${createdColumns.length} columns created in this run`
+    );
+    for (const columnName of createdColumns) {
+      await this.deleteColumnViaTableSettings(columnName, { menuItems });
+    }
+
+    Logger.info("Step 4: Verify none of this run's columns remain");
+    const remaining = (
+      await this._tableSettingsColumnNames(ALL_TYPES_SELF_CREATED_COLUMN)
+    ).filter(name => createdColumns.includes(name));
+    expect(
+      remaining,
+      "FAIL: columns created by this run are still listed after cleanup"
+    ).toEqual([]);
+    await this.closeTableSettings();
+    Logger.success(
+      `All ${createdColumns.length} column types added, verified and deleted`
+    );
     return createdColumns;
   }
 }

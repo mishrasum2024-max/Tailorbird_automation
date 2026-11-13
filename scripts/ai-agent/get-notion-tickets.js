@@ -3,14 +3,14 @@ require("dotenv").config();
 const { Client } = require("@notionhq/client");
 const fs = require("fs");
 const path = require("path");
+const { filterHidden } = require("./lib/notAutomatableList");
 
 const notion = new Client({
   auth: process.env.NOTION_API_KEY,
 });
 
 const DATA_SOURCE_ID =
-  process.env.NOTION_DATA_SOURCE_ID ||
-  "201aef20-7051-80c9-96fe-000b582249cd";
+  process.env.NOTION_DATA_SOURCE_ID || "201aef20-7051-80c9-96fe-000b582249cd";
 
 /*
  * Notion filter: only these two Status values (OR-ed together).
@@ -25,10 +25,7 @@ const TARGET_STATUSES = ["Ready to Release", "Released"];
  * only tickets whose "last edited time" falls between the start of
  * (today - LOOKBACK_DAYS) and now are published to Slack.
  */
-const LOOKBACK_DAYS = parseInt(
-  process.env.LOOKBACK_DAYS || "10",
-  10
-);
+const LOOKBACK_DAYS = parseInt(process.env.LOOKBACK_DAYS || "10", 10);
 
 function getCutoffDate() {
   const cutoff = new Date();
@@ -45,28 +42,17 @@ function getCutoffDate() {
  * send-ticket-approval.js), so every fetched ticket is guaranteed to be
  * selectable rather than silently truncated.
  */
-const MAX_TICKETS = parseInt(
-  process.env.MAX_TICKETS || "10",
-  10
-);
+const MAX_TICKETS = parseInt(process.env.MAX_TICKETS || "10", 10);
 
 function getText(property) {
   if (!property) return "";
 
   if (property.type === "title") {
-    return (
-      property.title
-        ?.map((item) => item.plain_text)
-        .join("") || ""
-    );
+    return property.title?.map(item => item.plain_text).join("") || "";
   }
 
   if (property.type === "rich_text") {
-    return (
-      property.rich_text
-        ?.map((item) => item.plain_text)
-        .join("") || ""
-    );
+    return property.rich_text?.map(item => item.plain_text).join("") || "";
   }
 
   return "";
@@ -111,27 +97,17 @@ function mapTicket(page) {
 
     status: getStatus(properties["Status"]),
 
-    issueType: getSelect(
-      properties["Issue Type"]
-    ),
+    issueType: getSelect(properties["Issue Type"]),
 
-    priority: getSelect(
-      properties["Priority"]
-    ),
+    priority: getSelect(properties["Priority"]),
 
-    testType: getText(
-      properties["Test_TYPE"]
-    ),
+    testType: getText(properties["Test_TYPE"]),
 
-    createdTime:
-      properties["Created time"]
-        ?.created_time || "",
+    createdTime: properties["Created time"]?.created_time || "",
 
     lastEditedTime: page.last_edited_time || "",
 
-    url:
-      getUrl(properties["URL"]) ||
-      page.url,
+    url: getUrl(properties["URL"]) || page.url,
 
     notionPageId: page.id,
   };
@@ -155,7 +131,7 @@ async function getAllMatchingTickets() {
       page_size: 100,
 
       filter: {
-        or: TARGET_STATUSES.map((status) => ({
+        or: TARGET_STATUSES.map(status => ({
           property: "Status",
           status: {
             equals: status,
@@ -175,10 +151,7 @@ async function getAllMatchingTickets() {
       tickets.push(mapTicket(page));
     }
 
-    cursor = response.has_more
-      ? response.next_cursor
-      : undefined;
-
+    cursor = response.has_more ? response.next_cursor : undefined;
   } while (cursor);
 
   return tickets;
@@ -188,7 +161,7 @@ async function getAvailableTickets() {
   const cutoff = getCutoffDate();
 
   console.log(
-    `🔎 Fetching Notion tickets with status ${TARGET_STATUSES.map((s) => `"${s}"`).join(" or ")}, sorted by last edited time (newest first)...`
+    `🔎 Fetching Notion tickets with status ${TARGET_STATUSES.map(s => `"${s}"`).join(" or ")}, sorted by last edited time (newest first)...`
   );
 
   const allTickets = await getAllMatchingTickets();
@@ -201,7 +174,7 @@ async function getAvailableTickets() {
    * Check every ticket returned by Notion and keep only
    * those whose last edited time is inside the window.
    */
-  const recentTickets = allTickets.filter((ticket) => {
+  const recentTickets = allTickets.filter(ticket => {
     const edited = new Date(ticket.lastEditedTime);
     return !Number.isNaN(edited.getTime()) && edited >= cutoff;
   });
@@ -211,7 +184,7 @@ async function getAvailableTickets() {
    * only — tickets are never filtered by it; they are published with
    * whatever priority they have (or "No priority" when it is blank).
    */
-  allTickets.forEach((ticket) => {
+  allTickets.forEach(ticket => {
     const inWindow = recentTickets.includes(ticket);
     console.log(
       `   • ${ticket.id} | Priority: ${ticket.priority || "No priority"} | Status: ${ticket.status} | Edited: ${ticket.lastEditedTime} | ${inWindow ? "within window" : "outside window — skipped"}`
@@ -223,38 +196,37 @@ async function getAvailableTickets() {
   );
 
   /*
+   * Tickets marked "can't be automated" in Slack are left out before
+   * the MAX_TICKETS cut, so their slots go to other tickets. No list
+   * (AI_NOT_AUTOMATABLE_DIR unset or branch missing) = nothing removed.
+   */
+  const { kept: automatableTickets } = filterHidden("ticket", recentTickets);
+
+  /*
    * Slack's radio_buttons element shows at most 10 options
    * (MAX_RADIO_OPTIONS in send-ticket-approval.js), so only the
    * MAX_TICKETS most recently edited ones are published.
    */
-  if (recentTickets.length > MAX_TICKETS) {
+  if (automatableTickets.length > MAX_TICKETS) {
     console.log(
       `ℹ️ Publishing the ${MAX_TICKETS} most recently edited of them (Slack selection limit).`
     );
   }
 
-  return recentTickets.slice(0, MAX_TICKETS);
+  return automatableTickets.slice(0, MAX_TICKETS);
 }
 
 async function main() {
   try {
     if (!process.env.NOTION_API_KEY) {
-      throw new Error(
-        "NOTION_API_KEY is missing."
-      );
+      throw new Error("NOTION_API_KEY is missing.");
     }
 
-    console.log(
-      "\n======================================"
-    );
+    console.log("\n======================================");
 
-    console.log(
-      "AI TICKET SELECTION"
-    );
+    console.log("AI TICKET SELECTION");
 
-    console.log(
-      "======================================"
-    );
+    console.log("======================================");
 
     /*
      * Find up to MAX_TICKETS available tickets.
@@ -268,12 +240,10 @@ async function main() {
      * No tickets available.
      */
     if (!tickets.length) {
-      console.log(
-        "\nℹ️ No ticket found."
-      );
+      console.log("\nℹ️ No ticket found.");
 
       console.log(
-        `(No tickets with status ${TARGET_STATUSES.map((s) => `"${s}"`).join(" or ")} were edited in the last ${LOOKBACK_DAYS} days.) Nothing will be sent to Slack.`
+        `(No tickets with status ${TARGET_STATUSES.map(s => `"${s}"`).join(" or ")} were edited in the last ${LOOKBACK_DAYS} days.) Nothing will be sent to Slack.`
       );
 
       /*
@@ -302,12 +272,7 @@ async function main() {
     /*
      * Save the tickets.
      */
-    const outputDir = path.join(
-      __dirname,
-      "..",
-      "..",
-      "data"
-    );
+    const outputDir = path.join(__dirname, "..", "..", "data");
 
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, {
@@ -315,10 +280,7 @@ async function main() {
       });
     }
 
-    const outputFile = path.join(
-      outputDir,
-      "notion-completed-tickets.json"
-    );
+    const outputFile = path.join(outputDir, "notion-completed-tickets.json");
 
     /*
      * Output format is unchanged: an array of tickets.
@@ -333,94 +295,49 @@ async function main() {
      * [ticket]               -> 1 ticket (fewer than MAX_TICKETS were found)
      * [ticket, ticket, ...]  -> up to MAX_TICKETS tickets
      */
-    fs.writeFileSync(
-      outputFile,
-      JSON.stringify(tickets, null, 2),
-      "utf8"
-    );
+    fs.writeFileSync(outputFile, JSON.stringify(tickets, null, 2), "utf8");
 
     /*
      * Display result.
      */
-    console.log(
-      "\n======================================"
-    );
+    console.log("\n======================================");
 
-    console.log(
-      `AVAILABLE TICKETS (${tickets.length})`
-    );
+    console.log(`AVAILABLE TICKETS (${tickets.length})`);
 
-    console.log(
-      "======================================"
-    );
+    console.log("======================================");
 
     tickets.forEach((ticket, index) => {
-      console.log(
-        `\n[${index + 1}] ID:       ${ticket.id}`
-      );
+      console.log(`\n[${index + 1}] ID:       ${ticket.id}`);
 
-      console.log(
-        `    Title:    ${ticket.title}`
-      );
+      console.log(`    Title:    ${ticket.title}`);
 
-      console.log(
-        `    Status:   ${ticket.status}`
-      );
+      console.log(`    Status:   ${ticket.status}`);
 
-      console.log(
-        `    Priority: ${ticket.priority || "N/A"}`
-      );
+      console.log(`    Priority: ${ticket.priority || "N/A"}`);
 
-      console.log(
-        `    Type:     ${ticket.issueType || "N/A"}`
-      );
+      console.log(`    Type:     ${ticket.issueType || "N/A"}`);
 
-      console.log(
-        `    Created:  ${ticket.createdTime}`
-      );
+      console.log(`    Created:  ${ticket.createdTime}`);
 
-      console.log(
-        `    Edited:   ${ticket.lastEditedTime}`
-      );
+      console.log(`    Edited:   ${ticket.lastEditedTime}`);
 
-      console.log(
-        `    URL:      ${ticket.url}`
-      );
+      console.log(`    URL:      ${ticket.url}`);
     });
 
-    console.log(
-      "\n======================================"
-    );
+    console.log("\n======================================");
 
-    console.log(
-      `\n✅ ${tickets.length} ticket(s) selected for Slack.`
-    );
+    console.log(`\n✅ ${tickets.length} ticket(s) selected for Slack.`);
 
-    console.log(
-      `📁 Saved to: ${outputFile}`
-    );
+    console.log(`📁 Saved to: ${outputFile}`);
 
-    console.log(
-      "\n➡️ Waiting for human approval in Slack..."
-    );
-
+    console.log("\n➡️ Waiting for human approval in Slack...");
   } catch (error) {
-    console.error(
-      "\n❌ Failed to fetch Notion ticket."
-    );
+    console.error("\n❌ Failed to fetch Notion ticket.");
 
     if (error.body) {
-      console.error(
-        JSON.stringify(
-          error.body,
-          null,
-          2
-        )
-      );
+      console.error(JSON.stringify(error.body, null, 2));
     } else {
-      console.error(
-        error.message || error
-      );
+      console.error(error.message || error);
     }
 
     process.exit(1);

@@ -56,6 +56,9 @@ test.describe.serial("FGA", () => {
   test("TC350 @sanity @regression @FGA : Invite user and assign property access successfully", async ({
     page,
   }) => {
+    // Added 2026-11-11 (insert-only, flaky in CI): this test has no timeout of its own, so it
+    // runs under the 280s config default — and its passing CI attempt took 4.7m (~282s).
+    test.setTimeout(600000);
     const fga = new FgaUserManagementPage(page);
     const { email } = generateFgaTestUser("testmember");
 
@@ -589,6 +592,12 @@ test.describe.serial("FGA", () => {
   /** @type {Awaited<ReturnType<import('@playwright/test').BrowserContext['storageState']>> | null} */
   let sharedStorageState = null;
   let sharedEmail = null;
+
+  // Added 2026-11-11 (insert-only): CI trace showed this group's beforeAll failing with "Test
+  // timeout of 280000ms exceeded" even though the hook calls test.setTimeout(480000) (invite +
+  // mailbox activation + access flow under 4 workers). A describe-level timeout applies to the
+  // hooks and every test in this group.
+  test.describe.configure({ timeout: 600000 });
 
   test.beforeAll(async ({ browser }) => {
     // Bumped from 400000: this hook waits on a real external Mailinator inbox round-trip

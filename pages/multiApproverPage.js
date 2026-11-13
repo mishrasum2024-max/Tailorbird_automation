@@ -238,10 +238,14 @@ class MultiApproverPage {
     // Match the cell by the same attribute the header index was read from — MCP-verified live
     // 2026-10-19: data-rgcol is 0-based and aria-colindex 1-based on this grid, so mixing them
     // resolved the column to the left (Approved On instead of Approver).
-    const { attr, colIndex } = await this.loc.approverColumnHeader.evaluate(el =>
-      el.getAttribute("data-rgcol") !== null
-        ? { attr: "data-rgcol", colIndex: el.getAttribute("data-rgcol") }
-        : { attr: "aria-colindex", colIndex: el.getAttribute("aria-colindex") }
+    const { attr, colIndex } = await this.loc.approverColumnHeader.evaluate(
+      el =>
+        el.getAttribute("data-rgcol") !== null
+          ? { attr: "data-rgcol", colIndex: el.getAttribute("data-rgcol") }
+          : {
+              attr: "aria-colindex",
+              colIndex: el.getAttribute("aria-colindex"),
+            }
     );
     const cell = this.page
       .locator(`[role="gridcell"][${attr}="${colIndex}"]`)

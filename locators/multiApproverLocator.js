@@ -3,76 +3,102 @@
  * @param {import('@playwright/test').Page} page
  */
 function multiApproverLocators(page) {
-    return {
-        // Global Jobs list navigation (left nav "Jobs (Contracts & POs)")
-        jobsNavLink: page
-            .locator('nav')
-            .locator('a, button, div[role="link"], div')
-            .filter({ hasText: /^Jobs \(Contracts & POs\)$/i })
-            .first(),
-        jobsSearchInput: page.getByRole('textbox', { name: 'Search...' }),
-        jobIdLink: (jobId) => page.getByRole('link', { name: jobId, exact: true }),
-        jobNameText: (jobName) => page.getByText(jobName).first(),
+  return {
+    // Global Jobs list navigation (left nav "Jobs (Contracts & POs)")
+    jobsNavLink: page
+      .locator("nav")
+      .locator('a, button, div[role="link"], div')
+      .filter({ hasText: /^Jobs \(Contracts & POs\)$/i })
+      .first(),
+    jobsSearchInput: page.getByRole("textbox", { name: "Search..." }),
+    jobIdLink: jobId => page.getByRole("link", { name: jobId, exact: true }),
+    jobNameText: jobName => page.getByText(jobName).first(),
 
-        // Job workspace tabs
-        invoiceTab: page.getByRole('tab', { name: 'Invoice' }),
+    // Job workspace tabs
+    invoiceTab: page.getByRole("tab", { name: "Invoice" }),
 
-        // Invoice tab list
-        createInvoiceButton: page
-            .getByRole('button', { name: /^(Create|Add) Invoice$/i })
-            .locator('visible=true')
-            .first(),
-        invoiceListLink: (invoiceNumberLabel) => page.getByRole('link', { name: invoiceNumberLabel, exact: true }),
+    // Invoice tab list
+    createInvoiceButton: page
+      .getByRole("button", { name: /^(Create|Add) Invoice$/i })
+      .locator("visible=true")
+      .first(),
+    invoiceListLink: invoiceNumberLabel =>
+      page.getByRole("link", { name: invoiceNumberLabel, exact: true }),
 
-        // Invoice details dialog ("Go Back Invoice Details")
-        invoiceDetailsDialog: page.getByRole('dialog', { name: 'Go Back Invoice Details' }),
-        invoiceNumberInput: page.getByRole('textbox', { name: 'Enter invoice number' }),
-        invoiceTitleInput: page.getByRole('textbox', { name: 'Enter title' }),
-        goBackButton: page.getByRole('button', { name: 'Go Back' }),
-        confirmInvoiceButton: page.getByRole('button', { name: 'Confirm Invoice' }),
-        confirmInvoiceDialog: page.getByRole('dialog', { name: 'Confirm Invoice' }),
-        confirmInvoiceDialogConfirmButton: page
-            .getByRole('dialog', { name: 'Confirm Invoice' })
-            .getByRole('button', { name: 'Confirm', exact: true }),
-        invoiceSubmittedToast: page.getByText('Invoice submitted for approval'),
+    // Invoice details dialog ("Go Back Invoice Details")
+    invoiceDetailsDialog: page.getByRole("dialog", {
+      name: "Go Back Invoice Details",
+    }),
+    invoiceNumberInput: page.getByRole("textbox", {
+      name: "Enter invoice number",
+    }),
+    invoiceTitleInput: page.getByRole("textbox", { name: "Enter title" }),
+    goBackButton: page.getByRole("button", { name: "Go Back" }),
+    confirmInvoiceButton: page.getByRole("button", { name: "Confirm Invoice" }),
+    confirmInvoiceDialog: page.getByRole("dialog", { name: "Confirm Invoice" }),
+    confirmInvoiceDialogConfirmButton: page
+      .getByRole("dialog", { name: "Confirm Invoice" })
+      .getByRole("button", { name: "Confirm", exact: true }),
+    invoiceSubmittedToast: page.getByText("Invoice submitted for approval"),
 
-        // Invoice line-item grid (inside invoice details dialog)
-        invoiceAmountColumnHeader: page.getByRole('columnheader', { name: 'Invoice Amount', exact: true }),
-        // `attr` (optional) = the attribute colIndex was read from on the header. MCP-verified live
-        // 2026-10-19: revo-grid now renders a 0-based data-rgcol AND a 1-based aria-colindex on every
-        // cell, so matching either attribute with the same number + .first() hit the column to the LEFT
-        // (Status instead of Invoice Amount). Callers that pass `attr` match only that attribute.
-        invoiceGridDataCellByColIndex: (colIndex, attr) =>
-            page
-                .locator(attr
-                    ? `[role="gridcell"][${attr}="${colIndex}"]`
-                    : `[role="gridcell"][data-rgcol="${colIndex}"], [role="gridcell"][aria-colindex="${colIndex}"]`)
-                .first(),
-        invoiceAmountEditorInput: page.getByTestId('bird-table-currency-input'),
+    // Invoice line-item grid (inside invoice details dialog)
+    invoiceAmountColumnHeader: page.getByRole("columnheader", {
+      name: "Invoice Amount",
+      exact: true,
+    }),
+    // `attr` (optional) = the attribute colIndex was read from on the header. MCP-verified live
+    // 2026-10-19: revo-grid now renders a 0-based data-rgcol AND a 1-based aria-colindex on every
+    // cell, so matching either attribute with the same number + .first() hit the column to the LEFT
+    // (Status instead of Invoice Amount). Callers that pass `attr` match only that attribute.
+    invoiceGridDataCellByColIndex: (colIndex, attr) =>
+      page
+        .locator(
+          attr
+            ? `[role="gridcell"][${attr}="${colIndex}"]`
+            : `[role="gridcell"][data-rgcol="${colIndex}"], [role="gridcell"][aria-colindex="${colIndex}"]`
+        )
+        .first(),
+    invoiceAmountEditorInput: page.getByTestId("bird-table-currency-input"),
 
-        // Approvals - All Approvals / My Approvals tabs
-        approvalsNavLink: page
-            .locator('nav')
-            .locator('a, button, div[role="link"], div')
-            .filter({ hasText: /^Approvals$/i })
-            .first(),
-        allApprovalsTab: page.getByRole('tab', { name: 'All Approvals' }),
-        myApprovalsTab: page.getByRole('tab', { name: 'My Approvals' }),
-        approvalsSearchInput: page.getByRole('textbox', { name: 'Search...' }),
-        approvalsGridScrollContainer: page.locator('.rgCol.scroll-rgCol.hydrated').first(),
-        approverColumnHeader: page.getByRole('columnheader', { name: 'Approver', exact: true }),
-        viewDetailsActionButton: page.getByRole('button', { name: 'View Details' }).first(),
+    // Approvals - All Approvals / My Approvals tabs
+    approvalsNavLink: page
+      .locator("nav")
+      .locator('a, button, div[role="link"], div')
+      .filter({ hasText: /^Approvals$/i })
+      .first(),
+    allApprovalsTab: page.getByRole("tab", { name: "All Approvals" }),
+    myApprovalsTab: page.getByRole("tab", { name: "My Approvals" }),
+    approvalsSearchInput: page.getByRole("textbox", { name: "Search..." }),
+    approvalsGridScrollContainer: page
+      .locator(".rgCol.scroll-rgCol.hydrated")
+      .first(),
+    approverColumnHeader: page.getByRole("columnheader", {
+      name: "Approver",
+      exact: true,
+    }),
+    viewDetailsActionButton: page
+      .getByRole("button", { name: "View Details" })
+      .first(),
 
-        // Approval Details dialog
-        approvalDetailsDialog: page.getByRole('dialog', { name: 'Approval Details' }),
-        approvalNotesInput: page.getByRole('textbox', { name: 'Notes (required for rejection)' }),
-        approveOnBehalfButton: page.getByRole('button', { name: 'Approve on Behalf' }),
+    // Approval Details dialog
+    approvalDetailsDialog: page.getByRole("dialog", {
+      name: "Approval Details",
+    }),
+    approvalNotesInput: page.getByRole("textbox", {
+      name: "Notes (required for rejection)",
+    }),
+    approveOnBehalfButton: page.getByRole("button", {
+      name: "Approve on Behalf",
+    }),
 
-        // Signed-in user's profile block in the top nav (name paragraph precedes
-        // the email paragraph) — used to dynamically resolve the current user's
-        // display name without ever hardcoding it.
-        signedInUserEmailText: page.locator('nav').getByText(/^[\w.+-]+@[\w-]+\.[\w.-]+$/).first(),
-    };
+    // Signed-in user's profile block in the top nav (name paragraph precedes
+    // the email paragraph) — used to dynamically resolve the current user's
+    // display name without ever hardcoding it.
+    signedInUserEmailText: page
+      .locator("nav")
+      .getByText(/^[\w.+-]+@[\w-]+\.[\w.-]+$/)
+      .first(),
+  };
 }
 
 module.exports = { multiApproverLocators };

@@ -71,6 +71,7 @@ class ReassignInvoicePage {
     await this.loc.jobsSearchInput.press("Enter").catch(() => {});
     await this.page.waitForTimeout(1000);
 
+    await this.widenJobsGrid();
     const propertyJobRows = this.loc.jobRowsForProperty();
     // Same virtualized/search-dependent Jobs grid as discoverPropertyJobs() in the test file
     // (bumped there to 65000 for the same variability) — kept in sync here.
@@ -103,6 +104,25 @@ class ReassignInvoicePage {
       `Opened job "${resolvedJobName}" for property "${propertyName}"`
     );
     return resolvedJobName;
+  }
+
+  /**
+   * Verified 2026-11-10 (headed, approver session, 1280x720, sidebar pinned by beforeEach — 224px):
+   * the global Jobs grid then mounts only Title…Project, so the "ID" column holding each row's
+   * /jobs/<id> link is absent and jobRowsForProperty() finds 0 rows ("No jobs found"), although
+   * all 6 jobs of Test Property5_Reassigning_Automation are listed. Forcing the grid wide mounts
+   * the ID column (6 rows with links; clicking one opens /jobs/4256). Cell order is unchanged.
+   */
+  async widenJobsGrid() {
+    await this.loc.jobsGrid.waitFor({ state: "visible", timeout: 20000 });
+    await this.loc.jobsGrid.evaluate(g => {
+      g.style.setProperty("width", "3000px", "important");
+      g.style.setProperty("min-width", "3000px", "important");
+    });
+    await expect(
+      this.page.getByRole("columnheader", { name: "ID", exact: true }).first(),
+      'FAIL: Jobs grid "ID" column (job links) did not render after widening'
+    ).toBeVisible({ timeout: 10000 });
   }
 
   /** Selects the first job listed for the property. */
@@ -273,6 +293,31 @@ class ReassignInvoicePage {
    * its Status column — no dependency on the invoice-list search box.
    */
   async getInvoiceStatus(invoiceNumber, options) {
+    // Trace-verified 2026-11-10 (TC368, Invoice #36721): after Confirm the invoice grid unmounts
+    // and remounts — forceInvoiceGridFullWidth found no grid (count 0) at 137.6s/138.7s, the grid
+    // came back at 139.0s and the row was read at 139.2s while still loading:
+    // "Invoice #36721Contract————" (no Status column, no data). waitForInvoiceRowText accepts any
+    // non-empty row text, so the status came back null although the invoice is Approved (live
+    // re-read shows "…$5 Approved"). Re-read (getInvoiceRowText re-widens the grid each time)
+    // until the row actually shows a status; fall back to the original path below otherwise.
+    // Trace-verified 2026-11-10 (TC371, Invoice #36728): 3.7s after Confirm the remounted grid still
+    // held the pre-confirm row ("…$0$0$0$0Draft" although $8 was entered); the invoice is Approved
+    // (live re-read: "…$8 Approved"). Every caller reads right after confirmAndApproveInvoice, so
+    // keep polling past that stale "Draft"; a status still "Draft" after 30s is returned as-is.
+    let settledStatus = null;
+    await expect
+      .poll(
+        async () => {
+          settledStatus = this.extractStatusFromRowText(
+            await this.getInvoiceRowText(invoiceNumber)
+          );
+          return settledStatus && !/^draft$/i.test(settledStatus);
+        },
+        { timeout: 30000, intervals: [1000, 2000, 3000] }
+      )
+      .toBeTruthy()
+      .catch(() => {});
+    if (settledStatus) return settledStatus;
     const rowText = await this.waitForInvoiceRowText(invoiceNumber, options);
     return this.extractStatusFromRowText(rowText);
   }

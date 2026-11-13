@@ -236,9 +236,15 @@ class CapexPage {
         }
         return null;
       };
+      // Pro Forma orgs show "Total Funds Remaining" on card 2; all others keep
+      // "Remaining Budget". Prefer the Pro Forma label when both could appear.
+      const fundsRemaining = findValue("Total Funds Remaining");
       return {
         properties: findValue("Properties"),
-        remainingBudget: findValue("Remaining Budget"),
+        remainingBudget: fundsRemaining ?? findValue("Remaining Budget"),
+        remainingBudgetLabel: fundsRemaining
+          ? "Total Funds Remaining"
+          : "Remaining Budget",
         currentCommitted: findValue("Current Committed"),
       };
     });

@@ -80,6 +80,10 @@
   "excelGraphParts": ["xl/charts/", "xl/drawings/"],
   "totalRowLabel": "Total",
   "derivedColumnRules": [
-    { "result": "Budget remaining", "minuend": "Current", "subtrahend": "Committed" }
+    {
+      "result": "Budget remaining",
+      "minuend": "Current",
+      "subtrahend": "Committed"
+    }
   ]
 }

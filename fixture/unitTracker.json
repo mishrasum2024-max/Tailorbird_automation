@@ -1,0 +1,122 @@
+{
+  "unitTrackerPath": "/unit-tracker",
+  "leftPanel": {
+    "section": "Trackers",
+    "item": "Unit Tracker"
+  },
+  "propertyName": "Test Property 2_The Westerham",
+  "selectPropertyButton": "Select a Property",
+  "propertySearchPlaceholder": "Search properties...",
+  "breadcrumb": {
+    "home": "Home",
+    "page": "Unit Tracker"
+  },
+  "metricLabels": [
+    "Property Unit Count",
+    "Units Currently in Program",
+    "Units in Progress"
+  ],
+  "searchPlaceholder": "Search...",
+  "searchButton": "Search",
+  "toolbarButtons": ["Filter", "View", "Table", "Export"],
+  "updateStatusButton": "Update Status",
+  "gridLogRowCount": 10,
+  "unitLabel": "106",
+  "unitExpectedStatus": "In Progress",
+  "subRecordExpectedStatus": "Released",
+  "subRecordsToAssert": [
+    "june11 FP type practice",
+    "Automation Job, please don't delete it"
+  ],
+  "subRecordToUpdate": "june11 FP type practice",
+  "statusOptions": [
+    "Not in Reno",
+    "Released",
+    "In Progress",
+    "Completed",
+    "Cancelled"
+  ],
+  "statusesToApply": ["In Progress", "Completed", "Cancelled", "Released"],
+  "updateStatusDialogTitle": "Update Status",
+  "updateStatusConfirmText": "Are you sure you want to update the status of 1 selected row(s) to",
+  "updateStatusToast": "Updated 1 row(s) to",
+  "filter": {
+    "panelTitle": "Filters",
+    "panelSubtitle": "Filter Options",
+    "groups": [
+      {
+        "group": "Status",
+        "options": [
+          "Blank",
+          "Not in Reno",
+          "Released",
+          "In Progress",
+          "Completed",
+          "Cancelled"
+        ]
+      },
+      {
+        "group": "Floor Plan Type",
+        "options": [
+          "Blank",
+          "1bdrm",
+          "1bdrm V1",
+          "1bdrm V2",
+          "1bdrm V3",
+          "2bdrm",
+          "2bdrm V1",
+          "2bdrm V2",
+          "2bdrm V3",
+          "2bdrm V4",
+          "3bdrm",
+          "3bdrm V1"
+        ]
+      },
+      { "group": "Unit Type", "options": ["Blank", "1X1", "2X1", "3X2"] },
+      { "group": "Fiscal Year", "options": ["Blank", "2026"] },
+      {
+        "group": "Reno Year & Quarter",
+        "options": ["Blank", "2026 Q2", "2026 Q3"]
+      }
+    ],
+    "dateGroup": "Reno Date",
+    "dateFromLabel": "From",
+    "dateToLabel": "To",
+    "dateFromPlaceholder": "Select start date",
+    "dateToPlaceholder": "Select end date",
+    "checkboxFilters": [
+      { "group": "Status", "option": "Released", "field": "status" },
+      {
+        "group": "Floor Plan Type",
+        "option": "1bdrm",
+        "field": "floor_plan_type"
+      },
+      { "group": "Unit Type", "option": "3X2", "field": "unit_type" },
+      { "group": "Fiscal Year", "option": "2026", "field": "fiscal_year" },
+      {
+        "group": "Reno Year & Quarter",
+        "option": "2026 Q2",
+        "field": "reno_year_quarter"
+      }
+    ],
+    "dateFilter": {
+      "field": "reno_date",
+      "fromText": "June 1, 2026",
+      "toText": "June 30, 2026",
+      "fromIso": "2026-06-01",
+      "toIso": "2026-06-30"
+    },
+    "applyButton": "Apply",
+    "clearButton": "Clear",
+    "resetButton": "Reset Filters"
+  },
+  "view": {
+    "namePrefix": "AutoView_",
+    "saveLabel": "Save current view as",
+    "nameInputPlaceholder": "Enter a view name",
+    "resetToDefault": "Reset to default"
+  },
+  "export": {
+    "fileName": "unit_tracker-data.csv"
+  }
+}

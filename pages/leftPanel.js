@@ -1,382 +1,599 @@
 // leftPanelHelper.js
-const locators = require('../locators/leftPanelLocator');
-const { Logger } = require('../utils/logger');
-const { expect } = require('@playwright/test');
-const { ensureLeftPanelExpanded } = require('../utils/leftPanelExpander');
-const { healingLocator, logLocatorHealth } = require('../utils/locatorHealer');
+const locators = require("../locators/leftPanelLocator");
+const { Logger } = require("../utils/logger");
+const { expect } = require("@playwright/test");
+const { ensureLeftPanelExpanded } = require("../utils/leftPanelExpander");
+const { healingLocator, logLocatorHealth } = require("../utils/locatorHealer");
 
 module.exports = {
+  _collapseContainerStrategies: function (page, parentLocator, label) {
+    return locators.collapseContainerStrategies(page, parentLocator, label);
+  },
 
-    _collapseContainerStrategies: function (page, parentLocator, label) {
-        return locators.collapseContainerStrategies(page, parentLocator, label);
-    },
+  getCollapseContainer: function (page, parentLocator, label) {
+    return healingLocator(
+      this._collapseContainerStrategies(page, parentLocator, label)
+    );
+  },
 
-    getCollapseContainer: function (page, parentLocator, label) {
-        return healingLocator(this._collapseContainerStrategies(page, parentLocator, label));
-    },
+  /**
+   * @param {import('@playwright/test').Page} page
+   * @param {string} label
+   * @param {string} [contextLabel]
+   */
+  async checkCollapseContainerHealth(page, label, contextLabel = "leftPanel") {
+    const parentLocator = page
+      .locator("nav a.mantine-NavLink-root")
+      .filter({ hasText: label })
+      .first();
+    return logLocatorHealth(
+      [
+        {
+          label: `collapseContainer[${label}]`,
+          strategies: this._collapseContainerStrategies(
+            page,
+            parentLocator,
+            label
+          ),
+        },
+      ],
+      contextLabel
+    );
+  },
 
-    /**
-     * @param {import('@playwright/test').Page} page
-     * @param {string} label
-     * @param {string} [contextLabel]
-     */
-    async checkCollapseContainerHealth(page, label, contextLabel = 'leftPanel') {
-        const parentLocator = page.locator('nav a.mantine-NavLink-root').filter({ hasText: label }).first();
-        return logLocatorHealth([{ label: `collapseContainer[${label}]`, strategies: this._collapseContainerStrategies(page, parentLocator, label) }], contextLabel);
-    },
-
-    ensureSectionsExpandedForLabels: async function(page) {
-        const sections = ['Financials', 'Trackers', 'Documents', 'Construction Management'];
-        for (const section of sections) {
-            try {
-                const parent = page.locator('nav a.mantine-NavLink-root').filter({ hasText: section }).first();
-                if (await parent.count() > 0 && await parent.isVisible().catch(() => false)) {
-                    const collapse = this.getCollapseContainer(page, parent, section);
-                    if (await collapse.count() > 0) {
-                        const visible = await this.listVisibleSuboptions(collapse);
-                        if (visible.length === 0) {
-                            await parent.click().catch(() => {});
-                            await page.waitForTimeout(500);
-                        }
-                    }
-                }
-            } catch (e) {
-                Logger.info(`Could not expand ${section}: ${e.message}`);
-            }
-        }
-    },
-
-    getLeftPanelLabels: async function(page) {
-        await this.ensureSectionsExpandedForLabels(page);
-        const visibleLabels = await this.getVisibleNavLabels(page);
-        Logger.info(`Visible nav labels: ${JSON.stringify(visibleLabels)}`);
-
-        // Check if More menu exists
-        const hasMoreMenu = await this.hasMoreMenuButton(page);
-        Logger.info(`Has More menu: ${hasMoreMenu}`);
-
-        if (!hasMoreMenu) {
-            // Full screen mode - all items visible
-            return visibleLabels;
-        }
-
-        // Minimized mode - get items from More menu
-        const moreLabels = await this.getMoreMenuLabels(page);
-        Logger.info(`More menu labels: ${JSON.stringify(moreLabels)}`);
-
-        // Combine and deduplicate
-        let allLabels = [...new Set([...visibleLabels, ...moreLabels])].filter(
-            (label) => label && label !== 'More'
-        );
-        // When in More mode, section headers (Trackers, Documents) may not appear; infer from children
-        if (moreLabels.includes('Unit Tracker') && !allLabels.includes('Trackers')) allLabels.push('Trackers');
-        if ((moreLabels.includes('Files') || moreLabels.includes('Images')) && !allLabels.includes('Documents')) allLabels.push('Documents');
-
-        return allLabels;
-    },
-
-    getVisibleNavLabels: async function(page) {
-        await page.locator('nav').waitFor({ state: 'visible', timeout: 15000 });
-        for (let attempt = 0; attempt < 3; attempt++) {
-            await page.waitForTimeout(attempt * 500 + 500);
-            const items = page.locator(locators.leftPanelLabels);
-            const count = await items.count();
-            Logger.info(`Total nav labels found: ${count} (attempt ${attempt + 1})`);
-            if (count === 0) continue;
-            const labels = [];
-            for (let i = 0; i < count; i++) {
-                const text = (await items.nth(i).innerText()).trim();
-                if (text && text !== 'More') labels.push(text);
-            }
-            if (labels.length > 0) return labels;
-        }
-        return [];
-    },
-
-    hasMoreMenuButton: async function(page) {
-        const moreButton = page.locator('nav .mantine-NavLink-root').filter({ hasText: 'More' });
-        if (await moreButton.count() > 0) return true;
-        const moreFallback = page.locator('nav').getByRole('link', { name: 'More' });
-        if (await moreFallback.count() > 0) return true;
-        const moreAny = page.locator('nav').locator('a, button').filter({ hasText: 'More' });
-        return await moreAny.count() > 0;
-    },
-
-    getMoreMenuLabels: async function(page) {
-        const more = await this.openMoreMenu(page);
-        if (!more) return [];
-
-        const labels = [];
-        const menuItems = more.locator('[role="menuitem"]');
-        const count = await menuItems.count();
-
-        for (let i = 0; i < count; i++) {
-            const text = (await menuItems.nth(i).innerText()).trim();
-            if (text) {
-                labels.push(text);
-                Logger.info(`Fetched More menu label: "${text}"`);
-            }
-        }
-
-        // Close menu
-        try {
-            await page.keyboard.press('Escape');
-        } catch (e) {
-            // Ignore if already closed
-        }
-
-        return labels;
-    },
-
-    openMoreMenu: async function(page) {
-        const moreCandidates = page.locator('nav .mantine-NavLink-root').filter({ hasText: 'More' });
-        if ((await moreCandidates.count()) === 0) return null;
-
-        await moreCandidates.first().click();
-        await page.waitForTimeout(300);
-
-        // The menu appears as a sibling or overlay
-        const menu = page.locator('[role="menu"]').first();
-        return menu;
-    },
-
-    getSectionLocators: async function (page, label) {
-        const parent = page.locator(locators.leftPanelItem(label)).first();
-        const collapse = this.getCollapseContainer(page, parent, label);
-        return { parent, collapse };
-    },
-
-    ensureSectionExpanded: async function (page, sectionLabel) {
-        // Check if section exists in direct nav - use filter for reliability.
-        // Some UIs render duplicate hidden navlinks; pick the first visible one.
-        const directParents = page.locator('nav a.mantine-NavLink-root').filter({ hasText: sectionLabel });
-        const directCount = await directParents.count();
-        const pickFirstVisible = async (locator) => {
-            const count = await locator.count();
-            for (let i = 0; i < count; i++) {
-                const candidate = locator.nth(i);
-                if (await candidate.isVisible().catch(() => false)) return candidate;
-            }
-            return count > 0 ? locator.first() : locator;
-        };
-        const directParent = directCount > 0 ? await pickFirstVisible(directParents) : directParents;
-        const directExists = directCount > 0;
-
-        if (directExists) {
-            // Section is in main nav
-            const collapse = this.getCollapseContainer(page, directParent, sectionLabel);
-            await directParent.waitFor({ state: 'attached' });
-            await directParent.scrollIntoViewIfNeeded();
-            const becameVisible = await directParent
-                .waitFor({ state: 'visible', timeout: 30000 })
-                .then(() => true)
-                .catch(() => false);
-            if (!becameVisible) {
-                Logger.info(`ensureSectionExpanded: "${sectionLabel}" parent link never became visible — skipping expand click`);
-                return;
-            }
+  ensureSectionsExpandedForLabels: async function (page) {
+    const sections = [
+      "Financials",
+      "Trackers",
+      "Documents",
+      "Construction Management",
+    ];
+    for (const section of sections) {
+      try {
+        const parent = page
+          .locator("nav a.mantine-NavLink-root")
+          .filter({ hasText: section })
+          .first();
+        if (
+          (await parent.count()) > 0 &&
+          (await parent.isVisible().catch(() => false))
+        ) {
+          const collapse = this.getCollapseContainer(page, parent, section);
+          if ((await collapse.count()) > 0) {
             const visible = await this.listVisibleSuboptions(collapse);
             if (visible.length === 0) {
-                await directParent.click();
-                await page.waitForTimeout(800);
+              await parent.click().catch(() => {});
+              await page.waitForTimeout(500);
             }
-        } else {
-            // Section might be in More menu
-            const hasMore = await this.hasMoreMenuButton(page);
-            if (hasMore) {
-                const more = await this.openMoreMenu(page);
-                if (more) {
-                    // Find the section in the menu
-                    const sectionInMenu = more.locator(`[role="menuitem"] >> text=${sectionLabel}`).first();
-                    if (await sectionInMenu.count() > 0) {
-                        // It's in the menu, but we may not be able to expand from menu
-                        Logger.info(`Section ${sectionLabel} found in More menu`);
-                    }
-                }
-                // Close menu
-                try {
-                    await page.keyboard.press('Escape');
-                } catch (e) {
-                    // Ignore
-                }
-            }
+          }
         }
-    },
+      } catch (e) {
+        Logger.info(`Could not expand ${section}: ${e.message}`);
+      }
+    }
+  },
 
-    getChildMenuLocator: async function (page, parentSectionLabel, childLabel) {
-        // Check if parent section exists in direct nav - use filter for reliability
-        const parentLocator = page.locator('nav a.mantine-NavLink-root').filter({ hasText: parentSectionLabel }).first();
-        if (await parentLocator.count() > 0) {
-            // Parent is in direct nav
-            const collapseLocator = parentLocator.locator(locators.collapseContainer);
-            return collapseLocator.locator(`a.mantine-NavLink-root:has(span.mantine-NavLink-label:has-text("${childLabel}"))`);
-        }
+  getLeftPanelLabels: async function (page) {
+    await this.ensureSectionsExpandedForLabels(page);
+    const visibleLabels = await this.getVisibleNavLabels(page);
+    Logger.info(`Visible nav labels: ${JSON.stringify(visibleLabels)}`);
 
-        // Check if child is in More menu
-        const hasMore = await this.hasMoreMenuButton(page);
-        if (hasMore) {
-            const more = await this.openMoreMenu(page);
-            if (more) {
-                const childInMenu = more.locator(`[role="menuitem"]`).filter({ hasText: childLabel }).first();
-                if (await childInMenu.count() > 0) {
-                    return childInMenu;
-                }
-            }
-            try {
-                await page.keyboard.press('Escape');
-            } catch (e) {
-                // Ignore
-            }
-        }
+    // Check if More menu exists
+    const hasMoreMenu = await this.hasMoreMenuButton(page);
+    Logger.info(`Has More menu: ${hasMoreMenu}`);
 
-        return null;
-    },
+    if (!hasMoreMenu) {
+      // Full screen mode - all items visible
+      return visibleLabels;
+    }
 
-    listVisibleSuboptions: async function (collapseLocator) {
-        const anchors = collapseLocator.locator(locators.subOptions);
-        const n = await anchors.count();
-        const visibleNames = [];
-        for (let i = 0; i < n; i++) {
-            const el = anchors.nth(i);
-            if (await el.isVisible()) {
-                const text = (await el.innerText()).trim();
-                if (text) visibleNames.push(text);
-            }
-        }
-        return visibleNames;
-    },
+    // Minimized mode - get items from More menu
+    const moreLabels = await this.getMoreMenuLabels(page);
+    Logger.info(`More menu labels: ${JSON.stringify(moreLabels)}`);
 
-    runTwoClickTest: async function (page, label) {
-        await page.waitForTimeout(30000);
-        await page.waitForTimeout(500);
-        await page.locator('nav').waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
+    // Combine and deduplicate
+    let allLabels = [...new Set([...visibleLabels, ...moreLabels])].filter(
+      label => label && label !== "More"
+    );
+    // When in More mode, section headers (Trackers, Documents) may not appear; infer from children
+    if (moreLabels.includes("Unit Tracker") && !allLabels.includes("Trackers"))
+      allLabels.push("Trackers");
+    if (
+      (moreLabels.includes("Files") || moreLabels.includes("Images")) &&
+      !allLabels.includes("Documents")
+    )
+      allLabels.push("Documents");
 
-        let directParent = page.locator('nav a.mantine-NavLink-root').filter({ has: page.getByText(label, { exact: true }) }).first();
-        let directExists = await directParent.count() > 0;
-        if (!directExists) {
-            directParent = page.locator('nav a.mantine-NavLink-root').filter({ hasText: label }).first();
-            directExists = await directParent.count() > 0;
-        }
+    return allLabels;
+  },
 
-        if (!directExists) {
-            // Section is not in direct nav, check More menu or scroll to find it
-            const hasMore = await this.hasMoreMenuButton(page);
-            if (hasMore) {
-                Logger.info(`Section ${label} is in More menu (minimized mode)`);
-                Logger.info(`Skipping expand/collapse test`);
-                return;
-            }
-            await page.locator('nav').first().scrollIntoViewIfNeeded();
-            await page.waitForTimeout(500);
-            directParent = page.locator('nav a.mantine-NavLink-root, nav a').filter({ has: page.getByText(label, { exact: true }) }).first();
-            directExists = await directParent.count() > 0;
-            if (!directExists) {
-                throw new Error(`Section not found: ${label}`);
-            }
-        }
+  getVisibleNavLabels: async function (page) {
+    await page.locator("nav").waitFor({ state: "visible", timeout: 15000 });
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await page.waitForTimeout(attempt * 500 + 500);
+      const items = page.locator(locators.leftPanelLabels);
+      const count = await items.count();
+      Logger.info(`Total nav labels found: ${count} (attempt ${attempt + 1})`);
+      if (count === 0) continue;
+      const labels = [];
+      for (let i = 0; i < count; i++) {
+        const text = (await items.nth(i).innerText()).trim();
+        if (text && text !== "More") labels.push(text);
+      }
+      if (labels.length > 0) return labels;
+    }
+    return [];
+  },
 
-        Logger.info(`Found ${label} section`);
+  hasMoreMenuButton: async function (page) {
+    const moreButton = page
+      .locator("nav .mantine-NavLink-root")
+      .filter({ hasText: "More" });
+    if ((await moreButton.count()) > 0) return true;
+    const moreFallback = page
+      .locator("nav")
+      .getByRole("link", { name: "More" });
+    if ((await moreFallback.count()) > 0) return true;
+    const moreAny = page
+      .locator("nav")
+      .locator("a, button")
+      .filter({ hasText: "More" });
+    return (await moreAny.count()) > 0;
+  },
 
-        // Ensure visibility - scroll nav to reveal element if in scrollable area
-        await page.locator('nav').evaluate((lbl) => {
-            const anchors = Array.from(document.querySelectorAll('nav a'));
-            const el = anchors.find(a => a.textContent?.trim() === lbl);
-            if (el) el.scrollIntoView({ block: 'nearest', behavior: 'instant' });
-        }, label).catch(() => {});
-        await directParent.scrollIntoViewIfNeeded();
-        await directParent.waitFor({ state: 'attached', timeout: 10000 });
-        const visible = await directParent.isVisible().catch(() => false);
-        if (!visible) {
-            await page.locator('nav').evaluate((el) => el?.scrollTo(0, 0));
-            await page.waitForTimeout(300);
-            await directParent.scrollIntoViewIfNeeded();
-        }
-        await page.waitForTimeout(300);
+  getMoreMenuLabels: async function (page) {
+    const more = await this.openMoreMenu(page);
+    if (!more) return [];
 
-        await this.checkCollapseContainerHealth(page, label, `runTwoClickTest[${label}]`);
+    const labels = [];
+    const menuItems = more.locator('[role="menuitem"]');
+    const count = await menuItems.count();
 
-        // Get collapse container
-        const collapse = this.getCollapseContainer(page, directParent, label);
-        const collapseExists = await collapse.count() > 0;
-        
-        if (!collapseExists) {
-            Logger.info(`No collapse container for ${label}`);
-            return;
-        }
+    for (let i = 0; i < count; i++) {
+      const text = (await menuItems.nth(i).innerText()).trim();
+      if (text) {
+        labels.push(text);
+        Logger.info(`Fetched More menu label: "${text}"`);
+      }
+    }
 
-        let beforeList = await this.listVisibleSuboptions(collapse);
-        Logger.info(`[Before] ${label} visible: ${beforeList}`);
+    // Close menu
+    try {
+      await page.keyboard.press("Escape");
+    } catch (e) {
+      // Ignore if already closed
+    }
 
-        if (beforeList.length === 0) {
-            Logger.info(`Expanding ${label} first`);
-            await directParent.click({ force: true });
-            await page.waitForTimeout(800);
-            beforeList = await this.listVisibleSuboptions(collapse);
-            Logger.info(`[After expand] ${label} visible: ${beforeList}`);
-        }
+    return labels;
+  },
 
-        // Test collapse - click to collapse
-        await directParent.click({ force: true });
-        await page.waitForTimeout(800);
-        const afterCollapse = await this.listVisibleSuboptions(collapse);
-        Logger.info(`[After Collapse] ${label} visible: ${afterCollapse}`);
-        expect(afterCollapse.length).toBeLessThanOrEqual(beforeList.length);
+  openMoreMenu: async function (page) {
+    const moreCandidates = page
+      .locator("nav .mantine-NavLink-root")
+      .filter({ hasText: "More" });
+    if ((await moreCandidates.count()) === 0) return null;
 
-        // Test expand - click to expand again
-        await directParent.click({ force: true });
-        await page.waitForTimeout(800);
-        const afterExpand = await this.listVisibleSuboptions(collapse);
-        Logger.info(`[After Expand] ${label} visible: ${afterExpand}`);
-        if (beforeList.length > 0) {
-            expect(afterExpand.length).toBeGreaterThan(0);
-        }
-    },
+    await moreCandidates.first().click();
+    await page.waitForTimeout(300);
 
-    async getMainNavbarWidth(page) {
-        const navbar = page.locator(locators.appShellNavbar).first();
-        await expect(navbar, 'App shell navbar must be visible').toBeVisible({ timeout: 15000 });
-        return navbar.evaluate((el) => Math.round(el.getBoundingClientRect().width));
-    },
+    // The menu appears as a sibling or overlay
+    const menu = page.locator('[role="menu"]').first();
+    return menu;
+  },
 
-    mainNavbarToggleLocator(page) {
-        return page.locator(locators.mainNavbarHeaderToggle).first();
-    },
+  getSectionLocators: async function (page, label) {
+    const parent = page.locator(locators.leftPanelItem(label)).first();
+    const collapse = this.getCollapseContainer(page, parent, label);
+    return { parent, collapse };
+  },
 
-    async assertMainSidebarToggle(page) {
-        const toggleBtn = this.mainNavbarToggleLocator(page);
-        await expect(toggleBtn, 'Main sidebar Pin/Unpin control must be visible while expanded').toBeVisible({ timeout: 10000 });
+  ensureSectionExpanded: async function (page, sectionLabel) {
+    // Check if section exists in direct nav - use filter for reliability.
+    // Some UIs render duplicate hidden navlinks; pick the first visible one.
+    const directParents = page
+      .locator("nav a.mantine-NavLink-root")
+      .filter({ hasText: sectionLabel });
+    const directCount = await directParents.count();
+    const pickFirstVisible = async locator => {
+      const count = await locator.count();
+      for (let i = 0; i < count; i++) {
+        const candidate = locator.nth(i);
+        if (await candidate.isVisible().catch(() => false)) return candidate;
+      }
+      return count > 0 ? locator.first() : locator;
+    };
+    const directParent =
+      directCount > 0 ? await pickFirstVisible(directParents) : directParents;
+    const directExists = directCount > 0;
 
-        const expandedW = await this.getMainNavbarWidth(page);
-        Logger.info(`[Main sidebar toggle] Navbar width before collapse (expect >150): ${expandedW}`);
-        expect(
-            expandedW,
-            'Sidebar should start expanded. If this fails, AppShell/CSS or env changed.',
-        ).toBeGreaterThan(150);
-
-        await toggleBtn.click();
-        await page.locator('main').first().hover();
-
-        await expect.poll(async () => this.getMainNavbarWidth(page), {
-            message:
-                'After collapse, navbar must narrow. Collapse control or ClientWrapper navbar width logic may have changed.',
-            timeout: 10000,
-        }).toBeLessThan(120);
-
-        const collapsedW = await this.getMainNavbarWidth(page);
-        Logger.info(`[Main sidebar toggle] Navbar width when collapsed (expect <120): ${collapsedW}`);
-
-        await ensureLeftPanelExpanded(page);
-
-        await expect.poll(async () => this.getMainNavbarWidth(page), {
-            message: 'After re-expanding, navbar must widen again. Toggle or layout may be broken.',
-            timeout: 10000,
-        }).toBeGreaterThan(150);
-
-        const restoredW = await this.getMainNavbarWidth(page);
-        Logger.info(`[Main sidebar toggle] Navbar width after expand again: ${restoredW}`);
-        Logger.success(
-            `[Main sidebar toggle] Completed: expanded → collapsed (${collapsedW}px) → expanded (${restoredW}px).`,
+    if (directExists) {
+      // Section is in main nav
+      const collapse = this.getCollapseContainer(
+        page,
+        directParent,
+        sectionLabel
+      );
+      await directParent.waitFor({ state: "attached" });
+      await directParent.scrollIntoViewIfNeeded();
+      const becameVisible = await directParent
+        .waitFor({ state: "visible", timeout: 30000 })
+        .then(() => true)
+        .catch(() => false);
+      if (!becameVisible) {
+        Logger.info(
+          `ensureSectionExpanded: "${sectionLabel}" parent link never became visible — skipping expand click`
         );
-    },
+        return;
+      }
+      const visible = await this.listVisibleSuboptions(collapse);
+      if (visible.length === 0) {
+        await directParent.click();
+        await page.waitForTimeout(800);
+      }
+    } else {
+      // Section might be in More menu
+      const hasMore = await this.hasMoreMenuButton(page);
+      if (hasMore) {
+        const more = await this.openMoreMenu(page);
+        if (more) {
+          // Find the section in the menu
+          const sectionInMenu = more
+            .locator(`[role="menuitem"] >> text=${sectionLabel}`)
+            .first();
+          if ((await sectionInMenu.count()) > 0) {
+            // It's in the menu, but we may not be able to expand from menu
+            Logger.info(`Section ${sectionLabel} found in More menu`);
+          }
+        }
+        // Close menu
+        try {
+          await page.keyboard.press("Escape");
+        } catch (e) {
+          // Ignore
+        }
+      }
+    }
+  },
 
+  getChildMenuLocator: async function (page, parentSectionLabel, childLabel) {
+    // Check if parent section exists in direct nav - use filter for reliability
+    const parentLocator = page
+      .locator("nav a.mantine-NavLink-root")
+      .filter({ hasText: parentSectionLabel })
+      .first();
+    if ((await parentLocator.count()) > 0) {
+      // Parent is in direct nav
+      const collapseLocator = parentLocator.locator(locators.collapseContainer);
+      return collapseLocator.locator(
+        `a.mantine-NavLink-root:has(span.mantine-NavLink-label:has-text("${childLabel}"))`
+      );
+    }
+
+    // Check if child is in More menu
+    const hasMore = await this.hasMoreMenuButton(page);
+    if (hasMore) {
+      const more = await this.openMoreMenu(page);
+      if (more) {
+        const childInMenu = more
+          .locator(`[role="menuitem"]`)
+          .filter({ hasText: childLabel })
+          .first();
+        if ((await childInMenu.count()) > 0) {
+          return childInMenu;
+        }
+      }
+      try {
+        await page.keyboard.press("Escape");
+      } catch (e) {
+        // Ignore
+      }
+    }
+
+    return null;
+  },
+
+  /**
+   * Added 2026-11-11 (insert-only; getChildMenuLocator above is unchanged). Visibility-aware
+   * variant: the nav renders duplicate HIDDEN copies of every NavLink (run-verified: 3 sets of
+   * 24 anchors, only one set visible) and can fold sections into a "More" item, so a plain
+   * count() > 0 check can resolve to a link that is never visible (TC500/TC501: "waiting for
+   * element to be visible" ×99 until timeout). Waits for whichever VISIBLE entry point appears —
+   * the child link, its collapsed parent section, or the "More" menu — and returns a visible,
+   * clickable locator for the child, or null.
+   */
+  getVisibleChildMenuLocator: async function (
+    page,
+    parentSectionLabel,
+    childLabel,
+    timeoutMs = 20000
+  ) {
+    const visibleNavLinks = () =>
+      page.locator("nav a.mantine-NavLink-root").filter({ visible: true });
+    const childInNav = () =>
+      healingLocator([
+        {
+          name: "nav NavLink (visible) with exact label",
+          locator: visibleNavLinks().filter({
+            has: page.getByText(childLabel, { exact: true }),
+          }),
+        },
+        {
+          name: "nav role:link (visible) exact name",
+          locator: page
+            .locator("nav")
+            .getByRole("link", { name: childLabel, exact: true })
+            .filter({ visible: true }),
+        },
+      ]).first();
+    const parentInNav = () =>
+      visibleNavLinks()
+        .filter({ has: page.getByText(parentSectionLabel, { exact: true }) })
+        .first();
+    const moreInNav = () =>
+      healingLocator([
+        {
+          name: "nav NavLink (visible) More",
+          locator: visibleNavLinks().filter({
+            has: page.getByText("More", { exact: true }),
+          }),
+        },
+        {
+          name: "nav role:link (visible) More",
+          locator: page
+            .locator("nav")
+            .getByRole("link", { name: "More", exact: true })
+            .filter({ visible: true }),
+        },
+      ]).first();
+
+    const deadline = Date.now() + timeoutMs;
+    let parentClicked = false;
+    while (Date.now() < deadline) {
+      if (
+        await childInNav()
+          .isVisible()
+          .catch(() => false)
+      )
+        return childInNav();
+      if (
+        !parentClicked &&
+        (await parentInNav()
+          .isVisible()
+          .catch(() => false))
+      ) {
+        await parentInNav()
+          .click()
+          .catch(() => {});
+        parentClicked = true;
+        await page.waitForTimeout(600);
+        continue;
+      }
+      if (
+        await moreInNav()
+          .isVisible()
+          .catch(() => false)
+      ) {
+        await moreInNav()
+          .click()
+          .catch(() => {});
+        const menu = page
+          .locator('[role="menu"]')
+          .filter({ visible: true })
+          .first();
+        await menu.waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
+        const childMenuItem = menu
+          .getByRole("menuitem")
+          .filter({ hasText: childLabel })
+          .first();
+        if (await childMenuItem.isVisible().catch(() => false))
+          return childMenuItem;
+        const parentMenuItem = menu
+          .getByRole("menuitem")
+          .filter({ hasText: parentSectionLabel })
+          .first();
+        if (await parentMenuItem.isVisible().catch(() => false)) {
+          await parentMenuItem.hover().catch(() => {});
+          await parentMenuItem.click().catch(() => {});
+          const nested = page
+            .locator('[role="menu"]')
+            .filter({ visible: true })
+            .getByRole("menuitem")
+            .filter({ hasText: childLabel })
+            .first();
+          if (
+            await nested
+              .waitFor({ state: "visible", timeout: 5000 })
+              .then(() => true)
+              .catch(() => false)
+          )
+            return nested;
+        }
+        await page.keyboard.press("Escape").catch(() => {});
+      }
+      await page.waitForTimeout(500);
+    }
+    return null;
+  },
+
+  listVisibleSuboptions: async function (collapseLocator) {
+    const anchors = collapseLocator.locator(locators.subOptions);
+    const n = await anchors.count();
+    const visibleNames = [];
+    for (let i = 0; i < n; i++) {
+      const el = anchors.nth(i);
+      if (await el.isVisible()) {
+        const text = (await el.innerText()).trim();
+        if (text) visibleNames.push(text);
+      }
+    }
+    return visibleNames;
+  },
+
+  runTwoClickTest: async function (page, label) {
+    await page.waitForTimeout(30000);
+    await page.waitForTimeout(500);
+    await page
+      .locator("nav")
+      .waitFor({ state: "visible", timeout: 10000 })
+      .catch(() => {});
+
+    let directParent = page
+      .locator("nav a.mantine-NavLink-root")
+      .filter({ has: page.getByText(label, { exact: true }) })
+      .first();
+    let directExists = (await directParent.count()) > 0;
+    if (!directExists) {
+      directParent = page
+        .locator("nav a.mantine-NavLink-root")
+        .filter({ hasText: label })
+        .first();
+      directExists = (await directParent.count()) > 0;
+    }
+
+    if (!directExists) {
+      // Section is not in direct nav, check More menu or scroll to find it
+      const hasMore = await this.hasMoreMenuButton(page);
+      if (hasMore) {
+        Logger.info(`Section ${label} is in More menu (minimized mode)`);
+        Logger.info(`Skipping expand/collapse test`);
+        return;
+      }
+      await page.locator("nav").first().scrollIntoViewIfNeeded();
+      await page.waitForTimeout(500);
+      directParent = page
+        .locator("nav a.mantine-NavLink-root, nav a")
+        .filter({ has: page.getByText(label, { exact: true }) })
+        .first();
+      directExists = (await directParent.count()) > 0;
+      if (!directExists) {
+        throw new Error(`Section not found: ${label}`);
+      }
+    }
+
+    Logger.info(`Found ${label} section`);
+
+    // Ensure visibility - scroll nav to reveal element if in scrollable area
+    await page
+      .locator("nav")
+      .evaluate(lbl => {
+        const anchors = Array.from(document.querySelectorAll("nav a"));
+        const el = anchors.find(a => a.textContent?.trim() === lbl);
+        if (el) el.scrollIntoView({ block: "nearest", behavior: "instant" });
+      }, label)
+      .catch(() => {});
+    await directParent.scrollIntoViewIfNeeded();
+    await directParent.waitFor({ state: "attached", timeout: 10000 });
+    const visible = await directParent.isVisible().catch(() => false);
+    if (!visible) {
+      await page.locator("nav").evaluate(el => el?.scrollTo(0, 0));
+      await page.waitForTimeout(300);
+      await directParent.scrollIntoViewIfNeeded();
+    }
+    await page.waitForTimeout(300);
+
+    await this.checkCollapseContainerHealth(
+      page,
+      label,
+      `runTwoClickTest[${label}]`
+    );
+
+    // Get collapse container
+    const collapse = this.getCollapseContainer(page, directParent, label);
+    const collapseExists = (await collapse.count()) > 0;
+
+    if (!collapseExists) {
+      Logger.info(`No collapse container for ${label}`);
+      return;
+    }
+
+    let beforeList = await this.listVisibleSuboptions(collapse);
+    Logger.info(`[Before] ${label} visible: ${beforeList}`);
+
+    if (beforeList.length === 0) {
+      Logger.info(`Expanding ${label} first`);
+      await directParent.click({ force: true });
+      await page.waitForTimeout(800);
+      beforeList = await this.listVisibleSuboptions(collapse);
+      Logger.info(`[After expand] ${label} visible: ${beforeList}`);
+    }
+
+    // Test collapse - click to collapse
+    await directParent.click({ force: true });
+    await page.waitForTimeout(800);
+    const afterCollapse = await this.listVisibleSuboptions(collapse);
+    Logger.info(`[After Collapse] ${label} visible: ${afterCollapse}`);
+    expect(afterCollapse.length).toBeLessThanOrEqual(beforeList.length);
+
+    // Test expand - click to expand again
+    await directParent.click({ force: true });
+    await page.waitForTimeout(800);
+    const afterExpand = await this.listVisibleSuboptions(collapse);
+    Logger.info(`[After Expand] ${label} visible: ${afterExpand}`);
+    if (beforeList.length > 0) {
+      expect(afterExpand.length).toBeGreaterThan(0);
+    }
+  },
+
+  async getMainNavbarWidth(page) {
+    const navbar = page.locator(locators.appShellNavbar).first();
+    await expect(navbar, "App shell navbar must be visible").toBeVisible({
+      timeout: 15000,
+    });
+    return navbar.evaluate(el => Math.round(el.getBoundingClientRect().width));
+  },
+
+  mainNavbarToggleLocator(page) {
+    return page.locator(locators.mainNavbarHeaderToggle).first();
+  },
+
+  async assertMainSidebarToggle(page) {
+    const toggleBtn = this.mainNavbarToggleLocator(page);
+    await expect(
+      toggleBtn,
+      "Main sidebar Pin/Unpin control must be visible while expanded"
+    ).toBeVisible({ timeout: 10000 });
+
+    const expandedW = await this.getMainNavbarWidth(page);
+    Logger.info(
+      `[Main sidebar toggle] Navbar width before collapse (expect >150): ${expandedW}`
+    );
+    expect(
+      expandedW,
+      "Sidebar should start expanded. If this fails, AppShell/CSS or env changed."
+    ).toBeGreaterThan(150);
+
+    await toggleBtn.click();
+    await page.locator("main").first().hover();
+
+    await expect
+      .poll(async () => this.getMainNavbarWidth(page), {
+        message:
+          "After collapse, navbar must narrow. Collapse control or ClientWrapper navbar width logic may have changed.",
+        timeout: 10000,
+      })
+      .toBeLessThan(120);
+
+    const collapsedW = await this.getMainNavbarWidth(page);
+    Logger.info(
+      `[Main sidebar toggle] Navbar width when collapsed (expect <120): ${collapsedW}`
+    );
+
+    await ensureLeftPanelExpanded(page);
+
+    await expect
+      .poll(async () => this.getMainNavbarWidth(page), {
+        message:
+          "After re-expanding, navbar must widen again. Toggle or layout may be broken.",
+        timeout: 10000,
+      })
+      .toBeGreaterThan(150);
+
+    const restoredW = await this.getMainNavbarWidth(page);
+    Logger.info(
+      `[Main sidebar toggle] Navbar width after expand again: ${restoredW}`
+    );
+    Logger.success(
+      `[Main sidebar toggle] Completed: expanded → collapsed (${collapsedW}px) → expanded (${restoredW}px).`
+    );
+  },
 };

@@ -124,17 +124,18 @@ test.describe("Documents - Images", () => {
 
   test("TC423 @images @regression : Add a custom column", async () => {
     const columnName = `ImgCol-${Date.now()}`;
-    await images.addCustomColumn(columnName, "Automation column for Images", 0);
-    const manageColumnsDialog = images.addColumnPage.loc.manageColumnsDialog;
-    await images.openManageColumns();
-    await expect(
-      manageColumnsDialog.getByText(columnName, { exact: true }),
-      "Newly added column must be listed in Manage Columns"
-    ).toBeVisible();
-    await images.closeManageColumns();
-    await images.deleteColumn(columnName);
+    // "Table settings" drawer replaced the table menu + Manage Columns (MCP-verified 2026-10-30).
+    await images.addCustomColumnViaTableSettings(
+      columnName,
+      "Automation column for Images",
+      0
+    );
+    await images.openTableSettings();
+    await images.verifyColumnInTableSettings(columnName);
+    await images.deleteColumnViaTableSettings(columnName);
+    await images.closeTableSettings();
     expect(
-      await images.isCustomColumnPresent(columnName),
+      await images.isCustomColumnPresentInTableSettings(columnName),
       `Column "${columnName}" must no longer be present after delete`
     ).toBe(false);
     Logger.success(
@@ -144,25 +145,23 @@ test.describe("Documents - Images", () => {
 
   test("TC424 @images @regression : Manage Columns lists columns", async () => {
     const columnName = `ImgCol-${Date.now()}`;
-    await images.addCustomColumn(columnName, "Automation column for Images", 0);
-    await images.openManageColumns();
-    const manageColumnsDialog = images.addColumnPage.loc.manageColumnsDialog;
+    await images.addCustomColumnViaTableSettings(
+      columnName,
+      "Automation column for Images",
+      0
+    );
+    // The drawer has no "Default Columns" / "Custom Columns" headings any more: it lists every
+    // column under "Columns" (plus "Rows & sections") — openTableSettings() asserts all of it.
+    await images.openTableSettings();
     await expect(
-      manageColumnsDialog.getByText("Default Columns", { exact: true }),
-      "Default Columns section must be visible"
+      images.addColumnPage._tableSettings().columnDisplayName("Image Name"),
+      "Default column must be listed"
     ).toBeVisible();
-    await expect(
-      manageColumnsDialog.getByText("Custom Columns", { exact: true }),
-      "Custom Columns section must be visible"
-    ).toBeVisible();
-    await expect(
-      manageColumnsDialog.getByText(columnName, { exact: true }),
-      "Newly added column must be listed"
-    ).toBeVisible();
-    await images.closeManageColumns();
-    await images.deleteColumn(columnName);
+    await images.verifyColumnInTableSettings(columnName);
+    await images.deleteColumnViaTableSettings(columnName);
+    await images.closeTableSettings();
     expect(
-      await images.isCustomColumnPresent(columnName),
+      await images.isCustomColumnPresentInTableSettings(columnName),
       `Column "${columnName}" must no longer be present after delete`
     ).toBe(false);
     Logger.success(
@@ -172,14 +171,19 @@ test.describe("Documents - Images", () => {
 
   test("TC425 @images @regression : Delete a custom column", async () => {
     const columnName = `ImgCol-${Date.now()}`;
-    await images.addCustomColumn(columnName, "Automation column for Images", 0);
+    await images.addCustomColumnViaTableSettings(
+      columnName,
+      "Automation column for Images",
+      0
+    );
     expect(
-      await images.isCustomColumnPresent(columnName),
+      await images.isCustomColumnPresentInTableSettings(columnName),
       "Newly added column must be present after add"
     ).toBe(true);
-    await images.deleteColumn(columnName);
+    await images.deleteColumnViaTableSettings(columnName);
+    await images.closeTableSettings();
     expect(
-      await images.isCustomColumnPresent(columnName),
+      await images.isCustomColumnPresentInTableSettings(columnName),
       "Deleted column must no longer be present"
     ).toBe(false);
     Logger.success(

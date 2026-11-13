@@ -467,6 +467,51 @@ class ImagesPage {
     return this.addColumnPage.addAndVerifyAllColumnTypes();
   }
 
+  // --- "Table settings" drawer (replaced the table menu + Manage Columns; MCP-verified
+  // 2026-10-30 on /documents/images): same delegation to AddColumnPage's drawer methods. ---
+
+  /** Adds a column after deleting only this suite's own ImgCol-<ms> leftovers (older than 10 min). */
+  async addCustomColumnViaTableSettings(
+    columnName,
+    description,
+    typeIndex = 0
+  ) {
+    return this.addColumnPage.addColumnViaTableSettings(
+      columnName,
+      description,
+      typeIndex,
+      { selfCreatedPattern: /^ImgCol-\d{13}$/ }
+    );
+  }
+
+  async openTableSettings() {
+    return this.addColumnPage.openTableSettings();
+  }
+
+  async closeTableSettings() {
+    return this.addColumnPage.closeTableSettings();
+  }
+
+  async verifyColumnInTableSettings(columnName) {
+    return this.addColumnPage.verifyColumnInTableSettings(columnName);
+  }
+
+  /** ⋮ menu on this grid: Add to Filter, Add to File Upload Creation Form, Delete column. */
+  async deleteColumnViaTableSettings(columnName) {
+    return this.addColumnPage.deleteColumnViaTableSettings(columnName, {
+      menuItems: [
+        "Add to Filter",
+        "Add to File Upload Creation Form",
+        "Delete column",
+      ],
+    });
+  }
+
+  /** Name-scoped (parallel-safe) presence check through the drawer. */
+  async isCustomColumnPresentInTableSettings(columnName) {
+    return this.addColumnPage.isColumnInTableSettings(columnName);
+  }
+
   /**
    * Name-scoped presence check via the existing, unmodified `_getCustomColumnNames()` (reads
    * the full Manage Columns list, same as `getCustomColumnCount()` does internally) — used

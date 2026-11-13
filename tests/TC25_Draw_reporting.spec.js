@@ -153,10 +153,10 @@ test.describe("Draw Reporting", () => {
       "TC372 Step 7: Capturing and asserting every Budget Overview and Historical Draws control"
     );
     const budgetOverviewControls =
-      await drawReportingJob.captureAllBudgetOverviewControls();
+      await drawReportingJob.captureAllBudgetOverviewControlsViaTableSettings();
     await drawReportingJob.openHistoricalDrawsTab();
     const historicalDrawsControls =
-      await drawReportingJob.captureAllHistoricalDrawsControls();
+      await drawReportingJob.captureAllHistoricalDrawsControlsViaTableSettings();
     await drawReportingJob.openOverviewTab();
 
     const allControlsSnapshot = {
@@ -176,7 +176,9 @@ test.describe("Draw Reporting", () => {
 
     const controlsBaselinePath = path.join(
       __dirname,
-      "../fixture/drawReportingControlsBaseline.json"
+      // Table settings drawer replaced Manage Columns (MCP-verified 2026-10-30): new baseline,
+      // written on its first run by compareUiSnapshotToBaseline, compared on later runs.
+      "../fixture/drawReportingControlsBaselineTableSettings.json"
     );
     compareUiSnapshotToBaseline({
       baselinePath: controlsBaselinePath,
@@ -268,10 +270,10 @@ test.describe("Draw Reporting", () => {
       "TC373 Step 5: Capturing and asserting every grid control matches the same static baseline as TC372"
     );
     const budgetOverviewControls =
-      await drawReportingJob.captureAllBudgetOverviewControls();
+      await drawReportingJob.captureAllBudgetOverviewControlsViaTableSettings();
     await drawReportingJob.openHistoricalDrawsTab();
     const historicalDrawsControls =
-      await drawReportingJob.captureAllHistoricalDrawsControls();
+      await drawReportingJob.captureAllHistoricalDrawsControlsViaTableSettings();
     await drawReportingJob.openOverviewTab();
 
     const allControlsSnapshot = {
@@ -280,7 +282,9 @@ test.describe("Draw Reporting", () => {
     };
     const controlsBaselinePath = path.join(
       __dirname,
-      "../fixture/drawReportingControlsBaseline.json"
+      // Table settings drawer replaced Manage Columns (MCP-verified 2026-10-30): new baseline,
+      // written on its first run by compareUiSnapshotToBaseline, compared on later runs.
+      "../fixture/drawReportingControlsBaselineTableSettings.json"
     );
     compareUiSnapshotToBaseline({
       baselinePath: controlsBaselinePath,
@@ -914,5 +918,14 @@ test.describe("Draw Reporting", () => {
     Logger.success(
       `Eligible approver configuration verified for draw "${drawName}" ("${eligibleText}"), approved via "${approvedByFullName}"`
     );
+  });
+  test("TC544 @drawReporting @regression BUG-1528-TC01 : Historical draw (Draw 22, Aug 1-31) deleted for Bayant Green Apartments — restore draw + draft draw", async () => {
+    test.setTimeout(200000);
+
+    const propertyName = "Test Property 6_Draw reporting";
+    await drawReportingJob.navigateToDrawReporting();
+    await drawReportingJob.selectPropertyByName(propertyName);
+    await drawReportingJob.assertSelectedPropertyIs(propertyName);
+    await drawReportingJob.verifyHistoricalDrawsListApprovedDraws();
   });
 });

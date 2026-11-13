@@ -211,6 +211,38 @@ class VendorBidPage {
     );
     const downloadDir = path.join(__dirname, "../downloads");
     fs.mkdirSync(downloadDir, { recursive: true });
+    // Added 2026-11-11 (insert-only): run-verified (TC31 beforeAll, main run 2026-11-11) the
+    // Export click below produced no "download" in 55s although the grid had loaded; a headed
+    // probe showed Export normally downloads ~1s after the click. Under load the click can land
+    // before the page is interactive and is lost. Wait for the grid's rows, then confirm Export
+    // responds (up to 3 attempts, 20s each) so the original click below runs on a live page.
+    await healingLocator([
+      {
+        name: 'css:[role="row"][data-rgrow]',
+        locator: this.page.locator('[role="row"][data-rgrow]'),
+      },
+      {
+        name: "revo-grid role:row",
+        locator: this.page.locator("revo-grid").getByRole("row"),
+      },
+    ])
+      .first()
+      .waitFor({ state: "visible", timeout: 30000 })
+      .catch(() => {});
+    for (let exportAttempt = 1; exportAttempt <= 3; exportAttempt++) {
+      await expect(this.exportButton)
+        .toBeEnabled({ timeout: 20000 })
+        .catch(() => {});
+      const probeDownload = this.page
+        .waitForEvent("download", { timeout: 20000 })
+        .catch(() => null);
+      await this.exportButton.click().catch(() => {});
+      if (await probeDownload) break;
+      Logger.info(
+        `VendorBidPage: Export produced no download (attempt ${exportAttempt}/3) — page not interactive yet, retrying`
+      );
+      await this.page.waitForTimeout(2000);
+    }
     const [download] = await Promise.all([
       this.page.waitForEvent("download", { timeout: 55000 }),
       this.exportButton.click(),

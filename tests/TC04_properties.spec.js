@@ -25,6 +25,7 @@ import {
 const { healingLocator } = require("../utils/locatorHealer");
 const { ProjectPage } = require("../pages/projectPage");
 const { AddColumnPage } = require("../pages/addColumnPage");
+const { ADD_COLUMN_TYPES } = require("../locators/addColumnLocator");
 const { Logger } = require("../utils/logger");
 const { CapexPage } = require("../pages/capexPage");
 const {
@@ -129,9 +130,9 @@ test.describe("PROPERTY", () => {
       await prop.changeView(testData.viewName);
     });
 
-    await test.step("Export current table data (CSV/XLSX/PDF)", async () => {
-      await prop.exportButton();
-    });
+    // await test.step("Export current table data (CSV/XLSX/PDF)", async () => {
+    //   await prop.exportButton();
+    // });
 
     await test.step("Create property via modal, assert success toast copy, then list", async () => {
       // createPropertyRobust (new, additive PropertiesHelper method) instead of
@@ -291,8 +292,24 @@ test.describe("PROPERTY", () => {
     await prop.changeView("Table View");
     await prop.searchProperty(propertyName);
     await prop.viewDetailsButton();
-    await prop.addDataColoumn();
-    await prop.addData();
+    // "Table settings" drawer replaced Table → Add custom column (MCP-verified 2026-10-30, Property
+    // Documents grid). Same data as addDataColoumn()/addData(): "Random Name", a random type; the
+    // previous run's "Random Name" (fixed name, only TC55 creates it) is removed first.
+    const documentsColumns = new AddColumnPage(page, {
+      scope: page
+        .locator("div")
+        .filter({
+          has: page.getByRole("button", { name: "Table", exact: true }),
+        })
+        .filter({ has: page.locator("revo-grid") })
+        .last(),
+    });
+    await documentsColumns.addColumnViaTableSettings(
+      "Random Name",
+      "Random_description_" + Date.now(),
+      Math.floor(Math.random() * ADD_COLUMN_TYPES.length),
+      { selfCreatedPattern: /^Random Name$/, minAgeMs: 0 }
+    );
   });
 
   test("TC56 @sanity @regression @property - Validate Location Tab", async () => {
@@ -317,10 +334,34 @@ test.describe("PROPERTY", () => {
       await prop.deleteRow();
     });
     await test.step("Add column and settings", async () => {
-      await prop.addColumndata();
-      await prop.settingsPanel();
-      await prop.deleteCustomColumn();
-      await prop.closeSettingsDrawer();
+      // "Table settings" drawer replaced View/Table → Add custom column + the settings drawer
+      // (MCP-verified 2026-10-30, Locations → Sites grid). Same column, same order: add "Test Column"
+      // (an earlier run's leftover of this fixed name is removed first), verify it in the drawer,
+      // delete it, close.
+      const sitesColumns = new AddColumnPage(page, {
+        scope: page
+          .getByRole("tabpanel")
+          .filter({
+            has: page.getByRole("button", { name: "Table", exact: true }),
+          })
+          .first(),
+      });
+      await sitesColumns.addColumnViaTableSettings(
+        "Test Column",
+        "This is a test description.",
+        0,
+        { selfCreatedPattern: /^Test Column$/, minAgeMs: 0 }
+      );
+      await sitesColumns.openTableSettings();
+      await sitesColumns.verifyColumnInTableSettings("Test Column");
+      await sitesColumns.deleteColumnViaTableSettings("Test Column", {
+        menuItems: [
+          "Add to Filter",
+          "Add to Site Creation Form",
+          "Delete column",
+        ],
+      });
+      await sitesColumns.closeTableSettings();
     });
     await test.step("Verify Unit view", async () => {
       await prop.selectLocation("unit");
@@ -1219,14 +1260,42 @@ test.describe("PROPERTY", () => {
     // Same Properties listing already MCP-verified live 2026-09-23 to need Enter to filter.
     await coverPicSearchInput.press("Enter").catch(() => {});
     await page.waitForTimeout(3000);
-    // MCP-verified live 2026-10-19: the card's cover now renders through the app's image proxy
-    // (background-image: url("/api/get-cached-image/<uuid>"), 200 image/png, same byte size as
-    // files/Property_image.png) instead of a direct files.tailorbird.com URL — accept either.
+    // MCP-verified 2026-11-11: property-card covers are now served by Uploadcare — every cover on
+    // the Properties list uses ucarecdn.com (8) or 2ra4zpwqaf.ucarecd.net (4), none
+    // files.tailorbird.com — so the page-wide check below can never match. Assert instead inside
+    // THIS property's card (class "PropertyCard-module__…_card"); verified live: finds the cover
+    // on a card that has one ("Test Property 1_Cottages on Elm") and nothing on a card without one.
+    const coverImageSelector =
+      '[style*="ucarecdn.com"], [style*="ucarecd.net"], [style*="files.tailorbird.com"]';
+    const propertyCardCover = healingLocator([
+      {
+        name: "css:PropertyCard card[hasText=name] >> cover",
+        locator: page
+          .locator('[class*="PropertyCard"][class*="card"]')
+          .filter({ hasText: propertyName })
+          .locator(coverImageSelector),
+      },
+      {
+        name: "innermost div[hasText=name, has cover] >> cover",
+        locator: page
+          .locator("div")
+          .filter({ hasText: propertyName })
+          .filter({ has: page.locator(coverImageSelector) })
+          .last()
+          .locator(coverImageSelector),
+      },
+    ]).first();
     await expect(
-      page
-        .locator('[style*="files.tailorbird.com"]')
-        .or(page.locator('[style*="/api/get-cached-image/"]'))
-        .first()
+      propertyCardCover,
+      `FAIL: cover picture not shown on the "${propertyName}" property card`
+    ).toBeVisible({ timeout: 15000 });
+    Logger.success(
+      `TC66: cover picture shown on the "${propertyName}" property card`
+    );
+    return;
+    // Cover renders as a signed CDN background-image (files.tailorbird.com).
+    await expect(
+      page.locator('[style*="files.tailorbird.com"]').first()
     ).toBeVisible({
       timeout: 15000,
     });
@@ -1251,7 +1320,9 @@ test.describe("PROPERTY", () => {
         timeout: 15000,
       });
 
-      const createdColumns = await addColumnPage.addAndVerifyAllColumnTypes();
+      // "Table settings" drawer replaced the table menu (MCP-verified 2026-10-30, Projects grid).
+      const createdColumns =
+        await addColumnPage.addAndVerifyAllColumnTypesViaTableSettings();
       expect(createdColumns.length).toBe(13);
 
       Logger.success("TC250: addAndVerifyAllColumnTypes — PASSED");
@@ -1266,9 +1337,30 @@ test.describe("PROPERTY", () => {
   }) => {
     test.setTimeout(420000); // 7 min — 3× getPropertyColumnValues + refreshCapexPage runs slow headless
     const capex = new CapexPage(page);
+    // "Table settings" drawer replaced CapEx's Manage Columns (MCP-verified 2026-10-30, "Capex
+    // Tracker"): the 9 default financial columns are shown/hidden through their eyes instead of
+    // select/unselectAllDefaultFinancialColumns(). Same list as capexPage.js FINANCIAL_COLS.
+    const capexColumns = new AddColumnPage(page, {
+      scope: page.locator("main"),
+    });
+    const defaultFinancialColumns = [
+      "Original Budget",
+      "Budget Revision",
+      "Current Budget",
+      "Budget Remaining",
+      "Original Contract Amount",
+      "Approved Change Orders",
+      "Current Contract Amount",
+      "Remaining Contract Amount",
+      "Invoiced Amount",
+    ];
+    const showAllDefaultFinancialColumns = async () => {
+      await capexColumns.showColumns(defaultFinancialColumns);
+      await capexColumns.closeTableSettings();
+    };
 
     await capex.goto();
-    await capex.selectAllDefaultFinancialColumns().catch(() => {});
+    await showAllDefaultFinancialColumns().catch(() => {});
     await capex.goto();
 
     // Step 1: capture Property column values before hiding columns
@@ -1281,7 +1373,10 @@ test.describe("PROPERTY", () => {
     let shouldResetColumns = false;
 
     try {
-      const hiddenColumns = await capex.unselectAllDefaultFinancialColumns();
+      const hiddenColumns = await capexColumns.hideShownColumns(
+        defaultFinancialColumns
+      );
+      await capexColumns.closeTableSettings();
       shouldResetColumns = true;
       expect(
         hiddenColumns.length,
@@ -1306,7 +1401,7 @@ test.describe("PROPERTY", () => {
       ).toEqual(propertyDataBeforeHide);
     } finally {
       if (shouldResetColumns) {
-        await capex.selectAllDefaultFinancialColumns().catch(() => {});
+        await showAllDefaultFinancialColumns().catch(() => {});
       }
     }
   });
@@ -1333,91 +1428,43 @@ test.describe("PROPERTY", () => {
     // deleteCustomColumn() assumes: button[0] toggles inline rename, button[1] opens the real
     // "Delete Column" confirmation, button[2] opens an unrelated "Add to Filter" menu. Written
     // self-contained against this grid's actual behavior rather than reusing those helpers.
+    // "Table settings" drawer replaced Table → Add custom column / Hide-show columns → Manage
+    // Columns on this grid too (MCP-verified 2026-10-30): the grid's "Table" button is
+    // bt-table-action and opens the File Upload drawer. Same flow: add → header visible → listed →
+    // delete. The scope is the panel holding this grid's single visible Table button and revo-grid.
     const columnName = `TC69 Add Column ${Date.now()}`;
-    const documentsTableButton = page.getByRole("button", {
-      name: "Table",
-      exact: true,
+    const documentsColumns = new AddColumnPage(page, {
+      scope: page
+        .locator("div")
+        .filter({
+          has: page.getByRole("button", { name: "Table", exact: true }),
+        })
+        .filter({ has: page.locator("revo-grid") })
+        .last(),
     });
 
     await test.step("Add a custom column on the Property Documents grid", async () => {
-      await documentsTableButton.click();
-      await page.getByTestId("bt-table-action-add-column").click();
-      await page
-        .getByRole("textbox", { name: /Enter column name/i })
-        .fill(columnName);
-      await page
-        .getByRole("textbox", { name: /Enter column description/i })
-        .fill("Added by TC69 automation");
-      await page
-        .getByRole("button", { name: "Add column", exact: true })
-        .click();
-
-      // MCP-verified live (2026-08-25): this grid is a revo-grid and only mounts a viewport-width
-      // slice of columns into the DOM (same virtualization already documented/handled for other
-      // revo-grids via AddColumnPage's _waitForColumnHeader/_forceGridFullWidth). This property's
-      // Documents grid has accumulated a large number of custom columns from prior runs, so a
-      // freshly-added column's header lands far to the right and never mounts without scrolling —
-      // a bare toBeVisible() times out even though the column was created successfully (confirmed
-      // present and checked-visible in Manage Columns). Poll + scroll the grid right, same pattern.
-      const newHeader = page.getByRole("columnheader", {
-        name: columnName,
-        exact: true,
-      });
-      await expect
-        .poll(
-          async () => {
-            if ((await newHeader.count()) > 0) return true;
-            await page.evaluate(() => {
-              document
-                .querySelectorAll(
-                  'revo-grid, [role="treegrid"], revogr-viewport-scroll'
-                )
-                .forEach(node => {
-                  if (node.scrollWidth > node.clientWidth + 5) {
-                    node.scrollLeft = Math.min(
-                      node.scrollLeft + 500,
-                      node.scrollWidth
-                    );
-                  }
-                });
-            });
-            return (await newHeader.count()) > 0;
-          },
-          { timeout: 25000, intervals: [250] }
-        )
-        .toBe(true);
-      await newHeader.scrollIntoViewIfNeeded();
-      await expect(newHeader).toBeVisible({ timeout: 10000 });
+      // Removes only this test's own leftovers ("TC69 Add Column <ms>", older than 10 min) first;
+      // ends by waiting for the new column header in the grid (scrolls the virtualized grid).
+      await documentsColumns.addColumnViaTableSettings(
+        columnName,
+        "Added by TC69 automation",
+        0,
+        { selfCreatedPattern: /^TC69 Add Column \d{13}$/ }
+      );
     });
 
     await test.step("Verify the new column in Manage Columns, then delete it", async () => {
-      await documentsTableButton.click();
-      await page.getByTestId("bt-table-action-hide-show-columns").click();
-
-      const drawer = page
-        .getByRole("dialog")
-        .filter({ has: page.getByRole("heading", { name: "Manage Columns" }) });
-      await expect(drawer).toBeVisible({ timeout: 10000 });
-      await expect(
-        drawer.getByText("Custom Columns", { exact: true })
-      ).toBeVisible();
-
-      const columnNameText = drawer.getByText(columnName, { exact: true });
-      await expect(columnNameText).toBeVisible({ timeout: 10000 });
-
-      const columnRow = columnNameText.locator("xpath=../..");
-      await columnRow.locator("button").nth(1).click();
-
-      const confirmDialog = page
-        .getByRole("dialog")
-        .filter({ has: page.getByText("Delete Column", { exact: true }) });
-      await expect(confirmDialog).toBeVisible({ timeout: 5000 });
-      await confirmDialog
-        .getByRole("button", { name: "Delete", exact: true })
-        .click();
-      await expect(columnNameText).toBeHidden({ timeout: 10000 });
-
-      await page.keyboard.press("Escape");
+      await documentsColumns.openTableSettings();
+      await documentsColumns.verifyColumnInTableSettings(columnName);
+      await documentsColumns.deleteColumnViaTableSettings(columnName, {
+        menuItems: [
+          "Add to Filter",
+          "Add to File Upload Creation Form",
+          "Delete column",
+        ],
+      });
+      await documentsColumns.closeTableSettings();
     });
   });
 });

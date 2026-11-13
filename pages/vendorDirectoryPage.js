@@ -4,6 +4,7 @@ const { expect } = require("@playwright/test");
 const { Logger } = require("../utils/logger");
 const { vendorLocators } = require("../locators/vendorLocator");
 const { resetActiveFilters } = require("../utils/filterResetHelper");
+const { AddColumnPage } = require("./addColumnPage");
 
 const VENDORS_DIRECTORY_URL = "/vendors/directory";
 
@@ -594,6 +595,11 @@ class VendorDirectoryPage {
         state: "visible",
         timeout: 15000,
       });
+      // The search box renders after "Invite New Vendor" (MCP-verified 2026-11-03: ~4s later on a
+      // normal load), so on a slow beta load it can miss the 15s wait below — give it longer first.
+      await this.locators.searchInput
+        .waitFor({ state: "visible", timeout: 45000 })
+        .catch(() => {});
       await this.locators.searchInput.waitFor({
         state: "visible",
         timeout: 15000,
@@ -636,6 +642,65 @@ class VendorDirectoryPage {
         { timeout: 20000, intervals: [500, 1000, 1500] }
       )
       .toBeTruthy();
+  }
+
+  /**
+   * viewColumnExportFlow() for the "Table settings" drawer (MCP-verified 2026-10-30, Vendor
+   * Directory, "Organization" table): the gear button that opened Manage Columns is now the Table
+   * button (data-testid bt-table-action) and opens the drawer. Same steps: create a view, open the
+   * column settings (drawer UI asserted) and close them, export the CSV. The old add-column step
+   * never ran — its "bt-add-column" button does not exist on this page (MCP-verified) — so it is
+   * not repeated here.
+   */
+  async viewColumnExportFlowViaTableSettings() {
+    try {
+      Logger.step("Verifying View, Table settings (columns), Export");
+      const viewBtn = this.locators.viewDropdownBtn;
+      if (await viewBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await viewBtn.click();
+        await this.page.waitForTimeout(500);
+        if (
+          await this.locators.createNewViewItem
+            .isVisible({ timeout: 2000 })
+            .catch(() => false)
+        ) {
+          await this.locators.createNewViewItem.click();
+          const viewName = `VendorView_${Date.now()}`;
+          await this.locators.viewNameInput.fill(viewName);
+          await this.page.keyboard.press("Enter");
+          await this.page.waitForTimeout(1000);
+        }
+        await this.page.keyboard.press("Escape");
+      }
+      const tableSettings = new AddColumnPage(this.page, {
+        scope: this.page.locator("main"),
+      });
+      await tableSettings.openTableSettings({ addColumn: false });
+      await tableSettings.closeTableSettings();
+      const expBtn = this.locators.exportBtn;
+      await expect(expBtn, "FAIL: Export button missing").toBeVisible({
+        timeout: 15000,
+      });
+      const downloadsPath = path.join(process.cwd(), "downloads");
+      const [download] = await Promise.all([
+        this.page.waitForEvent("download", { timeout: 45000 }),
+        expBtn.click(),
+      ]);
+      const savePath = path.join(
+        // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- suggestedFilename() comes from Playwright's own Download API for a file downloaded from our own test app during an automated test run, not externally attacker-controlled input; downloadsPath is a fixed literal test folder.
+        downloadsPath,
+        await download.suggestedFilename()
+      );
+      await download.saveAs(savePath);
+      const content = fs.readFileSync(savePath, "utf-8");
+      expect(content.length).toBeGreaterThan(50);
+      expect(content).toMatch(/Organization|Name|Location/i);
+      Logger.success("View, Table settings, Export verified");
+    } catch (e) {
+      Logger.error(`viewColumnExportFlowViaTableSettings: ${e.message}`);
+      await this.page.keyboard.press("Escape").catch(() => {});
+      throw e;
+    }
   }
 }
 

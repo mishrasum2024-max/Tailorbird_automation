@@ -167,7 +167,8 @@ test.describe("Category tab", () => {
 
   test("TC101 @sanity @regression @category : Verify filter option is working as expected", async () => {
     await page.goto("/financials/category?propertyId=765", {
-      waitUntil: "domcontentloaded", timeout :70000
+      waitUntil: "domcontentloaded",
+      timeout: 70000,
     });
     await expect(page, "UI changed: expected category route").toHaveURL(
       /category/
@@ -199,9 +200,7 @@ test.describe("Category tab", () => {
         .catch(() => false);
       if (tc101Empty) break;
       if (attempt === 6) {
-        await page
-          .reload({ waitUntil: "domcontentloaded" })
-          .catch(() => {});
+        await page.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
       }
       await page.waitForTimeout(5000);
       tc101RowsReady = await tc101HasRows();
@@ -216,7 +215,9 @@ test.describe("Category tab", () => {
       const tc101Reason = tc101RowsReady
         ? "no category with code 100 for propertyId=765"
         : "no category data shown for propertyId=765";
-      Logger.info(`TC101: ${tc101Reason} — nothing to filter; passing without changes.`);
+      Logger.info(
+        `TC101: ${tc101Reason} — nothing to filter; passing without changes.`
+      );
       test.info().annotations.push({
         type: "no-test-data",
         description: `TC101: ${tc101Reason}`,
@@ -275,16 +276,16 @@ test.describe("Category tab", () => {
           .catch(() => false);
         if (tc102Empty) break;
         if (attempt === 6) {
-          await page
-            .reload({ waitUntil: "domcontentloaded" })
-            .catch(() => {});
+          await page.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
         }
         await page.waitForTimeout(5000);
         tc102RowsReady = await tc102HasRows();
       }
       if (!tc102RowsReady) {
         tc102NoData = true;
-        Logger.info("TC102: no category data shown — nothing to check; passing without changes.");
+        Logger.info(
+          "TC102: no category data shown — nothing to check; passing without changes."
+        );
         test.info().annotations.push({
           type: "no-test-data",
           description: "TC102: no category data shown on the Category page",
@@ -488,41 +489,34 @@ test.describe("Category tab", () => {
       await financialsCategoryPage.dismissImportPickerVisual();
     });
 
+    // "Table settings" drawer replaced the Manage Columns dialog and the Add column modal
+    // (MCP-verified 2026-10-30, "Category" table); new baseline names — the old UI no longer exists.
+    const categoryColumns = new AddColumnPage(page, {
+      scope: page.locator("main"),
+    });
+
     await test.step("V4 — Manage Columns dialog", async () => {
-      await financialsCategoryPage.openManageColumnsDialogFromMenu();
-      await expect(loc.manageColumnsDialog).toBeVisible({ timeout: 12000 });
-      await expect(loc.manageColumnsDialog).toHaveScreenshot(
-        "tc07-v-category-manage-columns.png",
+      await categoryColumns.openTableSettings();
+      await expect(categoryColumns._tableSettings().drawer).toHaveScreenshot(
+        "tc07-v-category-table-settings-drawer.png",
         CATEGORY_VISUAL_ASSERT
       );
-      await financialsCategoryPage.dismissDialogWithEscape(
-        loc.manageColumnsDialog
-      );
-      await expect(loc.manageColumnsDialog).toBeHidden({ timeout: 12000 });
-      await financialsCategoryPage.dismissMenuOrPopover();
-      await page.waitForTimeout(400);
+      await categoryColumns.closeTableSettings();
     });
 
     await test.step("V5 — Add custom column modal", async () => {
-      await financialsCategoryPage.openAddColumnModalFromMenu();
-      // Sheet is portaled; role/title/classes vary — anchor on copy from the BirdTable add-column flow.
-      const addColSheet = page
-        .locator("div")
-        .filter({
-          has: page.locator("p").filter({ hasText: /^Add column$/ }),
-        })
-        .filter({
-          has: page.getByRole("textbox", { name: /Enter column description/i }),
-        })
-        .filter({ has: page.getByRole("button", { name: /^Cancel$/i }) })
-        .first();
-      await expect(addColSheet).toBeVisible({ timeout: 12000 });
-      await expect(addColSheet).toHaveScreenshot(
-        "tc07-v-category-add-column-modal.png",
+      const ts = categoryColumns._tableSettings();
+      await categoryColumns.openTableSettings();
+      await ts.addColumnTrigger.scrollIntoViewIfNeeded();
+      await ts.addColumnTrigger.click();
+      await expect(ts.addColumnForm).toBeVisible({ timeout: 12000 });
+      await expect(ts.addColumnForm).toHaveScreenshot(
+        "tc07-v-category-add-column-form.png",
         CATEGORY_VISUAL_ASSERT
       );
-      await financialsCategoryPage.dismissAddColumnModal();
-      await financialsCategoryPage.dismissMenuOrPopover();
+      await ts.formCancelButton.click();
+      await expect(ts.nameInput).toBeHidden({ timeout: 12000 });
+      await categoryColumns.closeTableSettings();
     });
 
     await test.step("V6 — Reset Category modal", async () => {
@@ -557,17 +551,22 @@ test.describe("Category tab", () => {
       "Remaining Contract Amount",
     ];
 
+    // "Table settings" drawer replaced CapEx's Table → Hide / show columns → Manage Columns
+    // (MCP-verified 2026-10-30, "Capex Tracker"): every column has an eye that saves on click.
+    // Same flow and grid assertions as before.
+    const capexColumns = new AddColumnPage(page, {
+      scope: page.locator("main"),
+    });
+
     // All 9 columns listed in drawer
-    const colResults = await capex.verifyManageColumns(ALL_COLS);
-    for (const { col, visible } of colResults) {
-      expect(visible, `"${col}" not in Manage Columns drawer`).toBeTruthy();
-    }
+    await capexColumns.openTableSettings();
+    await capexColumns.verifyColumnsListedInTableSettings(ALL_COLS);
+    await capexColumns.closeTableSettings();
     Logger.info("TC106: All 9 toggleable columns present in drawer ✓");
 
     // Hide Budget Remaining → disappears from grid
-    await capex.openManageColumnsDrawer();
-    await capex.toggleColumn("Budget Remaining");
-    await capex.closeManageColumnsDrawer();
+    await capexColumns.setColumnVisibility("Budget Remaining", false);
+    await capexColumns.closeTableSettings();
     expect(
       !(await capex.l.colHeaderBudgetRemaining
         .isVisible({ timeout: 3000 })
@@ -576,27 +575,24 @@ test.describe("Category tab", () => {
     Logger.info("TC106: Budget Remaining hidden ✓");
 
     // Restore → reappears
-    await capex.openManageColumnsDrawer();
-    await capex.toggleColumn("Budget Remaining");
-    await capex.closeManageColumnsDrawer();
+    await capexColumns.setColumnVisibility("Budget Remaining", true);
+    await capexColumns.closeTableSettings();
     await expect(capex.l.colHeaderBudgetRemaining).toBeVisible({
       timeout: 5000,
     });
     Logger.info("TC106: Budget Remaining restored ✓");
 
     // Hide 2 columns and restore — original order preserved
-    await capex.openManageColumnsDrawer();
-    await capex.toggleColumn("Budget Revision");
-    await capex.toggleColumn("Invoiced Amount");
-    await capex.closeManageColumnsDrawer();
+    await capexColumns.setColumnVisibility("Budget Revision", false);
+    await capexColumns.setColumnVisibility("Invoiced Amount", false);
+    await capexColumns.closeTableSettings();
     let order = await capex.getColumnOrder();
     expect(order.includes("Budget Revision")).toBeFalsy();
     expect(order.includes("Invoiced Amount")).toBeFalsy();
 
-    await capex.openManageColumnsDrawer();
-    await capex.toggleColumn("Budget Revision");
-    await capex.toggleColumn("Invoiced Amount");
-    await capex.closeManageColumnsDrawer();
+    await capexColumns.setColumnVisibility("Budget Revision", true);
+    await capexColumns.setColumnVisibility("Invoiced Amount", true);
+    await capexColumns.closeTableSettings();
     // Re-adding 2 columns makes the grid wider than before — confirmed live via MCP browser:
     // RevoGrid drops whichever columns don't fit its actual rendered width entirely (no
     // scrollbar ever reveals them), rather than making them scrollable, and that width

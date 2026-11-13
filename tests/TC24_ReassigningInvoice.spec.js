@@ -70,6 +70,8 @@ async function discoverPropertyJobs(rip, propertyName) {
   await rip.loc.jobsSearchInput.press("Enter").catch(() => {});
   await rip.page.waitForTimeout(1000);
 
+  // Same ID-column virtualization as ReassignInvoicePage.openJobOfProperty (see widenJobsGrid).
+  await rip.widenJobsGrid();
   const rows = rip.loc.jobRowsForProperty();
   await expect(
     rows.first(),

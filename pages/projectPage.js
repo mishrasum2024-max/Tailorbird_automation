@@ -18,6 +18,9 @@ const {
   jobStartDateInputStrategies,
   jobEndDateInputStrategies,
   jobBudgetCategoryInputStrategies,
+  jobBudgetCategoryPickerTriggerStrategies,
+  jobBudgetCategoryPickerSearchStrategies,
+  jobBudgetCategoryPickerCloseStrategies,
   jobSubmitBtnStrategies,
   contractsTabTriggerStrategies,
   jobOverviewEditButtonStrategies,
@@ -1233,6 +1236,22 @@ exports.ProjectPage = class ProjectPage {
       Logger.info(`Entered description: ${description}`);
     }
 
+    // The Add job modal no longer has an Estimated Budget field (MCP-verified 2026-11-09 on
+    // project 5256: Contract and PO both show only Title, Job Type, Financial Type, Vendor,
+    // Description, Start/End Date, Fiscal Year, Budget Category). The budget is set afterwards on
+    // the Contracts tab (Edit Contract Overview → Estimated Total Cost), so skip the fill when the
+    // field is absent instead of timing out; the fill below still runs if the field returns.
+    if (
+      estimatedBudget !== undefined &&
+      estimatedBudget !== null &&
+      (await estimatedBudgetInput.count()) === 0
+    ) {
+      Logger.info(
+        `Add job modal has no Estimated Budget field — skipping estimated budget ${estimatedBudget}`
+      );
+      estimatedBudget = undefined;
+    }
+
     if (estimatedBudget !== undefined && estimatedBudget !== null) {
       await estimatedBudgetInput.fill(String(estimatedBudget));
       Logger.info(`Entered estimated budget: ${estimatedBudget}`);
@@ -1299,6 +1318,124 @@ exports.ProjectPage = class ProjectPage {
     return `${y}-${m}-${d}`;
   }
 
+  /**
+   * Add-job "Budget Category" multi-select picker (MCP-verified 2026-11-09, project 5256): the
+   * "Select budget categories" button opens a popover with a search box and one unnamed checkbox
+   * per category beside its text; clicking the text toggles it, and after "Close" the trigger
+   * button's name becomes the selected category. Picks "Concrete" (the category the combobox
+   * flow searched for), else the first match. Returns the selected name, or null if absent.
+   */
+  async selectJobBudgetCategoryFromPicker(modalScope, searchText = "Concrete") {
+    // The field's button is "Select budget categories" until the modal finishes loading the
+    // project's default, then the app pre-selects it and the button's name becomes that category
+    // (MCP-verified 2026-11-09 on projects 5256/5259: "(none)" → "Select budget categories" →
+    // "Concrete" within ~1-3s). Locate the button by its field, whatever its current name.
+    const field = modalScope
+      .locator("div")
+      .filter({ has: this.page.getByText("Budget Category", { exact: true }) })
+      .filter({ has: this.page.getByRole("button") })
+      .last();
+    const fieldButton = field.getByRole("button").first();
+    const trigger = healingLocator(
+      jobBudgetCategoryPickerTriggerStrategies(modalScope)
+    ).first();
+    const present = await fieldButton
+      .or(trigger)
+      .first()
+      .waitFor({ state: "visible", timeout: 10000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!present) return null;
+    // Give the app's own pre-selection a chance to land before deciding to pick one ourselves —
+    // clicking a category the app then pre-selects would toggle it off again.
+    // The button text starts empty (MCP-verified), so wait for real text before judging it.
+    await expect(fieldButton).toHaveText(/\S/, { timeout: 10000 });
+    await expect(fieldButton)
+      .not.toHaveText("Select budget categories", { timeout: 5000 })
+      .catch(() => {});
+
+    const search = healingLocator(
+      jobBudgetCategoryPickerSearchStrategies(this.page)
+    ).first();
+    const current = (await fieldButton.innerText().catch(() => "")).trim();
+    if (current && current !== "Select budget categories") {
+      Logger.step(
+        `Budget Category pre-selected by the app: "${current}" — verifying in the picker`
+      );
+      await fieldButton.click();
+      await expect(
+        search,
+        'FAIL: "Search budget categories" box did not open'
+      ).toBeVisible({ timeout: 10000 });
+      const checkedCount = await this.page
+        .locator("div")
+        .filter({ has: this.page.getByPlaceholder("Search budget categories") })
+        .filter({
+          has: this.page.getByRole("button", { name: "Deselect all" }),
+        })
+        .last()
+        .getByRole("checkbox", { checked: true })
+        .count();
+      expect(
+        checkedCount,
+        `FAIL: Budget Category button shows "${current}" but no category is checked in the picker`
+      ).toBeGreaterThan(0);
+      await healingLocator(jobBudgetCategoryPickerCloseStrategies(this.page))
+        .first()
+        .click();
+      await expect(
+        search,
+        "FAIL: budget category picker did not close"
+      ).toBeHidden({ timeout: 10000 });
+      Logger.success(`Budget Category selected: "${current}"`);
+      return current;
+    }
+
+    Logger.step("Selecting Budget Category from the multi-select picker...");
+    await trigger.click();
+    await expect(
+      search,
+      'FAIL: "Search budget categories" box did not open'
+    ).toBeVisible({ timeout: 10000 });
+    await search.fill(searchText);
+
+    // Innermost element holding both the search box and the button bar — the category rows are
+    // siblings of that bar, not inside it (TC81 failure snapshot 2026-11-09).
+    const popover = this.page
+      .locator("div")
+      .filter({ has: this.page.getByPlaceholder("Search budget categories") })
+      .filter({ has: this.page.getByRole("button", { name: "Deselect all" }) })
+      .last();
+    const exactRow = popover.getByText(searchText, { exact: true }).first();
+    const anyRow = popover.getByText(searchText).first();
+    const row = (await exactRow
+      .waitFor({ state: "visible", timeout: 10000 })
+      .then(() => true)
+      .catch(() => false))
+      ? exactRow
+      : anyRow;
+    await expect(
+      row,
+      `FAIL: no budget category matching "${searchText}" in the picker`
+    ).toBeVisible({ timeout: 10000 });
+    const selected = (await row.innerText()).trim();
+    await row.click();
+
+    await healingLocator(jobBudgetCategoryPickerCloseStrategies(this.page))
+      .first()
+      .click();
+    await expect(
+      search,
+      "FAIL: budget category picker did not close"
+    ).toBeHidden({ timeout: 10000 });
+    await expect(
+      modalScope.getByRole("button", { name: selected, exact: true }),
+      `FAIL: Budget Category trigger does not show "${selected}" after selection`
+    ).toBeVisible({ timeout: 10000 });
+    Logger.success(`Budget Category selected: "${selected}"`);
+    return selected;
+  }
+
   async selectJobBudgetCategory(jobModal = null) {
     try {
       Logger.step("Selecting Budget Category in job form...");
@@ -1312,6 +1449,10 @@ exports.ProjectPage = class ProjectPage {
         .isVisible({ timeout: 3000 })
         .catch(() => false);
       if (!isVisible) {
+        // The combobox was replaced by a "Select budget categories" picker (MCP-verified 2026-11-09).
+        const pickedFromPicker =
+          await this.selectJobBudgetCategoryFromPicker(modalScope);
+        if (pickedFromPicker) return pickedFromPicker;
         Logger.info(
           "Budget Category field not visible in job form — skipping."
         );

@@ -982,7 +982,9 @@ async function handleNextBatch({ ack, body, client, kind }) {
   console.log("======================================");
   console.log(`🔁 NEXT BATCH (${kind}) REQUESTED`);
   console.log("======================================");
-  console.log(`Ticket: ${ticketId || "UNKNOWN"} | run: ${generationRunId || "UNKNOWN"}`);
+  console.log(
+    `Ticket: ${ticketId || "UNKNOWN"} | run: ${generationRunId || "UNKNOWN"}`
+  );
   console.log(`Cases: ${caseIds.join(", ") || "none"}`);
 
   if (
@@ -992,7 +994,9 @@ async function handleNextBatch({ ack, body, client, kind }) {
     !caseIds.every(id => NEXT_BATCH_CASE_ID_PATTERN.test(id))
   ) {
     console.error(`❌ Invalid next-batch button value: "${value}"`);
-    await reply("❌ This button is invalid (missing ticket, run or case IDs). Select the cases in the test-case message instead.");
+    await reply(
+      "❌ This button is invalid (missing ticket, run or case IDs). Select the cases in the test-case message instead."
+    );
     return;
   }
 
@@ -1024,11 +1028,16 @@ async function handleNextBatch({ ack, body, client, kind }) {
   }
 
   try {
-    await dispatchGitHubWorkflow(targetOwner, targetRepo, APPROVED_TICKET_WORKFLOW, {
-      ticket_id: ticketId,
-      selected_test_cases: caseIds.join(","),
-      generation_run_id: generationRunId,
-    });
+    await dispatchGitHubWorkflow(
+      targetOwner,
+      targetRepo,
+      APPROVED_TICKET_WORKFLOW,
+      {
+        ticket_id: ticketId,
+        selected_test_cases: caseIds.join(","),
+        generation_run_id: generationRunId,
+      }
+    );
 
     console.log(`✅ AI Approved Ticket workflow triggered for ${ticketId}`);
 
@@ -1038,13 +1047,19 @@ async function handleNextBatch({ ack, body, client, kind }) {
     );
   } catch (error) {
     console.error("❌ Failed to trigger the next batch:", error.message);
-    await reply(`❌ *Failed to start the next batch for ${ticketId}*\n\nError: ${error.message}`);
+    await reply(
+      `❌ *Failed to start the next batch for ${ticketId}*\n\nError: ${error.message}`
+    );
   }
 }
 
-app.action("automate_failed_cases", args => handleNextBatch({ ...args, kind: "failed" }));
+app.action("automate_failed_cases", args =>
+  handleNextBatch({ ...args, kind: "failed" })
+);
 
-app.action("automate_remaining_cases", args => handleNextBatch({ ...args, kind: "remaining" }));
+app.action("automate_remaining_cases", args =>
+  handleNextBatch({ ...args, kind: "remaining" })
+);
 
 // ==================================================
 // INSTRUCT & RETRY BLOCKED CASES (agent report → form → next batch)
@@ -1094,14 +1109,25 @@ app.action("instruct_blocked_cases", async ({ ack, body, client }) => {
 
   for (let i = 0; i < caseIds.length; i += INSTRUCT_OPTIONS_PER_BLOCK) {
     const chunk = caseIds.slice(i, i + INSTRUCT_OPTIONS_PER_BLOCK);
-    const options = chunk.map(id => ({ text: { type: "plain_text", text: id }, value: id }));
+    const options = chunk.map(id => ({
+      text: { type: "plain_text", text: id },
+      value: id,
+    }));
 
     caseBlocks.push({
       type: "input",
       block_id: `cases_${i / INSTRUCT_OPTIONS_PER_BLOCK}`,
       optional: i > 0,
-      label: { type: "plain_text", text: i === 0 ? "Cases to run in the next batch" : "More cases" },
-      element: { type: "checkboxes", action_id: "selected", options, initial_options: options },
+      label: {
+        type: "plain_text",
+        text: i === 0 ? "Cases to run in the next batch" : "More cases",
+      },
+      element: {
+        type: "checkboxes",
+        action_id: "selected",
+        options,
+        initial_options: options,
+      },
     });
   }
 
@@ -1154,100 +1180,154 @@ app.action("instruct_blocked_cases", async ({ ack, body, client }) => {
       },
     });
   } catch (error) {
-    console.error("❌ Could not open the instruct form:", error.data?.error || error.message);
+    console.error(
+      "❌ Could not open the instruct form:",
+      error.data?.error || error.message
+    );
   }
 });
 
-app.view("instruct_blocked_cases_modal", async ({ ack, view, body, client }) => {
-  let meta = {};
+app.view(
+  "instruct_blocked_cases_modal",
+  async ({ ack, view, body, client }) => {
+    let meta = {};
 
-  try {
-    meta = JSON.parse(view.private_metadata || "{}");
-  } catch (error) {
-    meta = {};
-  }
-
-  const values = view.state?.values || {};
-  const selected = [
-    ...new Set(
-      Object.entries(values)
-        .filter(([blockId]) => blockId.startsWith("cases_"))
-        .flatMap(([, block]) => block.selected?.selected_options || [])
-        .map(option => String(option.value || "").toUpperCase())
-        .filter(id => NEXT_BATCH_CASE_ID_PATTERN.test(id))
-    ),
-  ];
-  const instructions = String(values.instructions?.text?.value || "").trim().slice(0, INSTRUCT_MAX_TEXT);
-
-  if (!selected.length) {
-    await ack({ response_action: "errors", errors: { cases_0: "Tick at least one case." } });
-    return;
-  }
-
-  await ack();
-
-  const parsedRepo = parseRepoFull(meta.repoFull);
-  const targetOwner = parsedRepo?.owner || LEGACY_GH_OWNER;
-  const targetRepo = parsedRepo?.repo || LEGACY_GH_REPO;
-  const threadRef = meta.channel && meta.threadTs ? `${meta.channel}:${meta.threadTs}` : "";
-  const reply = text =>
-    meta.channel
-      ? client.chat.postMessage({ channel: meta.channel, thread_ts: meta.threadTs || undefined, text })
-      : Promise.resolve();
-
-  console.log("");
-  console.log("======================================");
-  console.log("✍️ INSTRUCT & RETRY REQUESTED");
-  console.log("======================================");
-  console.log(`Ticket: ${meta.ticketId} | run: ${meta.generationRunId} | by: ${body.user?.id}`);
-  console.log(`Cases: ${selected.join(", ")} | form text: ${instructions.length} chars | thread: ${threadRef || "none"}`);
-
-  if (!meta.ticketId || !/^\d+$/.test(meta.generationRunId || "")) {
-    await reply("❌ Could not start the batch: the form lost its ticket/run details. Click the button again.");
-    return;
-  }
-
-  const baseInputs = {
-    ticket_id: meta.ticketId,
-    selected_test_cases: selected.join(","),
-    generation_run_id: meta.generationRunId,
-  };
-
-  try {
     try {
-      await dispatchGitHubWorkflow(targetOwner, targetRepo, APPROVED_TICKET_WORKFLOW, {
-        ...baseInputs,
-        user_instructions: instructions,
-        user_instructions_thread: threadRef,
-      });
+      meta = JSON.parse(view.private_metadata || "{}");
     } catch (error) {
-      // The workflow on main does not declare the instruction inputs yet
-      // (this listener was deployed before that workflow change was merged):
-      // GitHub rejects unknown inputs. Start a skills-only retry instead of
-      // failing, and say so.
-      if (!/Unexpected inputs/i.test(String(error.message))) throw error;
+      meta = {};
+    }
 
-      console.warn("⚠️ Workflow on main has no user_instructions inputs yet — dispatching without instructions.");
-      await dispatchGitHubWorkflow(targetOwner, targetRepo, APPROVED_TICKET_WORKFLOW, baseInputs);
+    const values = view.state?.values || {};
+    const selected = [
+      ...new Set(
+        Object.entries(values)
+          .filter(([blockId]) => blockId.startsWith("cases_"))
+          .flatMap(([, block]) => block.selected?.selected_options || [])
+          .map(option => String(option.value || "").toUpperCase())
+          .filter(id => NEXT_BATCH_CASE_ID_PATTERN.test(id))
+      ),
+    ];
+    const instructions = String(values.instructions?.text?.value || "")
+      .trim()
+      .slice(0, INSTRUCT_MAX_TEXT);
+
+    if (!selected.length) {
+      await ack({
+        response_action: "errors",
+        errors: { cases_0: "Tick at least one case." },
+      });
+      return;
+    }
+
+    await ack();
+
+    const parsedRepo = parseRepoFull(meta.repoFull);
+    const targetOwner = parsedRepo?.owner || LEGACY_GH_OWNER;
+    const targetRepo = parsedRepo?.repo || LEGACY_GH_REPO;
+    const threadRef =
+      meta.channel && meta.threadTs ? `${meta.channel}:${meta.threadTs}` : "";
+    const reply = text =>
+      meta.channel
+        ? client.chat.postMessage({
+            channel: meta.channel,
+            thread_ts: meta.threadTs || undefined,
+            text,
+          })
+        : Promise.resolve();
+
+    console.log("");
+    console.log("======================================");
+    console.log("✍️ INSTRUCT & RETRY REQUESTED");
+    console.log("======================================");
+    console.log(
+      `Ticket: ${meta.ticketId} | run: ${meta.generationRunId} | by: ${body.user?.id}`
+    );
+    console.log(
+      `Cases: ${selected.join(", ")} | form text: ${instructions.length} chars | thread: ${threadRef || "none"}`
+    );
+
+    if (!meta.ticketId || !/^\d+$/.test(meta.generationRunId || "")) {
       await reply(
-        `⚠️ *Next batch started for ${meta.ticketId}: ${selected.join(", ")} — WITHOUT your instructions.*\n` +
-          "The workflow on main does not accept instructions yet (merge the instruction-input change to main). " +
-          "The cases retry using the skills only."
+        "❌ Could not start the batch: the form lost its ticket/run details. Click the button again."
       );
       return;
     }
 
-    await reply(
-      `✅ *Next batch started for ${meta.ticketId}* by <@${body.user?.id}>: ${selected.join(", ")}\n` +
-        (instructions || threadRef
-          ? "🧭 The agent will follow the instructions from the form and this thread's replies; cases not mentioned retry using the skills only."
-          : "🤖 No instructions given — the cases retry using the skills only.")
-    );
-  } catch (error) {
-    console.error("❌ Failed to start the instructed batch:", error.message);
-    await reply(`❌ *Failed to start the next batch for ${meta.ticketId}*\n\nError: ${error.message}`);
+    const baseInputs = {
+      ticket_id: meta.ticketId,
+      selected_test_cases: selected.join(","),
+      generation_run_id: meta.generationRunId,
+    };
+
+    try {
+      try {
+        await dispatchGitHubWorkflow(
+          targetOwner,
+          targetRepo,
+          APPROVED_TICKET_WORKFLOW,
+          {
+            ...baseInputs,
+            user_instructions: instructions,
+            user_instructions_thread: threadRef,
+          }
+        );
+      } catch (error) {
+        // The workflow on main does not declare the instruction inputs yet
+        // (this listener was deployed before that workflow change was merged):
+        // GitHub rejects unknown inputs. Start a skills-only retry instead of
+        // failing, and say so.
+        if (!/Unexpected inputs/i.test(String(error.message))) throw error;
+
+        console.warn(
+          "⚠️ Workflow on main has no user_instructions inputs yet — dispatching without instructions."
+        );
+        await dispatchGitHubWorkflow(
+          targetOwner,
+          targetRepo,
+          APPROVED_TICKET_WORKFLOW,
+          baseInputs
+        );
+        await reply(
+          `⚠️ *Next batch started for ${meta.ticketId}: ${selected.join(", ")} — WITHOUT your instructions.*\n` +
+            "The workflow on main does not accept instructions yet (merge the instruction-input change to main). " +
+            "The cases retry using the skills only."
+        );
+        return;
+      }
+
+      await reply(
+        `✅ *Next batch started for ${meta.ticketId}* by <@${body.user?.id}>: ${selected.join(", ")}\n` +
+          (instructions || threadRef
+            ? "🧭 The agent will follow the instructions from the form and this thread's replies; cases not mentioned retry using the skills only."
+            : "🤖 No instructions given — the cases retry using the skills only.")
+      );
+    } catch (error) {
+      console.error("❌ Failed to start the instructed batch:", error.message);
+      await reply(
+        `❌ *Failed to start the next batch for ${meta.ticketId}*\n\nError: ${error.message}`
+      );
+    }
   }
-});
+);
+
+// ==================================================
+// NOT-AUTOMATABLE LIST (ticket picker)
+// ==================================================
+//
+// "Hide from future runs" / "Undo" for tickets ->
+// ai-not-automatable.yml. Only new action IDs; no handler
+// above is changed or shadowed.
+//
+require("./ai-agent/lib/notAutomatableHandlers").registerNotAutomatableHandlers(
+  app,
+  {
+    kind: "ticket",
+    dispatchGitHubWorkflow,
+    owner: TICKET_SELECTION_OWNER,
+    repo: TICKET_SELECTION_REPO,
+  }
+);
 
 // ==================================================
 // BUG-REGRESSION AGENT (ai-bug-agent/slack/)
@@ -1288,8 +1368,15 @@ async function start() {
     console.log("🧪 Stage 2 listener: automate_testcases");
 
     console.log("♻️ Retry listeners: resume_reuse, resume_fresh");
-    console.log("🔁 Next-batch listeners: automate_failed_cases, automate_remaining_cases");
-    console.log("✍️ Instruct listeners: instruct_blocked_cases, view instruct_blocked_cases_modal");
+    console.log(
+      "🔁 Next-batch listeners: automate_failed_cases, automate_remaining_cases"
+    );
+    console.log(
+      "✍️ Instruct listeners: instruct_blocked_cases, view instruct_blocked_cases_modal"
+    );
+    console.log(
+      "🚫 Not-automatable listeners: hide_/undo_not_automatable_tickets, hide_/undo_not_automatable_bugs"
+    );
 
     console.log("");
 

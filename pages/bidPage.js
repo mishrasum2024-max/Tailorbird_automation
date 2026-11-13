@@ -576,8 +576,12 @@ class BidPage {
    */
   async attachFileToBidBookChatAndWaitForContext(filePath) {
     const loc = this.loc();
-    const bidBookPanel = this.page.getByRole("tabpanel", { name: "Bid Book AI Assisted" });
-    const attachmentsLabel = bidBookPanel.getByText(/^\d+ attachments?$/).first();
+    const bidBookPanel = this.page.getByRole("tabpanel", {
+      name: "Bid Book AI Assisted",
+    });
+    const attachmentsLabel = bidBookPanel
+      .getByText(/^\d+ attachments?$/)
+      .first();
 
     await expect(loc.chatAttachButton).toBeVisible({ timeout: 10000 });
     await loc.chatAttachButton.click();
@@ -594,27 +598,35 @@ class BidPage {
       await directFileInput.setInputFiles(filePath, { timeout: 15000 });
       Logger.info("Attached file via Uploadcare's file input");
     } else {
-      const fileChooserPromise = this.page.waitForEvent("filechooser", { timeout: 15000 });
+      const fileChooserPromise = this.page.waitForEvent("filechooser", {
+        timeout: 15000,
+      });
       await ucDialog.getByRole("button", { name: "From device" }).click();
       const chooser = await fileChooserPromise;
       await chooser.setFiles(filePath);
       Logger.info("Attached file via native file chooser");
     }
 
-    await expect(ucDialog.getByText(/\d+ files? uploaded/)).toBeVisible({ timeout: 60000 });
+    await expect(ucDialog.getByText(/\d+ files? uploaded/)).toBeVisible({
+      timeout: 60000,
+    });
     const doneBtn = ucDialog.getByRole("button", { name: /^Done$/i });
     await expect(doneBtn).toBeEnabled({ timeout: 20000 });
     await doneBtn.click({ force: true });
-    await expect(ucDialog).toBeHidden({ timeout: 30000 }).catch(async () => {
-      await this.page.keyboard.press("Escape").catch(() => {});
-    });
+    await expect(ucDialog)
+      .toBeHidden({ timeout: 30000 })
+      .catch(async () => {
+        await this.page.keyboard.press("Escape").catch(() => {});
+      });
 
     let fileInChatContext = await attachmentsLabel
       .waitFor({ state: "visible", timeout: 30000 })
       .then(() => true)
       .catch(() => false);
     if (!fileInChatContext) {
-      Logger.info('Attachment not in the chat context yet — reloading so the chat re-reads its files');
+      Logger.info(
+        "Attachment not in the chat context yet — reloading so the chat re-reads its files"
+      );
       await this.page.reload({ waitUntil: "domcontentloaded" });
       await this.navigateToBidBookTab();
       fileInChatContext = await attachmentsLabel
@@ -623,9 +635,13 @@ class BidPage {
         .catch(() => false);
     }
     if (!fileInChatContext) {
-      throw new Error('Uploaded file never appeared as an attachment in the Bid Book chat');
+      throw new Error(
+        "Uploaded file never appeared as an attachment in the Bid Book chat"
+      );
     }
-    Logger.success(`File attached to Bid Book chat and in chat context: ${path.basename(filePath)}`);
+    Logger.success(
+      `File attached to Bid Book chat and in chat context: ${path.basename(filePath)}`
+    );
   }
 
   /**
@@ -659,20 +675,27 @@ class BidPage {
         ? `\n\nIf the attached file is not available to you, use this exact data from it instead:\n\n${this.bidBookInlineData}`
         : "";
       initialMessage = `${initialMessage}${inlineData}`;
-      const followUpMessage =
-        `Yes, please proceed exactly as you suggested above and generate the complete bid book table now.${inlineData}`;
-      const thoughtButtons = bidBookPanel.getByRole("button", { name: "Thought" });
+      const followUpMessage = `Yes, please proceed exactly as you suggested above and generate the complete bid book table now.${inlineData}`;
+      const thoughtButtons = bidBookPanel.getByRole("button", {
+        name: "Thought",
+      });
       let tableReady = false;
       for (let attempt = 1; attempt <= maxAttempts && !tableReady; attempt++) {
         const thoughtsBefore = await thoughtButtons.count().catch(() => 0);
-        await this.typeInvokeMessage(attempt === 1 ? initialMessage : followUpMessage);
-        const panelTextAfterSend = await bidBookPanel.innerText().catch(() => "");
+        await this.typeInvokeMessage(
+          attempt === 1 ? initialMessage : followUpMessage
+        );
+        const panelTextAfterSend = await bidBookPanel
+          .innerText()
+          .catch(() => "");
 
         const turnFinished = await expect
           .poll(
             async () => {
-              if (await loc.bidBookIframe.isVisible().catch(() => false)) return true;
-              if (!(await loc.chatInput.isEnabled().catch(() => false))) return false;
+              if (await loc.bidBookIframe.isVisible().catch(() => false))
+                return true;
+              if (!(await loc.chatInput.isEnabled().catch(() => false)))
+                return false;
               const panelText = await bidBookPanel.innerText().catch(() => "");
               return panelText.length > panelTextAfterSend.length;
             },
@@ -682,7 +705,8 @@ class BidPage {
           .then(() => true)
           .catch(() => false);
 
-        const thoughtShown = (await thoughtButtons.count().catch(() => 0)) > thoughtsBefore;
+        const thoughtShown =
+          (await thoughtButtons.count().catch(() => 0)) > thoughtsBefore;
         tableReady = await loc.bidBookIframe
           .waitFor({ state: "visible", timeout: 10000 })
           .then(() => true)
@@ -693,7 +717,11 @@ class BidPage {
         );
         if (!tableReady) {
           const lastResponseText = (
-            await bidBookPanel.locator("p").last().textContent().catch(() => "")
+            await bidBookPanel
+              .locator("p")
+              .last()
+              .textContent()
+              .catch(() => "")
           ).trim();
           Logger.info(
             `Turn ${attempt} response (adaptive reply basis only): "${lastResponseText.substring(0, 150)}"`
@@ -990,12 +1018,33 @@ class BidPage {
     await expect(loc.vendorSearchInput).toBeVisible({ timeout: 15000 });
     await expect(loc.vendorFilterButton).toBeVisible({ timeout: 10000 });
 
+    // MCP-verified 2026-11-10 (bid 1196): the dialog's vendor grid (BirdTable "vendor_organization",
+    // suppressHorizontalScroll) is ~725px wide inside the 780px drawer, so RevoGrid only mounts the
+    // "Name" column; Location / Service Area / Primary Contact / Primary Contact Email / Trades are
+    // absent from the DOM until the grid is wider (forcing it wide showed all of them; no saved view
+    // hides them). Widen THIS dialog's grid for the header checks, then restore it below.
+    const sendBidVendorGrid = loc.sendToVendorsDialog
+      .locator("revo-grid")
+      .first();
+    await expect(
+      sendBidVendorGrid,
+      "FAIL: Send Bid to Vendors vendor grid did not render"
+    ).toBeVisible({ timeout: 15000 });
+    await sendBidVendorGrid.evaluate(g => {
+      g.style.setProperty("width", "3000px", "important");
+      g.style.setProperty("min-width", "3000px", "important");
+    });
     await expect(loc.colVendorName).toBeVisible();
     await expect(loc.colVendorLocation).toBeVisible();
     await expect(loc.colVendorServiceArea).toBeVisible();
     await expect(loc.colVendorPrimaryContact).toBeVisible();
     await expect(loc.colVendorContactEmail).toBeVisible();
     Logger.info("Vendor grid columns verified");
+    // Restore the drawer's own width so the vendor search/selection below runs exactly as before.
+    await sendBidVendorGrid.evaluate(g => {
+      g.style.removeProperty("width");
+      g.style.removeProperty("min-width");
+    });
 
     await expect(loc.inviteVendorButton).toBeVisible();
     await expect(loc.inviteVendorButton).toContainText("+ Invite a New Vendor");

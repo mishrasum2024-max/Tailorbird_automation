@@ -11,6 +11,8 @@ const { ProjectPage } = require("../pages/projectPage");
 const { ProjectJob } = require("../pages/projectJob");
 const { getTabsDisabledState } = require("../utils/tabsDisabledHelper");
 const { ensureLeftPanelExpanded } = require("../utils/leftPanelExpander");
+const { healingLocator } = require("../utils/locatorHealer");
+const { armCsvExportChoice } = require("../utils/exportMenu");
 
 const TC08_SNAPSHOT_DIR = path.join(
   process.cwd(),
@@ -850,6 +852,61 @@ test.describe("Invoice tab", () => {
     // each retry waiting up to 45s for the Confirm button to enable; worst case across 5
     // invoices can legitimately exceed even 600000ms. Bumped further for headroom.
     test.setTimeout(480000); // 8 minutes max
+    // Added 2026-11-11 (insert-only, flaky in CI): the passing CI attempt took 11.4m, above the 8m
+    // budget set just above (the comment there already notes the worst case can exceed 600000ms).
+    test.setTimeout(900000);
+    // Added 2026-11-12 (insert-only): run-verified failure — data/projectData.json and
+    // data/lastCreatedJob.json are shared files that BOTH the mandatory chain (TC81: Capex
+    // "Mall in Noida_*" job) and TC224 (Unit Interior "Mall in Noida_*" job) overwrite. When TC224
+    // wrote last, beforeEach opened its Unit Interior job, where the invoice amount never commits
+    // ("Invoice amount did not appear committed. Cell text = $0") and every Confirm fails with
+    // "Empty invoice, please update the 'Invoice Amount' column…". This test is built for the Capex
+    // contract job, so when the opened job is not Capex, switch to the newest finalized Capex
+    // "Mall in Noida_*" job (the mandatory chain's). No-op when the opened job is already Capex.
+    {
+      const openedJobId = Number((page.url().match(/\/jobs\/(\d+)/) || [])[1]);
+      const finalizedJobs = await page
+        .evaluate(async () => {
+          const res = await fetch("/api/jobs?isContractFinalized=true");
+          return res.ok ? res.json() : [];
+        })
+        .catch(() => []);
+      const jobList = Array.isArray(finalizedJobs) ? finalizedJobs : [];
+      const openedJob = jobList.find(j => Number(j.id) === openedJobId);
+      if (!openedJob || openedJob.job_type !== "capex") {
+        const capexJob = jobList
+          .filter(
+            j =>
+              j.job_type === "capex" &&
+              String(j.title || "").startsWith("Mall in Noida_")
+          )
+          .sort((a, b) => Number(b.id) - Number(a.id))[0];
+        expect(
+          capexJob,
+          `FAIL: opened job ${openedJobId} is "${openedJob ? openedJob.job_type : "unknown"}" and no finalized Capex "Mall in Noida_*" job exists`
+        ).toBeTruthy();
+        Logger.info(
+          `TC130: opened job ${openedJobId} is "${openedJob ? openedJob.job_type : "unknown"}" — switching to Capex job ${capexJob.id} "${capexJob.title}"`
+        );
+        await page.goto(
+          `${process.env.BASE_URL}/jobs/${capexJob.id}?tab=invoices`,
+          { waitUntil: "load" }
+        );
+        await invoicePage.navigateToInvoiceTab();
+        await healingLocator([
+          { name: "addInvoiceButton", locator: invoicePage.addInvoiceButton },
+          {
+            name: "role:button Create Invoice",
+            locator: page.getByRole("button", {
+              name: /Create Invoice|Add Invoice/i,
+            }),
+          },
+        ])
+          .first()
+          .waitFor({ state: "visible", timeout: 60000 });
+        await page.waitForTimeout(2000);
+      }
+    }
     Logger.step(
       "TC130: Creating 5 complete invoices with budget category (save via Go Back, no confirm)..."
     );
@@ -1243,10 +1300,16 @@ test.describe("Invoice tab", () => {
       exportBtn,
       "Export button should be visible on the Invoices page"
     ).toBeVisible({ timeout: 10000 });
+    // Export now opens a menu (MCP-verified 2026-10-28) — pick "Export CSV" when it opens.
+    const csvChoice = armCsvExportChoice(page);
     const [download] = await Promise.all([
       page.waitForEvent("download", { timeout: 15000 }),
       exportBtn.click(),
     ]);
+    expect(
+      await csvChoice,
+      'FAIL: "Export CSV" was not chosen from the Export menu'
+    ).toBe(true);
     const downloadsDir = path.join(process.cwd(), "downloads");
     if (!fs.existsSync(downloadsDir))
       fs.mkdirSync(downloadsDir, { recursive: true });
@@ -1343,5 +1406,31 @@ test.describe("Invoice tab", () => {
     Logger.success(
       `TC136 passed: exported CSV has ${invoiceNumberValues.length} invoice row(s), no Invoice Number value is formatted as a date`
     );
+  });
+
+  test("TC496 @regression @changeOrderAndinvoice BUG-1552-TC01 : Invoice Documents table when creating an Invoice should not auto resize or flicker", async () => {
+    Logger.step("BUG-1552: open invoice details and sample table sizes");
+    await invoicePage.clickAddInvoice();
+    await expect(page).toHaveURL(/\/invoices\/\d+/, { timeout: 15_000 });
+    const grid = page.locator("revo-grid").first();
+    await expect(grid).toBeVisible({ timeout: 20_000 });
+    await page.waitForTimeout(3000); // let initial layout settle
+
+    // Sample the table box for ~5s: a stable layout must keep one size.
+    const samples = [];
+    for (let i = 0; i < 20; i++) {
+      const box = await grid.boundingBox();
+      samples.push(
+        box ? `${Math.round(box.width)}x${Math.round(box.height)}` : "hidden"
+      );
+      await page.waitForTimeout(250);
+    }
+    const unique = [...new Set(samples)];
+    Logger.info(`BUG-1552 sampled sizes: ${JSON.stringify(unique)}`);
+    expect(
+      unique,
+      `Invoice details table must not resize or flicker, saw: ${JSON.stringify(unique)}`
+    ).toHaveLength(1);
+    expect(unique[0]).not.toBe("hidden");
   });
 });

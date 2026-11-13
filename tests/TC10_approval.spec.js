@@ -117,6 +117,49 @@ async function createNewPropertyRobust(page) {
   }
 }
 
+// True when the property is still in the user's GET /api/properties list. property.json is a
+// hand-off from TC04 and is also committed, so a stale name survives after the property is
+// deleted (MCP-verified 2026-11-05: "name_1782972565376" → "No properties found").
+async function isPropertyListed(page, propertyName) {
+  const response = await page.request.get("/api/properties");
+  expect(response.status(), "FAIL: GET /api/properties did not succeed").toBe(
+    200
+  );
+  const properties = await response.json().catch(() => []);
+  return (
+    Array.isArray(properties) && properties.some(p => p.name === propertyName)
+  );
+}
+
+// The navbar sometimes renders only "Get Help" without the sidebar menu or its Pin/Unpin
+// button (TC171 failure snapshot, 2026-11-05); ensureLeftPanelExpanded then waits 3 × 45s.
+// Wait for the sidebar control and reload once when it has not rendered.
+async function waitForSidebarReady(page) {
+  const sidebarToggle = healingLocator([
+    {
+      name: "role:pin-or-unpin",
+      locator: page.getByRole("button", { name: /^(Pin|Unpin) sidebar$/ }),
+    },
+    {
+      name: "css:aria-label",
+      locator: page.locator(
+        'button[aria-label="Pin sidebar"], button[aria-label="Unpin sidebar"]'
+      ),
+    },
+  ]).first();
+  const ready = await sidebarToggle
+    .waitFor({ state: "visible", timeout: 30000 })
+    .then(() => true)
+    .catch(() => false);
+  if (ready) return;
+  Logger.info("[Sidebar] Sidebar menu not rendered after 30s — reloading once");
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(
+    sidebarToggle,
+    "FAIL: sidebar Pin/Unpin button did not render after a reload"
+  ).toBeVisible({ timeout: 45000 });
+}
+
 let currentPropertyName = "";
 const APPROVAL_VISUAL_ASSERT = {
   animations: "disabled",
@@ -185,7 +228,22 @@ test.describe("Approval Templates", () => {
     await page.goto(process.env.DASHBOARD_URL, {
       waitUntil: "domcontentloaded",
     });
+    // The SSO callback intermittently answers "Couldn't sign in" (/api/auth/callback);
+    // a fresh navigation re-runs the login and lands on the dashboard.
+    const _onDashboard = await page
+      .waitForURL(process.env.DASHBOARD_URL, { timeout: 15000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!_onDashboard) {
+      Logger.info(
+        `[beforeEach] Sign-in did not reach the dashboard (${page.url()}) — retrying navigation once`
+      );
+      await page.goto(process.env.DASHBOARD_URL, {
+        waitUntil: "domcontentloaded",
+      });
+    }
     await expect(page).toHaveURL(process.env.DASHBOARD_URL);
+    await waitForSidebarReady(page);
     await ensureLeftPanelExpanded(page);
     // Wait for app shell — networkidle times out on CapEx page in CI (headless Linux)
     const _appShell = page
@@ -206,10 +264,24 @@ test.describe("Approval Templates", () => {
     await approvalJob.navigateToApprovalTab();
     await approvalJob.navigateToApprovalTemplatesTab();
     await approvalJob.waitForPageLoad();
+    // A column hidden by an interrupted run (e.g. TC173/TC174 between Hide and Show) stays
+    // hidden in the saved view and fails every core-column check; restore it before each test.
+    await new AddColumnPage(page, {
+      scope: page.locator("main"),
+    }).showHiddenColumns("approval_template");
   });
 
   test("TC168 @approval @Mandatory @sanity : Verify user can create approval for mandatory property", async () => {
     currentPropertyName = getPropertyName();
+    if (!(await isPropertyListed(page, currentPropertyName))) {
+      Logger.info(
+        `TC168: "${currentPropertyName}" from property.json no longer exists — creating a fresh property`
+      );
+      currentPropertyName = await createNewPropertyRobust(page);
+      await approvalJob.navigateToApprovalTab();
+      await approvalJob.navigateToApprovalTemplatesTab();
+      await approvalJob.waitForPageLoad();
+    }
 
     try {
       Logger.step("TC161: Starting create template positive flow");
@@ -428,48 +500,25 @@ test.describe("Approval Templates", () => {
       await approvalJob.expectApprovalTemplatesTableCoreColumnsVisible();
       Logger.info("Core template table columns visible before manage columns");
 
-      // Click Manage Columns button
-      await approvalJob.clickManageColumnsButton();
-      Logger.info("Manage Columns dialog opened");
+      // "Table settings" drawer replaced Table menu → Hide/Show columns → Manage Columns
+      // (MCP-verified 2026-10-30, Approval Templates). Each column now has an eye (Hide/Show)
+      // that saves on click; toggle the first 2 columns and restore them, as before.
+      const tableSettings = new AddColumnPage(page, {
+        scope: page.locator("main"),
+      });
+      await tableSettings.openTableSettings({ addColumn: false });
+      Logger.info("Table settings drawer opened");
 
-      const allCheckboxes = await approvalJob.getAllCheckboxes();
-      const checkboxCount = await allCheckboxes.count();
-      expect(
-        checkboxCount,
-        "Manage Columns dialog should expose at least one column checkbox"
-      ).toBeGreaterThan(0);
-      Logger.info("Column checkboxes found: " + checkboxCount);
+      const columnNames = await tableSettings.verifyColumnVisibilityControls();
+      Logger.info("Column visibility controls found: " + columnNames.length);
 
-      // Record original state then toggle first 2 columns
-      const originalStates = [];
-      for (let i = 0; i < Math.min(2, checkboxCount); i++) {
-        const checkbox = allCheckboxes.nth(i);
-        const wasChecked = await checkbox.isChecked();
-        originalStates.push(wasChecked);
-        await checkbox.click();
-        await page.waitForTimeout(300);
-        const nowChecked = await checkbox.isChecked();
-        Logger.info(
-          "Checkbox " + i + " toggled from " + wasChecked + " to " + nowChecked
-        );
-      }
+      // Toggle the first 2 columns and restore them so column visibility is not polluted
+      const toggled =
+        await tableSettings.toggleFirstColumnsVisibilityAndRestore(2);
+      Logger.info("TC173: Toggled and restored: " + toggled.join(", "));
 
-      // Restore original states so column visibility is not polluted for subsequent tests
-      Logger.info("TC173: Restoring toggled columns to original state");
-      for (let i = 0; i < originalStates.length; i++) {
-        const checkbox = allCheckboxes.nth(i);
-        const currentChecked = await checkbox.isChecked();
-        if (currentChecked !== originalStates[i]) {
-          await checkbox.click();
-          await page.waitForTimeout(300);
-          Logger.info("Checkbox " + i + " restored to " + originalStates[i]);
-        }
-      }
-
-      // Close dialog
-      await page.keyboard.press("Escape");
-      await page.waitForTimeout(800);
-      Logger.info("Manage Columns dialog closed");
+      await tableSettings.closeTableSettings();
+      Logger.info("Table settings drawer closed");
 
       Logger.success("TC173 passed: Manage Columns tested with column toggles");
     } catch (error) {
@@ -486,39 +535,16 @@ test.describe("Approval Templates", () => {
       const addColumnPage = new AddColumnPage(page, {
         scope: page.locator("main"),
       });
-      await addColumnPage.openManageColumns();
-      Logger.info("Manage Columns dialog opened");
+      // "Table settings" drawer replaced Manage Columns (MCP-verified 2026-10-30): hide every
+      // column (negative case), then show them all back — each eye click saves immediately.
+      await addColumnPage.openTableSettings({ addColumn: false });
+      Logger.info("Table settings drawer opened");
 
-      // Get all checkboxes
-      const allCheckboxes = addColumnPage.loc.manageColumnsDialog.locator(
-        'input[type="checkbox"]'
-      );
-      const checkboxCount = await allCheckboxes.count();
-
-      // Test: Uncheck all columns (negative case)
-      for (let i = 0; i < checkboxCount; i++) {
-        const checkbox = allCheckboxes.nth(i);
-        const isChecked = await checkbox.isChecked();
-        if (isChecked) {
-          await checkbox.click();
-          await page.waitForTimeout(200);
-        }
-      }
-      Logger.info("All columns unchecked");
-
-      // Check them all back
-      for (let i = 0; i < checkboxCount; i++) {
-        const checkbox = allCheckboxes.nth(i);
-        const isChecked = await checkbox.isChecked();
-        if (!isChecked) {
-          await checkbox.click();
-          await page.waitForTimeout(200);
-        }
-      }
-      Logger.info("All columns checked back");
+      const restored = await addColumnPage.hideAllColumnsThenShowAll();
+      Logger.info(`All columns hidden, then all ${restored.length} shown back`);
 
       // Close dialog
-      await addColumnPage.closeManageColumns();
+      await addColumnPage.closeTableSettings();
 
       await approvalJob.expectApprovalTemplatesTableCoreColumnsVisible();
       Logger.success(
@@ -1167,12 +1193,14 @@ test.describe("Approval Templates", () => {
 
   test("TC196 @approval @regression @positive : Verify Table menu shows Hide/Show Columns option", async () => {
     await settleApprovalWorkspace(page, 1000);
-    await page.locator("main").getByTestId("bt-table-action").click();
-    await expect(
-      page.getByRole("button", { name: /hide.*show columns/i })
-    ).toBeVisible({ timeout: 12000 });
-    await page.keyboard.press("Escape");
-    await page.waitForTimeout(300);
+    // The Table button now opens the "Table settings" drawer, where every column carries its own
+    // Hide/Show control (MCP-verified 2026-10-30) instead of a "Hide / show columns" menu item.
+    const tableSettings = new AddColumnPage(page, {
+      scope: page.locator("main"),
+    });
+    await tableSettings.openTableSettings({ addColumn: false });
+    await tableSettings.verifyColumnVisibilityControls();
+    await tableSettings.closeTableSettings();
   });
 
   test("TC197 @approval @regression @edge : Verify Add Approval Rule adds a new approver row", async () => {
@@ -1515,21 +1543,17 @@ test.describe("Approval Templates", () => {
     await test.step("V13 — Manage Columns dialog", async () => {
       await approvalJob.cancelDialog();
       await settleApprovalWorkspace(page, 1200);
-      await approvalJob.clickManageColumnsButton();
-      const manageDialog = page
-        .getByRole("dialog", { name: "Manage Columns" })
-        .or(
-          page
-            .locator('section[role="dialog"]')
-            .filter({ hasText: "Manage Columns" })
-        )
-        .first();
-      await expect(manageDialog).toBeVisible({ timeout: 15000 });
-      await expect(manageDialog).toHaveScreenshot(
-        "tc10-v-approval-manage-columns-dialog.png",
+      // "Table settings" drawer replaced the Manage Columns dialog (MCP-verified 2026-10-30);
+      // new baseline name because the old dialog no longer exists.
+      const tableSettings = new AddColumnPage(page, {
+        scope: page.locator("main"),
+      });
+      await tableSettings.openTableSettings({ addColumn: false });
+      await expect(tableSettings._tableSettings().drawer).toHaveScreenshot(
+        "tc10-v-approval-table-settings-drawer.png",
         APPROVAL_VISUAL_ASSERT
       );
-      await page.keyboard.press("Escape");
+      await tableSettings.closeTableSettings();
     });
 
     await test.step("V16 — All Approvals workspace", async () => {
@@ -1778,6 +1802,46 @@ test.describe("Approval Templates", () => {
       .filter({ hasText: /Approval Details/i });
     await expect(dialog).toBeVisible({ timeout: 20000 });
     Logger.info("TC364: Approval Details dialog opened");
+
+    // The newest rows are often already Approved/Rejected by other suites, and only a
+    // pending approval offers "Remind Approver" — switch to a "Pending Approval" row.
+    const _hasRemind = await dialog
+      .getByRole("button", { name: "Remind Approver" })
+      .waitFor({ state: "visible", timeout: 5000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!_hasRemind) {
+      Logger.info(
+        'TC364: First approval is not pending — opening a "Pending Approval" row instead'
+      );
+      await page.keyboard.press("Escape");
+      await expect(dialog).toBeHidden({ timeout: 10000 });
+      const pendingRow = page
+        .locator('[role="treegrid"]')
+        .getByRole("row")
+        .filter({
+          has: page.getByRole("gridcell", {
+            name: "Pending Approval",
+            exact: true,
+          }),
+        })
+        .first();
+      await expect(
+        pendingRow,
+        'FAIL: No "Pending Approval" row found in All Approvals grid'
+      ).toBeVisible({ timeout: 15000 });
+      const pendingRowGrow = await pendingRow.getAttribute("data-rgrow");
+      await page
+        .locator(
+          `div[role="gridcell"][data-rgrow="${pendingRowGrow}"] button:has(svg.lucide-eye)`
+        )
+        .first()
+        .click();
+      await expect(dialog).toBeVisible({ timeout: 20000 });
+      Logger.info(
+        "TC364: Approval Details dialog opened for a pending approval"
+      );
+    }
 
     // Assert the "Remind Approver" option is present
     const remindApproverBtn = dialog.getByRole("button", {

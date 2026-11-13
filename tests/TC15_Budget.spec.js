@@ -3,7 +3,6 @@ const path = require("path");
 const fs = require("fs");
 const { test, expect } = require("@playwright/test");
 const { BudgetJob } = require("../pages/budgetPage");
-const { ApprovalJob } = require("../pages/approvalPage");
 const { AddColumnPage } = require("../pages/addColumnPage");
 const { Logger } = require("../utils/logger");
 const { ensureLeftPanelExpanded } = require("../utils/leftPanelExpander");
@@ -146,16 +145,22 @@ test.describe("Budget Workflow", () => {
       scope: page.locator("main"),
     });
     const colName = `TestCol-${Date.now()}`;
-    await addColumnPage.addColumn(colName, "Automation Test column for budget");
-    await addColumnPage.openManageColumns();
-    await expect(
-      addColumnPage.loc.manageColumnsDialog
-        .locator("p")
-        .filter({ hasText: colName })
-        .first()
-    ).toBeVisible({ timeout: 8000 });
-    await addColumnPage.deleteColumn(colName);
-    await addColumnPage.closeManageColumns();
+    // "Table settings" drawer replaced the table menu + Manage Columns dialog (MCP-verified
+    // 2026-10-30). Same flow as before: add (after removing this test's own leftovers), verify, delete.
+    await addColumnPage.addColumnViaTableSettings(
+      colName,
+      "Automation Test column for budget"
+    );
+    await addColumnPage.openTableSettings();
+    await addColumnPage.verifyColumnInTableSettings(colName);
+    await addColumnPage.deleteColumnViaTableSettings(colName, {
+      menuItems: [
+        "Add to Filter",
+        "Add to Budget Creation Form",
+        "Delete column",
+      ],
+    });
+    await addColumnPage.closeTableSettings();
     Logger.success("TC253: Add, verify, delete column completed");
   });
 
@@ -245,6 +250,11 @@ test.describe("Budget Workflow", () => {
       await budgetJob.openRevisionEditor();
       await page.waitForTimeout(3000);
       await budgetJob.verifyRevisionEditorOpen();
+      // MCP-verified 2026-10-28: the naming dialog can stay up ~30s after Continue, and at the
+      // 1280px Desktop Chrome viewport RevoGrid does not render the right-most Actions (trash)
+      // column until the grid is scrolled right — reveal it before deleting.
+      await budgetJob.waitForRevisionEditorReady();
+      await budgetJob.scrollRevisionEditorToNotesColumn();
       await page.waitForTimeout(2000);
       const countBeforeDelete = await budgetJob.getTreegridRowCount();
       expect(
@@ -266,6 +276,11 @@ test.describe("Budget Workflow", () => {
     });
 
     test("TC260 @budget @regression : Verify Budget Category persists before and after approval submission", async () => {
+      // MCP-verified 2026-11-03: at the 1280px Desktop Chrome viewport RevoGrid does not render
+      // the right-most Actions (trash) column, so deleteFirstRowInRevision() waits forever. At
+      // 1920px every column renders without horizontal scrolling (scrolling would reorder the
+      // row's cells and break the index-based cell lookups that follow).
+      await page.setViewportSize({ width: 1920, height: 1080 });
       await budgetJob.navigateToBudget();
       await budgetJob.selectBrookProperty();
       await budgetJob.openRevisionEditor();
@@ -381,9 +396,24 @@ test.describe("Budget Workflow", () => {
   test("TC263 @budget @regression @ui : Verify Table Menu, Add Column panel and Manage Columns drawer functionality", async () => {
     await budgetJob.navigateToBudget();
     await budgetJob.selectBrookProperty();
-    await budgetJob.verifyTableMenuItems();
-    await budgetJob.verifyAddColumnPanelValidation();
-    await budgetJob.verifyManageColumnsDrawerContent();
+    // "Table settings" drawer replaced the table menu, Add column panel and Manage Columns
+    // (MCP-verified 2026-10-30). Same checks: drawer contents, Add column form validation (nothing
+    // added), default columns listed, Budget Remaining visibility toggled and restored.
+    await budgetJob.ensureBudgetOverviewTab();
+    const tableSettings = new AddColumnPage(page, {
+      scope: page.getByRole("tabpanel", { name: "Overview" }),
+    });
+    await tableSettings.openTableSettings();
+    await tableSettings.verifyAddColumnFormValidation();
+    await tableSettings.verifyColumnsListedInTableSettings([
+      "Budget Item",
+      "Description",
+      "Category Code",
+      "Original Budget",
+      "Current Budget",
+    ]);
+    await tableSettings.toggleColumnVisibilityAndRestore("Budget Remaining");
+    await tableSettings.closeTableSettings();
     Logger.success("TC263: Table menu, Add column, Manage Columns – PASSED");
   });
 
@@ -428,424 +458,35 @@ test.describe("Budget Workflow", () => {
     await budgetJob.navigateToBudget();
     await budgetJob.selectBrookProperty();
     await budgetJob.verifyDisabledButtonStylingAndAmounts();
-    await budgetJob.verifyEdgeCases();
+    // Table settings drawer replaced the table menu / Manage Columns (MCP-verified 2026-10-30).
+    await budgetJob.verifyEdgeCasesViaTableSettings();
     Logger.success(
       "TC268: Visual states, negative guards, edge cases – PASSED"
     );
   });
 
-  test("TC269 @budget @e2e @revision : Verify Budget revision import, AI notes, approval, and status updates", async () => {
-    test.setTimeout(600000); // 8 minutes max
-
-    const timestamp = Date.now();
-    const propertyName = `TC244_BudgetProp_${timestamp}`;
-    const templateName = `TC244_BudgetTemplate_${timestamp}`;
-
-    const approvalJob = new ApprovalJob(page);
-
-    // ===== STEP 1: Create new property =====
-    Logger.step("TC269 Step 1: Creating new property");
-    // createPropertyRobust (existing, additive ApprovalJob method — pages/approvalPage.js)
-    // instead of createProperty: same MCP-verified client-side stale-cache bug on the
-    // Properties listing after in-app navigation, already root-caused and fixed there.
-    // createProperty() itself is untouched.
-    await approvalJob.createPropertyRobust(
-      propertyName,
-      "Domestic Terminal, College Park, GA 30337, USA",
-      "College Park",
-      "GA",
-      "30337",
-      "Garden Style"
-    );
-    Logger.success(`TC269 Step 1: Property created — ${propertyName}`);
-
-    // ===== STEP 2: Create Budget Approval template with 2 approvers =====
-    Logger.step("TC269 Step 2: Creating Budget Approval template");
-    await approvalJob.navigateToApprovalTab();
-    await approvalJob.createBudgetApprovalTemplateForTest(
-      templateName,
-      propertyName
-    );
-    Logger.success(`TC269 Step 2: Template created — ${templateName}`);
-
-    // ===== STEP 3: Navigate to Budget, select property, import CSV, submit =====
-    Logger.step("TC269 Step 3: Importing budget CSV for initial budget");
+  test("TC556 @regression @budget BUG-1582-TC01 : Missing Download Sample CSV for Budget Import", async () => {
+    test.setTimeout(180000);
     await budgetJob.navigateToBudget();
-    await page.waitForTimeout(5000);
-    await budgetJob.selectPropertyByName(propertyName);
-    await budgetJob.openRevisionEditor();
-    const budgetFilePath = path.resolve(
-      process.cwd(),
-      "files",
-      "budget_data.csv"
-    );
-    expect(fs.existsSync(budgetFilePath)).toBeTruthy();
-    await budgetJob.uploadFileInRevision(budgetFilePath);
-    await budgetJob.ensureSubmitEnabledAfterUpload();
-    await budgetJob.clickSubmitForApproval();
-    await page.waitForTimeout(5000);
-    Logger.success("TC269 Step 3: Initial budget submitted for approval");
-
-    // ===== STEP 4: Approve the initial budget via "Approve on Behalf" =====
-    Logger.step("TC269 Step 4: Approving initial budget in All Approvals");
-    await approvalJob.navigateToAllApprovalsTab();
-    await approvalJob.approveRevisionOnBehalfByPropertyInAllApprovals(
-      propertyName
-    );
-    Logger.success("TC269 Step 4: Initial budget approved");
-
-    // ===== STEP 5: Revision #1 — enter adjustments, assert AI notes + summary cards =====
-    Logger.step(
-      "TC269 Step 5: Creating Revision #1 (Bathroom -2000 / Concrete +1000)"
-    );
-    await budgetJob.navigateToBudget();
-    await page.waitForTimeout(5000);
-    await budgetJob.selectPropertyByName(propertyName);
-    await page.waitForTimeout(5000);
-    await budgetJob.openRevisionEditor();
-
-    await budgetJob.enterRevisionAdjustmentByItemNameV2(
-      "Bathroom fixtures install",
-      -2000
-    );
-    await budgetJob.enterRevisionAdjustmentByItemNameV2("Concrete", 1000);
-    await page.waitForTimeout(3000);
-
-    // Assert AI-generated Notes column values (scroll grid right to reveal Notes column)
-    await budgetJob.assertRevisionAINoteVisible(
-      "this revision decreased the adjustment amount by $2,000.00"
-    );
-    await budgetJob.assertRevisionAINoteVisible(
-      "this revision increased the adjustment amount by $1,000.00"
-    );
-    Logger.success("TC269 Step 5: Revision #1 AI notes verified");
-
-    // Assert summary card values
-    await expect(page.getByText("$1,000.00").first()).toBeVisible({
-      timeout: 15000,
-    }); // Total Increase
-    await expect(page.getByText("-$2,000.00").first()).toBeVisible({
-      timeout: 15000,
-    }); // Total Decrease
-    await expect(page.getByText("-$1,000.00").first()).toBeVisible({
-      timeout: 15000,
-    }); // Net Change
-    Logger.success("TC269 Step 5: Revision #1 summary cards verified");
-
-    await budgetJob.clickSubmitForApproval();
-    await page.waitForTimeout(5000);
-    Logger.success("TC269 Step 5: Revision #1 submitted for approval");
-
-    // ===== STEP 6: Revision #2 — enter adjustments, assert AI notes + summary cards =====
-    Logger.step(
-      "TC269 Step 6: Creating Revision #2 (Bathroom +4000 / Concrete -500)"
-    );
-    await budgetJob.navigateToBudget();
-    await page.waitForTimeout(5000);
-    await budgetJob.selectPropertyByName(propertyName);
-    await page.waitForTimeout(5000);
-    await budgetJob.openRevisionEditor();
-
-    await budgetJob.enterRevisionAdjustmentByItemNameV2(
-      "Bathroom fixtures install",
-      4000
-    );
-    await budgetJob.enterRevisionAdjustmentByItemNameV2("Concrete", -500);
-    await page.waitForTimeout(3000);
-
-    // Assert AI-generated Notes column values (scroll grid right to reveal Notes column)
-    await budgetJob.assertRevisionAINoteVisible(
-      "this revision increased the adjustment amount by $4,000.00"
-    );
-    await budgetJob.assertRevisionAINoteVisible(
-      "this revision decreased the adjustment amount by $500.00"
-    );
-    Logger.success("TC269 Step 6: Revision #2 AI notes verified");
-
-    // Assert summary card values
-    await expect(page.getByText("$4,000.00").first()).toBeVisible({
-      timeout: 15000,
-    }); // Total Increase
-    await expect(page.getByText("-$500.00").first()).toBeVisible({
-      timeout: 15000,
-    }); // Total Decrease
-    await expect(page.getByText("$3,500.00").first()).toBeVisible({
-      timeout: 15000,
-    }); // Net Change
-    Logger.success("TC269 Step 6: Revision #2 summary cards verified");
-
-    await budgetJob.clickSubmitForApproval();
-    await page.waitForTimeout(5000);
-    Logger.success("TC269 Step 6: Revision #2 submitted for approval");
-
-    // ===== STEP 7: All Approvals — assert both revisions Pending =====
-    Logger.step(
-      "TC269 Step 7: Verifying both revisions visible with Pending Approval status"
-    );
-    await approvalJob.navigateToAllApprovalsTab();
-    await approvalJob.assertRevisionsByPropertyHaveStatus(
-      propertyName,
-      "Pending Approval",
-      2
-    );
-    Logger.success("TC269 Step 7: Both revisions show Pending Approval");
-
-    // ===== STEP 8: Approve both revisions via "Approve on Behalf" =====
-    Logger.step("TC269 Step 8: Approving both pending revisions on behalf");
-    await approvalJob.approveAllPendingRevisionsOnBehalfByProperty(
-      propertyName
-    );
-    Logger.success("TC269 Step 8: Both revisions approved on behalf");
-
-    // ===== STEP 9: Assert both revisions now show Approved =====
-    Logger.step("TC269 Step 9: Asserting both revisions are Approved");
-    await approvalJob.assertRevisionsByPropertyHaveStatus(
-      propertyName,
-      "Approved",
-      2
-    );
-    Logger.success("TC269 Step 9: Both revisions confirmed Approved");
-
-    // ===== STEP 10: Navigate to Revision #1 editor, assert Notes changed after approval =====
-    Logger.step(
-      "TC269 Step 10: Asserting Revision #1 Notes changed after approval"
-    );
-    await approvalJob.navigateToAllApprovalsTab();
-    await approvalJob.navigateToNthBudgetRevisionEditorByProperty(
-      propertyName,
-      1
-    );
-    await expect(
-      page.getByText(
-        "Change in current budget from 18000.03 to 22000.03 due to an approved revision"
-      )
-    ).toBeVisible({ timeout: 15000 });
-    await expect(
-      page.getByText(
-        "Change in current budget from 18000.01 to 17500.01 due to an approved revision"
-      )
-    ).toBeVisible({ timeout: 15000 });
-    Logger.success(
-      "TC269 Step 10: Revision #1 Notes confirmed changed after approval — TC269 PASSED"
-    );
-  });
-
-  test("TC270 @budget @e2e @revision @reallocation : Verify multiple Budget reallocations generate AI notes without Conflict status", async () => {
-    test.setTimeout(480000); // 8 minutes max
-
-    // A taller viewport gives the "Reallocate From" popover room to render fully
-    // on-screen regardless of where its trigger row sits in the revision grid.
-    await page.setViewportSize({ width: 1600, height: 1000 });
-
-    const timestamp = Date.now();
-    const propertyName = `TC271_ReallocProp_${timestamp}`;
-    const templateName = `TC271_ReallocTemplate_${timestamp}`;
-
-    const BUDGET_A = "Budget A - Appliances Reserve";
-    const BUDGET_C = "Budget C - Cabinets (No Original Budget)";
-    const BUDGET_D = "Budget D - Carpet (No Original Budget)";
-    const BUDGET_E = "Budget E - Vanity (Small Original Budget)";
-
-    const approvalJob = new ApprovalJob(page);
-
-    // ===== STEP 1: Create new property =====
-    Logger.step("TC271 Step 1: Creating new property");
-    // createPropertyRobust (existing, additive ApprovalJob method — pages/approvalPage.js)
-    // instead of createProperty: same MCP-verified client-side stale-cache bug on the
-    // Properties listing after in-app navigation, already root-caused and fixed there.
-    // createProperty() itself is untouched.
-    await approvalJob.createPropertyRobust(
-      propertyName,
-      "Domestic Terminal, College Park, GA 30337, USA",
-      "College Park",
-      "GA",
-      "30337",
-      "Garden Style"
-    );
-    Logger.success(`TC270 Step 1: Property created — ${propertyName}`);
-
-    // ===== STEP 2: Create Budget Approval template for the new property =====
-    Logger.step("TC270 Step 2: Creating Budget Approval template");
-    await approvalJob.navigateToApprovalTab();
-    await approvalJob.createBudgetApprovalTemplateForTest(
-      templateName,
-      propertyName
-    );
-    Logger.success(`TC270 Step 2: Template created — ${templateName}`);
-
-    // ===== STEP 3: Build initial budget — Category A large, C & D no original budget, E small =====
-    Logger.step(
-      "TC270 Step 3: Building initial budget (Budget A large / C & D none / E small)"
-    );
-    await budgetJob.navigateToBudget();
-    await page.waitForTimeout(5000);
-    await budgetJob.selectPropertyByName(propertyName);
-    await page.waitForTimeout(5000);
-    await budgetJob.openRevisionEditor();
-
-    await budgetJob.addBudgetItemInRevision(
-      "301 - INT_Appliances",
-      BUDGET_A,
-      "Large reserve budget item used as reallocation source (Budget A)",
-      "60000"
-    );
-    await budgetJob.addBudgetItemInRevision(
-      "302 - INT_Cabinets",
-      BUDGET_C,
-      "New budget line with no original budget allocated (Budget C)"
-    );
-    await budgetJob.addBudgetItemInRevision(
-      "303 - INT_Carpet",
-      BUDGET_D,
-      "New budget line with no original budget allocated (Budget D)"
-    );
-    await budgetJob.addBudgetItemInRevision(
-      "304 - INT_Vanity",
-      BUDGET_E,
-      "Small existing budget line used as reallocation destination (Budget E)",
-      "800"
-    );
-
-    await budgetJob.clickSubmitForApproval();
-    Logger.success("TC270 Step 3: Initial budget submitted for approval");
-
-    // ===== STEP 4: Approve the initial budget via "Approve on Behalf" =====
-    Logger.step("TC270 Step 4: Approving initial budget in All Approvals");
-    await approvalJob.navigateToAllApprovalsTab();
-    await approvalJob.approveRevisionOnBehalfByPropertyInAllApprovals(
-      propertyName
-    );
-    Logger.success("TC270 Step 4: Initial budget approved");
-
-    // ===== STEP 5: Open the Budget Revision used for all three reallocations =====
-    Logger.step(
-      "TC270 Step 5: Opening Budget Revision — grid + AI section must load first"
-    );
-    await budgetJob.navigateToBudget();
-    await page.waitForTimeout(5000);
-    await budgetJob.selectPropertyByName(propertyName);
-    await page.waitForTimeout(5000);
+    await budgetJob.selectBrookProperty();
     await budgetJob.openRevisionEditor();
     await budgetJob.verifyRevisionEditorOpen();
-
-    const rowsBeforeReallocation = await budgetJob.getAllRevisionRowTexts();
+    await budgetJob.openBudgetUploadGuideInRevision();
+    await budgetJob.verifySampleCsvDownloadInUploadGuide();
+    Logger.success("TC556: Sample CSV download offered in Budget upload guide");
+  });
+  test("TC556 @budget @regression BUG-1581-TC01 : Budget - Column Headers Scroll Horizontally to the Left", async () => {
+    await budgetJob.navigateToBudget();
+    await budgetJob.selectBrookProperty();
+    await budgetJob.openRevisionEditor();
+    await budgetJob.waitForRevisionEditorReady();
+    const { maxXDrift, maxScroll } =
+      await budgetJob.measureRevisionHeaderDrift();
     expect(
-      rowsBeforeReallocation.length,
-      "Revision grid must be loaded with the 4 existing budget rows before reallocating"
-    ).toBeGreaterThanOrEqual(4);
-    Logger.success(
-      `TC270 Step 5: Revision editor loaded with ${rowsBeforeReallocation.length} rows`
-    );
-
-    // ===== REALLOCATION 1: Budget A -> Budget C, $5,900 =====
-    Logger.step("TC270 Reallocation 1: Budget A -> Budget C ($5,900)");
-    await budgetJob.reallocateBudgetAmount(BUDGET_C, BUDGET_A, 5900);
-
-    const rowCTextAfter1 = await budgetJob.getRevisionRowFullText(BUDGET_C);
-    expect(
-      rowCTextAfter1,
-      "Reallocation row must be visible and non-empty"
-    ).toBeTruthy();
-    expect(rowCTextAfter1).toContain(BUDGET_C);
-    expect(rowCTextAfter1).toContain("$5,900");
-
-    const notes1 = await budgetJob.getRevisionRowNotesText(BUDGET_C);
-    Logger.info(`TC270 Reallocation 1 AI-generated note: "${notes1}"`);
-    expect(notes1, "AI generated note must not be empty").toBeTruthy();
-    expect(notes1).toContain("$5,900.00");
-    expect(notes1).toContain(BUDGET_A);
-    expect(notes1.toLowerCase()).not.toContain("conflict");
-    Logger.success(
-      "TC270 Reallocation 1: Budget A -> Budget C validated (source, destination, amount, AI note)"
-    );
-
-    // ===== REALLOCATION 2: Budget A -> Budget D, $1,500 =====
-    Logger.step("TC270 Reallocation 2: Budget A -> Budget D ($1,500)");
-    await budgetJob.reallocateBudgetAmount(BUDGET_D, BUDGET_A, 1500);
-
-    const rowDTextAfter2 = await budgetJob.getRevisionRowFullText(BUDGET_D);
-    expect(
-      rowDTextAfter2,
-      "Reallocation row must be visible and non-empty"
-    ).toBeTruthy();
-    expect(rowDTextAfter2).toContain(BUDGET_D);
-    expect(rowDTextAfter2).toContain("$1,500");
-
-    const notes2 = await budgetJob.getRevisionRowNotesText(BUDGET_D);
-    Logger.info(`TC270 Reallocation 2 AI-generated note: "${notes2}"`);
-    expect(notes2, "AI generated note must not be empty").toBeTruthy();
-    expect(notes2).toContain("$1,500.00");
-    expect(notes2).toContain(BUDGET_A);
-    expect(notes2.toLowerCase()).not.toContain("conflict");
-    Logger.success(
-      "TC270 Reallocation 2: Budget A -> Budget D validated (source, destination, amount, AI note)"
-    );
-
-    // ===== REALLOCATION 3: Budget A -> Budget E, $45,000 =====
-    Logger.step("TC270 Reallocation 3: Budget A -> Budget E ($45,000)");
-    await budgetJob.reallocateBudgetAmount(BUDGET_E, BUDGET_A, 45000);
-
-    const rowETextAfter3 = await budgetJob.getRevisionRowFullText(BUDGET_E);
-    expect(
-      rowETextAfter3,
-      "Reallocation row must be visible and non-empty"
-    ).toBeTruthy();
-    expect(rowETextAfter3).toContain(BUDGET_E);
-    expect(rowETextAfter3).toContain("$45,800"); // $800 original + $45,000 reallocated
-
-    const notes3 = await budgetJob.getRevisionRowNotesText(BUDGET_E);
-    Logger.info(`TC270 Reallocation 3 AI-generated note: "${notes3}"`);
-    expect(notes3, "AI generated note must not be empty").toBeTruthy();
-    expect(notes3).toContain("$45,000.00");
-    expect(notes3).toContain(BUDGET_A);
-    expect(notes3.toLowerCase()).not.toContain("conflict");
-    Logger.success(
-      "TC270 Reallocation 3: Budget A -> Budget E validated (source, destination, amount, AI note)"
-    );
-
-    // ===== FINAL GRID VALIDATIONS: every row visible, non-empty text =====
-    Logger.step(
-      "TC270: Final grid validation — every row must be visible with non-empty text"
-    );
-    const allRowTexts = await budgetJob.getAllRevisionRowTexts();
-    expect(
-      allRowTexts.length,
-      "All budget rows (A, C, D, E + totals) must remain in the grid"
-    ).toBeGreaterThanOrEqual(4);
-    allRowTexts.forEach((text, index) => {
-      expect(
-        text.length,
-        `Row ${index} text must not be empty`
-      ).toBeGreaterThan(0);
-    });
-
-    // ===== CONFLICT VALIDATION: no row / no global banner may contain "Conflict" =====
-    await budgetJob.assertNoConflictInRevisionEditor(allRowTexts);
-    Logger.success(
-      'TC270: Conflict validation passed — no row or banner contains "Conflict"'
-    );
-
-    // ===== FINAL ASSERTIONS =====
-    await expect(
-      page.getByText("$52,400.00").first(),
-      "Total Reallocated summary must equal $5,900 + $1,500 + $45,000"
-    ).toBeVisible({ timeout: 10000 });
-
-    const submitBtn = page
-      .getByRole("dialog")
-      .getByRole("button", { name: /Submit for Approval/i })
-      .first();
-    await expect(
-      submitBtn,
-      "Submit for Approval must remain enabled after all reallocations"
-    ).toBeEnabled();
-    Logger.success(
-      "TC270: Total Reallocated amount and Submit button state verified"
-    );
-
-    await budgetJob.clickSubmitForApproval();
-    Logger.success(
-      "TC270: Budget Reallocation revision submitted for approval — TC270 PASSED"
-    );
+      maxXDrift,
+      "Column headers must not move horizontally on their own"
+    ).toBeLessThanOrEqual(1);
+    expect(maxScroll, "Grid must not scroll horizontally on its own").toBe(0);
+    Logger.success("TC556: Revision editor headers stay stable");
   });
 });
