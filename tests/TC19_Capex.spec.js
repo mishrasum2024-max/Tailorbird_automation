@@ -309,6 +309,10 @@ test.describe("CapEx Page", () => {
       "Remaining Contract Amount",
       "Invoiced Amount",
     ];
+    // Added 2026-11-19 (insert-only): app commit 35306fd43 ("Capex Tracker lifetime columns")
+    // relabelled "Invoiced Amount" to "Invoice Amount - YTD" (MCP-verified headed on the
+    // Properties / Fund / Region tabs; "Invoice Amount - Lifetime" is a separate, new column).
+    FUND_COLS[FUND_COLS.indexOf("Invoiced Amount")] = "Invoice Amount - YTD";
     for (const col of FUND_COLS) {
       if (
         col === "Remaining Contract Amount" &&
@@ -453,6 +457,9 @@ test.describe("CapEx Page", () => {
       "Remaining Contract Amount",
       "Invoiced Amount",
     ];
+    // Added 2026-11-19 (insert-only): "Invoiced Amount" is now "Invoice Amount - YTD" (see TC295).
+    REGION_COLS[REGION_COLS.indexOf("Invoiced Amount")] =
+      "Invoice Amount - YTD";
     for (const col of REGION_COLS) {
       if (
         col === "Remaining Contract Amount" &&
@@ -707,6 +714,8 @@ test.describe("CapEx Page", () => {
       "Invoiced Amount",
       "Actions",
     ];
+    // Added 2026-11-19 (insert-only): "Invoiced Amount" is now "Invoice Amount - YTD" (see TC295).
+    EXPECTED[EXPECTED.indexOf("Invoiced Amount")] = "Invoice Amount - YTD";
     for (const col of EXPECTED) {
       if (
         col === "Remaining Contract Amount" &&
@@ -1446,3 +1455,306 @@ test.describe("CapEx Page", () => {
     Logger.success("TC310 ✓");
   });
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// Missing-coverage E2E cases (formerly tests/TC39_CapexE2E.spec.js). Wrapped in a block so its
+// names never clash with this file's; it relies on this file's test.use
+// (storageState: sessionState.json). Added 2026-11-19.
+// ════════════════════════════════════════════════════════════════════════════
+{
+  /**
+   * CapEx E2E — on properties the suite creates and deletes itself.
+   *
+   *   TC581 Non-Pro Forma: a budget revision raises "Remaining Budget" by the
+   *         adjustment and leaves Total Funds Remaining unchanged (FEAT-1351)
+   *   TC582 Empty states: a category with no work and a scope search with no hits
+   *   TC583 Export → Export Custom Report (AI Assisted) opens with the CapEx source
+   *   TC584 A contract number in the drill-down opens the job's Contracts tab
+   *
+   * No seeded property, job, budget or shared data/*.json file is modified:
+   * TC581–TC583 share one new property with its own budget; TC584 builds its own
+   * property → budget → project → job → finalized contract (ApprovalE2EPage chain,
+   * shared-file guard included). Every property is deleted in teardown.
+   *
+   * MCP-verified 2026-11-18 (headed owner browser) — see
+   * locators/capexE2ELocator.js and pages/capexE2EPage.js headers.
+   */
+
+  const { CapexE2EPage } = require("../pages/capexE2EPage");
+  const { PropertyE2EPage } = require("../pages/propertyE2EPage");
+  const { ApprovalE2EPage } = require("../pages/approvalE2EPage");
+  const { Logger } = require("../utils/logger");
+  const { ensureLeftPanelExpanded } = require("../utils/leftPanelExpander");
+
+  const REVISION_ITEM = "Tile and carpet flooring";
+  const REVISION_AMOUNT = 1000;
+  const EMPTY_CATEGORY = "Interior wall painting"; // budget item with no project/job
+  const money = (t) => Number(String(t).replace(/[^0-9.-]/g, "")) || 0;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TC581–TC583 — one suite-owned property with its own budget
+  // ═══════════════════════════════════════════════════════════════════════════
+  test.describe.serial("CapEx E2E — suite-owned budget property", () => {
+    let ownerContext;
+    /** @type {CapexE2EPage} */ let capex;
+    /** @type {PropertyE2EPage} */ let props;
+    let property;
+
+    test.beforeAll(async ({ browser }, testInfo) => {
+      testInfo.setTimeout(600000);
+      // A manually created context does not inherit the config's baseURL; without
+      // it the existing helpers' relative navigation lands on a 404 (run 1).
+      ownerContext = await browser.newContext({
+        storageState: "sessionState.json",
+        baseURL: process.env.BASE_URL,
+      });
+      const page = await ownerContext.newPage();
+      await page.goto(process.env.DASHBOARD_URL, { waitUntil: "load" });
+      await ensureLeftPanelExpanded(page);
+      capex = new CapexE2EPage(page);
+      props = new PropertyE2EPage(page);
+      property = await props.createOwnProperty("Capex");
+      await capex.submitFirstBudget(property.name, property.id);
+      Logger.success(
+        `Setup: "${property.name}" (id ${property.id}) has a budget`,
+      );
+    });
+
+    test.afterAll(async () => {
+      if (property) await props.deletePropertyQuietly(property.name);
+      await ownerContext?.close().catch(() => {});
+    });
+
+    test("TC581 @capex @regression @e2e : Verify a budget revision raises Remaining Budget by the adjustment and leaves Total Funds Remaining unchanged for a non-Pro Forma organization", async () => {
+      test.setTimeout(600000);
+      const page = capex.page;
+      const flags =
+        (await capex._getJson("/api/auth/feature-flags")).featureFlags || [];
+      test.skip(
+        flags.includes("proforma-budget"),
+        "Organization has Pro Forma Budget — this case covers non-Pro Forma orgs",
+      );
+      Logger.info(
+        "TC581: organization is non-Pro Forma (no proforma-budget flag)",
+      );
+
+      const before = await capex.getStats(property.id);
+      const itemBefore = await capex.getCategoryRow(property.id, REVISION_ITEM);
+      expect(
+        before.properties,
+        "FAIL: stats must cover exactly this property",
+      ).toBe(1);
+
+      await capex.open();
+      await capex.selectOnlyProperty(property.name);
+      const cardsBefore = await capex.readCards();
+      expect(
+        cardsBefore.remainingBudgetLabel,
+        'FAIL: a non-Pro Forma org shows "Remaining Budget" on card 2',
+      ).toBe("Remaining Budget");
+      expect(
+        money(cardsBefore.remainingBudget),
+        "FAIL: Remaining Budget card must match the stats API",
+      ).toBe(Math.round(before.remaining));
+      Logger.success(
+        `TC581: before — Remaining Budget ${cardsBefore.remainingBudget}, Total Funds Remaining ${before.fundsRemaining}`,
+      );
+
+      const body = await capex.submitRevisionAdjustment(
+        property.name,
+        REVISION_ITEM,
+        REVISION_AMOUNT,
+      );
+      expect(body.columnName, "FAIL: revision saves adjustment_amount").toBe(
+        "adjustment_amount",
+      );
+      expect(Number(body.value), "FAIL: saved adjustment").toBe(
+        REVISION_AMOUNT,
+      );
+
+      await expect
+        .poll(async () => (await capex.getStats(property.id)).remaining, {
+          message: `FAIL: Remaining Budget must rise by ${REVISION_AMOUNT}`,
+          timeout: 90000,
+          intervals: [5000],
+        })
+        .toBeCloseTo(before.remaining + REVISION_AMOUNT, 2);
+      const after = await capex.getStats(property.id);
+      expect(
+        after.fundsRemaining,
+        "FAIL: Total Funds Remaining must NOT change for a non-Pro Forma org",
+      ).toBeCloseTo(before.fundsRemaining, 2);
+      expect(after.committed, "FAIL: committed must not change").toBeCloseTo(
+        before.committed,
+        2,
+      );
+      const itemAfter = await capex.getCategoryRow(property.id, REVISION_ITEM);
+      expect(
+        itemAfter.revision,
+        "FAIL: item Budget Revision must rise",
+      ).toBeCloseTo(itemBefore.revision + REVISION_AMOUNT, 2);
+      expect(
+        itemAfter.current,
+        "FAIL: item Current Budget must rise",
+      ).toBeCloseTo(itemBefore.current + REVISION_AMOUNT, 2);
+      Logger.success(
+        `TC581: after — remaining ${before.remaining} → ${after.remaining}, Total Funds Remaining ${before.fundsRemaining} → ${after.fundsRemaining}`,
+      );
+
+      await capex.open();
+      await capex.selectOnlyProperty(property.name);
+      const cardsAfter = await capex.readCards();
+      expect(
+        money(cardsAfter.remainingBudget),
+        "FAIL: Remaining Budget card must show the revised value",
+      ).toBe(Math.round(after.remaining));
+      expect(cardsAfter.remainingBudgetLabel).toBe("Remaining Budget");
+      Logger.success(`TC581: card now ${cardsAfter.remainingBudget}`);
+      Logger.success("TC581 PASSED");
+      await page.keyboard.press("Escape").catch(() => {});
+    });
+
+    test("TC582 @capex @regression @e2e : Verify a budget category with no linked work and a scope search with no hits show their empty states", async () => {
+      test.setTimeout(300000);
+      await capex.open();
+      await capex.selectOnlyProperty(property.name);
+      await capex.expandPropertyRow(property.name);
+      await capex.openCategoryDrillDown(EMPTY_CATEGORY);
+      await expect(
+        capex.emptyDrillDown(),
+        `FAIL: "${EMPTY_CATEGORY}" has no projects/jobs — the drill-down must say so`,
+      ).toBeVisible({ timeout: 30000 });
+      Logger.success("TC582: empty drill-down message shown");
+
+      expect(
+        await capex.scopeSearchShowsNoMatches(`zz_no_property_${Date.now()}`),
+        'FAIL: scope search with no hits must show "No matches"',
+      ).toBe(true);
+      Logger.success('TC582: scope search shows "No matches"');
+      Logger.success("TC582 PASSED");
+    });
+
+    test("TC583 @capex @regression @e2e : Verify Export Custom Report (AI Assisted) opens with the CapEx source and the selected scope", async () => {
+      test.setTimeout(300000);
+      const page = capex.page;
+      await capex.open();
+      await capex.selectOnlyProperty(property.name);
+
+      const menu = await capex.openExportMenu();
+      await expect(menu.csv, 'FAIL: "Export CSV" must be offered').toBeVisible({
+        timeout: 15000,
+      });
+      await expect(
+        menu.custom,
+        'FAIL: "Export Custom Report" must be offered',
+      ).toBeVisible();
+      await expect(
+        menu.custom,
+        "FAIL: custom report is AI assisted",
+      ).toContainText(/AI Assisted/i); // shown upper-case via CSS; DOM text is "AI Assisted"
+      await menu.custom.click();
+
+      const dialog = capex.customReportDialog();
+      await expect(dialog, "FAIL: Custom Report modal must open").toBeVisible({
+        timeout: 30000,
+      });
+      const source = `Source: CapEx · FY ${capex.fiscalYear} · Properties · ${property.name}`;
+      await expect(dialog, `FAIL: modal must show "${source}"`).toContainText(
+        source,
+      );
+      await expect(dialog, "FAIL: modal must be AI assisted").toContainText(
+        /AI Assisted/i,
+      );
+      await expect(dialog, "FAIL: modal must offer suggestions").toContainText(
+        /Suggested/i,
+      );
+      await expect(
+        dialog.getByRole("button", { name: "New", exact: true }),
+        'FAIL: "New" must be offered',
+      ).toBeVisible();
+      await expect(
+        dialog.getByRole("button", { name: /^History/ }),
+        'FAIL: "History" must be offered',
+      ).toBeVisible();
+      Logger.success(
+        `TC583: modal shows "${source}", suggestions, History and New`,
+      );
+      await page.keyboard.press("Escape");
+      await expect(
+        dialog,
+        "FAIL: modal must close without sending a prompt",
+      ).toBeHidden({
+        timeout: 15000,
+      });
+      Logger.success("TC583 PASSED");
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TC584 — own property with a finalized contract
+  // ═══════════════════════════════════════════════════════════════════════════
+  test.describe("CapEx E2E — contract link on a suite-owned contract", () => {
+    let chain;
+
+    test.afterEach(async ({ page }) => {
+      if (chain)
+        await new PropertyE2EPage(page).deletePropertyQuietly(
+          chain.propertyName,
+        );
+    });
+
+    test("TC584 @capex @regression @e2e : Verify the contract number in the CapEx drill-down opens the job's Contracts tab", async ({
+      page,
+    }) => {
+      test.setTimeout(1200000); // property → budget → project → job → finalize
+      const snapshot = ApprovalE2EPage.backupSharedData();
+      try {
+        chain = await new ApprovalE2EPage(page).createFinalizedContractChain(
+          `Capex${Date.now()}`,
+        );
+        expect(
+          ApprovalE2EPage.changedSharedData(snapshot),
+          "FAIL: building the chain must not change shared hand-off files",
+        ).toEqual([]);
+      } finally {
+        ApprovalE2EPage.restoreSharedData(snapshot);
+      }
+      Logger.success(`TC584: chain ready → ${JSON.stringify(chain)}`);
+
+      const capex = new CapexE2EPage(page);
+      await capex.open();
+      await capex.selectOnlyProperty(chain.propertyName);
+      await capex.expandPropertyRow(chain.propertyName);
+      await capex.openCategoryDrillDown("Bathroom fixtures install");
+      const link = await capex.contractLinkInDrillDown(
+        chain.projectName,
+        chain.jobId,
+      );
+      await expect(link, "FAIL: link text").toHaveText(`#${chain.jobId}`);
+      const title = await link.evaluate((e) =>
+        e.closest("[title]")?.getAttribute("title"),
+      );
+      expect(title, "FAIL: link tooltip").toBe(`Contract #: ${chain.jobId}`);
+
+      await link.click();
+      await expect(
+        page,
+        "FAIL: link must open the job's Contracts tab",
+      ).toHaveURL(new RegExp(`/jobs/${chain.jobId}\\?tab=contracts`), {
+        timeout: 30000,
+      });
+      await expect(
+        capex.contractsTab(),
+        "FAIL: Contracts tab must be selected",
+      ).toHaveAttribute("aria-selected", "true", { timeout: 30000 });
+      await expect(
+        page.getByText("Contract ID", { exact: true }).first(),
+        "FAIL: Contracts panel must render",
+      ).toBeVisible({ timeout: 30000 });
+      Logger.success(
+        `TC584: #${chain.jobId} opened /jobs/${chain.jobId}?tab=contracts`,
+      );
+      Logger.success("TC584 PASSED");
+    });
+  });
+}

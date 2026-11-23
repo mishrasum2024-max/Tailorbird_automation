@@ -865,6 +865,19 @@ class UnitTrackerPage {
     // "Actions" column (prop "actions", pinned colPinEnd) holding row buttons; the CSV export
     // correctly omits it and every other column name matches. Exclude it like "__selection".
     grid.cols = grid.cols.filter(c => c.prop !== "actions");
+    // Added 2026-11-17 (insert-only): "Move-In Date"/"Move-Out Date" (move_in_date /
+    // move_out_date) arrive in the grid source as "YYYY-MM-DD 00:00:00", while the grid cell and
+    // the CSV both show "MM/DD/YYYY" (MCP-verified on Test Property 2_The Westerham: cell
+    // "11/28/2026", source "2026-11-28 00:00:00", CSV "11/28/2026"). Drop a midnight time so
+    // asCsv() below converts these like every other date column; any other time is kept.
+    grid.rows.forEach(r =>
+      Object.keys(r).forEach(k => {
+        const midnight =
+          typeof r[k] === "string" &&
+          r[k].match(/^(\d{4}-\d{2}-\d{2}) 00:00:00$/);
+        if (midnight) r[k] = midnight[1];
+      })
+    );
     const [header, ...rows] = UnitTrackerPage.parseCsv(csv);
     const propByName = Object.fromEntries(grid.cols.map(c => [c.name, c.prop]));
     expect(
@@ -1034,6 +1047,489 @@ class UnitTrackerPage {
       }
     );
     Logger.info(`Cleanup: ${rowId} status → "${status}" (${res.status()})`);
+  }
+
+  // ---------- Move-In / Move-Out dates (TC564–TC567) ----------
+  // MCP-verified 2026-11-16 (headed MCP browser, owner session, Test Property 2_The Westerham, unit 101):
+  // - Save: PUT /api/bird-table/cells?&property_id=<id> { columnName: "move_in_date" | "move_out_date",
+  //   value: "<YYYY-MM-DD>T00:00:00.000Z" (or "" when cleared), rowId: "<unit row id>",
+  //   tableName: "unit_tracker" } → 200 { success: true, message: "Cell updated successfully" }; no toast.
+  // - Move-In earlier than Move-Out → 400 { success: false, message: "Move-in date must be on or
+  //   after the move-out date" } + the same toast; the same day is accepted. Move-Out can be cleared
+  //   while Move-In is set.
+  // - Grid source and the all-rows API hold "YYYY-MM-DD 00:00:00"; the cell shows MM/DD/YYYY, "—" when empty.
+  // - Only unit rows are editable; job / scope rows show the columns read-only (cell class "disabled").
+  // - The first edit creates a unit lease cycle (state "locked") that the UI cannot remove; clearing
+  //   both cells empties the dates again.
+  // - Contract → Units tab (/jobs/<id>?tab=contracts&contractSubTab=units, data from
+  //   GET /api/bird-table?table_name=ui-contract-units&layout=table&jobId=<id>) has NO Move-In /
+  //   Move-Out field (neither in the grid, its Columns settings, nor its API) — the tests assert that
+  //   the unit's contract data stays consistent with the Unit Tracker and is untouched by date edits.
+
+  static isoDay(value) {
+    return value ? String(value).slice(0, 10) : null;
+  }
+
+  static displayDate(iso) {
+    const [y, m, d] = iso.split("-");
+    return `${m}/${d}/${y}`;
+  }
+
+  moveDateField(columnName) {
+    const md = data.moveDates;
+    return columnName === md.moveInColumn ? md.moveInField : md.moveOutField;
+  }
+
+  /** Search is a "contains" match across fields (MCP: "101" also lists 704, 1010…) — require the unit, not an exact list. */
+  async searchUnitContaining(label = data.moveDates.unitLabel) {
+    Logger.step(`Searching "${label}"`);
+    await this.searchInput.fill(label);
+    await this.searchButton.click();
+    await expect
+      .poll(
+        async () =>
+          (await this.visibleRows())
+            .filter(r => r.kind === "unit")
+            .map(r => r.label),
+        {
+          message: `FAIL: Search for "${label}" does not show unit ${label}`,
+          timeout: UI_TIMEOUT,
+        }
+      )
+      .toContain(label);
+    await expect(
+      this.gridRow(label),
+      `FAIL: Row "${label}" not shown after search`
+    ).toBeVisible({ timeout: UI_TIMEOUT });
+  }
+
+  /** The unit row and its job rows from the all-rows API. */
+  async moveDateRows(label = data.moveDates.unitLabel) {
+    const rows = await this.fetchAllRowsFromApi();
+    const unit = rows.find(
+      r => r.__treeRowKind === "unit" && String(r.hierarchy_label) === label
+    );
+    expect(unit, `FAIL: Unit ${label} not returned by the API`).toBeTruthy();
+    const jobs = rows.filter(
+      r => r.parentId === unit.id && r.__treeRowKind === "job"
+    );
+    return { unit, jobs };
+  }
+
+  async moveDateCell(label, columnName) {
+    const header = healingLocator(
+      L.columnHeaderStrategies(this.grid, columnName)
+    ).first();
+    await expect(header, `FAIL: "${columnName}" column not shown`).toBeVisible({
+      timeout: UI_TIMEOUT,
+    });
+    const colIndex = await header.getAttribute("aria-colindex");
+    const rowIndex = await this.gridRow(label).getAttribute("data-rgrow");
+    expect(
+      colIndex !== null && rowIndex !== null,
+      `FAIL: Could not locate the "${columnName}" cell of "${label}"`
+    ).toBeTruthy();
+    return healingLocator(
+      L.gridCellStrategies(this.grid, rowIndex, colIndex)
+    ).first();
+  }
+
+  datePicker() {
+    return healingLocator(L.datePickerDropdownStrategies(this.page)).first();
+  }
+
+  /** MCP-verified: Escape does not close the date editor; clicking outside the grid does. */
+  async closeCellEditor() {
+    await this.breadcrumbPage.click();
+    await expect(
+      this.datePicker(),
+      "FAIL: Date picker did not close"
+    ).toBeHidden({
+      timeout: UI_TIMEOUT,
+    });
+  }
+
+  /** Waits for the single-cell save of `field` while `action` runs. */
+  async captureCellSave(field, action) {
+    const [put] = await Promise.all([
+      this.page.waitForResponse(
+        r =>
+          r.url().includes("/api/bird-table/cells?") &&
+          r.request().method() === "PUT" &&
+          (r.request().postData() || "").includes(`"columnName":"${field}"`),
+        { timeout: UI_TIMEOUT }
+      ),
+      action(),
+    ]);
+    return {
+      status: put.status(),
+      body: JSON.parse(put.request().postData() || "{}"),
+      json: await put.json().catch(() => ({})),
+    };
+  }
+
+  /** Double-clicks the cell and picks `day` of the month the date picker opens on. */
+  async pickMoveDate(label, columnName, day) {
+    Logger.step(`"${columnName}" of ${label}: picking day ${day}`);
+    const field = this.moveDateField(columnName);
+    const cell = await this.moveDateCell(label, columnName);
+    await cell.dblclick();
+    const calendar = this.datePicker();
+    await expect(
+      calendar,
+      `FAIL: Date picker of "${columnName}" did not open`
+    ).toBeVisible({ timeout: UI_TIMEOUT });
+    const level = (
+      await healingLocator(L.calendarLevelStrategies(calendar))
+        .first()
+        .innerText()
+    ).trim();
+    const [monthName, year] = level.split(" ");
+    const month = new Date(`${monthName} 1, ${year}`).getMonth() + 1;
+    expect(month, `FAIL: Unreadable calendar month "${level}"`).toBeGreaterThan(
+      0
+    );
+    const iso = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const dayButton = healingLocator(
+      L.calendarDayStrategies(calendar, `${day} ${monthName} ${year}`)
+    ).first();
+    await expect(
+      dayButton,
+      `FAIL: Day ${day} not in the date picker`
+    ).toBeEnabled();
+    const result = await this.captureCellSave(field, () => dayButton.click());
+    Logger.info(
+      `"${columnName}" → ${iso}: ${result.status} ${JSON.stringify(result.json)}`
+    );
+    return { ...result, iso, display: UnitTrackerPage.displayDate(iso), field };
+  }
+
+  verifyMoveDateRequest(result, unitId, expectedValueIso) {
+    expect(result.body.tableName, "FAIL: Wrong table saved").toBe(
+      "unit_tracker"
+    );
+    expect(result.body.columnName, "FAIL: Wrong column saved").toBe(
+      result.field
+    );
+    expect(String(result.body.rowId), "FAIL: Wrong row saved").toBe(
+      String(unitId)
+    );
+    if (expectedValueIso === "")
+      expect(result.body.value, "FAIL: Clear must send an empty value").toBe(
+        ""
+      );
+    else
+      expect(
+        UnitTrackerPage.isoDay(result.body.value),
+        "FAIL: Wrong date sent"
+      ).toBe(expectedValueIso);
+  }
+
+  async setMoveDate(label, unitId, columnName, day) {
+    const result = await this.pickMoveDate(label, columnName, day);
+    this.verifyMoveDateRequest(result, unitId, result.iso);
+    expect(
+      result.status,
+      `FAIL: Saving "${columnName}" did not return 200`
+    ).toBe(200);
+    expect(
+      result.json,
+      `FAIL: "${columnName}" save not confirmed`
+    ).toMatchObject({
+      success: true,
+      message: data.moveDates.cellUpdatedMessage,
+    });
+    Logger.success(`"${columnName}" of ${label} saved as ${result.display}`);
+    return result;
+  }
+
+  async verifyMoveDateRejected(result, unitId) {
+    const md = data.moveDates;
+    this.verifyMoveDateRequest(result, unitId, result.iso);
+    expect(
+      result.status,
+      "FAIL: Invalid Move-In must be rejected with 400"
+    ).toBe(400);
+    expect(result.json, "FAIL: Wrong rejection message").toMatchObject({
+      success: false,
+      message: md.invalidOrderMessage,
+    });
+    await expect(
+      healingLocator(
+        L.toastStrategies(this.page, md.invalidOrderMessage)
+      ).first(),
+      "FAIL: Validation toast not shown"
+    ).toBeVisible({ timeout: UI_TIMEOUT });
+    Logger.success(`Rejected with "${md.invalidOrderMessage}"`);
+  }
+
+  async clearMoveDate(label, unitId, columnName) {
+    Logger.step(`Clearing "${columnName}" of ${label}`);
+    const cell = await this.moveDateCell(label, columnName);
+    await cell.hover();
+    const clear = healingLocator(
+      L.cellClearButtonStrategies(cell, data.moveDates.clearButton)
+    ).first();
+    await expect(
+      clear,
+      `FAIL: Clear (✕) of "${columnName}" not shown`
+    ).toBeVisible();
+    const result = {
+      ...(await this.captureCellSave(this.moveDateField(columnName), () =>
+        clear.click()
+      )),
+      field: this.moveDateField(columnName),
+    };
+    this.verifyMoveDateRequest(result, unitId, "");
+    expect(
+      result.status,
+      `FAIL: Clearing "${columnName}" did not return 200`
+    ).toBe(200);
+    expect(
+      result.json,
+      `FAIL: Clearing "${columnName}" not confirmed`
+    ).toMatchObject({
+      success: true,
+      message: data.moveDates.cellUpdatedMessage,
+    });
+    Logger.success(`"${columnName}" of ${label} cleared`);
+  }
+
+  /**
+   * Asserts both dates of the unit in the grid cells (MM/DD/YYYY or "—"), the grid's data and the
+   * API. `expected` = { moveIn, moveOut } as YYYY-MM-DD or null.
+   */
+  async verifyMoveDates(label, unitId, expected) {
+    const md = data.moveDates;
+    for (const [columnName, iso] of [
+      [md.moveInColumn, expected.moveIn],
+      [md.moveOutColumn, expected.moveOut],
+    ]) {
+      const cell = await this.moveDateCell(label, columnName);
+      if (iso)
+        await expect(
+          cell,
+          `FAIL: "${columnName}" of ${label} does not show ${UnitTrackerPage.displayDate(iso)}`
+        ).toContainText(UnitTrackerPage.displayDate(iso), {
+          timeout: UI_TIMEOUT,
+        });
+      else
+        await expect(
+          cell,
+          `FAIL: "${columnName}" of ${label} must be empty ("${md.emptyCell}")`
+        ).toHaveText(md.emptyCell, { timeout: UI_TIMEOUT });
+    }
+    const want = [expected.moveIn, expected.moveOut];
+    await expect
+      .poll(
+        async () =>
+          (
+            await this.grid.evaluate(
+              async (g, [id, inField, outField]) => {
+                const r = (await g.getSource()).find(x => x.id === id);
+                return r ? [r[inField], r[outField]] : [];
+              },
+              [unitId, md.moveInField, md.moveOutField]
+            )
+          ).map(UnitTrackerPage.isoDay),
+        {
+          message: `FAIL: Grid data of ${label} has the wrong dates`,
+          timeout: UI_TIMEOUT,
+        }
+      )
+      .toEqual(want);
+    const apiRow = (await this.fetchAllRowsFromApi()).find(
+      r => r.id === unitId
+    );
+    expect(
+      [apiRow?.[md.moveInField], apiRow?.[md.moveOutField]].map(
+        UnitTrackerPage.isoDay
+      ),
+      `FAIL: API dates of ${label} are wrong`
+    ).toEqual(want);
+    Logger.success(
+      `${label}: Move-In ${expected.moveIn ?? md.emptyCell}, Move-Out ${expected.moveOut ?? md.emptyCell} (cell, grid data, API)`
+    );
+  }
+
+  /** Job rows under the unit show the dates read-only: "—", disabled cell, no date picker. */
+  async verifyJobRowsMoveDatesReadOnly(label = data.moveDates.unitLabel) {
+    const md = data.moveDates;
+    const { children } = await this.expandUnit(label);
+    for (const child of children) {
+      for (const columnName of [md.moveInColumn, md.moveOutColumn]) {
+        const cell = await this.moveDateCell(child.label, columnName);
+        await expect(
+          cell,
+          `FAIL: "${columnName}" of job row "${child.label}" must be empty`
+        ).toHaveText(md.emptyCell);
+        await expect(
+          cell,
+          `FAIL: "${columnName}" of job row "${child.label}" must be read-only`
+        ).toHaveClass(/disabled/);
+        await cell.dblclick();
+        await expect(
+          this.datePicker(),
+          `FAIL: Job row "${child.label}" opened a date picker`
+        ).toBeHidden();
+      }
+    }
+    Logger.success(
+      `Job rows of ${label} show Move-In/Move-Out read-only: ${children.map(c => c.label).join(", ")}`
+    );
+  }
+
+  /** Opens the Unit Tracker on the property and searches the unit. */
+  async openUnitInTracker(label = data.moveDates.unitLabel) {
+    await this.navigateToUnitTracker();
+    await this.selectProperty();
+    await this.searchUnitContaining(label);
+  }
+
+  /** Cleanup / precondition: empties both dates through the same API the grid uses. */
+  async restoreMoveDates(unitId) {
+    const md = data.moveDates;
+    if (!unitId || !this.propertyId) return;
+    for (const field of [md.moveInField, md.moveOutField]) {
+      const res = await this.page.request.put(
+        `${this.baseUrl}/api/bird-table/cells?&property_id=${this.propertyId}`,
+        {
+          data: {
+            columnName: field,
+            value: "",
+            rowId: String(unitId),
+            tableName: "unit_tracker",
+          },
+        }
+      );
+      Logger.info(`Cleanup: ${unitId} ${field} → "" (${res.status()})`);
+    }
+  }
+
+  // ---------- Contract → Units tab ----------
+
+  async contractUnitRowsFromApi(jobId, label = data.moveDates.unitLabel) {
+    const res = await this.page.request.get(
+      `${this.baseUrl}/api/bird-table?table_name=${data.moveDates.contractUnitsTable}&layout=table&jobId=${jobId}`
+    );
+    expect(
+      res.status(),
+      `FAIL: Contract Units API of job ${jobId} did not return 200`
+    ).toBe(200);
+    return (await res.json()).rows.filter(r => String(r.unit_name) === label);
+  }
+
+  async openContractUnitsTab(jobId) {
+    const md = data.moveDates;
+    Logger.step(`Opening job ${jobId} → Contracts → ${md.contractUnitsTab}`);
+    const [res] = await Promise.all([
+      this.page.waitForResponse(
+        r =>
+          r.url().includes(`table_name=${md.contractUnitsTable}`) &&
+          r.url().includes(`jobId=${jobId}`) &&
+          r.request().method() === "GET",
+        { timeout: UI_TIMEOUT }
+      ),
+      this.page.goto(
+        `${this.baseUrl}/jobs/${jobId}?tab=contracts&propertyId=${this.propertyId}&contractSubTab=units`,
+        { waitUntil: "domcontentloaded" }
+      ),
+    ]);
+    expect(res.status(), "FAIL: Contract Units data did not return 200").toBe(
+      200
+    );
+    await expect(
+      healingLocator(L.tabStrategies(this.page, md.contractUnitsTab)).first(),
+      `FAIL: "${md.contractUnitsTab}" tab is not selected`
+    ).toHaveAttribute("aria-selected", "true", { timeout: UI_TIMEOUT });
+    await expect(
+      this.grid.getByRole("row").first(),
+      "FAIL: Contract Units grid did not render"
+    ).toBeVisible({ timeout: UI_TIMEOUT });
+  }
+
+  /**
+   * Contract → Units tab of `job` shows the unit with the same FP Type, Unit Type (= tracker
+   * "Bed x Bath"), Status and Start/End dates as the Unit Tracker's job row.
+   */
+  async verifyContractUnitMatchesTracker(
+    trackerUnit,
+    trackerJob,
+    label = data.moveDates.unitLabel
+  ) {
+    await this.openContractUnitsTab(trackerJob.job_id);
+    let contract = null;
+    await expect
+      .poll(
+        async () =>
+          (contract = await this.grid.evaluate(async (g, l) => {
+            const r = (await g.getSource()).find(
+              x => String(x.unit_name) === l
+            );
+            return r
+              ? {
+                  status: r.status,
+                  floorPlanType: r.floor_plan_type,
+                  unitType: r.unit_type,
+                  start: r.reno_start_date,
+                  end: r.reno_end_date,
+                }
+              : null;
+          }, label)),
+        {
+          message: `FAIL: Unit ${label} not on the Contract Units tab of job ${trackerJob.job_id}`,
+          timeout: UI_TIMEOUT,
+        }
+      )
+      .not.toBeNull();
+    const row = this.gridRow(label);
+    await expect(
+      row,
+      `FAIL: Unit ${label} row not shown on the Contract Units tab`
+    ).toBeVisible();
+    expect(
+      contract.floorPlanType,
+      "FAIL: FP Type differs from the Unit Tracker"
+    ).toBe(trackerUnit.floor_plan_type);
+    expect(
+      contract.unitType,
+      "FAIL: Unit Type differs from the Unit Tracker's Bed x Bath"
+    ).toBe(trackerUnit.bed_x_bath);
+    expect(
+      contract.status,
+      "FAIL: Status differs from the Unit Tracker job row"
+    ).toBe(trackerJob.status);
+    expect(
+      UnitTrackerPage.isoDay(contract.start),
+      "FAIL: Start Date differs from the Unit Tracker"
+    ).toBe(UnitTrackerPage.isoDay(trackerJob.contract_reno_start));
+    expect(
+      UnitTrackerPage.isoDay(contract.end),
+      "FAIL: End Date differs from the Unit Tracker"
+    ).toBe(UnitTrackerPage.isoDay(trackerJob.contract_reno_end));
+    for (const text of [
+      contract.floorPlanType,
+      contract.unitType,
+      contract.status,
+    ].filter(Boolean))
+      await expect(
+        row,
+        `FAIL: Unit ${label} row does not show "${text}"`
+      ).toContainText(text);
+    Logger.success(
+      `Contract Units (job ${trackerJob.job_id}) unit ${label}: ${contract.status} | ${contract.floorPlanType} | ${contract.unitType} — matches the Unit Tracker`
+    );
+  }
+
+  /** Snapshot of the unit on every job's Contract Units data (to prove date edits never touch it). */
+  async contractUnitSnapshot(jobs, label = data.moveDates.unitLabel) {
+    const snapshot = {};
+    for (const job of jobs)
+      snapshot[job.job_id] = await this.contractUnitRowsFromApi(
+        job.job_id,
+        label
+      );
+    return snapshot;
   }
 }
 

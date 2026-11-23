@@ -546,6 +546,19 @@ test.describe("Approval Templates", () => {
       // Close dialog
       await addColumnPage.closeTableSettings();
 
+      // Added 2026-11-17 (insert-only): column visibility is saved per user (PUT
+      // /api/table-view-config) and CI runs TC10 on 4 workers as the same user. Each PUT
+      // writes the whole config, so a parallel test's save (e.g. its beforeEach
+      // showHiddenColumns from a page loaded while this test had columns hidden) can re-hide
+      // "Name" after the Show clicks above (CI 2026-11-16: "Name" header missing even after
+      // the reload in expectApprovalTemplatesTableCoreColumnsVisible, whose Manage Columns
+      // checkbox heal no longer exists). MCP-verified 2026-11-17: hide-all → show-all saves
+      // 200 and all 6 headers return. Reload to read the saved view and restore anything a
+      // parallel save re-hid, through the same drawer the beforeEach uses.
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await approvalJob.waitForPageLoad();
+      await addColumnPage.showHiddenColumns("approval_template");
+
       await approvalJob.expectApprovalTemplatesTableCoreColumnsVisible();
       Logger.success(
         "TC174 passed: Manage Columns negative scenarios tested — columns restored"
@@ -1528,6 +1541,29 @@ test.describe("Approval Templates", () => {
         )
         .first();
       if (await footer.isVisible({ timeout: 4000 }).catch(() => false)) {
+        // Added 2026-11-17 (insert-only): "Cancel" is 85.58px wide (Inter 14px, MCP-measured
+        // 2026-11-17), so its element clip rounds to 85 or 86px depending on sub-pixel layout
+        // and font metrics (CI 2026-11-16: expected 86x37, received 85x37 — a size mismatch
+        // fails before any pixel tolerance applies). Visual-only: give "Create Template" a
+        // whole-pixel width so Cancel starts on a whole pixel, and give Cancel the committed
+        // baseline's width (read from the PNG header). MCP-verified: clip is then 86x37.
+        const actionsBaselineWidth = require("fs")
+          .readFileSync(
+            `${__dirname}/../committed_ui_snapshots/TC10_approval.spec.js/tc10-v-approval-create-template-actions.png`
+          )
+          .readUInt32BE(16);
+        await approvalJob
+          .createTemplateDialog()
+          .locator(
+            'button:has-text("Create Template"), button:has-text("Cancel")'
+          )
+          .evaluateAll((buttons, cancelWidth) => {
+            buttons.forEach(b => {
+              b.style.width = /Cancel/.test(b.textContent)
+                ? `${cancelWidth}px`
+                : `${Math.ceil(b.getBoundingClientRect().width)}px`;
+            });
+          }, actionsBaselineWidth);
         await expect(footer).toHaveScreenshot(
           "tc10-v-approval-create-template-actions.png",
           APPROVAL_VISUAL_ASSERT
@@ -1874,3 +1910,733 @@ test.describe("Approval Templates", () => {
     await page.waitForTimeout(300);
   });
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// Missing-coverage E2E cases (formerly tests/TC37_ApprovalsE2E.spec.js). Wrapped in a block so its
+// names never clash with this file's; it relies on this file's test.use
+// (storageState: sessionState.json). Added 2026-11-19.
+// ════════════════════════════════════════════════════════════════════════════
+{
+  /**
+   * Approvals E2E — complete approval coverage without touching shared data.
+   *
+   * Part 1 (read-only on existing approvals):
+   *   TC569 /approvals redirect, TC570 draw disbursement schedule in the drawer,
+   *   TC571 vendor name (+ owner vendor code) in the drawer, TC572 Amenity Code
+   *   approvals (only when the org has the amenity-code feature).
+   * Part 2 (self-contained E2E): builds its OWN property → budget → project → job →
+   *   finalized contract → Change Order template [owner, real approver], then raises
+   *   its own change orders and drives them through every approval action:
+   *   TC573 approver approves from My Approvals (CO → Approved, contract updated),
+   *   TC574 approver rejection requires notes, then rejects with a note,
+   *   TC575 owner "Reject on Behalf" requires notes, then rejects on behalf,
+   *   TC576 owner "Approve on Behalf" completes the approval.
+   *
+   * No seeded property/job/template/vendor is modified. Shared data/*.json hand-off
+   * files are backed up before the chain and verified unchanged afterwards
+   * (see pages/approvalE2EPage.js).
+   *
+   * MCP-verified 2026-11-18 (headed owner + approver browsers) — see the
+   * locators/approvalE2ELocator.js header for the observed behaviour.
+   */
+
+  const fs = require("fs");
+  const path = require("path");
+  const { ApprovalE2EPage } = require("../pages/approvalE2EPage");
+  const { Logger } = require("../utils/logger");
+
+  const OWNER_NAME = "Sumit Harsh";
+  const APPROVER_NAME = "Sumit Mishra";
+  const APPROVER_SESSION = path.join(__dirname, "../OtherSessionState.json");
+  const money = (t) => Number(String(t).replace(/[^0-9.-]/g, "")) || 0;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Part 1 — behaviour on existing approvals (read-only)
+  // ═══════════════════════════════════════════════════════════════════════════
+  test.describe("Approvals — drawer and navigation on existing approvals", () => {
+    test("TC569 @approval @regression : Verify /approvals redirects to All Approvals with that tab selected", async ({
+      page,
+    }) => {
+      const approvals = new ApprovalE2EPage(page);
+      Logger.info("TC569: open /approvals directly");
+      await page.goto(`${process.env.BASE_URL}/approvals`, {
+        waitUntil: "load",
+      });
+      await expect(
+        page,
+        "FAIL: /approvals must redirect to /approvals/all-approvals",
+      ).toHaveURL(/\/approvals\/all-approvals$/, { timeout: 30000 });
+      Logger.success(`TC569: redirected to ${page.url()}`);
+
+      for (const [name, selected] of [
+        ["All Approvals", "true"],
+        ["My Approvals", "false"],
+        ["Approval Templates", "false"],
+      ]) {
+        const tab = page.getByRole("tab", { name, exact: true });
+        await expect(tab, `FAIL: "${name}" tab must be visible`).toBeVisible({
+          timeout: 30000,
+        });
+        await expect(
+          tab,
+          `FAIL: "${name}" tab aria-selected must be ${selected} after the redirect`,
+        ).toHaveAttribute("aria-selected", selected);
+        Logger.success(`TC569: tab "${name}" visible, selected=${selected}`);
+      }
+      await expect(
+        approvals.searchInput.first(),
+        "FAIL: All Approvals grid search must be available",
+      ).toBeVisible({ timeout: 30000 }); // cold first load can exceed the 5s default (combined run, 2026-11-18)
+      Logger.success("TC569 PASSED");
+    });
+
+    test("TC570 @approval @drawReporting @regression : Verify Draw approval details show the Draw disbursement schedule above the approval chain with current-draw rows highlighted", async ({
+      page,
+    }) => {
+      test.setTimeout(240000);
+      const approvals = new ApprovalE2EPage(page);
+      await page.goto(`${process.env.BASE_URL}/approvals/all-approvals`, {
+        waitUntil: "load",
+      });
+
+      // Newest Draw approval whose draw still exists (an old approval whose draw was
+      // deleted renders "Draw not found" instead of the table — MCP-verified on #259).
+      const draws = (await approvals.getApprovalRows())
+        .filter((r) => r.template_type === "Draw")
+        .sort((a, b) => Number(b.approval_id) - Number(a.approval_id));
+      test.skip(!draws.length, "No Draw approvals exist in this organization");
+      Logger.info(`TC570: ${draws.length} Draw approvals found; newest first`);
+
+      let opened = null;
+      for (const draw of draws.slice(0, 5)) {
+        Logger.info(
+          `TC570: trying Draw #${draw.approval_number} (approval ${draw.approval_id}, ${draw.current_status})`,
+        );
+        await approvals.gotoApprovalsTab("All Approvals");
+        await approvals.openApprovalDetails(draw.approval_number, [
+          "Draw",
+          String(draw.approval_number),
+        ]);
+        await expect(
+          approvals.drawSchedulePanel,
+          "FAIL: Draw approval details must show the 'Draw disbursement schedule' section",
+        ).toBeVisible({ timeout: 30000 });
+        const notFound = await approvals.detailsDialog
+          .getByText("Draw not found")
+          .isVisible()
+          .catch(() => false);
+        if (!notFound) {
+          opened = draw;
+          break;
+        }
+        Logger.info(
+          `TC570: Draw #${draw.approval_number}'s draw was deleted ("Draw not found") — trying the next one`,
+        );
+        await approvals.closeDrawer();
+      }
+      expect(
+        opened,
+        "FAIL: none of the 5 newest Draw approvals has a live draw schedule",
+      ).not.toBeNull();
+
+      const { fields, text } = await approvals.readDrawerFields();
+      expect(fields["Approval Type"], "FAIL: Approval Type must be Draw").toBe(
+        "Draw",
+      );
+      expect(fields["Property"], "FAIL: Property must be shown").toBeTruthy();
+      expect(fields["Draw Name"], "FAIL: Draw Name must be shown").toBeTruthy();
+      expect(
+        text.indexOf("Draw disbursement schedule"),
+        "FAIL: the schedule must render ABOVE the Approval Status chain",
+      ).toBeLessThan(text.indexOf("Approval Status"));
+      Logger.success(
+        `TC570: Draw "${fields["Draw Name"]}" on "${fields["Property"]}" — schedule is above Approval Status`,
+      );
+
+      const table = approvals.detailsDialog.locator("table").first();
+      await expect(table, "FAIL: schedule table must render").toBeVisible();
+      const headers = (await table.locator("th").allInnerTexts()).map((h) =>
+        h.trim(),
+      );
+      Logger.info(`TC570: schedule headers → [${headers.join(" | ")}]`);
+      expect(
+        headers.length,
+        "FAIL: schedule must have 8 columns (non Pro Forma) or 10 (Pro Forma)",
+      ).toBeGreaterThanOrEqual(8);
+      for (const fixed of ["Current Draw", "Draw Remaining"]) {
+        expect(
+          headers,
+          `FAIL: schedule must have the "${fixed}" column`,
+        ).toContain(fixed);
+      }
+      const currentIdx = headers.indexOf("Current Draw");
+
+      const rows = await table.locator("tbody tr").evaluateAll(
+        (trs, idx) =>
+          trs.map((tr) => {
+            const tds = Array.from(tr.querySelectorAll("td"));
+            const cell = tds[idx];
+            return {
+              item: (tds[0]?.innerText || "").trim(),
+              current: (cell?.innerText || "").trim(),
+              weight: cell ? Number(getComputedStyle(cell).fontWeight) : 0,
+              bg: getComputedStyle(tr).backgroundColor,
+            };
+          }),
+        currentIdx,
+      );
+      const budgetRows = rows.filter((r) => r.item && r.item !== "Total");
+      expect(
+        budgetRows.length,
+        "FAIL: schedule must list at least one budget item",
+      ).toBeGreaterThan(0);
+      expect(
+        rows.some((r) => r.item === "Total"),
+        "FAIL: schedule must end with a Total row",
+      ).toBeTruthy();
+
+      let highlighted = 0;
+      for (const r of budgetRows) {
+        const amount = money(r.current);
+        if (amount !== 0) {
+          highlighted++;
+          expect(
+            r.weight,
+            `FAIL: "${r.item}" has Current Draw ${r.current} — its cell must be bold (>=600)`,
+          ).toBeGreaterThanOrEqual(600);
+          expect(
+            r.bg,
+            `FAIL: "${r.item}" Current Draw ${r.current} — row must be ${amount > 0 ? "green" : "red"}`,
+          ).toBe(amount > 0 ? "rgb(232, 245, 233)" : "rgb(255, 235, 238)");
+        } else {
+          expect(
+            r.weight,
+            `FAIL: "${r.item}" has no current draw — its Current Draw cell must not be bold`,
+          ).toBeLessThan(600);
+        }
+      }
+      Logger.success(
+        `TC570: ${budgetRows.length} budget rows checked, ${highlighted} highlighted as current-draw rows`,
+      );
+      Logger.success("TC570 PASSED");
+    });
+
+    test("TC571 @approval @regression : Verify approval details show the vendor as 'Name (#code)' when the owner has a vendor code and the plain name otherwise", async ({
+      page,
+    }) => {
+      test.setTimeout(180000);
+      const approvals = new ApprovalE2EPage(page);
+      await page.goto(`${process.env.BASE_URL}/approvals/all-approvals`, {
+        waitUntil: "load",
+      });
+      const candidate = (await approvals.getApprovalRows())
+        .filter(
+          (r) => r.vendor_name && /Invoice|Change Order/.test(r.template_type),
+        )
+        .sort((a, b) => Number(b.approval_id) - Number(a.approval_id))[0];
+      test.skip(
+        !candidate,
+        "No invoice/change-order approval with a vendor exists",
+      );
+
+      const details = await approvals.getApprovalDetails(candidate.approval_id);
+      const name = String(details.vendorName || "").trim();
+      const code = String(details.vendorCode || "").trim();
+      const expected = code ? `${name} (#${code})` : name;
+      Logger.info(
+        `TC571: ${candidate.template_type} #${candidate.approval_number} — API vendorName="${name}", vendorCode="${code || "(none)"}" → expect "${expected}"`,
+      );
+      expect(
+        name,
+        "FAIL: approval details API must return the vendor name",
+      ).toBeTruthy();
+
+      await approvals.gotoApprovalsTab("All Approvals");
+      await approvals.openApprovalDetails(candidate.approval_number, [
+        candidate.template_type,
+        String(candidate.approval_number),
+      ]);
+      const { fields } = await approvals.readDrawerFields();
+      expect(
+        fields["Vendor"],
+        `FAIL: drawer Vendor must read "${expected}" (owner vendor code ${code ? "present" : "absent"})`,
+      ).toBe(expected);
+      if (!code) {
+        expect(
+          fields["Vendor"],
+          "FAIL: without an owner vendor code no '(#…)' suffix may be shown",
+        ).not.toMatch(/\(#.*\)/);
+      }
+      Logger.success(`TC571: drawer Vendor = "${fields["Vendor"]}"`);
+      Logger.success("TC571 PASSED");
+    });
+
+    test("TC572 @approval @regression : Verify Amenity Code approvals are offered only when the organization has the amenity-code feature", async ({
+      page,
+    }) => {
+      test.setTimeout(120000);
+      const approvals = new ApprovalE2EPage(page);
+      await page.goto(`${process.env.BASE_URL}/approvals/all-approvals`, {
+        waitUntil: "load",
+      });
+      const flags = await approvals.getFeatureFlags();
+      const enabled = flags.includes("amenity-code");
+      Logger.info(
+        `TC572: amenity-code feature flag is ${enabled ? "ON" : "OFF"}`,
+      );
+
+      const amenityRows = (await approvals.getApprovalRows()).filter((r) =>
+        /amenity/i.test(r.template_type || ""),
+      );
+      if (!enabled) {
+        expect(
+          amenityRows.length,
+          "FAIL: with amenity-code OFF the org must have no Amenity Code approvals",
+        ).toBe(0);
+        Logger.success("TC572: flag OFF and no Amenity Code approvals exist ✓");
+        test.skip(
+          true,
+          "amenity-code feature is not enabled for this organization — the Amenity Code template type and its approval drawer cannot be exercised here",
+        );
+      }
+      expect(
+        amenityRows.length,
+        "FAIL: amenity-code is ON but no Amenity Code approval exists to open",
+      ).toBeGreaterThan(0);
+      const row = amenityRows[0];
+      await approvals.gotoApprovalsTab("All Approvals");
+      await approvals.openApprovalDetails(row.approval_number, [
+        String(row.approval_number),
+      ]);
+      const details = await approvals.getApprovalDetails(row.approval_id);
+      expect(
+        (details.amenityApprovalUnits || []).length,
+        "FAIL: Amenity Code approval details must list affected units",
+      ).toBeGreaterThan(0);
+      Logger.success("TC572 PASSED");
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Part 2 — self-contained change order approval E2E
+  // ═══════════════════════════════════════════════════════════════════════════
+  test.describe
+    .serial("Approvals E2E — change order approvals on a suite-owned property", () => {
+    const suffix = `${Date.now()}`;
+    const templateName = `ApprovalE2E_CO_Template_${suffix}`;
+    let ownerContext;
+    let approverContext;
+    /** @type {ApprovalE2EPage} */ let owner;
+    /** @type {ApprovalE2EPage} */ let approver;
+    let chain;
+    let sharedSnapshot;
+    let templateCreated = false;
+    let approvedChangeOrderTotal = 0;
+
+    test.beforeAll(async ({ browser }, testInfo) => {
+      testInfo.setTimeout(1200000); // property → budget → project → job → finalize → template
+      expect(
+        fs.existsSync(APPROVER_SESSION),
+        "FAIL: OtherSessionState.json (approver Sumit Mishra) must exist — run TC01_login TC03 first",
+      ).toBeTruthy();
+
+      sharedSnapshot = ApprovalE2EPage.backupSharedData();
+      ownerContext = await browser.newContext({
+        storageState: "sessionState.json",
+      });
+      owner = new ApprovalE2EPage(await ownerContext.newPage());
+      approverContext = await browser.newContext({
+        storageState: APPROVER_SESSION,
+      });
+      approver = new ApprovalE2EPage(await approverContext.newPage());
+
+      try {
+        chain = await owner.createFinalizedContractChain(suffix);
+        Logger.success(`Setup: chain ready → ${JSON.stringify(chain)}`);
+
+        const changed = ApprovalE2EPage.changedSharedData(sharedSnapshot);
+        expect(
+          changed,
+          `FAIL: building the chain must not change shared hand-off files (changed: ${changed.join(", ")})`,
+        ).toEqual([]);
+        Logger.success(
+          "Setup: shared data/*.json files untouched by the chain",
+        );
+
+        await owner.createChangeOrderTemplate(
+          templateName,
+          chain.propertyName,
+          [OWNER_NAME, APPROVER_NAME],
+        );
+        templateCreated = true;
+      } finally {
+        ApprovalE2EPage.restoreSharedData(sharedSnapshot);
+      }
+
+      const baseline = await owner.getContractTotals(chain.jobId);
+      expect(
+        baseline.changeOrder,
+        "FAIL: a freshly finalized contract must start with $0 change orders",
+      ).toBe(0);
+      expect(
+        baseline.revised,
+        "FAIL: Revised Contract amount must equal Original before any change order",
+      ).toBe(baseline.original);
+      Logger.success(
+        `Setup: contract baseline Original ${baseline.original}, Change order 0`,
+      );
+    });
+
+    test.afterAll(async () => {
+      if (owner && templateCreated)
+        await owner.deleteTemplateQuietly(templateName);
+      await approverContext?.close().catch(() => {});
+      await ownerContext?.close().catch(() => {});
+      ApprovalE2EPage.restoreSharedData(sharedSnapshot);
+      if (sharedSnapshot) {
+        const changed = ApprovalE2EPage.changedSharedData(sharedSnapshot);
+        Logger.info(
+          changed.length
+            ? `Teardown: shared files still differ: ${changed.join(", ")}`
+            : "Teardown: shared data/*.json files identical to before the suite",
+        );
+      }
+    });
+
+    /** Raise a change order and return its approval row + details. */
+    async function raiseChangeOrder(label, amount) {
+      const number = await owner.createChangeOrder(chain.jobId, {
+        title: `ApprovalE2E_${label}_${suffix}`,
+        amount,
+      });
+      const row = await owner.waitForApprovalRow(number, "Change Order");
+      expect(
+        row.current_status,
+        `FAIL: change order #${number} must enter "Pending Approval" because of the Change Order template`,
+      ).toBe("Pending Approval");
+      expect(
+        money(row.dollar_amount),
+        `FAIL: approval amount must equal the change order amount ${amount}`,
+      ).toBe(Number(amount));
+
+      const details = await owner.getApprovalDetails(row.approval_id);
+      const chainSteps = details.approvalChain || [];
+      Logger.info(
+        `Change order #${number} chain → ${JSON.stringify(chainSteps.map((s) => ({ status: s.review_status, eligible: s.eligible_approvers, ready: s.ready_for_review })))}`,
+      );
+      expect(
+        chainSteps.length,
+        "FAIL: template must create 2 approval steps",
+      ).toBe(2);
+      expect(
+        chainSteps[0].eligible_approvers,
+        `FAIL: step 1 must be ${OWNER_NAME}`,
+      ).toContain(OWNER_NAME);
+      expect(
+        chainSteps[0].review_status,
+        `FAIL: step 1 (${OWNER_NAME}) is the requester's own step and must be skipped automatically`,
+      ).toBe("skipped");
+      expect(
+        chainSteps[1].eligible_approvers,
+        `FAIL: step 2 must be ${APPROVER_NAME}`,
+      ).toContain(APPROVER_NAME);
+      expect(
+        chainSteps[1].review_status,
+        `FAIL: step 2 (${APPROVER_NAME}) must be pending`,
+      ).toBe("pending");
+      expect(
+        chainSteps[1].ready_for_review,
+        `FAIL: step 2 (${APPROVER_NAME}) must be ready for review`,
+      ).toBeTruthy();
+      Logger.success(
+        `Change order #${number}: Pending Approval, step 1 skipped (requester), step 2 ready for ${APPROVER_NAME}`,
+      );
+      return { number, row, details };
+    }
+
+    test("TC573 @approval @multiApprover @changeOrder @regression @e2e : Verify approver approves a change order from My Approvals and the change order and contract are updated", async () => {
+      test.setTimeout(600000);
+      const amount = 150;
+      const { number, row } = await raiseChangeOrder("Approve", amount);
+
+      Logger.info(`TC573: ${APPROVER_NAME} opens My Approvals`);
+      await approver.gotoApprovalsTab("My Approvals");
+      const rowText = await approver.openApprovalDetails(number, [
+        "Change Order",
+        number,
+      ]);
+      // The row's Status cell sits beyond the 1280px viewport and RevoGrid does not
+      // mount it (verified in run 2); the status is asserted on the drawer badge and
+      // the API instead.
+      expect(rowText, `FAIL: My Approvals row must show $${amount}`).toContain(
+        `$${amount}`,
+      );
+      expect(
+        rowText,
+        `FAIL: My Approvals row must show the suite's property`,
+      ).toContain(chain.propertyName);
+
+      const { fields, text } = await approver.readDrawerFields();
+      expect(
+        text,
+        `FAIL: ${APPROVER_NAME}'s step must show PENDING APPROVAL in the drawer`,
+      ).toMatch(/pending approval/i);
+      expect(fields["Approval Type"], "FAIL: Approval Type").toBe(
+        "Change Order",
+      );
+      expect(fields["Property"], "FAIL: Property").toBe(chain.propertyName);
+      expect(fields["Job"], "FAIL: Job").toBe(chain.jobName);
+      expect(fields["Contract Number"], "FAIL: Contract Number = job id").toBe(
+        chain.jobId,
+      );
+      expect(
+        text,
+        "FAIL: chain must read '0 of 1 approved' (skipped step excluded)",
+      ).toContain("0 of 1 approved");
+      expect(text, "FAIL: drawer must list the change order details").toContain(
+        "Change Order Details",
+      );
+      for (const name of ["Approve", "Reject", "Remind Approver"]) {
+        await expect(
+          approver.drawerButton(name),
+          `FAIL: approver must see "${name}"`,
+        ).toBeVisible();
+      }
+      Logger.success("TC573: drawer fields and approver actions verified");
+
+      const note = `TC573 approved by ${APPROVER_NAME} ${suffix}`;
+      const result = await approver.actOnApproval("Approve", note);
+      await approver.expectNotification("Approved", /Approved/);
+      Logger.info(
+        `TC573: preflight ${result.preflightText ? "shown and confirmed" : "not shown"}`,
+      );
+
+      await expect
+        .poll(() => owner.getApprovalStatus(row.approval_id), {
+          message: "FAIL: approval must become Approved",
+          timeout: 60000,
+        })
+        .toBe("Approved");
+      const after = await owner.getApprovalDetails(row.approval_id);
+      const step2 = after.approvalChain[1];
+      expect(step2.review_status, "FAIL: step 2 must be approved").toBe(
+        "approved",
+      );
+      expect(
+        step2.acted_by_name,
+        `FAIL: step 2 must be approved by ${APPROVER_NAME}`,
+      ).toBe(APPROVER_NAME);
+      expect(step2.notes, "FAIL: the approval note must be saved").toBe(note);
+      expect(
+        after.isTerminalApproval,
+        "FAIL: approval must be terminal",
+      ).toBeTruthy();
+      Logger.success("TC573: API shows Approved, terminal, note saved");
+
+      expect(
+        await owner.getChangeOrderStatusInJob(chain.jobId, number),
+        `FAIL: change order #${number} must be Approved on the job`,
+      ).toBe("Approved");
+
+      approvedChangeOrderTotal += amount;
+      await expect
+        .poll(
+          async () => (await owner.getContractTotals(chain.jobId)).changeOrder,
+          {
+            message: `FAIL: contract Change order total must become ${approvedChangeOrderTotal}`,
+            timeout: 90000,
+            intervals: [5000],
+          },
+        )
+        .toBe(approvedChangeOrderTotal);
+      const totals = await owner.getContractTotals(chain.jobId);
+      expect(
+        totals.revised,
+        "FAIL: Revised Contract amount must equal Original + approved change orders",
+      ).toBeCloseTo(totals.original + approvedChangeOrderTotal, 2);
+      Logger.success(
+        `TC573: contract Change order ${totals.changeOrder}, Revised ${totals.revised} = Original ${totals.original} + ${approvedChangeOrderTotal}`,
+      );
+      Logger.success("TC573 PASSED");
+    });
+
+    test("TC574 @approval @changeOrder @regression @e2e : Verify approver cannot reject without notes and a rejection with notes is saved", async () => {
+      test.setTimeout(600000);
+      const amount = 120;
+      const { number, row } = await raiseChangeOrder("Reject", amount);
+
+      await approver.gotoApprovalsTab("My Approvals");
+      await approver.openApprovalDetails(number, ["Change Order", number]);
+      await expect(
+        approver.notesInput,
+        "FAIL: notes field must be shown",
+      ).toHaveAttribute("placeholder", approver.notesPlaceholder);
+      await expect(
+        approver.detailsDialog.getByText("Notes (required for rejection)"),
+        "FAIL: notes label must state it is required for rejection",
+      ).toBeVisible();
+
+      const empty = await approver.rejectWithoutNotes("Reject");
+      expect(
+        empty.requestsSent,
+        "FAIL: no approve/reject request may be sent without notes",
+      ).toEqual([]);
+      expect(
+        empty.ariaInvalid,
+        "FAIL: notes field must be marked invalid",
+      ).toBe("true");
+      expect(
+        await owner.getApprovalStatus(row.approval_id),
+        "FAIL: approval must stay Pending Approval after the blocked reject",
+      ).toBe("Pending Approval");
+      Logger.success(
+        "TC574: empty-notes reject blocked, nothing sent, still pending",
+      );
+
+      const note = `TC574 rejected by ${APPROVER_NAME} ${suffix}`;
+      await approver.actOnApproval("Reject", note);
+      await approver.expectNotification(
+        "Rejected",
+        /The approval has been successfully rejected!/,
+      );
+      await expect
+        .poll(() => owner.getApprovalStatus(row.approval_id), {
+          message: "FAIL: approval must become Rejected",
+          timeout: 60000,
+        })
+        .toBe("Rejected");
+      const after = await owner.getApprovalDetails(row.approval_id);
+      expect(
+        after.approvalChain[1].review_status,
+        "FAIL: step 2 must be rejected",
+      ).toBe("rejected");
+      expect(
+        after.approvalChain[1].notes,
+        "FAIL: rejection note must be saved",
+      ).toBe(note);
+      expect(
+        after.approvalChain[1].acted_by_name,
+        `FAIL: rejected by ${APPROVER_NAME}`,
+      ).toBe(APPROVER_NAME);
+      expect(
+        await owner.getChangeOrderStatusInJob(chain.jobId, number),
+        `FAIL: change order #${number} must be Rejected on the job`,
+      ).toBe("Rejected");
+
+      const totals = await owner.getContractTotals(chain.jobId);
+      expect(
+        totals.changeOrder,
+        "FAIL: a rejected change order must not change the contract Change order total",
+      ).toBe(approvedChangeOrderTotal);
+      Logger.success(
+        `TC574: Rejected with note; contract Change order total unchanged at ${totals.changeOrder}`,
+      );
+      Logger.success("TC574 PASSED");
+    });
+
+    test("TC575 @approval @changeOrder @regression @e2e : Verify owner Reject on Behalf requires notes and records the rejection on behalf of the approver", async () => {
+      test.setTimeout(600000);
+      const { number, row } = await raiseChangeOrder("RejectOnBehalf", 110);
+
+      await owner.gotoApprovalsTab("All Approvals");
+      await owner.openApprovalDetails(number, ["Change Order", number]);
+      for (const name of ["Approve on Behalf", "Reject on Behalf"]) {
+        await expect(
+          owner.drawerButton(name),
+          `FAIL: org admin must see "${name}" for ${APPROVER_NAME}'s step`,
+        ).toBeVisible();
+      }
+      const empty = await owner.rejectWithoutNotes("Reject on Behalf");
+      expect(
+        empty.requestsSent,
+        "FAIL: Reject on Behalf without notes must send nothing",
+      ).toEqual([]);
+      expect(
+        await owner.getApprovalStatus(row.approval_id),
+        "FAIL: approval must stay Pending Approval",
+      ).toBe("Pending Approval");
+      Logger.success("TC575: empty-notes Reject on Behalf blocked");
+
+      const note = `TC575 rejected on behalf by ${OWNER_NAME} ${suffix}`;
+      await owner.actOnApproval("Reject on Behalf", note);
+      await owner.expectNotification(
+        "Rejected",
+        /The approval has been successfully rejected!/,
+      );
+      await expect
+        .poll(() => owner.getApprovalStatus(row.approval_id), {
+          message: "FAIL: approval must become Rejected",
+          timeout: 60000,
+        })
+        .toBe("Rejected");
+      const step2 = (await owner.getApprovalDetails(row.approval_id))
+        .approvalChain[1];
+      expect(step2.review_status, "FAIL: step 2 must be rejected").toBe(
+        "rejected",
+      );
+      expect(
+        step2.on_behalf_display_name,
+        `FAIL: rejection must be recorded on behalf by ${OWNER_NAME}`,
+      ).toBe(OWNER_NAME);
+      expect(step2.notes, "FAIL: on-behalf rejection note must be saved").toBe(
+        note,
+      );
+      expect(
+        await owner.getChangeOrderStatusInJob(chain.jobId, number),
+        `FAIL: change order #${number} must be Rejected`,
+      ).toBe("Rejected");
+      Logger.success("TC575 PASSED");
+    });
+
+    test("TC576 @approval @changeOrder @regression @e2e : Verify owner Approve on Behalf completes the approval and updates the contract", async () => {
+      test.setTimeout(600000);
+      const amount = 90;
+      const { number, row } = await raiseChangeOrder("ApproveOnBehalf", amount);
+
+      await owner.gotoApprovalsTab("All Approvals");
+      await owner.openApprovalDetails(number, ["Change Order", number]);
+      const note = `TC576 approved on behalf by ${OWNER_NAME} ${suffix}`;
+      await owner.actOnApproval("Approve on Behalf", note);
+      await owner.expectNotification("Approved", /Approved/);
+
+      await expect
+        .poll(() => owner.getApprovalStatus(row.approval_id), {
+          message: "FAIL: approval must become Approved",
+          timeout: 60000,
+        })
+        .toBe("Approved");
+      const step2 = (await owner.getApprovalDetails(row.approval_id))
+        .approvalChain[1];
+      expect(step2.review_status, "FAIL: step 2 must be approved").toBe(
+        "approved",
+      );
+      expect(
+        step2.on_behalf_display_name,
+        `FAIL: approval must be recorded on behalf by ${OWNER_NAME}`,
+      ).toBe(OWNER_NAME);
+      expect(step2.notes, "FAIL: on-behalf approval note must be saved").toBe(
+        note,
+      );
+      expect(
+        await owner.getChangeOrderStatusInJob(chain.jobId, number),
+        `FAIL: change order #${number} must be Approved`,
+      ).toBe("Approved");
+
+      approvedChangeOrderTotal += amount;
+      await expect
+        .poll(
+          async () => (await owner.getContractTotals(chain.jobId)).changeOrder,
+          {
+            message: `FAIL: contract Change order total must become ${approvedChangeOrderTotal}`,
+            timeout: 90000,
+            intervals: [5000],
+          },
+        )
+        .toBe(approvedChangeOrderTotal);
+      Logger.success(
+        `TC576: contract Change order total now ${approvedChangeOrderTotal}`,
+      );
+      Logger.success("TC576 PASSED");
+    });
+  });
+}

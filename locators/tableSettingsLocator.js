@@ -80,14 +80,29 @@ function tableSettingsLocators(page) {
     drawer,
     title: drawer.getByText("Table settings", { exact: true }),
     subtitle: drawer.getByText(/changes preview live in the table/i),
-    organizationDefaultTag: drawer.getByText("Organization default", {
-      exact: true,
-    }),
+    // The header's view-scope indicator. app/components/BirdTable/SettingsDrawer.tsx renders the
+    // "Organization default" badge only while the user's view equals the org default; once the
+    // user's labels / column order / sections differ (column-order feature, app commit
+    // bbcfc5de3, 2026-11-16) it renders a "Reset to organization default" button instead
+    // (MCP-verified 2026-11-19: Vendor Directory and CapEx show the button, Budget the badge).
+    // Either one is the indicator, so accept both.
+    organizationDefaultTag: drawer
+      .getByText("Organization default", { exact: true })
+      .or(
+        drawer.getByRole("button", {
+          name: "Reset to organization default",
+          exact: true,
+        })
+      )
+      .first(),
     columnsHeading: drawer.getByText("Columns", { exact: true }),
-    columnsHint: drawer.getByText(
-      "Drag to reorder. Rename inline. Hide columns you don't need. Locked columns are system-managed.",
-      { exact: true }
-    ),
+    // App commit db76f95e4 (2026-11-18, "Pin columns from table settings") reworded this hint
+    // to "Drag to reorder. Pin a column to keep it on the left. Dragging it out of the pinned
+    // columns unpins it." (MCP-verified 2026-11-19, Budget / Test Property 2_The Westerham).
+    // Match the stable opening sentence so further rewording of the rest does not break every
+    // Table settings test. The "Drag to reorder" row buttons carry that text only as an
+    // aria-label, so getByText resolves to the hint alone.
+    columnsHint: drawer.getByText(/^Drag to reorder\.\s/),
     rowsSectionsHeading: drawer.getByText("Rows & sections", { exact: true }),
     rowsSectionsHint: drawer.getByText(
       "Organize rows into sections. Drag sections to reorder and rename inline.",

@@ -550,6 +550,11 @@ test.describe("Category tab", () => {
       "Original Contract Amount",
       "Remaining Contract Amount",
     ];
+    // Added 2026-11-19 (insert-only): app commit 35306fd43 ("Capex Tracker lifetime columns")
+    // relabelled "Invoiced Amount" to "Invoice Amount - YTD" — MCP-verified headed: Table settings
+    // lists "Invoice Amount - YTD display name" and no "Invoiced Amount" (same rename as TC295/296/299).
+    const INVOICE_COL = "Invoice Amount - YTD";
+    ALL_COLS[ALL_COLS.indexOf("Invoiced Amount")] = INVOICE_COL;
 
     // "Table settings" drawer replaced CapEx's Table → Hide / show columns → Manage Columns
     // (MCP-verified 2026-10-30, "Capex Tracker"): every column has an eye that saves on click.
@@ -582,6 +587,40 @@ test.describe("Category tab", () => {
     });
     Logger.info("TC106: Budget Remaining restored ✓");
 
+    // Added 2026-11-19 (insert-only): the steps below this block hide/restore the column by its
+    // old label "Invoiced Amount", which no longer exists. This block runs the same steps and
+    // assertions with the current label (INVOICE_COL) and returns; the original lines are kept
+    // unchanged after it. Column order is read from the grid's own column list (getColumns()):
+    // MCP-verified, hidden columns drop out of it and restored ones come back, while the DOM
+    // header read (getColumnOrder) only sees columns that fit forceGridFullWidth's 3000px — the
+    // grid now has 21 columns, so a restored column can sit past that edge.
+    const gridColumnNames = () =>
+      page
+        .locator("revo-grid")
+        .first()
+        .evaluate(async g => (await g.getColumns()).map(c => c.name));
+    {
+      await capexColumns.setColumnVisibility("Budget Revision", false);
+      await capexColumns.setColumnVisibility(INVOICE_COL, false);
+      await capexColumns.closeTableSettings();
+      let renamedOrder = await gridColumnNames();
+      expect(renamedOrder.includes("Budget Revision")).toBeFalsy();
+      expect(renamedOrder.includes(INVOICE_COL)).toBeFalsy();
+
+      await capexColumns.setColumnVisibility("Budget Revision", true);
+      await capexColumns.setColumnVisibility(INVOICE_COL, true);
+      await capexColumns.closeTableSettings();
+      renamedOrder = await gridColumnNames();
+      expect(renamedOrder).toContain("Budget Revision");
+      expect(renamedOrder).toContain(INVOICE_COL);
+      expect(renamedOrder).toContain("Current Budget");
+      expect(renamedOrder).toContain("Actions");
+      Logger.info("TC106: Column order preserved after multi-hide/restore ✓");
+
+      Logger.success("TC106 ✓");
+      return;
+    }
+
     // Hide 2 columns and restore — original order preserved
     await capexColumns.setColumnVisibility("Budget Revision", false);
     await capexColumns.setColumnVisibility("Invoiced Amount", false);
@@ -612,3 +651,154 @@ test.describe("Category tab", () => {
     Logger.success("TC106 ✓");
   });
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// Missing-coverage E2E cases (formerly tests/TC44_CategoryE2E.spec.js). Wrapped in a block so its
+// names never clash with this file's; it relies on this file's test.use
+// (storageState: sessionState.json). Added 2026-11-19.
+// ════════════════════════════════════════════════════════════════════════════
+{
+  /**
+   * Categories E2E — org category table, suite-owned rows only.
+   *
+   * The category table is org-wide configuration, so TC605 only creates, edits and
+   * deletes its OWN AUTO-<suffix> code (imported from a generated CSV with the
+   * org's headers) and an afterAll removes any leftover AUTO-<suffix> rows. TC606
+   * only reads (sorting).
+   *
+   *   TC605 import a new code → inline edit of Category Name persists → Delete removes it
+   *   TC606 Category Code header sorts ascending, then descending
+   *
+   * Live-verified 2026-11-19 — see locators/retainageCategoryE2ELocator.js.
+   */
+
+  const os = require("os");
+  const path = require("path");
+  const {
+    RetainageCategoryE2EPage,
+  } = require("../pages/retainageCategoryE2EPage");
+  const { Logger } = require("../utils/logger");
+
+  const SUFFIX = Date.now().toString().slice(-7);
+  const PREFIX = `AUTO-CAT${SUFFIX}`;
+  const collator = new Intl.Collator(undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+
+  test.describe.serial("Categories E2E — suite-owned category rows", () => {
+    test.afterAll(async ({ browser }) => {
+      const ctx = await browser.newContext({
+        storageState: "sessionState.json",
+        baseURL: process.env.BASE_URL,
+      });
+      try {
+        await new RetainageCategoryE2EPage(
+          await ctx.newPage(),
+        ).deleteOwnCategoriesQuietly(PREFIX);
+      } finally {
+        await ctx.close().catch(() => {});
+      }
+    });
+
+    test("TC605 @category @regression @e2e : Verify an imported category can be edited inline and deleted, with both changes persisted", async ({
+      page,
+    }) => {
+      test.setTimeout(600000);
+      const rc = new RetainageCategoryE2EPage(page);
+      const code = `${PREFIX}-1`;
+      const name = `AutoCat ${SUFFIX}`;
+      const edited = `AutoCat EDITED ${SUFFIX}`;
+      const before = (await rc.categoryRows()).length;
+
+      await rc.openCategoryPage();
+      const csv = rc.writeCategoryCsv(
+        path.join(os.tmpdir(), "tb-category-e2e", `category_${SUFFIX}.csv`),
+        [{ code, name }],
+      );
+      await rc.importCategoryCsv(csv);
+      await expect
+        .poll(async () => (await rc.categoryByCode(code))?.name || null, {
+          message: `FAIL: imported category "${code}" must exist`,
+          timeout: 60000,
+          intervals: [3000],
+        })
+        .toBe(name);
+      expect(
+        (await rc.categoryRows()).length,
+        "FAIL: import adds exactly one row",
+      ).toBe(before + 1);
+      Logger.success(`TC605: imported "${code}" → "${name}"`);
+
+      await rc.openCategoryPage();
+      await rc.searchCategory(code);
+      await rc.editCategoryName(name, edited);
+      await expect
+        .poll(async () => (await rc.categoryByCode(code))?.name || null, {
+          message: "FAIL: inline edit must be saved",
+          timeout: 30000,
+          intervals: [2000],
+        })
+        .toBe(edited);
+      await rc.openCategoryPage();
+      await rc.searchCategory(code);
+      await expect(
+        page
+          .locator("main [role=gridcell]")
+          .filter({ hasText: edited })
+          .first(),
+        "FAIL: edited name must show after reload",
+      ).toBeVisible({ timeout: 30000 });
+      Logger.success(`TC605: name edited inline to "${edited}" and persisted`);
+
+      await rc.deleteCategoryByCode(code);
+      await rc.openCategoryPage();
+      await rc.searchCategory(code);
+      await expect(
+        page.locator("main [role=gridcell]").filter({ hasText: code }),
+        "FAIL: deleted category must not be listed",
+      ).toHaveCount(0, { timeout: 30000 });
+      expect(
+        (await rc.categoryRows()).length,
+        "FAIL: row count back to the original",
+      ).toBe(before);
+      Logger.success("TC605 PASSED");
+    });
+
+    test("TC606 @category @regression : Verify the category table sorts by Category Code ascending and descending", async ({
+      page,
+    }) => {
+      const rc = new RetainageCategoryE2EPage(page);
+      expect(
+        (await rc.categoryRows()).filter((r) => r.code).length,
+        "FAIL: org needs at least 2 categories",
+      ).toBeGreaterThan(1);
+      await rc.openCategoryPage();
+
+      const asc = await rc.sortCodes("Category Code", collator.compare, "asc");
+      expect(asc.length, "FAIL: codes visible after sorting").toBeGreaterThan(
+        1,
+      );
+      expect(asc, "FAIL: ascending order").toEqual(
+        [...asc].sort(collator.compare),
+      );
+      Logger.success(`TC606: ascending → ${asc.slice(0, 5).join(", ")}…`);
+
+      const desc = await rc.sortCodes(
+        "Category Code",
+        collator.compare,
+        "desc",
+      );
+      expect(desc.length).toBeGreaterThan(1);
+      expect(desc, "FAIL: descending order").toEqual(
+        [...desc].sort(collator.compare).reverse(),
+      );
+      expect(
+        desc[0],
+        "FAIL: descending must start from the other end",
+      ).not.toBe(asc[0]);
+      Logger.success(`TC606: descending → ${desc.slice(0, 5).join(", ")}…`);
+      Logger.success("TC606 PASSED");
+    });
+  });
+}

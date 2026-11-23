@@ -1378,15 +1378,30 @@ class AddColumnPage {
       ts.addSectionButton,
       'FAIL: "+ Add section" must be enabled'
     ).toBeEnabled();
-    // Nothing is pending when the drawer opens, so neither save button can be used yet.
+    // Nothing is pending when the drawer opens, so "Save changes" cannot be used yet.
     await expect(
       ts.saveChangesButton,
       'FAIL: "Save changes" must be disabled with no pending change'
     ).toBeDisabled();
-    await expect(
-      ts.saveForEveryoneButton,
-      'FAIL: "Save for everyone" must be disabled with no pending change'
-    ).toBeDisabled();
+    // "Save for everyone" depends on the user's saved view (app SettingsDrawer.tsx): while the
+    // view equals the org default ("Organization default" badge) it must be disabled; once the
+    // user's own column order differs from the org's (badge replaced by "Reset to organization
+    // default", app commit bbcfc5de3) it is enabled because it would publish that order to
+    // everyone (MCP/source-verified 2026-11-19, Vendor Directory). Assert the matching state.
+    const userViewDiffersFromOrg = await ts.drawer
+      .getByRole("button", { name: "Reset to organization default", exact: true })
+      .isVisible()
+      .catch(() => false);
+    if (userViewDiffersFromOrg) {
+      Logger.info(
+        'Table settings: user view differs from the organization default — "Save for everyone" may publish it, so it is not asserted disabled'
+      );
+    } else {
+      await expect(
+        ts.saveForEveryoneButton,
+        'FAIL: "Save for everyone" must be disabled with no pending change'
+      ).toBeDisabled();
+    }
     expect(
       await ts.columnNameTextboxes.count(),
       "FAIL: Table settings lists no columns"
@@ -1578,10 +1593,14 @@ class AddColumnPage {
       "FAIL: Add column API did not receive the entered name and description"
     ).toEqual([columnName, description]);
 
+    // The app closes this form only after the POST *and* a full table refetch
+    // (app/components/BirdTable/hooks/useTableActions.ts handleAddColumn: await refetchData()).
+    // On large grids (Images, All Approvals) under load that refetch took >15s on 2026-11-19
+    // although the POST had already returned 200, so allow the refetch time to finish.
     await expect(
       ts.nameInput,
       "FAIL: Add column form did not close after adding"
-    ).toBeHidden({ timeout: 15000 });
+    ).toBeHidden({ timeout: 90000 });
     await this.verifyColumnInTableSettings(columnName);
     await this.closeTableSettings();
     await this._waitForColumnHeader(columnName);

@@ -4,6 +4,7 @@ const { test, expect } = require("@playwright/test");
 const { VendorListingPage } = require("../pages/vendorListingPage");
 const { VendorContractPage } = require("../pages/vendorContractPage");
 const { VendorChangeOrderPage } = require("../pages/vendorChangeOrderPage");
+const { VendorPayInvoicePage } = require("../pages/vendorPayInvoicePage");
 const path = require("path");
 const { Logger } = require("../utils/logger");
 const { healingLocator } = require("../utils/locatorHealer");
@@ -142,6 +143,42 @@ test.describe("Vendor Contracts & Change Orders — requested smoke suite", () =
   });
 
   test.describe("Change Orders", () => {
+    test("TC488 @e2e @vendor @changeOrders @smoke @positive : Verify vendor can raise a New change order against an existing contract line item", async ({
+      page,
+    }) => {
+      test.setTimeout(120000);
+      await gotoBaseAndOpen(page, "changeOrders");
+      const changeOrderPage = new VendorChangeOrderPage(page);
+
+      await changeOrderPage.openNewChangeOrderDialog();
+      await changeOrderPage.selectContractAndCreateDraft(
+        smokeData.changeOrder.contractOptionLabel
+      );
+
+      const title = `${smokeData.changeOrder.title} ${Date.now()}`;
+      await changeOrderPage.fillTitleAndDescription(
+        title,
+        smokeData.changeOrder.description
+      );
+      await changeOrderPage.setExistingLineItemAmount(
+        smokeData.changeOrder.existingLineItem.costItemLabel,
+        smokeData.changeOrder.existingLineItem.amount
+      );
+      await changeOrderPage.assertTotalChangeOrderAmount(
+        smokeData.changeOrder.existingLineItem.expectedTotal
+      );
+
+      await changeOrderPage.clickSubmitForApproval(
+        smokeData.changeOrder.existingLineItem.expectedTotal
+      );
+      await changeOrderPage.confirmSubmit();
+      await changeOrderPage.assertSubmittedChangeOrderDetailFullyVisible(title);
+
+      Logger.success(
+        `TC488: Change Order "${title}" raised against existing line item "${smokeData.changeOrder.existingLineItem.costItemLabel}" and submitted successfully.`
+      );
+    });
+
     test("TC489 @vendor @changeOrders @contracts @smoke : Verify approved change order updates invoiceable contract amount", async ({
       page,
     }) => {
@@ -404,6 +441,106 @@ test.describe("Vendor Contracts & Change Orders — requested smoke suite", () =
       );
     });
 
+    test("TC490 @vendor @changeOrders @smoke @negative : Verify change order cannot be submitted with missing required information", async ({
+      page,
+    }) => {
+      test.setTimeout(90000);
+      await gotoBaseAndOpen(page, "changeOrders");
+      const changeOrderPage = new VendorChangeOrderPage(page);
+      await changeOrderPage.openNewChangeOrderDialog();
+      await changeOrderPage.selectContractAndCreateDraft(
+        smokeData.changeOrder.contractOptionLabel
+      );
+
+      // Deliberately leave Title/Description/every amount empty (the required
+      // information), then assert the app refuses to let this reach approval. The extra
+      // settle wait avoids a false pass from toBeDisabled()'s retry-until-first-match
+      // semantics: Playwright-verified 2026-09-17 the Submit button is briefly disabled
+      // immediately after draft creation (a loading flash) before settling to its real
+      // steady state — asserting right away can catch that transient flash and pass for
+      // the wrong reason instead of reflecting the app's actual behavior.
+      await page.waitForTimeout(2000);
+      const submitButton = page.getByRole("button", {
+        name: "Submit for Approval",
+        exact: true,
+      });
+      await expect(
+        submitButton,
+        'FAIL: "Submit for Approval" must be disabled while required information (Title, a non-zero amount) is missing.'
+      ).toBeDisabled({ timeout: 10000 });
+
+      Logger.success(
+        "TC490: Change Order submission is correctly blocked while required information is missing."
+      );
+    });
+
+    test("TC492 @vendor @changeOrders @smoke : Verify change order source and provenance are retained correctly", async ({
+      page,
+    }) => {
+      test.setTimeout(120000);
+      await gotoBaseAndOpen(page, "changeOrders");
+      const changeOrderPage = new VendorChangeOrderPage(page);
+      const vendorListingPage = new VendorListingPage(page);
+
+      await changeOrderPage.openNewChangeOrderDialog();
+      await changeOrderPage.selectContractAndCreateDraft(
+        smokeData.changeOrder.contractOptionLabel
+      );
+      const title = `${smokeData.changeOrder.title} Provenance ${Date.now()}`;
+      await changeOrderPage.fillTitleAndDescription(
+        title,
+        smokeData.changeOrder.description
+      );
+      await changeOrderPage.setExistingLineItemAmount(
+        smokeData.changeOrder.existingLineItem.costItemLabel,
+        smokeData.changeOrder.existingLineItem.amount
+      );
+      await changeOrderPage.clickSubmitForApproval(
+        smokeData.changeOrder.existingLineItem.expectedTotal
+      );
+      await changeOrderPage.confirmSubmit();
+
+      // Source/provenance on the detail page: Raised By must read "Vendor" (not "Owner"),
+      // and Contract must match the contract this Change Order was actually raised
+      // against.
+      const raisedBy = await changeOrderPage.getDetailFieldValue("Raised By");
+      expect(
+        raisedBy,
+        `FAIL: submitted Change Order "Raised By" reads "${raisedBy}", expected "Vendor".`
+      ).toBe("Vendor");
+      const contractField =
+        await changeOrderPage.getDetailFieldValue("Contract");
+      expect(
+        smokeData.changeOrder.contractOptionLabel,
+        `FAIL: submitted Change Order's Contract field "${contractField}" is not reflected in the source contract label.`
+      ).toContain(contractField);
+
+      // Same provenance retained on the Change Orders listing (export), not just the
+      // detail page — cross-surface consistency.
+      await vendorListingPage.navigateTo("changeOrders");
+      const row = await vendorListingPage.exportAndFindRow(
+        "changeOrders",
+        "Title",
+        title
+      );
+      expect(
+        row,
+        `FAIL: submitted Change Order "${title}" not found in the Change Orders export.`
+      ).not.toBeNull();
+      expect(
+        row["Raised By"],
+        'FAIL: exported row "Raised By" does not read "Vendor".'
+      ).toBe("Vendor");
+      expect(
+        row.Contract,
+        `FAIL: exported row Contract "${row.Contract}" does not match "${contractField}".`
+      ).toBe(contractField);
+
+      Logger.success(
+        `TC492: Change Order "${title}" provenance retained correctly (Raised By "Vendor", Contract "${contractField}") on both the detail page and the listing.`
+      );
+    });
+
     test("TC493 @vendor @changeOrders @smoke : Verify Export and Search is working", async ({
       page,
     }) => {
@@ -595,5 +732,127 @@ test.describe("Vendor Contracts & Change Orders — requested smoke suite", () =
         `TC493: Change Orders Export (${columns.length} columns, ${rowCount} rows) and Search both verified working.`
       );
     });
+
+    test("TC494 @vendor @changeOrders @smoke : Verify Chat option is present", async ({
+      page,
+    }) => {
+      test.setTimeout(60000);
+      await gotoBaseAndOpen(page, "changeOrders");
+
+      await expect(
+        page.getByText("Piper", { exact: true }),
+        'FAIL: "Piper" chat panel title not visible on Change Orders.'
+      ).toBeVisible({ timeout: 10000 });
+      await expect(
+        page.getByText("Change Orders Assistance", { exact: true }),
+        'FAIL: "Change Orders Assistance" Piper subtitle not visible.'
+      ).toBeVisible();
+      await expect(
+        page.getByPlaceholder("Ask about your change orders", { exact: true }),
+        "FAIL: Piper chat input not visible on Change Orders."
+      ).toBeVisible();
+
+      Logger.success(
+        "TC494: Chat (Piper) option is present on the Change Orders page."
+      );
+    });
+
+    test("TC529 @regression @vendor @invoices BUG-1511-TC01 : Vendor portal - Draft Invoice deleted isn't removed from Invoice DB", async ({
+      page,
+    }) => {
+      test.setTimeout(120000);
+      const listing = await gotoBaseAndOpen(page, "invoices");
+      const invoicePage = new VendorPayInvoicePage(page);
+
+      await invoicePage.createInvoiceDraftFromModal(
+        smokeData.changeOrder.contractOptionLabel
+      );
+
+      const title = `BUG1511 Draft ${Date.now()}`;
+      await page
+        .locator("main")
+        .getByRole("textbox", { name: "Title", exact: true })
+        .fill(title);
+      await invoicePage.saveRegularInvoiceDraft();
+      await invoicePage.deleteRegularInvoiceDraft();
+
+      await listing.navigateTo("invoices");
+      await page.reload({ waitUntil: "load" });
+      await page.waitForTimeout(2000);
+      await expect(
+        page.getByText(title, { exact: false }),
+        "FAIL: deleted draft invoice is still listed in the Invoices DB."
+      ).toHaveCount(0);
+
+      Logger.success(
+        "BUG-1511-TC01: deleted draft invoice is no longer listed in the Invoices DB."
+      );
+    });
+
+    test("TC496 @regression @vendor @invoices BUG-1492-TC01 : Beta/Vendor portal - agent unable to fetch attached invoice PDF", async ({
+      page,
+    }) => {
+      test.setTimeout(180000);
+      await gotoBaseAndOpen(page, "invoices");
+
+      await page
+        .getByRole("button", { name: /Invoice or Pay App|New Invoice/ })
+        .first()
+        .click();
+      await page.getByRole("textbox", { name: "Contract" }).first().click();
+      const contractOption = page
+        .getByRole("option", { name: /Automation Job — Test Property 2/ })
+        .first();
+      await expect(
+        contractOption,
+        "FAIL: no contract option available to bill against."
+      ).toBeVisible({ timeout: 15000 });
+      await contractOption.click();
+
+      const [fileChooser] = await Promise.all([
+        page.waitForEvent("filechooser"),
+        page.getByText("Drop invoice documents here").click(),
+      ]);
+      await fileChooser.setFiles("files/supporting_invoice_placeholder.pdf");
+      await page.getByRole("button", { name: "Continue" }).click();
+      await page.waitForURL(/\/invoices\/drafts\/\d+/, { timeout: 30000 });
+
+      // The agent must be able to read the attached PDF: it must never claim the file is missing.
+      const chatReply = page
+        .getByText(/Supporting Invoice|isn't an invoice|placeholder/i)
+        .first();
+      await expect(
+        chatReply,
+        "FAIL: Piper did not read the attached invoice PDF (no reference to its content)."
+      ).toBeVisible({ timeout: 120000 });
+      await expect(
+        page.getByText(
+          /No file appears to be available|can't see (the|any) (file|attachment)|re-upload/i
+        ),
+        "FAIL: Piper reports the attached invoice PDF is unavailable."
+      ).toHaveCount(0);
+
+      Logger.success("TC496: Piper fetched and read the attached invoice PDF.");
+    });
+  });
+
+  test("TC496 @regression @vendor @changeOrderAndinvoice BUG-1510-TC01 : Vendor portal - Invoice Open full editor erases initial chat", async ({
+    page,
+  }) => {
+    test.setTimeout(150000);
+    const invoicePage = new VendorPayInvoicePage(page);
+    const message = "What still needs my attention before I submit?";
+
+    await gotoBaseAndOpen(page, "invoices");
+    const draftUrl = await invoicePage.startPdfInvoiceDraftWithPiper(
+      path.resolve(__dirname, "../files/supporting_invoice_placeholder.pdf")
+    );
+    await invoicePage.sendInvoiceChatMessage(message);
+    await invoicePage.openFullEditor(draftUrl);
+    await invoicePage.assertInvoiceChatRetained(message);
+
+    Logger.success(
+      "TC496: invoice Piper chat is retained after opening the full editor."
+    );
   });
 });

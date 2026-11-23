@@ -292,6 +292,32 @@ test.describe("PROPERTY", () => {
     await prop.changeView("Table View");
     await prop.searchProperty(propertyName);
     await prop.viewDetailsButton();
+    // Precondition (MCP-verified 2026-11-19): with no documents the Property Documents section
+    // shows "No file uploads added yet" and renders NO revo-grid, so the grid scope below matches
+    // nothing and the add-column flow cannot run. In the full suite TC53 uploads
+    // files/property_data.csv to this (test-created) property first; when that has not happened
+    // (TC53 failed or a filtered run), upload the same file here.
+    const noDocuments = page.getByText("No file uploads added yet", {
+      exact: true,
+    });
+    await page
+      .locator("revo-grid")
+      .first()
+      .or(noDocuments)
+      .first()
+      .waitFor({ state: "visible", timeout: 60000 });
+    if (await noDocuments.isVisible().catch(() => false)) {
+      console.log(
+        "TC55: property has no documents — uploading files/property_data.csv (same file as TC53)"
+      );
+      await prop.uploadPropertyDocument(
+        path.resolve("./files/property_data.csv")
+      );
+      await expect(
+        page.locator("revo-grid").first(),
+        "FAIL: Property Documents grid must render after the upload"
+      ).toBeVisible({ timeout: 60000 });
+    }
     // "Table settings" drawer replaced Table → Add custom column (MCP-verified 2026-10-30, Property
     // Documents grid). Same data as addDataColoumn()/addData(): "Random Name", a random type; the
     // previous run's "Random Name" (fixed name, only TC55 creates it) is removed first.
@@ -329,9 +355,10 @@ test.describe("PROPERTY", () => {
     });
     await test.step("Location tab - Sites grid", async () => {
       await prop.openLocationTab();
-      await prop.addButton();
-      await prop.addRowDetail();
-      await prop.deleteRow();
+      // Site names are read-only since 2026-11-11 ("Name can only be edited in the Admin
+      // Portal"), so a named row can no longer be added here. Add a row, verify its Name is
+      // read-only, and delete that same row (MCP-verified 2026-11-17).
+      await prop.addSiteRowVerifyNameReadOnlyAndDelete();
     });
     await test.step("Add column and settings", async () => {
       // "Table settings" drawer replaced View/Table → Add custom column + the settings drawer
@@ -1468,3 +1495,389 @@ test.describe("PROPERTY", () => {
     });
   });
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// Missing-coverage E2E cases (formerly tests/TC38_PropertiesE2E.spec.js). Wrapped in a block so its
+// names never clash with this file's; it relies on this file's test.use
+// (storageState: sessionState.json). Added 2026-11-19.
+// ════════════════════════════════════════════════════════════════════════════
+{
+  /**
+   * Properties E2E — edit, delete, locked unit fields and unassigned-unit counts.
+   *
+   * Every test creates its OWN property and deletes it in afterEach, so no seeded
+   * property, unit or shared data/*.json file is ever modified.
+   *
+   *   TC577 Edit Property drawer saves overview fields (City/State/Zip are
+   *         address-derived and read-only)
+   *   TC578 Delete Property confirmation: Cancel keeps it, Delete removes it
+   *   TC579 Units grid: Tailorbird floor-plan fields are locked (UI and API),
+   *         customer fields are editable and persist
+   *   TC580 Unassigned-unit counter (Locations) and "not covered by takeoff"
+   *         message (Takeoffs)
+   *
+   * MCP-verified 2026-11-18 (headed owner browser) — see
+   * locators/propertyE2ELocator.js and pages/propertyE2EPage.js headers.
+   */
+
+  const { PropertyE2EPage } = require("../pages/propertyE2EPage");
+  const { Logger } = require("../utils/logger");
+  const { ensureLeftPanelExpanded } = require("../utils/leftPanelExpander");
+
+  const DELETE_DIALOG_TEXT =
+    "All associated projects, jobs, units, budgets, and other data will be permanently deleted. This action cannot be undone.";
+  const LOCKED_UNIT_COLUMNS = [
+    "Floor Plan Type",
+    "Bed x Bath",
+    "SQFT",
+    "GSF",
+    "NSF",
+    "Building",
+    "Site",
+    "Level",
+    "Missing Info / Discovery",
+  ];
+  const CUSTOMER_UNIT_COLUMNS = [
+    "Unit Name",
+    "Unit Type",
+    "Client Floor Plan Type",
+    "Client SQFT",
+  ];
+
+  test.describe("Properties E2E — on test-owned properties", () => {
+    /** Names of properties created by the current test (deleted in afterEach). */
+    let created = [];
+
+    test.beforeEach(async ({ page }) => {
+      created = [];
+      await page.goto(process.env.DASHBOARD_URL, { waitUntil: "load" });
+      await ensureLeftPanelExpanded(page);
+    });
+
+    test.afterEach(async ({ page }) => {
+      const props = new PropertyE2EPage(page);
+      for (const name of created) await props.deletePropertyQuietly(name);
+    });
+
+    test("TC577 @property @regression @e2e : Verify the Edit Property drawer saves overview fields and keeps address-derived City, State and Zip read-only", async ({
+      page,
+    }) => {
+      test.setTimeout(420000);
+      const props = new PropertyE2EPage(page);
+      const { name, id } = await props.createOwnProperty("Edit");
+      created.push(name);
+
+      await props.openDetails(id);
+      const before = await props.readOverview([
+        "Property Type",
+        "City",
+        "State",
+        "Zip Code",
+      ]);
+      expect(before["Property Type"], "FAIL: initial type").toBe(
+        "Garden Style",
+      );
+
+      await props.openEditDrawer();
+      await expect(
+        props.editInput("Enter name"),
+        "FAIL: Name must be prefilled with the property name",
+      ).toHaveValue(name);
+      for (const label of ["City", "State", "Zipcode"]) {
+        const field = props.editLabelledInput(label);
+        await expect(
+          field,
+          `FAIL: ${label} must be disabled (auto-filled from the address)`,
+        ).toBeDisabled();
+        await expect(field, `FAIL: ${label} placeholder`).toHaveAttribute(
+          "placeholder",
+          "Auto-filled from address",
+        );
+      }
+      await expect(props.editLabelledInput("City")).toHaveValue("College Park");
+      await expect(props.editLabelledInput("State")).toHaveValue("GA");
+      await expect(props.editLabelledInput("Zipcode")).toHaveValue("30337");
+      await expect(
+        props.editDialog.getByText("Project Count", { exact: true }),
+        "FAIL: Project Count is read-only and must not be in the drawer",
+      ).toHaveCount(0);
+      Logger.success("TC577: drawer prefilled; City/State/Zipcode read-only");
+
+      const legalName = `PropE2E Legal ${Date.now()}`;
+      const legalAddress = "1 Test Street, Atlanta";
+      await props.editInput("Enter legal name").fill(legalName);
+      await props.editInput("Enter legal address").fill(legalAddress);
+      await props.editInput("Enter unit count").fill("42");
+      await props.selectType("Mid Rise");
+      const { status } = await props.saveEdit();
+      expect(
+        status,
+        "FAIL: PUT /api/bird-table/rows must succeed",
+      ).toBeLessThan(300);
+      Logger.success(
+        `TC577: Save Changes → PUT ${status}, toast shown, drawer closed`,
+      );
+
+      await page.reload({ waitUntil: "load" });
+      const after = await props.readOverview([
+        "Property Type",
+        "Legal Name",
+        "Legal Address",
+        "Unit Count",
+        "City",
+        "State",
+        "Zip Code",
+      ]);
+      expect(after["Property Type"], "FAIL: Type must persist").toBe(
+        "Mid Rise",
+      );
+      expect(after["Legal Name"], "FAIL: Legal Name must persist").toBe(
+        legalName,
+      );
+      expect(after["Legal Address"], "FAIL: Legal Address must persist").toBe(
+        legalAddress,
+      );
+      expect(after["Unit Count"], "FAIL: Unit Count must persist").toBe("42");
+      expect(after["City"], "FAIL: City must be unchanged").toBe(
+        before["City"],
+      );
+      expect(after["State"], "FAIL: State must be unchanged").toBe(
+        before["State"],
+      );
+      expect(after["Zip Code"], "FAIL: Zip must be unchanged").toBe(
+        before["Zip Code"],
+      );
+
+      const record = await props.getPropertyRecord(name);
+      expect(record.legal_name, "FAIL: API legal_name").toBe(legalName);
+      expect(record.legal_address, "FAIL: API legal_address").toBe(
+        legalAddress,
+      );
+      expect(Number(record.unit_count), "FAIL: API unit_count").toBe(42);
+      expect(record.type, "FAIL: API type").toBe("mid_rise");
+      Logger.success(
+        "TC577: Overview and API reflect the saved values after reload",
+      );
+      Logger.success("TC577 PASSED");
+    });
+
+    test("TC578 @property @regression @e2e : Verify Delete Property confirmation — Cancel keeps the property and Delete removes it", async ({
+      page,
+    }) => {
+      test.setTimeout(420000);
+      const props = new PropertyE2EPage(page);
+      const { name } = await props.createOwnProperty("Delete");
+      created.push(name);
+
+      let rgrow = await props.findListingRow(name);
+      expect(
+        rgrow,
+        `FAIL: "${name}" must be listed in Table View`,
+      ).not.toBeNull();
+
+      const dialogText = await props.openDeleteDialog(rgrow);
+      expect(dialogText, "FAIL: dialog title").toContain("Delete Property");
+      expect(dialogText, "FAIL: dialog warning text").toContain(
+        DELETE_DIALOG_TEXT,
+      );
+      for (const b of ["Cancel", "Delete"]) {
+        await expect(
+          props.deleteDialogButton(b),
+          `FAIL: "${b}" button must be in the dialog`,
+        ).toBeVisible();
+      }
+      Logger.success(
+        "TC578: Delete Property dialog shows the destructive warning",
+      );
+
+      await props.deleteDialogButton("Cancel").click();
+      await expect(
+        props.deleteDialog,
+        "FAIL: Cancel must close the dialog",
+      ).toBeHidden({
+        timeout: 15000,
+      });
+      expect(
+        await props.getPropertyRecord(name),
+        "FAIL: Cancel must keep the property",
+      ).not.toBeNull();
+      await expect(
+        page
+          .locator('revogr-data[type="rgRow"] [role="row"]')
+          .filter({ hasText: name }),
+        "FAIL: the row must stay after Cancel",
+      ).toHaveCount(1);
+      Logger.success("TC578: Cancel kept the property");
+
+      await props.openDeleteDialog(rgrow);
+      const status = await props.confirmDelete();
+      expect(
+        status,
+        "FAIL: DELETE /api/bird-table/rows must succeed",
+      ).toBeLessThan(300);
+      await expect(
+        page
+          .getByRole("alert")
+          .filter({ hasText: "Row deleted successfully" })
+          .or(
+            page
+              .locator(".mantine-Notification-root")
+              .filter({ hasText: "Row deleted successfully" }),
+          )
+          .first(),
+        'FAIL: "Row deleted successfully" toast must appear',
+      ).toBeVisible({ timeout: 20000 });
+      Logger.success(`TC578: Delete → DELETE ${status}, toast shown`);
+
+      await expect
+        .poll(() => props.getPropertyRecord(name), {
+          message:
+            "FAIL: deleted property must disappear from the property API",
+          timeout: 60000,
+        })
+        .toBeNull();
+      await page.reload({ waitUntil: "load" });
+      rgrow = await props.findListingRow(name);
+      expect(
+        rgrow,
+        "FAIL: deleted property must not be listed after reload",
+      ).toBeNull();
+      created = []; // already deleted
+      Logger.success("TC578 PASSED");
+    });
+
+    test("TC579 @property @regression @e2e : Verify Units grid locks Tailorbird floor-plan fields and allows customer fields to be edited", async ({
+      page,
+    }) => {
+      test.setTimeout(480000);
+      const props = new PropertyE2EPage(page);
+      const { name, id } = await props.createOwnProperty("Units");
+      created.push(name);
+
+      await props.openUnits(id);
+      const addStatus = await props.addUnitRow();
+      expect(addStatus, "FAIL: Add Row must create a unit").toBeLessThan(300);
+      await page.reload({ waitUntil: "load" });
+      await props.openUnits(id);
+
+      for (const header of LOCKED_UNIT_COLUMNS) {
+        expect(
+          await props.unitCellOpensEditor(header),
+          `FAIL: "${header}" is Admin-only and must not open an editor`,
+        ).toBe(false);
+      }
+      Logger.success(
+        `TC579: ${LOCKED_UNIT_COLUMNS.length} Tailorbird columns are locked`,
+      );
+      for (const header of CUSTOMER_UNIT_COLUMNS) {
+        expect(
+          await props.unitCellOpensEditor(header),
+          `FAIL: "${header}" is a customer field and must open an editor`,
+        ).toBe(true);
+      }
+      Logger.success(
+        `TC579: ${CUSTOMER_UNIT_COLUMNS.length} customer columns are editable`,
+      );
+
+      // Root cause of runs 2–3 (MCP-reproduced 2026-11-18): Escape does not cancel
+      // a RevoGrid editor — the editor opened by the check above is committed
+      // (re-saving the old value) on the next double-click, and that edit session's
+      // Enter then sends nothing. Reload so the real edit starts on a fresh grid.
+      await page.reload({ waitUntil: "load" });
+      await props.openUnits(id);
+      const edit = await props.editUnitCell("Client SQFT", 850);
+      expect(
+        edit.status,
+        "FAIL: PUT /cells for Client SQFT must succeed",
+      ).toBeLessThan(300);
+      expect(
+        edit.body.columnName,
+        "FAIL: Client SQFT maps to client_area",
+      ).toBe("client_area");
+      expect(
+        Number(edit.body.value),
+        "FAIL: the saved Client SQFT value sent to the API must be 850",
+      ).toBe(850);
+      await page.reload({ waitUntil: "load" });
+      await props.openUnits(id);
+      expect(
+        await props.readUnitCell("Client SQFT"),
+        "FAIL: Client SQFT must persist after reload",
+      ).toBe("850");
+      Logger.success("TC579: Client SQFT saved and persisted");
+
+      const forced = await props.putUnitCellViaApi(
+        id,
+        edit.body.rowId,
+        "area",
+        999,
+      );
+      expect(
+        forced.status,
+        "FAIL: API must reject an Admin-only column edit",
+      ).toBe(400);
+      expect(forced.body.message, "FAIL: rejection message").toBe(
+        "This field can only be edited in the Admin Portal.",
+      );
+      await page.reload({ waitUntil: "load" });
+      await props.openUnits(id);
+      expect(
+        await props.readUnitCell("SQFT"),
+        "FAIL: SQFT must stay unchanged after the rejected edit",
+      ).not.toBe("999");
+      Logger.success(
+        "TC579: forced SQFT edit rejected with the Admin Portal message",
+      );
+      Logger.success("TC579 PASSED");
+    });
+
+    test("TC580 @property @regression @e2e : Verify unassigned-unit counter on Locations and the not-covered-by-takeoff message on Takeoffs", async ({
+      page,
+    }) => {
+      test.setTimeout(420000);
+      const props = new PropertyE2EPage(page);
+      const { name, id } = await props.createOwnProperty("Unassigned");
+      created.push(name);
+
+      await props.openUnits(id);
+      const empty = await props.unassignedCount();
+      expect(
+        empty.text,
+        "FAIL: new property must show 0 unassigned units",
+      ).toBe("0 unassigned units");
+      Logger.success(`TC580: counter "${empty.text}" on a new property`);
+
+      expect(
+        await props.addUnitRow(),
+        "FAIL: Add Row must create a unit",
+      ).toBeLessThan(300);
+      await page.reload({ waitUntil: "load" });
+      await props.openUnits(id);
+      const one = await props.unassignedCount();
+      expect(
+        one.text,
+        "FAIL: a unit without Floor Plan Type must be counted as unassigned",
+      ).toBe("1 unassigned unit");
+      const color = await props.unassignedCounter.evaluate(
+        (e) => getComputedStyle(e).color,
+      );
+      expect(color, "FAIL: a non-zero unassigned count must be orange").toBe(
+        "rgb(253, 126, 20)",
+      );
+      Logger.success(`TC580: counter "${one.text}" shown in orange (${color})`);
+
+      await props.openTakeoffs();
+      await expect(
+        props.notCoveredMessage(),
+        "FAIL: Takeoffs must explain the unit not covered by takeoff",
+      ).toHaveText(
+        "1 unit is not covered by takeoff (no Floor Plan Type). Quantities stay per floor plan.",
+        { timeout: 30000 },
+      );
+      Logger.success(
+        "TC580: Takeoffs shows the not-covered-by-takeoff message",
+      );
+      Logger.success("TC580 PASSED");
+    });
+  });
+}

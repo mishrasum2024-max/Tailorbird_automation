@@ -5,6 +5,9 @@ const { retainageLocators } = require("../locators/retainageLocator");
 const { Logger } = require("../utils/logger");
 const fixture = require("../fixture/retainage.json");
 const { ensureLeftPanelExpanded } = require("../utils/leftPanelExpander");
+const {
+  waitForReadyRecoveringErrors,
+} = require("../utils/errorLoadingDataRecovery");
 
 test.use({
   storageState: "sessionState.json",
@@ -46,6 +49,18 @@ test.beforeAll(async ({ browser }) => {
   });
   await ensureLeftPanelExpanded(setupPage);
   await setupRetainagePage.gotoInvoiceList(fixture.jobId);
+  // Added 2026-11-23 (insert-only): 2-worker run (TC601) — job 4304's Invoice tab was still
+  // half-loaded (KPIs $0, Create Invoice disabled) and createDraftInvoice's click gave up after
+  // 55s. MCP-verified (dashboard → Jobs → job 4304 → Invoice): Create Invoice turns enabled once
+  // the job row and invoice list load (~12s on a normal run). Wait up to 80s for it, reloading
+  // the tab (or pressing the "Error Loading Data" Retry) if it never settles.
+  await waitForReadyRecoveringErrors(
+    setupPage,
+    setupRetainagePage.loc.createInvoiceButton.and(
+      setupPage.locator("button:not([disabled]):not([data-disabled='true'])")
+    ),
+    { label: `Job ${fixture.jobId} Create Invoice (enabled)` }
+  );
 
   resolvedInvoiceId = await setupRetainagePage.createDraftInvoice();
   await setupRetainagePage.setRetainagePercent(10);
@@ -1244,3 +1259,216 @@ test.describe("retainage Contract", () => {
     );
   });
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// Missing-coverage E2E cases (formerly tests/TC43_RetainageE2E.spec.js). Wrapped in a block so its
+// names never clash with this file's; it relies on this file's test.use
+// (storageState: sessionState.json). Added 2026-11-19.
+// ════════════════════════════════════════════════════════════════════════════
+{
+  /**
+   * Retainage E2E — contract/invoice Retainage % on suite-owned data only.
+   *
+   * Setup builds its OWN property → budget → project → finalized job
+   * (ApprovalE2EPage chain, unchanged) plus an unfinalized Contract job "B" whose
+   * contract Retainage % the tests drive. Seed jobs 3906/4304 are never modified:
+   * TC604 only opens an invoice that already exists in job 4304's Retainage tab.
+   *
+   *   TC601 contract Retainage % is clamped to 0–100 (150 → 100%, -5 → 0%)
+   *   TC602 contract Retainage % = 10 saves, locks after finalize, new invoice inherits it
+   *   TC603 invoice-level Retainage % outside 0–100 is rejected and not saved
+   *   TC604 Retainage tab "Open invoice" opens the invoice in a new tab (read-only)
+   *
+   * Shared data/*.json hand-off files are backed up and verified unchanged.
+   * Live-verified 2026-11-19 — see locators/retainageCategoryE2ELocator.js.
+   */
+
+  const { JobProjectE2EPage } = require("../pages/jobProjectE2EPage");
+  const {
+    RetainageCategoryE2EPage,
+  } = require("../pages/retainageCategoryE2EPage");
+  const { ApprovalE2EPage } = require("../pages/approvalE2EPage");
+  const { PropertyE2EPage } = require("../pages/propertyE2EPage");
+  const { ProjectJob } = require("../pages/projectJob");
+  const { Logger } = require("../utils/logger");
+
+  const READ_ONLY_RETAINAGE_JOB = 4304; // TC22 approves an invoice here every run
+
+  test.describe.serial("Retainage E2E — suite-owned contract job", () => {
+    let ctx;
+    /** @type {JobProjectE2EPage} */ let jp;
+    /** @type {RetainageCategoryE2EPage} */ let rc;
+    let chain;
+    let jobB;
+    let jobBName;
+    let invoiceId;
+
+    test.beforeAll(async ({ browser }, testInfo) => {
+      testInfo.setTimeout(1500000);
+      ctx = await browser.newContext({
+        storageState: "sessionState.json",
+        baseURL: process.env.BASE_URL,
+        viewport: { width: 1920, height: 1080 },
+      });
+      const page = await ctx.newPage();
+      jp = new JobProjectE2EPage(page);
+      rc = new RetainageCategoryE2EPage(page);
+      const suffix = `Ret${Date.now().toString().slice(-7)}`;
+      const snapshot = ApprovalE2EPage.backupSharedData();
+      try {
+        chain = await jp.createChain(suffix);
+        jobBName = `RetainageE2E_jobB_${suffix}`;
+        jobB = await jp.createContractJob(chain.projectId, jobBName);
+        expect(
+          ApprovalE2EPage.changedSharedData(snapshot),
+          "FAIL: building the chain must not change shared hand-off files",
+        ).toEqual([]);
+      } finally {
+        ApprovalE2EPage.restoreSharedData(snapshot);
+      }
+    });
+
+    test.afterAll(async () => {
+      if (chain && jp)
+        await new PropertyE2EPage(jp.page).deletePropertyQuietly(
+          chain.propertyName,
+        );
+      await ctx?.close().catch(() => {});
+    });
+
+    test("TC601 @retainage @regression @e2e : Verify contract Retainage % is limited to 0–100 in Edit Contract Overview", async () => {
+      await rc.openContractDrawer(jobB);
+      expect(
+        await rc.loc("contractRetainageInput").inputValue(),
+        "FAIL: new contract starts at 0%",
+      ).toBe("0%");
+      expect(
+        await rc.typeContractRetainage(150),
+        "FAIL: 150 must clamp to 100%",
+      ).toBe("100%");
+      Logger.success("TC601: 150 → 100%");
+      expect(
+        await rc.typeContractRetainage(-5),
+        "FAIL: -5 must clamp to 0%",
+      ).toBe("0%");
+      Logger.success("TC601: -5 → 0%");
+      await rc.cancelContractDrawer();
+      Logger.success("TC601 PASSED");
+    });
+
+    test("TC602 @retainage @regression @e2e : Verify contract Retainage % saves on a draft contract, locks after finalize and is inherited by new invoices", async () => {
+      test.setTimeout(900000);
+      const page = jp.page;
+      await rc.openContractDrawer(jobB);
+      expect(await rc.typeContractRetainage(10)).toBe("10%");
+      await rc.setContractEstimatedCost(1000);
+      await rc.saveContractDrawer();
+      await rc.openContractDrawer(jobB);
+      expect(
+        await rc.loc("contractRetainageInput").inputValue(),
+        "FAIL: saved Retainage % must reload as 10%",
+      ).toBe("10%");
+      await rc.cancelContractDrawer();
+      Logger.success("TC602: contract Retainage % saved as 10%");
+
+      const snapshot = ApprovalE2EPage.backupSharedData();
+      try {
+        await jp.approvals._finalizeContractWithRetry(
+          new ProjectJob(page),
+          { projectName: chain.projectName },
+          { jobName: jobBName, projectName: chain.projectName },
+          jobB,
+        );
+        expect(ApprovalE2EPage.changedSharedData(snapshot)).toEqual([]);
+      } finally {
+        ApprovalE2EPage.restoreSharedData(snapshot);
+      }
+      const drawer = await rc.openContractDrawer(jobB);
+      await expect(
+        rc.loc("contractRetainageInput"),
+        "FAIL: Retainage % locked after finalize",
+      ).toBeDisabled();
+      await expect(rc.loc("contractRetainageInput")).toHaveValue("10%");
+      await expect(drawer).toContainText(
+        "Contract is finalized. Retainage % cannot be changed.",
+      );
+      await rc.cancelContractDrawer();
+      Logger.success("TC602: finalized contract locks Retainage % at 10%");
+
+      await rc.retainage.gotoInvoiceList(jobB);
+      invoiceId = await rc.retainage.createDraftInvoice();
+      await expect
+        .poll(() => rc.retainage.getInvoiceRetainageBadgeText(), {
+          message: "FAIL: new invoice must inherit the contract Retainage %",
+          timeout: 30000,
+        })
+        .toBe("From contract (10%)");
+      await expect(rc.retainage.loc.retainagePercentInput).toHaveValue("10%");
+      Logger.success(
+        `TC602: invoice #${invoiceId} shows "From contract (10%)"`,
+      );
+      Logger.success("TC602 PASSED");
+    });
+
+    test("TC603 @retainage @regression @e2e : Verify an invoice Retainage % outside 0–100 is rejected and not saved", async () => {
+      expect(invoiceId, "FAIL: TC602 must create the invoice").toBeTruthy();
+      const page = jp.page;
+      const rp = rc.retainage;
+      for (const value of [101, -3]) {
+        await rp.gotoInvoiceDetail(jobB, invoiceId);
+        await rp.setRetainagePercent(value);
+        await expect(
+          rc.toast("Retainage % must be between 0 and 100"),
+          `FAIL: ${value}% must be rejected`,
+        ).toBeVisible({ timeout: 15000 });
+        await page.reload({ waitUntil: "load" });
+        await expect(
+          rp.loc.retainagePercentInput,
+          `FAIL: ${value}% must not be saved`,
+        ).toHaveValue("10%", { timeout: 30000 });
+        expect(await rp.getInvoiceRetainageBadgeText()).toBe(
+          "From contract (10%)",
+        );
+        Logger.success(
+          `TC603: ${value}% rejected, invoice keeps 10% from contract`,
+        );
+      }
+      Logger.success("TC603 PASSED");
+    });
+  });
+
+  test.describe("Retainage — Open invoice action (read-only)", () => {
+    test("TC604 @retainage @regression : Verify the Retainage tab Open invoice action opens the invoice in a new tab", async ({
+      page,
+    }) => {
+      const rc = new RetainageCategoryE2EPage(page);
+      const action = await rc.firstOpenInvoiceAction(READ_ONLY_RETAINAGE_JOB);
+      await action.hover({ force: true });
+      await expect(
+        page.getByRole("tooltip").filter({ hasText: "Open invoice" }),
+        'FAIL: tooltip "Open invoice"',
+      ).toBeVisible({ timeout: 10000 });
+      const jobUrl = page.url();
+      const [invoiceTab] = await Promise.all([
+        page.context().waitForEvent("page", { timeout: 30000 }),
+        action.click(),
+      ]);
+      await invoiceTab.waitForLoadState("load");
+      await expect(invoiceTab, "FAIL: new tab must open the invoice").toHaveURL(
+        new RegExp(`/jobs/${READ_ONLY_RETAINAGE_JOB}/invoices/\\d+`),
+        { timeout: 30000 },
+      );
+      await expect(
+        invoiceTab.getByText("Invoice Details").first(),
+        "FAIL: invoice page must render",
+      ).toBeVisible({ timeout: 30000 });
+      expect(
+        page.url(),
+        "FAIL: the job page stays open in the original tab",
+      ).toBe(jobUrl);
+      Logger.success(`TC604: opened ${invoiceTab.url()} in a new tab`);
+      await invoiceTab.close();
+      Logger.success("TC604 PASSED");
+    });
+  });
+}

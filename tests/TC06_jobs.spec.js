@@ -1706,3 +1706,359 @@ test.describe("Project and Jobs", () => {
     await projectPage.closeJobModalIfOpen();
   });
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// Missing-coverage E2E cases (formerly tests/TC42_JobsE2E.spec.js). Wrapped in a block so its
+// names never clash with this file's; it relies on this file's test.use
+// (storageState: sessionState.json). Added 2026-11-19.
+// ════════════════════════════════════════════════════════════════════════════
+{
+  /**
+   * Jobs E2E — job coverage on suite-owned data only.
+   *
+   * Setup builds its OWN property → budget → project → finalized Contract job "A"
+   * (ApprovalE2EPage.createFinalizedContractChain, unchanged) and an unfinalized
+   * Contract job "B" on the same project. Every action below targets those jobs or a
+   * throwaway job the test creates; no seeded job is touched.
+   *
+   *   TC595 Edit Job saves on B; A (finalized) has Fiscal Year + Budget Category locked
+   *   TC596 Delete Row on the Jobs table: Cancel keeps, Delete removes (throwaway job)
+   *   TC597 Create Job: Non Contract locks Financial Type/Vendor/dates; Contract needs dates
+   *   TC598 Bulk Complete/Close locks A and B; closing a locked job again is skipped
+   *   TC599 Bulk Reopen unlocks A and B
+   *   TC600 Void/Cancel Contract needs notes, then locks A and disables CO/Invoice
+   *
+   * Serial: TC599 reopens what TC598 closed and TC600 voids A last.
+   * Shared data/*.json hand-off files are backed up and verified unchanged.
+   * Live-verified 2026-11-19 — see locators/jobProjectE2ELocator.js.
+   */
+
+  const { JobProjectE2EPage } = require("../pages/jobProjectE2EPage");
+  const { ApprovalE2EPage } = require("../pages/approvalE2EPage");
+  const { PropertyE2EPage } = require("../pages/propertyE2EPage");
+  const { Logger } = require("../utils/logger");
+
+  test.describe.serial("Jobs E2E — suite-owned jobs", () => {
+    let ctx;
+    /** @type {JobProjectE2EPage} */ let jp;
+    let chain;
+    let suffix;
+    let jobB;
+    let jobBTitle;
+
+    test.beforeAll(async ({ browser }, testInfo) => {
+      testInfo.setTimeout(1500000); // chain + one extra job
+      ctx = await browser.newContext({
+        storageState: "sessionState.json",
+        baseURL: process.env.BASE_URL,
+        viewport: { width: 1920, height: 1080 },
+      });
+      const page = await ctx.newPage();
+      jp = new JobProjectE2EPage(page);
+      suffix = `Jobs${Date.now().toString().slice(-7)}`;
+      const snapshot = ApprovalE2EPage.backupSharedData();
+      try {
+        chain = await jp.createChain(suffix);
+        jobBTitle = `JobsE2E_jobB_${suffix}`;
+        jobB = await jp.createContractJob(chain.projectId, jobBTitle);
+        expect(
+          ApprovalE2EPage.changedSharedData(snapshot),
+          "FAIL: building the chain must not change shared hand-off files",
+        ).toEqual([]);
+      } finally {
+        ApprovalE2EPage.restoreSharedData(snapshot);
+      }
+    });
+
+    test.afterAll(async () => {
+      if (chain && jp)
+        await new PropertyE2EPage(jp.page).deletePropertyQuietly(
+          chain.propertyName,
+        );
+      await ctx?.close().catch(() => {});
+    });
+
+    test("TC595 @jobs @regression @e2e : Verify Edit Job saves the title and locks Fiscal Year and Budget Category once the contract is finalized", async () => {
+      const page = jp.page;
+      const newTitle = `${jobBTitle}_edited`;
+
+      await jp.openJob(jobB);
+      let drawer = await jp.openEditJobDrawer();
+      const save = jp.saveChanges(drawer);
+      await expect(
+        save,
+        "FAIL: Save Changes disabled before any change",
+      ).toBeDisabled();
+      await expect(
+        jp.fiscalYearInput(drawer),
+        "FAIL: unfinalized job → Fiscal Year editable",
+      ).toBeEnabled();
+      await jp.expectJobBudgetCategoryLocked(drawer, false, "unfinalized job");
+      await drawer.getByLabel(/Title/i).first().fill(newTitle);
+      await expect(
+        save,
+        "FAIL: Save Changes enabled after a change",
+      ).toBeEnabled();
+      await save.click();
+      await jp.expectToast("Job updated successfully", "TC595");
+      await page.reload({ waitUntil: "load" });
+      await expect(
+        page.getByText(newTitle, { exact: true }).first(),
+        "FAIL: new title must show after reload",
+      ).toBeVisible({ timeout: 30000 });
+      const rowB = (await jp.tableRows("job")).find(
+        (r) => String(r.id) === String(jobB),
+      );
+      expect(rowB?.title, "FAIL: API job title").toBe(newTitle);
+      jobBTitle = newTitle;
+      Logger.success(`TC595: job ${jobB} renamed to "${newTitle}"`);
+
+      await jp.openJob(chain.jobId);
+      drawer = await jp.openEditJobDrawer();
+      await expect(
+        jp.fiscalYearInput(drawer),
+        "FAIL: finalized job → Fiscal Year disabled",
+      ).toBeDisabled();
+      await jp.expectJobBudgetCategoryLocked(drawer, true, "finalized job");
+      await expect(
+        drawer.getByLabel(/Title/i).first(),
+        "FAIL: finalized job → Title still editable",
+      ).toBeEnabled();
+      Logger.success(
+        `TC595: finalized job ${chain.jobId} has FY + Budget Category locked`,
+      );
+      await drawer.getByRole("button", { name: "Cancel", exact: true }).click();
+      Logger.success("TC595 PASSED");
+    });
+
+    test("TC596 @jobs @regression @e2e : Verify Delete Row on the Jobs table asks for confirmation and removes the job only after Delete", async () => {
+      test.setTimeout(600000);
+      const page = jp.page;
+      const title = `JobsE2E_jobC_${suffix}`;
+      const jobC = await jp.createContractJob(chain.projectId, title);
+
+      await jp.openJobsTable(title);
+      await expect(jp.deleteRowButtons(), "FAIL: one matching job").toHaveCount(
+        1,
+        {
+          timeout: 30000,
+        },
+      );
+      await jp.deleteRowButtons().first().click();
+      const confirm = jp.dialog("Delete Row");
+      await expect(confirm).toContainText(
+        "Are you sure you want to delete this row? This action cannot be undone.",
+      );
+      await confirm
+        .getByRole("button", { name: "Cancel", exact: true })
+        .click();
+      await expect(confirm).toBeHidden();
+      await expect(
+        page.getByText(title, { exact: true }).first(),
+        "FAIL: Cancel must keep the job",
+      ).toBeVisible();
+      Logger.success("TC596: Cancel kept the job");
+
+      await jp.deleteRowButtons().first().click();
+      await jp
+        .dialog("Delete Row")
+        .getByRole("button", { name: "Delete", exact: true })
+        .click();
+      await jp.expectToast("Row deleted successfully", "TC596");
+      await jp.openJobsTable(title);
+      await expect(
+        page.getByText(title, { exact: true }),
+        "FAIL: deleted job must not be listed",
+      ).toHaveCount(0, { timeout: 30000 });
+      expect(
+        (await jp.tableRows("job")).some((r) => String(r.id) === String(jobC)),
+        "FAIL: deleted job must not be returned by the API",
+      ).toBe(false);
+      Logger.success("TC596 PASSED");
+    });
+
+    test("TC597 @jobs @regression : Verify Non Contract jobs lock Financial Type, Vendor and dates, and Contract jobs require start and end dates", async () => {
+      const page = jp.page;
+      await jp.openProject(chain.projectId, "jobs");
+      await jp.openCreateJobModal();
+      const modal = page
+        .getByRole("dialog")
+        .filter({ hasText: "Add job" })
+        .last();
+      const financialType = modal.getByPlaceholder("Select Contract or PO");
+      const startDate = modal.getByPlaceholder("YYYY-MM-DD").nth(0);
+      const endDate = modal.getByPlaceholder("YYYY-MM-DD").nth(1);
+
+      await modal.getByLabel("Job Type").first().click();
+      await page
+        .getByRole("option", { name: "Non Contract", exact: true })
+        .click();
+      await expect(financialType, "FAIL: Financial Type locked").toBeDisabled();
+      await expect(
+        modal.locator('input[type="hidden"][value="Non-Contract"]'),
+        "FAIL: Financial Type forced to Non-Contract",
+      ).toHaveCount(1);
+      await expect(
+        modal.getByPlaceholder("Not applicable for non-contract jobs"),
+        "FAIL: Vendor not applicable",
+      ).toBeDisabled();
+      await expect(startDate, "FAIL: Start Date disabled").toBeDisabled();
+      await expect(endDate, "FAIL: End Date disabled").toBeDisabled();
+      await expect(modal).toContainText(
+        "Financial type, vendor, and schedule dates are not applicable for non-contract jobs.",
+      );
+      Logger.success(
+        "TC597: Non Contract → Financial Type/Vendor/dates locked",
+      );
+
+      await modal.getByLabel("Job Type").first().click();
+      await page.getByRole("option", { name: "Capex", exact: true }).click();
+      await financialType.click();
+      await page.getByRole("option", { name: "Contract", exact: true }).click();
+      await expect(
+        startDate,
+        "FAIL: Start Date editable for Contract",
+      ).toBeEnabled();
+      await expect(modal).toContainText(
+        "Contract jobs require a start and end date. Add both before creating the job.",
+      );
+      Logger.success("TC597: Contract without dates → date requirement shown");
+
+      await modal.getByRole("button", { name: "Cancel", exact: true }).click();
+      await expect(modal, "FAIL: modal closes without creating").toBeHidden({
+        timeout: 15000,
+      });
+      Logger.success("TC597 PASSED");
+    });
+
+    test("TC598 @jobs @regression @e2e : Verify bulk Complete/Close locks the selected jobs and skips a job that is already locked", async () => {
+      const page = jp.page;
+      const titleA = chain.jobName;
+      await jp.selectJobs(suffix, [titleA, jobBTitle]);
+      await jp.bulkButton("Complete/Close").click();
+      const modal = jp.dialog("Complete/Close jobs");
+      await expect(modal).toContainText("Ready to close (2)", {
+        timeout: 30000,
+      });
+      await expect(modal).toContainText(titleA);
+      await expect(modal).toContainText(jobBTitle);
+      await modal
+        .getByRole("button", { name: "Close 2 jobs", exact: true })
+        .click();
+      await jp.expectToast("2 job(s) marked as Complete/Closed.", "TC598");
+
+      await jp.openJob(chain.jobId);
+      await expect(jp.lockedBanner(), "FAIL: locked banner").toBeVisible({
+        timeout: 30000,
+      });
+      await expect(page.getByText(/Closed by /).first()).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "Reopen Job" }),
+        "FAIL: Reopen Job offered",
+      ).toBeVisible();
+      await expect(
+        jp.editButton(),
+        "FAIL: Edit disabled on a closed job",
+      ).toBeDisabled();
+      await jp.openJob(chain.jobId, "contracts");
+      await expect(
+        jp.voidCancelButton(),
+        "FAIL: Void/Cancel disabled on a closed job",
+      ).toBeDisabled({ timeout: 30000 });
+      Logger.success(
+        `TC598: job ${chain.jobId} locked (banner, Edit + Void disabled)`,
+      );
+
+      await jp.selectJobs(titleA, [titleA]);
+      await jp.bulkButton("Complete/Close").click();
+      await jp.expectToast(
+        "This job is locked and cannot be modified.",
+        "TC598 re-close",
+      );
+      await expect(jp.toast("Locked jobs skipped")).toBeVisible();
+      Logger.success("TC598 PASSED");
+    });
+
+    test("TC599 @jobs @regression @e2e : Verify bulk Reopen unlocks Complete/Closed jobs", async () => {
+      const page = jp.page;
+      await jp.selectJobs(suffix, [chain.jobName, jobBTitle]);
+      await jp.bulkButton("Reopen").click();
+      const modal = jp.dialog("Reopen jobs");
+      await expect(modal).toContainText("Ready to reopen (2)", {
+        timeout: 30000,
+      });
+      await expect(modal).toContainText(
+        "This will clear the Complete/Closed status and unlock each job so it can be edited again.",
+      );
+      await modal
+        .getByRole("button", { name: "Reopen 2 jobs", exact: true })
+        .click();
+      await jp.expectToast("2 job(s) reopened.", "TC599");
+
+      for (const id of [chain.jobId, jobB]) {
+        await jp.openJob(id);
+        await expect(
+          jp.lockedBanner(),
+          `FAIL: job ${id} unlocked`,
+        ).toBeHidden();
+        await expect(
+          jp.editButton(),
+          `FAIL: Edit enabled on job ${id}`,
+        ).toBeEnabled({
+          timeout: 30000,
+        });
+      }
+      await expect(
+        page.getByRole("button", { name: "Reopen Job" }),
+      ).toHaveCount(0);
+      Logger.success("TC599 PASSED");
+    });
+
+    test("TC600 @jobs @regression @e2e : Verify Void/Cancel Contract requires notes and then locks the job and its Change Orders and Invoice tabs", async () => {
+      const page = jp.page;
+      await jp.openJob(chain.jobId, "contracts");
+      await expect(jp.voidCancelButton()).toBeEnabled({ timeout: 30000 });
+      await jp.voidCancelButton().click();
+      const modal = jp.dialog("Void/Cancel Contract");
+      await expect(modal).toContainText("Please add notes to continue.");
+      const confirm = modal.getByRole("button", {
+        name: "Void/Cancel Contract",
+        exact: true,
+      });
+      await expect(
+        confirm,
+        "FAIL: confirm disabled without notes",
+      ).toBeDisabled();
+      await modal
+        .locator("textarea")
+        .first()
+        .fill(`Voided by Jobs E2E ${suffix}`);
+      await expect(confirm, "FAIL: confirm enabled with notes").toBeEnabled();
+      await confirm.click();
+      await jp.expectToast(
+        "The Contract has been moved to Void/Cancelled status.",
+        "TC600",
+      );
+
+      await jp.openJob(chain.jobId, "contracts");
+      await expect(jp.lockedBanner(), "FAIL: voided job locked").toBeVisible({
+        timeout: 30000,
+      });
+      await expect(page.getByText(/Voided by /).first()).toBeVisible();
+      await expect(
+        page.getByText("Contract: Cancelled/Voided").first(),
+      ).toBeVisible();
+      for (const name of ["Change Orders", "Invoice"]) {
+        await expect(
+          jp.tab(name),
+          `FAIL: ${name} tab disabled after void`,
+        ).toBeDisabled();
+      }
+      await expect(
+        jp.editButton(),
+        "FAIL: Edit disabled after void",
+      ).toBeDisabled();
+      Logger.success("TC600 PASSED");
+    });
+  });
+}

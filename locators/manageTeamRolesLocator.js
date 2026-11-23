@@ -30,17 +30,106 @@
  */
 function tableButtonStrategies(page) {
   return [
-    { name: 'role:button[name=Table]', locator: page.getByRole('button', { name: 'Table' }) },
-    { name: 'testid:bt-table-action', locator: page.getByTestId('bt-table-action') },
-    { name: 'css:button:has(svg.lucide-table)', locator: page.locator('button:has(svg.lucide-table)') },
     {
-      name: 'position:group-with-direct-Export-child-first-direct-button',
-      locator: page.locator('.mantine-Group-root')
-        .filter({ has: page.locator(':scope > button', { hasText: 'Export' }) })
-        .locator(':scope > button')
+      name: "role:button[name=Table]",
+      locator: page.getByRole("button", { name: "Table" }),
+    },
+    {
+      name: "testid:bt-table-action",
+      locator: page.getByTestId("bt-table-action"),
+    },
+    {
+      name: "css:button:has(svg.lucide-table)",
+      locator: page.locator("button:has(svg.lucide-table)"),
+    },
+    {
+      name: "position:group-with-direct-Export-child-first-direct-button",
+      locator: page
+        .locator(".mantine-Group-root")
+        .filter({ has: page.locator(":scope > button", { hasText: "Export" }) })
+        .locator(":scope > button")
         .first(),
     },
   ];
 }
 
-module.exports = { tableButtonStrategies };
+// ---------- Create role drawer (TC568) ----------
+// MCP-verified 2026-11-16 (beta.tailorbird.com/organization → Roles → Add role): a Mantine Drawer
+// with role="dialog" named "Create role"; each permission component is a Mantine Accordion control
+// (role="button", name = component, aria-controls → its role="region" panel); each permission is a
+// Mantine Checkbox whose accessible name is its label, with a .mantine-Checkbox-description below.
+
+function createRoleDrawerStrategies(page, title) {
+  return [
+    {
+      name: "role:dialog(name)",
+      locator: page.getByRole("dialog", { name: title, exact: true }),
+    },
+    {
+      name: "css:.mantine-Drawer-content has title",
+      locator: page
+        .locator(".mantine-Drawer-content")
+        .filter({ has: page.getByText(title, { exact: true }) }),
+    },
+  ];
+}
+
+/** Every permission-component accordion control inside the drawer. */
+function permissionComponentStrategies(page, drawer) {
+  return [
+    {
+      name: "role:button has accordion label",
+      locator: drawer
+        .getByRole("button")
+        .filter({ has: page.locator(".mantine-Accordion-label") }),
+    },
+    {
+      name: "css:.mantine-Accordion-control",
+      locator: drawer.locator(".mantine-Accordion-control"),
+    },
+  ];
+}
+
+function permissionCheckboxStrategies(region) {
+  return [
+    { name: "role:checkbox", locator: region.getByRole("checkbox") },
+    {
+      name: "css:input[type=checkbox]",
+      locator: region.locator('input[type="checkbox"]'),
+    },
+  ];
+}
+
+function drawerButtonStrategies(drawer, name) {
+  return [
+    {
+      name: "role:button(exact)",
+      locator: drawer.getByRole("button", { name, exact: true }),
+    },
+    {
+      name: "button has text(exact)",
+      locator: drawer
+        .locator("button")
+        .filter({ has: drawer.getByText(name, { exact: true }) }),
+    },
+  ];
+}
+
+function drawerInputStrategies(drawer, label, placeholder) {
+  return [
+    {
+      name: "placeholder",
+      locator: drawer.getByPlaceholder(placeholder, { exact: true }),
+    },
+    { name: "label", locator: drawer.getByLabel(label) },
+  ];
+}
+
+module.exports = {
+  tableButtonStrategies,
+  createRoleDrawerStrategies,
+  permissionComponentStrategies,
+  permissionCheckboxStrategies,
+  drawerButtonStrategies,
+  drawerInputStrategies,
+};

@@ -16,8 +16,8 @@ test.use({
  * FEAT-1236 — Column terminology (org-level display-name overrides), automated on the CapEx
  * Tracker's "Table settings" drawer (inline "<standard> display name" + "Save for everyone").
  * MCP-verified 2026-11-06 on beta.tailorbird.com:
- * - Save for everyone → PUT /api/table-column-labels 200; labels are stored per table
- *   (GET /api/table-column-labels?tableName=capex_tracker → columns[].orgLabel), and saving the
+ * - Save for everyone → PUT /api/table-view-config?labels=1 200; labels are stored per table
+ *   (GET /api/table-view-config?tableName=capex_tracker&labels=1 → columns[].orgLabel), and saving the
  *   standard label again clears the override (orgLabel back to null).
  * - Only financial/custom columns are listed; "Property" is not, so it cannot be renamed.
  * - A whitespace-only label keeps "Save for everyone" disabled.
@@ -44,11 +44,11 @@ const SPECIAL =
 /** Org labels saved for the CapEx table, keyed by internal column name. */
 async function getOrgLabels(page) {
   const response = await page.request.get(
-    "/api/table-column-labels?tableName=capex_tracker"
+    "/api/table-view-config?tableName=capex_tracker&labels=1"
   );
   expect(
     response.status(),
-    `FAIL: GET /api/table-column-labels for capex_tracker did not succeed: ${await response.text()}`
+    `FAIL: GET /api/table-view-config labels for capex_tracker did not succeed: ${await response.text()}`
   ).toBe(200);
   const { columns } = await response.json();
   return Object.fromEntries(columns.map(c => [c.columnName, c.orgLabel]));
@@ -59,7 +59,8 @@ async function expectLabelsSaved(page, save) {
   const [response] = await Promise.all([
     page.waitForResponse(
       res =>
-        res.url().includes("/api/table-column-labels") &&
+        res.url().includes("/api/table-view-config") &&
+        res.url().includes("labels=1") &&
         res.request().method() === "PUT",
       { timeout: 60000 }
     ),
@@ -67,7 +68,7 @@ async function expectLabelsSaved(page, save) {
   ]);
   expect(
     response.status(),
-    "FAIL: PUT /api/table-column-labels did not succeed"
+    "FAIL: PUT /api/table-view-config labels did not succeed"
   ).toBe(200);
 }
 
@@ -113,17 +114,38 @@ test.describe("FEAT-1236 Column terminology (CapEx)", () => {
     ).toContain("Property");
 
     Logger.step("Try to save a whitespace-only label for Budget Remaining");
+    // Added 2026-11-23 (insert-only): MCP-verified on the CapEx Tracker — GET
+    // /api/table-view-config?labels=1 now fires once at page load and opening Table settings (3x)
+    // fires no labels request, so the waitForResponse below could never resolve (60s timeout in CI).
+    // Once the drawer is open, read the saved labels again from the page itself: that is the same
+    // GET the wait expects (a real, current read of the org labels) and it does not touch the
+    // drawer's textboxes.
+    const labelsReadAfterDrawerOpens = t.ts.drawer
+      .waitFor({ state: "visible", timeout: 60000 })
+      .then(() =>
+        page.evaluate(() =>
+          fetch("/api/table-view-config?tableName=capex_tracker&labels=1").then(
+            r => r.status
+          )
+        )
+      )
+      .catch(() => null);
     // Wait for the drawer's labels GET first: its response resets the textboxes, which would
     // otherwise leave Save disabled for the wrong reason (MCP-verified 2026-11-06).
     await Promise.all([
       page.waitForResponse(
         res =>
-          res.url().includes("/api/table-column-labels") &&
+          res.url().includes("/api/table-view-config") &&
+          res.url().includes("labels=1") &&
           res.request().method() === "GET",
         { timeout: 60000 }
       ),
       t.columns.openTableSettings(),
     ]);
+    expect(
+      await labelsReadAfterDrawerOpens,
+      "FAIL: GET /api/table-view-config labels (read after Table settings opened) must return 200"
+    ).toBe(200);
     const remaining = t.ts.columnDisplayName("Budget Remaining");
     await remaining.fill("   ");
     await expect(remaining, "FAIL: whitespace label was not typed").toHaveValue(
@@ -152,9 +174,45 @@ test.describe("FEAT-1236 Column terminology (CapEx)", () => {
     page,
   }) => {
     const headersBefore = await t.getHeaders();
+    // Added 2026-11-19 (insert-only): MCP-verified (headed, CapEx Tracker) — the grid now has 22
+    // columns (app commit 35306fd43 added the lifetime/proforma ones) and only draws those inside
+    // its window; columns are auto-sized, so renaming "Current Budget" to the longer CUSTOM label
+    // widens it and pushes the last drawn column ("Cumulative Proforma Adjustments") out of the
+    // DOM — the TC559 CI failure, not a label change. Compare the grid's full column list instead
+    // (getColumns() names = the shown labels) by refilling the header arrays read by getHeaders().
+    const gridColumnNames = () =>
+      page
+        .locator("revo-grid")
+        .first()
+        .evaluate(async g => (await g.getColumns()).map(c => c.name));
+    headersBefore.splice(0, headersBefore.length, ...(await gridColumnNames()));
     const rowBefore = await t.getFirstDataRow();
     const totalsBefore = await t.getTotals();
     const rowsBefore = await t.getGridRowTexts();
+    // Added 2026-11-19 (insert-only): row texts from the grid's data instead of drawn cells — the
+    // rename shifts the drawn column window (see headersBefore above), so the drawn Total row
+    // lost its "Cumulative Proforma Adjustments" cell (-$1,929,911.96) after sorting. MCP-verified:
+    // getVisibleSource() = the shown rows, getSource("rowPinEnd") = the Total row; every column's
+    // value is serialised, Total last (same shape the checks below use).
+    const gridRowTexts = () =>
+      page
+        .locator("revo-grid")
+        .first()
+        .evaluate(async g => {
+          const props = (await g.getColumns())
+            .map(c => c.prop)
+            .filter(p => p !== "actions");
+          // Numbers to cents, as displayed: the Total is re-summed in sort order, so raw floats
+          // differ in the last binary digit (4984347.0600000005 vs 4984347.059999999).
+          const cell = v =>
+            typeof v === "number" ? v.toFixed(2) : String(v ?? "");
+          const text = r => props.map(p => cell(r[p])).join("|");
+          return [
+            ...(await g.getVisibleSource()).map(text),
+            ...(await g.getSource("rowPinEnd")).map(text),
+          ];
+        });
+    rowsBefore.splice(0, rowsBefore.length, ...(await gridRowTexts()));
     expect(
       rowsBefore.length,
       "FAIL: CapEx grid has no data rows to compare"
@@ -174,6 +232,13 @@ test.describe("FEAT-1236 Column terminology (CapEx)", () => {
     ).toBe(CUSTOM);
 
     const headers = await t.getHeaders();
+    // Added 2026-11-19 (insert-only): full column list, see headersBefore above.
+    await expect
+      .poll(async () => (await gridColumnNames()).includes(CUSTOM), {
+        timeout: 30000,
+      })
+      .toBe(true);
+    headers.splice(0, headers.length, ...(await gridColumnNames()));
     expect(headers, "FAIL: custom label should be the column header").toContain(
       CUSTOM
     );
@@ -202,6 +267,8 @@ test.describe("FEAT-1236 Column terminology (CapEx)", () => {
     Logger.step(`Sort by the renamed "${CUSTOM}" header`);
     await t.sortByHeader(CUSTOM);
     const sorted = await t.getGridRowTexts();
+    // Added 2026-11-19 (insert-only): grid data rows, see rowsBefore above.
+    sorted.splice(0, sorted.length, ...(await gridRowTexts()));
     expect(
       sorted.length,
       "FAIL: sorting by the renamed column changed the row count"
@@ -308,19 +375,20 @@ test.describe("FEAT-1236 Column terminology (CapEx)", () => {
   test("TC562 @regression @capex FEAT-1236 : Verify a label that matches another column is rejected and nothing is saved", async ({
     page,
   }) => {
-    // MCP-verified 2026-11-06: PUT /api/table-column-labels → 400, toast "Could not save column
+    // MCP-verified 2026-11-06: PUT /api/table-view-config?labels=1 → 400, toast "Could not save column
     // names" + '"net_paid" matches another column. Choose a different label.' (the quoted name is
     // sometimes the internal key, so only the stable part is asserted); no orgLabel is stored.
     const headersBefore = await t.getHeaders();
     const rowBefore = await t.getFirstDataRow();
 
     Logger.step(`Try to label "${FIN}" as "${FIN2}" (another column's label)`);
-    // Opening the drawer fires GET /api/table-column-labels; its response re-renders the
+    // Opening the drawer fires GET /api/table-view-config?labels=1; its response re-renders the
     // display-name textboxes and wipes anything typed before it lands (MCP-verified 2026-11-06).
     const [labelsLoad] = await Promise.all([
       page.waitForResponse(
         res =>
-          res.url().includes("/api/table-column-labels") &&
+          res.url().includes("/api/table-view-config") &&
+          res.url().includes("labels=1") &&
           res.request().method() === "GET",
         { timeout: 60000 }
       ),
@@ -339,7 +407,8 @@ test.describe("FEAT-1236 Column terminology (CapEx)", () => {
     const [response] = await Promise.all([
       page.waitForResponse(
         res =>
-          res.url().includes("/api/table-column-labels") &&
+          res.url().includes("/api/table-view-config") &&
+          res.url().includes("labels=1") &&
           res.request().method() === "PUT",
         { timeout: 60000 }
       ),

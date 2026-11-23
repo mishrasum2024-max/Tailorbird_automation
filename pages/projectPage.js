@@ -1,5 +1,8 @@
 const { expect } = require("@playwright/test");
 const { Logger } = require("../utils/logger");
+const {
+  waitForReadyRecoveringErrors,
+} = require("../utils/errorLoadingDataRecovery");
 const fs = require("fs");
 const path = require("path");
 const { propertyLocators } = require("../locators/propertyLocator");
@@ -968,6 +971,12 @@ exports.ProjectPage = class ProjectPage {
       .getByRole("textbox", { name: "Search..." })
       .or(this.page.locator('input[placeholder="Search..."]'))
       .first();
+    // Added 2026-11-23 (insert-only): 2-worker run TC595 setup — Projects showed "Error Loading
+    // Data" (failed organization_membership query) and the search box never appeared in 30s.
+    // MCP-verified: the banner's Retry button brings the list back. Wait up to 80s, recovering.
+    await waitForReadyRecoveringErrors(this.page, searchProject, {
+      label: "Projects list",
+    });
     await searchProject.waitFor({ state: "visible", timeout: 30000 });
     await expect(searchProject).toBeEnabled({ timeout: 30000 });
     await searchProject.click();

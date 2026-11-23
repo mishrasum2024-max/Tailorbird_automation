@@ -412,7 +412,137 @@ function toastStrategies(page, text) {
   ];
 }
 
+// ---------- Move-In / Move-Out dates (TC564–TC567) ----------
+// MCP-verified 2026-11-16 (owner session, headed MCP browser, Test Property 2_The Westerham):
+// - "Move-In Date" / "Move-Out Date" are columnheaders of the unit_tracker treegrid; editable only
+//   on unit rows (job / scope row cells carry class "disabled").
+// - Double-click opens a Mantine DatePickerInput dropdown (portal): header level button
+//   "November 2026", day buttons with accessible names like "20 November 2026".
+// - A filled cell carries a "Clear selection" (✕) button. The data pane is revogr-data[type=rgRow];
+//   the Total row lives in revogr-data[type=rowPinEnd] with the same data-rgrow, so scope to rgRow.
+
+function columnHeaderStrategies(grid, name) {
+  return [
+    {
+      name: "role:columnheader(exact)",
+      locator: grid.getByRole("columnheader", { name, exact: true }),
+    },
+    {
+      name: "css:[role=columnheader] has text(exact)",
+      locator: grid
+        .locator('[role="columnheader"]')
+        .filter({ has: grid.getByText(name, { exact: true }) }),
+    },
+  ];
+}
+
+/** One data cell of the body pane by RevoGrid row index (data-rgrow) and aria-colindex. */
+function gridCellStrategies(grid, rowIndex, colIndex) {
+  const position = `[aria-colindex="${colIndex}"][data-rgrow="${rowIndex}"]`;
+  return [
+    {
+      name: "role:gridcell in rgRow pane at position",
+      locator: grid
+        .locator('revogr-data[type="rgRow"]')
+        .getByRole("gridcell")
+        .and(grid.locator(position)),
+    },
+    {
+      name: "css:rgRow [role=gridcell] at position",
+      locator: grid.locator(
+        `revogr-data[type="rgRow"] [role="gridcell"]${position}`
+      ),
+    },
+  ];
+}
+
+/** The open date-picker dropdown (it is the one holding the month/year level button). */
+function datePickerDropdownStrategies(page) {
+  return [
+    {
+      name: "css:.mantine-Popover-dropdown has day button",
+      locator: page
+        .locator(".mantine-Popover-dropdown")
+        .filter({
+          has: page.getByRole("button", {
+            name: /^\d{1,2} [A-Z][a-z]+ \d{4}$/,
+          }),
+        }),
+    },
+    {
+      name: "css:.mantine-Popover-dropdown has calendar level",
+      locator: page
+        .locator(".mantine-Popover-dropdown")
+        .filter({
+          has: page.locator(".mantine-DatePickerInput-calendarHeaderLevel"),
+        }),
+    },
+  ];
+}
+
+function calendarLevelStrategies(calendar) {
+  return [
+    {
+      name: "role:button Month YYYY",
+      locator: calendar.getByRole("button", { name: /^[A-Z][a-z]+ \d{4}$/ }),
+    },
+    {
+      name: "css:.mantine-DatePickerInput-calendarHeaderLevel",
+      locator: calendar.locator(".mantine-DatePickerInput-calendarHeaderLevel"),
+    },
+  ];
+}
+
+/** A day button, e.g. "20 November 2026" (outside-month days have their own month in the name). */
+function calendarDayStrategies(calendar, dayName) {
+  return [
+    {
+      name: "role:button(exact)",
+      locator: calendar.getByRole("button", { name: dayName, exact: true }),
+    },
+    {
+      name: "css:button[aria-label]",
+      locator: calendar.locator(`button[aria-label="${dayName}"]`),
+    },
+  ];
+}
+
+function cellClearButtonStrategies(cell, name) {
+  return [
+    {
+      name: "role:button(exact)",
+      locator: cell.getByRole("button", { name, exact: true }),
+    },
+    {
+      name: "css:button.revo-grid-cell-clear-btn",
+      locator: cell.locator("button.revo-grid-cell-clear-btn"),
+    },
+  ];
+}
+
+function tabStrategies(page, name) {
+  return [
+    {
+      name: "role:tab(exact)",
+      locator: page.getByRole("tab", { name, exact: true }),
+    },
+    {
+      name: "css:[role=tab] has text(exact)",
+      locator: page
+        .locator('[role="tab"]')
+        .filter({ has: page.getByText(name, { exact: true }) }),
+    },
+  ];
+}
+
 module.exports = {
+  columnHeaderStrategies,
+  gridCellStrategies,
+  datePickerDropdownStrategies,
+  calendarLevelStrategies,
+  calendarDayStrategies,
+  cellClearButtonStrategies,
+  tabStrategies,
   textButtonStrategies,
   unitTrackerMenuItemStrategies,
   selectPropertyButtonStrategies,

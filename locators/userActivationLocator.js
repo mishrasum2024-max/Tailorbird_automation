@@ -76,7 +76,17 @@ function budgetPropertyDropdownStrategies(page) {
   ];
 }
 
+/** Run-verified 2026-11-23 (TC361 failure screenshot): with 0 change orders on the user's
+ * properties the Change Orders page renders "No change orders added yet" and no treegrid. */
+function changeOrdersEmptyStateStrategies(page) {
+  return [
+    { name: 'text:No change orders added yet(exact)', locator: page.getByText('No change orders added yet', { exact: true }) },
+    { name: 'role:paragraph[hasText=No change orders added yet]', locator: page.getByRole('paragraph').filter({ hasText: 'No change orders added yet' }) },
+  ];
+}
+
 module.exports = {
+  changeOrdersEmptyStateStrategies,
   profileMenuTriggerStrategies,
   profileMenuStrategies,
   propertiesGridStrategies,

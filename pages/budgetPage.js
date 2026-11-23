@@ -1006,6 +1006,10 @@ exports.BudgetJob = class BudgetJob {
     const scope = hasDialog ? dialog : this.page;
     const treegrid = scope.locator('[role="treegrid"]').first();
     await expect(treegrid).toBeVisible({ timeout: 10000 });
+    // Added 2026-11-19 (insert-only): the trash (row_action) column is now off-screen and not
+    // pinned, so it is not rendered until scrolled to (see scrollRevisionGridToColumn).
+    const rowActionOffScreen = await this.revisionGridHasColumn("row_action");
+    if (rowActionOffScreen) await this.scrollRevisionGridToColumn("row_action");
 
     // RevoGrid renders pinned columns (e.g. Actions/delete) OUTSIDE [role="treegrid"]
     // in a sibling DOM node, so scope to the full dialog instead of treegrid.
@@ -1016,6 +1020,9 @@ exports.BudgetJob = class BudgetJob {
     const deleteBtn = actionRowDeleteBtns.first();
     await deleteBtn.scrollIntoViewIfNeeded();
     await deleteBtn.click({ force: true });
+    // Added 2026-11-19 (insert-only): back to the far left — the steps that follow use index-based
+    // cell lookups that assume the grid is not scrolled.
+    if (rowActionOffScreen) await this.scrollRevisionGridToColumn(null);
 
     await expect(budget.submitForApprovalBtn).toBeEnabled({ timeout: 15000 });
     Logger.success("First row deleted - Submit for Approval enabled");
@@ -3382,6 +3389,13 @@ exports.BudgetJob = class BudgetJob {
     Logger.step(
       `Entering revision adjustment ${amount} for "${budgetItemName}" (v2)`
     );
+    // Added 2026-11-19 (insert-only): the "Adjustment" header filter below now matches
+    // "Cumulative Proforma Adjustments" (read-only) first; use the Adjustment Amount column.
+    if (await this.revisionGridHasColumn("adjustment_amount"))
+      return this.enterRevisionAdjustmentInAdjustmentAmountColumn(
+        budgetItemName,
+        amount
+      );
     await this.page.waitForTimeout(2000);
 
     const adjHeader = this.page
@@ -3451,6 +3465,193 @@ exports.BudgetJob = class BudgetJob {
       }
     });
     await this.page.waitForTimeout(1000);
+  }
+
+  // Added 2026-11-19 (insert-only): MCP-verified (headed, Test Property 2_The Westerham, revision
+  // editor): the revision grid gained six columns between "Original Budget" and "Current Budget"
+  // (Proforma Budget, Cumulative Proforma Adjustments, Revised Proforma Budget, Invoice Amount -
+  // Lifetime, Amount Paid - Lifetime, Proforma Funds Remaining). "Adjustment Amount", "Reallocate
+  // From", Notes (diff_notes) and the row trash action (row_action, NOT pinned) now sit past the
+  // right edge even at 2560px, and RevoGrid does not render off-screen columns — so the trash
+  // button / currency editor / Reallocate trigger were never found, and the fixed cell indexes
+  // (nth(7) = Reallocate From, nth(11) = Notes) now point at other columns. These helpers locate
+  // a column by its prop and scroll it into view with RevoGrid's own API.
+
+  /** The revision editor's RevoGrid (inside the revision dialog). */
+  revisionRevoGrid() {
+    return this.page.locator('[role="dialog"] revo-grid').first();
+  }
+
+  /** True when the revision grid has a column with this prop (the post-2026-11-19 layout). */
+  async revisionGridHasColumn(prop) {
+    const grid = this.revisionRevoGrid();
+    if (!(await grid.count().catch(() => 0))) return false;
+    return grid
+      .evaluate(
+        async (g, p) => (await g.getColumns()).some(c => c.prop === p),
+        prop
+      )
+      .catch(() => false);
+  }
+
+  /** Scrolls the revision grid to the column `prop`, or back to the far left when prop is null. */
+  async scrollRevisionGridToColumn(prop) {
+    const grid = this.revisionRevoGrid();
+    await grid.evaluate(
+      (g, p) => (p ? g.scrollToColumnProp(p) : g.scrollToCoordinate({ x: 0 })),
+      prop
+    );
+    await this.page.waitForTimeout(1000);
+  }
+
+  /** aria-colindex (1-based position in getColumns()) of the column `prop`. */
+  async revisionGridColIndex(prop) {
+    return this.revisionRevoGrid().evaluate(
+      async (g, p) => (await g.getColumns()).findIndex(c => c.prop === p) + 1,
+      prop
+    );
+  }
+
+  /** data-rgrow of the row showing `itemName` (read with the grid scrolled to the far left). */
+  async revisionGridRowIndex(itemName) {
+    await this.scrollRevisionGridToColumn(null);
+    const row = budget.treegridDataRows.filter({ hasText: itemName }).first();
+    await expect(
+      row,
+      `Row "${itemName}" must be visible in the revision grid`
+    ).toBeVisible({ timeout: 15000 });
+    return row.getAttribute("data-rgrow");
+  }
+
+  /** The cell of row `itemName` in column `prop`, scrolled into view. */
+  async revisionGridCell(itemName, prop) {
+    const rowIndex = await this.revisionGridRowIndex(itemName);
+    await this.scrollRevisionGridToColumn(prop);
+    const colIndex = await this.revisionGridColIndex(prop);
+    return this.revisionRevoGrid()
+      .locator(
+        `[role="gridcell"][aria-colindex="${colIndex}"][data-rgrow="${rowIndex}"]`
+      )
+      .first();
+  }
+
+  /** Adjustment entry for the current layout: the "Adjustment Amount" (adjustment_amount) cell. */
+  async enterRevisionAdjustmentInAdjustmentAmountColumn(
+    budgetItemName,
+    amount
+  ) {
+    await this.page.waitForTimeout(2000);
+    const cell = await this.revisionGridCell(
+      budgetItemName,
+      "adjustment_amount"
+    );
+    await expect(
+      cell,
+      `"Adjustment Amount" cell of "${budgetItemName}" must be visible`
+    ).toBeVisible({ timeout: 20000 });
+    await cell.click();
+    await this.page.waitForTimeout(600);
+    await this.page.keyboard.press("Enter");
+    await this.page.waitForTimeout(1000);
+    const currencyInput = this.page.locator(
+      '[data-testid="bird-table-currency-input"]'
+    );
+    await currencyInput.waitFor({ state: "visible", timeout: 10000 });
+    await currencyInput.fill(String(amount));
+    await this.page.keyboard.press("Enter");
+    await this.page.waitForTimeout(3000);
+    await this.scrollRevisionGridToColumn(null);
+    Logger.success(
+      `Adjustment ${amount} entered for "${budgetItemName}" (Adjustment Amount column)`
+    );
+  }
+
+  /** Reallocation for the current layout: opens the trigger in the "Reallocate From" column. */
+  async reallocateBudgetAmountInReallocateFromColumn(
+    destinationItemName,
+    sourceItemName,
+    amount
+  ) {
+    const cell = await this.revisionGridCell(
+      destinationItemName,
+      "reallocate_from"
+    );
+    const reallocateBtn = cell.locator("button").first();
+    await expect(
+      reallocateBtn,
+      `"Reallocate From" trigger of "${destinationItemName}" must be visible`
+    ).toBeVisible({ timeout: 15000 });
+    await reallocateBtn.click();
+
+    const popup = this.page
+      .getByRole("dialog")
+      .filter({
+        has: this.page.getByRole("textbox", { name: "Select category" }),
+      })
+      .last();
+    await expect(popup, "Reallocate From popup must open").toBeVisible({
+      timeout: 10000,
+    });
+    await popup.getByRole("textbox", { name: "Select category" }).click();
+    await this.page.waitForTimeout(500);
+    await this.page
+      .getByRole("option", { name: sourceItemName })
+      .first()
+      .click();
+    await this.page.waitForTimeout(500);
+    await popup.getByRole("textbox", { name: "$" }).fill(String(amount));
+    await this.page.keyboard.press("Tab");
+    await this.page.waitForTimeout(300);
+    const saveBtn = popup.getByRole("button", { name: "Save", exact: true });
+    await expect(
+      saveBtn,
+      "Save button must become enabled after entering a valid allocation"
+    ).toBeEnabled({ timeout: 10000 });
+    await saveBtn.scrollIntoViewIfNeeded().catch(() => {});
+    await saveBtn.click({ timeout: 20000 });
+    await this.page.waitForTimeout(2500);
+    // Back to the far left so the row's item name (and amounts) render for the next lookups.
+    await this.scrollRevisionGridToColumn(null);
+    Logger.success(
+      `Reallocated $${amount} from "${sourceItemName}" to "${destinationItemName}" (Reallocate From column)`
+    );
+  }
+
+  /**
+   * Full text of grid row `rowIndex` (data-rgrow) across every column: the left part, then the
+   * reallocation / amount columns, then Notes — RevoGrid only renders the columns in view.
+   * `pane` is the row pane ("rgRow" data rows, "rowPinEnd" the Total row, which reuses
+   * data-rgrow 0 — MCP-verified).
+   */
+  async revisionRowTextAcrossColumns(rowIndex, pane = "rgRow") {
+    const grid = this.revisionRevoGrid();
+    const parts = [];
+    for (const prop of [null, "reallocate_from", "new_amount", "diff_notes"]) {
+      await this.scrollRevisionGridToColumn(prop);
+      parts.push(
+        (
+          await grid
+            .locator(
+              `revogr-data[type="${pane}"] [role="gridcell"][data-rgrow="${rowIndex}"]`
+            )
+            .allTextContents()
+        ).join(" ")
+      );
+    }
+    await this.scrollRevisionGridToColumn(null);
+    return parts.join(" ").replace(/\s+/g, " ").trim();
+  }
+
+  /** AI Notes for the current layout: the row's diff_notes cell. */
+  async getRevisionRowNotesTextFromNotesColumn(itemName) {
+    const cell = await this.revisionGridCell(itemName, "diff_notes");
+    await expect(
+      cell,
+      `Notes cell of "${itemName}" must be visible`
+    ).toBeVisible({ timeout: 10000 });
+    const text = ((await cell.textContent()) || "").trim();
+    await this.scrollRevisionGridToColumn(null);
+    return text;
   }
 
   /**
@@ -3608,6 +3809,14 @@ exports.BudgetJob = class BudgetJob {
    * Generates an AI note on the destination row (e.g. Moved "$X" money from "...").
    */
   async reallocateBudgetAmount(destinationItemName, sourceItemName, amount) {
+    // Added 2026-11-19 (insert-only): cell nth(7) below is now "Invoice Amount - Lifetime"; the
+    // "Reallocate From" trigger is located by its column instead.
+    if (await this.revisionGridHasColumn("reallocate_from"))
+      return this.reallocateBudgetAmountInReallocateFromColumn(
+        destinationItemName,
+        sourceItemName,
+        amount
+      );
     const row = budget.treegridDataRows
       .filter({ hasText: destinationItemName })
       .first();
@@ -3665,6 +3874,9 @@ exports.BudgetJob = class BudgetJob {
    * row matching itemName - e.g. Moved "$5,900.00" money from "... - Budget A ...".
    */
   async getRevisionRowNotesText(itemName) {
+    // Added 2026-11-19 (insert-only): cell nth(11) below is no longer Notes; read diff_notes.
+    if (await this.revisionGridHasColumn("diff_notes"))
+      return this.getRevisionRowNotesTextFromNotesColumn(itemName);
     const row = budget.treegridDataRows.filter({ hasText: itemName }).first();
     await expect(
       row,
@@ -3679,6 +3891,12 @@ exports.BudgetJob = class BudgetJob {
    * the complete generated row (all columns) renders correctly and is non-empty.
    */
   async getRevisionRowFullText(itemName) {
+    // Added 2026-11-19 (insert-only): with the six new columns the reallocation amounts and
+    // Notes are no longer rendered at the left scroll position — read the row across columns.
+    if (await this.revisionGridHasColumn("diff_notes"))
+      return this.revisionRowTextAcrossColumns(
+        await this.revisionGridRowIndex(itemName)
+      );
     const row = budget.treegridDataRows.filter({ hasText: itemName }).first();
     await expect(
       row,
@@ -3692,6 +3910,25 @@ exports.BudgetJob = class BudgetJob {
    * revision editor grid and returns their trimmed full text content.
    */
   async getAllRevisionRowTexts() {
+    // Added 2026-11-19 (insert-only): read every row across all columns (incl. Notes) so the
+    // "no Conflict" check still covers the off-screen columns of the current layout.
+    if (await this.revisionGridHasColumn("diff_notes")) {
+      await this.scrollRevisionGridToColumn(null);
+      const rowKeys = await budget.treegridDataRows.evaluateAll(rs => [
+        ...new Set(
+          rs.map(
+            r =>
+              `${r.closest("revogr-data")?.getAttribute("type") || "rgRow"}|${r.getAttribute("data-rgrow")}`
+          )
+        ),
+      ]);
+      const allTexts = [];
+      for (const key of rowKeys) {
+        const [pane, rowIndex] = key.split("|");
+        allTexts.push(await this.revisionRowTextAcrossColumns(rowIndex, pane));
+      }
+      return allTexts;
+    }
     const rows = budget.treegridDataRows;
     const count = await rows.count();
     const texts = [];

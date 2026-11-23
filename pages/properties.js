@@ -58,6 +58,8 @@ const { healingLocator } = require("../utils/locatorHealer");
 const { withExtendedTerminalWait } = require("../utils/resilientRetry");
 const { waitForSlowDataWithReload } = require("../utils/resilientRetry");
 const { resetActiveFilters } = require("../utils/filterResetHelper");
+// Added 2026-11-17 (insert-only): used by addSiteRowVerifyNameReadOnlyAndDelete().
+const { Logger } = require("../utils/logger");
 
 class PropertiesHelper {
   constructor(page) {
@@ -553,6 +555,17 @@ class PropertiesHelper {
       console.log(
         `🔄 Wait for property creation: verifying breadcrumb '${name}'`
       );
+      // Added 2026-11-23 (insert-only): 2-worker run (TC601 retry) — the new property's detail
+      // page was still a loading skeleton after 15s, so the breadcrumb wait below timed out.
+      // MCP-verified (dashboard → Properties → open property): the name is plain text in
+      // .mantine-Breadcrumbs-root and appears ~3s after opening on a normal run. Give a slow
+      // beta up to 80s first; the original 15s check below then confirms it.
+      await this.page
+        .locator(".mantine-Breadcrumbs-root")
+        .filter({ hasText: name })
+        .first()
+        .waitFor({ state: "visible", timeout: 80000 })
+        .catch(() => {});
       await this.page
         .locator(`.mantine-Breadcrumbs-root:has-text('${name}')`)
         .waitFor({ state: "visible", timeout: 15000 });
@@ -2634,6 +2647,219 @@ class PropertiesHelper {
       await locationSearch.press("Enter").catch(() => {});
     }
     console.log(`✔ Row deleted: ${rowName}`);
+  }
+  /**
+   * Added 2026-11-17 (insert-only) for TC56. Site names became read-only in the app on
+   * 2026-11-11 (Site table "Name" column editable: false; the server rejects name edits with
+   * "Name can only be edited in the Admin Portal."), so a typed-in name can never be committed
+   * and addRowDetail() always failed — leaving a blank row behind on every run.
+   *
+   * MCP-verified flow on the Sites grid (Test Property 1, 2026-11-17):
+   * - "Add Row" → POST /api/bird-table/rows 200; the response carries the new row
+   *   (rows[0].id) and the columns, with "name" editable: false.
+   * - The app first inserts the row optimistically at the TOP of the grid source (index 0),
+   *   then its refetch (GET /api/bird-table?table_name=site, ~1s later) puts it at the END.
+   *   A row index read before the refetch therefore points at another row once it lands
+   *   (run-verified: an earlier version of this method deleted row 1850 instead of its own).
+   * - The new row's Name cell has class "disabled" and a double click opens no editor.
+   * - The row's trash button deletes it at once (DELETE /api/bird-table/rows 200, no dialog).
+   *
+   * Safety: the row id comes from the POST response; the index is re-read and must be stable
+   * before every action; a route guard aborts any DELETE whose row_id is not this row's id, so
+   * this method can never delete another row; the created row is always removed (API fallback).
+   */
+  async addSiteRowVerifyNameReadOnlyAndDelete() {
+    const tabpanel = healingLocator(
+      prop.locationsTabpanelStrategies(this.page)
+    );
+    // Hidden tabpanels (Overview, Floor Plans, Building Exterior) keep their own treegrid and
+    // "Add Row" in the DOM (run-verified 2026-11-17: .first() picked a hidden "Add Row"), so
+    // only the visible match is used.
+    const treegrid = healingLocator(prop.locationsTreegridStrategies(tabpanel))
+      .filter({ visible: true })
+      .first();
+    await expect(treegrid, "FAIL: Locations grid not visible").toBeVisible({
+      timeout: 30000,
+    });
+    const addRow = healingLocator(
+      prop.addRowTriggerStrategies(tabpanel, this.page)
+    )
+      .filter({ visible: true })
+      .first();
+    await expect(addRow, 'FAIL: "Add Row" button not visible').toBeVisible({
+      timeout: 15000,
+    });
+    const isRowsCall = (r, method) =>
+      r.url().includes("/api/bird-table/rows") &&
+      r.request().method() === method;
+    const isSiteRefetch = r =>
+      r.request().method() === "GET" &&
+      r.url().includes("/api/bird-table?") &&
+      r.url().includes("table_name=site&");
+    const rowIdOf = request => {
+      try {
+        return String(JSON.parse(request.postData() || "{}").row_id);
+      } catch (e) {
+        return null;
+      }
+    };
+
+    Logger.step('Locations → "Add Row"');
+    const refetch = this.page
+      .waitForResponse(isSiteRefetch, { timeout: 30000 })
+      .catch(() => null);
+    const [created] = await Promise.all([
+      this.page.waitForResponse(r => isRowsCall(r, "POST"), {
+        timeout: 30000,
+      }),
+      addRow.click(),
+    ]);
+    expect(created.status(), "FAIL: Add Row was not saved").toBe(200);
+    const createdBody = await created.json().catch(() => ({}));
+    const newId =
+      createdBody.rows && createdBody.rows[0] && createdBody.rows[0].id;
+    expect(newId, "FAIL: Add Row response has no new row id").toBeTruthy();
+    const nameColumn = (createdBody.columns || []).find(
+      c => c.columnName === "name"
+    );
+    expect(
+      nameColumn && nameColumn.editable,
+      'FAIL: Site "Name" column must be read-only (editable: false)'
+    ).toBe(false);
+    Logger.success(`Site row ${newId} added`);
+
+    // Only this row may ever be deleted from here on.
+    let deletedOk = false;
+    let blockedDeletes = 0;
+    const guard = async route => {
+      const request = route.request();
+      if (request.method() !== "DELETE") return route.fallback();
+      const rowId = rowIdOf(request);
+      if (rowId !== String(newId)) {
+        blockedDeletes++;
+        Logger.info(
+          `[TC56 guard] Blocked DELETE of row ${rowId} (only ${newId} may be deleted)`
+        );
+        return route.abort("blockedbyclient");
+      }
+      return route.fallback();
+    };
+    await this.page.route("**/api/bird-table/rows", guard);
+
+    const sourceIndex = () =>
+      treegrid.evaluate(
+        async (g, id) => (await g.getSource()).findIndex(r => r.id === id),
+        newId
+      );
+    // Scrolls to the row and returns its index once two reads 500ms apart agree.
+    const locateRow = async () => {
+      let index = -1;
+      await expect
+        .poll(
+          async () => {
+            const first = await sourceIndex();
+            if (first < 0) return false;
+            await treegrid.evaluate((g, i) => g.scrollToRow(i), first);
+            await this.page.waitForTimeout(500);
+            index = await sourceIndex();
+            return first === index;
+          },
+          {
+            message: `FAIL: site row ${newId} did not settle in the grid`,
+            timeout: 30000,
+          }
+        )
+        .toBe(true);
+      const rowCells = healingLocator(
+        prop.siteRowCellsStrategies(treegrid, index)
+      );
+      await expect(
+        rowCells.first(),
+        `FAIL: site row ${newId} not rendered`
+      ).toBeVisible({ timeout: 15000 });
+      return { index, rowCells };
+    };
+
+    try {
+      // Let the app's refetch replace the optimistic row before reading any index.
+      await refetch;
+
+      const { index, rowCells } = await locateRow();
+      const nameCell = rowCells.first();
+      await expect(
+        nameCell,
+        'FAIL: new row "Name" cell must be read-only (class "disabled")'
+      ).toHaveClass(/disabled/);
+      await nameCell.dblclick();
+      await expect(
+        healingLocator(prop.revogrEditInputStrategies(this.page)),
+        'FAIL: double-clicking "Name" must not open an editor'
+      ).toHaveCount(0);
+      await this.page.keyboard.press("Escape").catch(() => {});
+      Logger.success(`Site row ${newId} (index ${index}): "Name" is read-only`);
+
+      Logger.step(`Deleting site row ${newId}`);
+      for (let attempt = 1; attempt <= 3 && !deletedOk; attempt++) {
+        const blockedBefore = blockedDeletes;
+        const { rowCells: cells } = await locateRow();
+        const deleteButton = healingLocator(
+          prop.locationRowDeleteButtonStrategies(cells)
+        ).first();
+        await expect(
+          deleteButton,
+          "FAIL: Delete button missing on the added row"
+        ).toBeVisible({ timeout: 15000 });
+        const ownDelete = this.page
+          .waitForResponse(
+            r =>
+              isRowsCall(r, "DELETE") && rowIdOf(r.request()) === String(newId),
+            { timeout: 30000 }
+          )
+          .catch(() => null);
+        await deleteButton.click();
+        const outcome = await Promise.race([
+          ownDelete,
+          expect
+            .poll(() => blockedDeletes > blockedBefore, { timeout: 30000 })
+            .toBe(true)
+            .then(() => "blocked")
+            .catch(() => null),
+        ]);
+        if (outcome && outcome !== "blocked") {
+          expect(outcome.status(), "FAIL: Delete was not saved").toBe(200);
+          deletedOk = true;
+        } else {
+          Logger.info(
+            `Delete attempt ${attempt}/3 did not target row ${newId} — re-locating and retrying`
+          );
+        }
+      }
+      expect(deletedOk, `FAIL: could not delete site row ${newId}`).toBe(true);
+      await expect
+        .poll(async () => (await sourceIndex()) === -1, {
+          message: `FAIL: site row ${newId} still in the grid after Delete`,
+          timeout: 20000,
+        })
+        .toBe(true);
+      Logger.success(`Site row ${newId} deleted`);
+    } finally {
+      await this.page.unroute("**/api/bird-table/rows", guard).catch(() => {});
+      // Never leave this test's blank row behind if anything above failed.
+      if (!deletedOk) {
+        const pageUrl = new URL(this.page.url());
+        await this.page.request
+          .delete(`${pageUrl.origin}/api/bird-table/rows`, {
+            data: {
+              table_name: "site",
+              row_id: String(newId),
+              context_data: {
+                property_id: pageUrl.searchParams.get("propertyId"),
+              },
+            },
+          })
+          .catch(() => {});
+      }
+    }
   }
   async addColumndata() {
     const locationsPanel = healingLocator(

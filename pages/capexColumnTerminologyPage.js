@@ -50,13 +50,14 @@ class CapexColumnTerminologyPage {
         timeout: 10000,
       });
       // Added 2026-11-11 (insert-only): trace-verified TC559 failure — the PUT
-      // /api/table-column-labels started by this click was still in flight when the reload below
+      // /api/table-view-config?labels=1 started by this click was still in flight when the reload below
       // ran, so it was aborted (no response) and the caller's waitForResponse timed out after 60s.
       // Let the save finish before closing the drawer and reloading.
       const labelsSaved = this.page
         .waitForResponse(
           res =>
-            res.url().includes("/api/table-column-labels") &&
+            res.url().includes("/api/table-view-config") &&
+            res.url().includes("labels=1") &&
             res.request().method() === "PUT",
           { timeout: 60000 }
         )

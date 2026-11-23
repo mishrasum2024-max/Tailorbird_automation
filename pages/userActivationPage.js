@@ -9,6 +9,9 @@ const {
   budgetPropertySelectorButtonStrategies,
   budgetPropertyDropdownStrategies,
 } = require("../locators/userActivationLocator");
+const {
+  changeOrdersEmptyStateStrategies,
+} = require("../locators/userActivationLocator");
 
 /**
  * Drives the full "accept invite" activation flow for a brand-new invited user:
@@ -474,6 +477,30 @@ class UserActivationPage {
     Logger.step("[Activation] Navigating to Change Orders page");
     await this.gotoPath("/change-orders");
     await this.waitForGridRows();
+  }
+
+  /**
+   * Opens /change-orders and reports whether the grid has rows (true) or the page shows its
+   * empty state (false). Run-verified 2026-11-23: with 0 change orders on the user's assigned
+   * property the page renders "No change orders added yet" and no treegrid, so
+   * gotoChangeOrdersPage()'s waitForGridRows() times out instead of explaining why.
+   * @returns {Promise<boolean>}
+   */
+  async openChangeOrdersPageAndCheckRows({ timeout = 30000 } = {}) {
+    await this.gotoPath("/change-orders");
+    const firstCell = this.activationPage
+      .locator('[role="treegrid"] [role="gridcell"]')
+      .first();
+    const emptyState = healingLocator(
+      changeOrdersEmptyStateStrategies(this.activationPage)
+    ).first();
+    await expect(
+      firstCell.or(emptyState).first(),
+      "FAIL: Change Orders page rendered neither rows nor its empty state"
+    ).toBeVisible({ timeout });
+    const hasRows = await firstCell.isVisible();
+    Logger.info(`[Activation] Change Orders page has rows: ${hasRows}`);
+    return hasRows;
   }
 
   async gotoInvoicesPage() {

@@ -72,7 +72,7 @@
           "3bdrm V1"
         ]
       },
-      { "group": "Unit Type", "options": ["Blank", "1X1", "2X1", "3X2"] },
+      { "group": "Bed x Bath", "options": ["Blank", "1X1", "2X1", "3X2"] },
       { "group": "Fiscal Year", "options": ["Blank", "2026"] },
       {
         "group": "Reno Year & Quarter",
@@ -91,7 +91,7 @@
         "option": "1bdrm",
         "field": "floor_plan_type"
       },
-      { "group": "Unit Type", "option": "3X2", "field": "unit_type" },
+      { "group": "Bed x Bath", "option": "3X2", "field": "bed_x_bath" },
       { "group": "Fiscal Year", "option": "2026", "field": "fiscal_year" },
       {
         "group": "Reno Year & Quarter",
@@ -118,5 +118,21 @@
   },
   "export": {
     "fileName": "unit_tracker-data.csv"
+  },
+  "moveDates": {
+    "unitLabel": "101",
+    "moveInColumn": "Move-In Date",
+    "moveOutColumn": "Move-Out Date",
+    "moveInField": "move_in_date",
+    "moveOutField": "move_out_date",
+    "moveOutDay": 10,
+    "moveInDay": 20,
+    "invalidMoveInDay": 5,
+    "emptyCell": "—",
+    "cellUpdatedMessage": "Cell updated successfully",
+    "invalidOrderMessage": "Move-in date must be on or after the move-out date",
+    "clearButton": "Clear selection",
+    "contractUnitsTab": "Units",
+    "contractUnitsTable": "ui-contract-units"
   }
 }

@@ -1,0 +1,110 @@
+{
+  "_source": "MCP-verified 2026-11-16 on beta.tailorbird.com (owner session): Manage Organization → Roles tab → Add role → \"Create role\" drawer. Baseline compared by TC568 (tests/TC35_UnitTracker.spec.js). To accept an intended product change, re-run TC568 with UPDATE_ROLE_PERMISSIONS_BASELINE=1 and review the diff of this file.",
+  "drawerTitle": "Create role",
+  "components": [
+    {
+      "component": "Approvals",
+      "permissions": [
+        { "name": "Delete Approval Templates", "description": "Allows users to delete Approval Templates", "type": "checkbox" },
+        { "name": "Create & Manage Approval Templates", "description": "Allows users to create and manage Approval Templates", "type": "checkbox" },
+        { "name": "Amenity Name - Edit", "description": "Allows users to edit amenity names during amenity name approvals", "type": "checkbox" }
+      ]
+    },
+    {
+      "component": "Bids",
+      "permissions": [
+        { "name": "Create and Manage Bids", "description": "Allow users to create and manage bids", "type": "checkbox" },
+        { "name": "Delete Bids", "description": "Allow users to delete bids", "type": "checkbox" }
+      ]
+    },
+    {
+      "component": "Budget",
+      "permissions": [
+        { "name": "Edit Manage Versions", "description": "Allows users to edit the names or metadata of budget versions.", "type": "checkbox" },
+        { "name": "Delete Manage Versions", "description": "Enables the removal of specific budget versions from a property.", "type": "checkbox" },
+        { "name": "Mark Version Active", "description": "Allows users to set a specific budget version as the current active budget.", "type": "checkbox" },
+        { "name": "Delete Revision Row", "description": "Grants the ability to delete rows or items during a budget revision.", "type": "checkbox" },
+        { "name": "Adjustment and Reallocation", "description": "Permission to adjust funds and reallocate amounts between budget items.", "type": "checkbox" },
+        { "name": "Edit Revision", "description": "Allows editing of existing line items while a budget is under revision.", "type": "checkbox" },
+        { "name": "Add Budget Revision Line Item", "description": "Enables adding new line items during the budget revision process.", "type": "checkbox" },
+        { "name": "Revise Budget", "description": "Grants permission to initiate a revision of the existing property budget.", "type": "checkbox" },
+        { "name": "Upload Document in Revision", "description": "Allows uploading supporting documentation for budget revisions.", "type": "checkbox" },
+        { "name": "Edit Revision Documents", "description": "Allows editing metadata for documents attached to budget revisions.", "type": "checkbox" },
+        { "name": "Delete Document in Revision Documents", "description": "Grants permission to delete documents tied to budget revisions.", "type": "checkbox" }
+      ]
+    },
+    {
+      "component": "Change Orders",
+      "permissions": [
+        { "name": "Create and Manage", "description": "Allow users to create and manage change orders", "type": "checkbox" },
+        { "name": "Delete", "description": "Allow users to delete change orders", "type": "checkbox" }
+      ]
+    },
+    {
+      "component": "Contracts & POs",
+      "permissions": [
+        { "name": "Create and Manage Contracts & POs", "description": "Allow users to create and manage contracts and POs", "type": "checkbox" },
+        { "name": "Void/Cancel Contracts", "description": "Allow users to void or cancel contracts", "type": "checkbox" }
+      ]
+    },
+    {
+      "component": "Invoice",
+      "permissions": [
+        { "name": "Delete Invoice", "description": "Grants the ability to delete an invoice from the system.", "type": "checkbox" },
+        { "name": "Create and Manage Invoices", "description": "Allow users to create and manage invoices", "type": "checkbox" }
+      ]
+    },
+    {
+      "component": "Job",
+      "permissions": [
+        { "name": "Create Job", "description": "Allows users to create new jobs within a property.", "type": "checkbox" },
+        { "name": "Delete Job", "description": "Grants the ability to permanently delete a job from the property.", "type": "checkbox" },
+        { "name": "Reopen Job", "description": "Allows users to reopen a Complete/Closed job.", "type": "checkbox" },
+        { "name": "Complete/Close Job", "description": "Allows users to mark a job as Complete/Closed.", "type": "checkbox" }
+      ]
+    },
+    {
+      "component": "Other",
+      "permissions": [
+        { "name": "IT & IAM Setup", "description": "Allows users to open IT & IAM Setup for domain verification, SSO, and directory sync.", "type": "checkbox" }
+      ]
+    },
+    {
+      "component": "Project",
+      "permissions": [
+        { "name": "Create Project", "description": "Allows users to create a new project within a property.", "type": "checkbox" },
+        { "name": "Delete Project", "description": "Grants the ability to permanently delete projects from a property.", "type": "checkbox" }
+      ]
+    },
+    {
+      "component": "Property",
+      "permissions": [
+        { "name": "Edit Data inline", "description": "Enables inline editing of property details like address and unit count directly in the table.", "type": "checkbox" },
+        { "name": "Create Property", "description": "Allows users to create a new property record within the organization.", "type": "checkbox" },
+        { "name": "Delete Property", "description": "Provides the ability to permanently remove a property from the system.", "type": "checkbox" },
+        { "name": "Edit Locations", "description": "Enables updating details for existing property locations and units.", "type": "checkbox" },
+        { "name": "Takeoff Edit Fields", "description": "Allows editing of specific data fields within property takeoffs.", "type": "checkbox" },
+        { "name": "Export Asset Viewer Views", "description": "Enables exporting specific views and data from the Asset Viewer tool.", "type": "checkbox" },
+        { "name": "Create Draw", "description": "Allows users to create draw reports for a property.", "type": "checkbox" }
+      ]
+    },
+    {
+      "component": "Row and Column Ordering",
+      "permissions": [
+        { "name": "Create & Update Column", "description": "Allows users to create and update custom table columns.", "type": "checkbox" },
+        { "name": "Delete Column", "description": "Allows users to delete custom table columns.", "type": "checkbox" },
+        { "name": "Reorder Columns", "description": "Allows users to save a table's column order for everyone in the organization.", "type": "checkbox" },
+        { "name": "Create & Update Row Sections", "description": "Allows users to create and update row sections.", "type": "checkbox" },
+        { "name": "Delete Row Sections", "description": "Allows users to delete row sections.", "type": "checkbox" },
+        { "name": "Move Rows to Sections", "description": "Allows users to move rows between sections.", "type": "checkbox" }
+      ]
+    },
+    {
+      "component": "Unit Tracker",
+      "permissions": [
+        { "name": "Edit Status & Dates", "description": "Allows users to edit status, reno start date and reno end date on the Unit Tracker.", "type": "checkbox" },
+        { "name": "Admin-Edit Lease Fields", "description": "Allows users to overwrite an already-synced Move-Out, Prior Rent, Move-In or Current Rent value on the Unit Tracker, and to re-pull a record from the PMS.", "type": "checkbox" }
+      ]
+    }
+  ]
+}

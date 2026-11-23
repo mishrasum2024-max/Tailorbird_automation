@@ -14,5 +14,18 @@
   "columnDescription": "Description",
   "columnPermissions": "Permissions",
   "builtInRoleEditor": "Editor",
-  "builtInRoleViewOnly": "View Only"
+  "builtInRoleViewOnly": "View Only",
+  "createRole": {
+    "_source": "MCP beta 2026-11-16: /organization → Roles tab → Add role opens a drawer dialog \"Create role\".",
+    "rolesIntro": "Manage custom organization roles and their permission bundles.",
+    "drawerTitle": "Create role",
+    "nameLabel": "Name",
+    "namePlaceholder": "Role name",
+    "descriptionLabel": "Description",
+    "descriptionPlaceholder": "Optional description",
+    "permissionsHeading": "Permissions",
+    "cancelButton": "Cancel",
+    "createButton": "Create",
+    "updateBaselineEnv": "UPDATE_ROLE_PERMISSIONS_BASELINE"
+  }
 }

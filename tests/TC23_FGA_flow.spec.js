@@ -12,6 +12,14 @@ const fgaTexts = require("../fixture/fga_cta_texts.json");
 const { ensureLeftPanelExpanded } = require("../utils/leftPanelExpander");
 const dashboardLandingUrl = process.env.DASHBOARD_URL || orgUrls.dashboardUrl;
 const TARGET_PROPERTY = "Test Property 1_Cottages on Elm";
+// Added 2026-11-17 (insert-only): permanent seed job "Automation_Job" on TARGET_PROPERTY with an
+// approved contract (MCP-verified) — TC362 creates its own invoice on it.
+const TC362_SEED_JOB_ID = 4139;
+const { WorkerPdfPage } = require("../pages/workerPdfPage");
+const { ApprovalE2EPage } = require("../pages/approvalE2EPage");
+const {
+  waitForReadyRecoveringErrors,
+} = require("../utils/errorLoadingDataRecovery");
 const CREATED_USERS_FILE = path.join(__dirname, "../data/fgaCreatedUsers.json");
 
 function generateFgaTestUser(prefix = "fga") {
@@ -699,6 +707,60 @@ test.describe.serial("FGA", () => {
     };
   }
 
+  /**
+   * Creates a change order as the owner on the permanent seed job (TC362_SEED_JOB_ID, approved
+   * contract on TARGET_PROPERTY) with the existing ApprovalE2EPage.createChangeOrder(), so the
+   * FGA user has a change order to see after the daily cleanup has removed the test ones.
+   * @param {import('@playwright/test').Browser} browser
+   */
+  async function seedChangeOrderOnTargetProperty(browser) {
+    const ownerContext = await browser.newContext({
+      storageState: "sessionState.json",
+      baseURL: process.env.BASE_URL,
+    });
+    try {
+      const ownerPage = await ownerContext.newPage();
+      const number = await new ApprovalE2EPage(ownerPage).createChangeOrder(
+        TC362_SEED_JOB_ID,
+        { title: `TC361_FGA_CO_${Date.now()}`, amount: 10 }
+      );
+      // Source of truth is the API behind the /change-orders listing (MCP-verified 2026-11-23:
+      // GET /api/bird-table?table_name=change_order returns every change order the session may
+      // see, with id/job_id/property_id/status). The UI helper can report "confirmed" while a
+      // change order is still Draft, so require Pending Approval/Approved on the seed job.
+      let seededStatus = "";
+      await expect
+        .poll(
+          async () => {
+            const res = await ownerPage.request.get(
+              "/api/bird-table?table_name=change_order"
+            );
+            if (res.status() !== 200) return `HTTP ${res.status()}`;
+            const rows = (await res.json()).rows || [];
+            const row = rows.find(
+              r =>
+                String(r.id) === String(number) &&
+                Number(r.job_id) === TC362_SEED_JOB_ID
+            );
+            seededStatus = row ? String(row.status) : "not listed";
+            return seededStatus;
+          },
+          {
+            message: `FAIL: Change Order #${number} on job ${TC362_SEED_JOB_ID} must reach Pending Approval/Approved`,
+            timeout: 60000,
+            intervals: [2000, 5000],
+          }
+        )
+        .toMatch(/^(Pending Approval|Approved)$/);
+      Logger.info(
+        `[TC361] Created Change Order #${number} (${seededStatus}) on job ${TC362_SEED_JOB_ID} ("${TARGET_PROPERTY}")`
+      );
+      return number;
+    } finally {
+      await ownerContext.close();
+    }
+  }
+
   /** Poll-then-read: the grid shell can render before the named column's data finishes fetching. */
   async function getScopedGridValues(activation, columnHeader, pageLabel) {
     await expect
@@ -896,6 +958,23 @@ test.describe.serial("FGA", () => {
   }) => {
     const { context, activation } = await newAuthenticatedActivation(browser);
     try {
+      // Run-verified 2026-11-23: "Test Property 1_Cottages on Elm" had 0 change orders (the daily
+      // cleanup removes test ones), so the page showed "No change orders added yet" with no
+      // treegrid and gotoChangeOrdersPage() timed out. Seed one as the owner only when empty,
+      // then re-open the page until the new row is visible to the FGA user.
+      if (!(await activation.openChangeOrdersPageAndCheckRows())) {
+        test.setTimeout(420000);
+        Logger.step(
+          `[TC361] No change orders visible — seeding one on job ${TC362_SEED_JOB_ID}`
+        );
+        await seedChangeOrderOnTargetProperty(browser);
+        await expect(async () => {
+          expect(
+            await activation.openChangeOrdersPageAndCheckRows(),
+            "FAIL: seeded change order not yet visible to the FGA user"
+          ).toBe(true);
+        }).toPass({ timeout: 120000, intervals: [5000, 10000, 15000] });
+      }
       await activation.gotoChangeOrdersPage();
       const values = await getScopedGridValues(
         activation,
@@ -933,8 +1012,48 @@ test.describe.serial("FGA", () => {
   test("TC362 @regression @FGA @scope : Invoice visibility is limited to the assigned property only", async ({
     browser,
   }) => {
+    // Added 2026-11-17 (insert-only): the FGA user can only see invoices on TARGET_PROPERTY, and
+    // this test never created one — it relied on an invoice already being there. On 2026-11-16
+    // (CI) and 2026-11-17 (MCP) "Test Property 1_Cottages on Elm" had 0 invoices (test invoices
+    // are removed by the daily cleanup), and with 0 rows the Invoices page renders "No invoices
+    // added yet" and no treegrid, so waitForGridRows timed out. Create a fresh $10 invoice as the
+    // owner on the permanent seed job "Automation_Job" (4139, approved contract on that property)
+    // with the existing WorkerPdfPage helper, which reads the amount back from the Invoice
+    // Details dialog only (run-verified 2026-11-17: DrawReportingJob's unscoped amount cell read
+    // "—" from the job's background grid although the dialog showed $10). MCP-verified its
+    // "Confirm Invoice" step shows "Are you sure you want to approve this invoice?" on this job.
+    const ownerContext = await browser.newContext({
+      storageState: "sessionState.json",
+      baseURL: process.env.BASE_URL,
+    });
+    try {
+      const ownerPage = await ownerContext.newPage();
+      const invoice = await new WorkerPdfPage(ownerPage).createApprovedInvoice(
+        TC362_SEED_JOB_ID,
+        `TC362_FGA_Invoice_${Date.now()}`,
+        10
+      );
+      Logger.info(
+        `[TC362] Created ${invoice.invoiceNumberLabel} on job ${TC362_SEED_JOB_ID} ("${TARGET_PROPERTY}")`
+      );
+    } finally {
+      await ownerContext.close();
+    }
     const { context, activation } = await newAuthenticatedActivation(browser);
     try {
+      // Added 2026-11-23 (insert-only): 2-worker run — the FGA user's Invoices page had no
+      // treegrid after 20s although the owner had just created TC362's invoice (owner job page
+      // showed it). Give a slow beta up to 80s per attempt for the first row, reloading (or
+      // pressing "Error Loading Data" Retry) up to 3 times, before the original 20s check below.
+      test.setTimeout(600000);
+      await activation.gotoPath("/invoices");
+      await waitForReadyRecoveringErrors(
+        activation.activationPage,
+        activation.activationPage
+          .locator('[role="treegrid"] [role="gridcell"]')
+          .first(),
+        { label: "FGA user Invoices rows" }
+      );
       await activation.gotoInvoicesPage();
       const values = await getScopedGridValues(
         activation,

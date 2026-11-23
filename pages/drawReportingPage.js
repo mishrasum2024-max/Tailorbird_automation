@@ -1902,6 +1902,13 @@ exports.DrawReportingJob = class DrawReportingJob {
       await amountEditor.fill("10");
       await amountEditor.press("Enter");
       await this.page.waitForTimeout(500);
+      // Added 2026-11-19 (insert-only): run-verified (TC376 trace) — the cell is redrawn only after
+      // the save (PUT /api/bird-table/cells?invoiceId=…) and the row re-fetch complete, ~1-2s after
+      // Enter; the read below came 0.6s after Enter and saw "—". Wait (web-first) for the value;
+      // the existing read + assertion below still decide pass/fail.
+      await expect(amountCell)
+        .toContainText("10", { timeout: 15000 })
+        .catch(() => {});
 
       const confirmedAmount = (await amountCell.textContent()).trim();
       expect(
@@ -1973,6 +1980,28 @@ exports.DrawReportingJob = class DrawReportingJob {
     const cells = (await row.getByRole("cell").allTextContents()).map(c =>
       c.trim()
     );
+    // Added 2026-11-19 (insert-only): MCP-verified (headed, "Test Property 6_Draw reporting" draw
+    // editor) — the disbursement schedule gained 7 columns after "Budget Item" (Original Budget,
+    // Proforma Budget, Cumulative Proforma Adjustments, Revised Proforma Budget, Invoice Amount -
+    // Lifetime, Amount Paid - Lifetime, Proforma Funds Remaining; 15 columns now), so the fixed
+    // positions below read the wrong cells (e.g. "Current Draw" read "Amount Paid - Lifetime" = $0,
+    // the TC376 failure). When the header count differs from the 8 positions, map by header name.
+    const headerNames = (
+      await draw.drawEditorDialog.getByRole("columnheader").allTextContents()
+    ).map(h => h.trim());
+    if (headerNames.length !== 8 && headerNames.includes("Current Draw")) {
+      const byHeader = name => cells[headerNames.indexOf(name)];
+      return {
+        budgetItem: byHeader("Budget Item"),
+        currentBudget: this.parseCurrencyText(byHeader("Current Budget")),
+        committed: this.parseCurrencyText(byHeader("Committed")),
+        reallocation: this.parseCurrencyText(byHeader("Reallocation")),
+        budgetRemaining: this.parseCurrencyText(byHeader("Budget Remaining")),
+        drawn: this.parseCurrencyText(byHeader("Drawn")),
+        currentDraw: this.parseCurrencyText(byHeader("Current Draw")),
+        drawRemaining: this.parseCurrencyText(byHeader("Draw Remaining")),
+      };
+    }
     const [
       budgetItem,
       currentBudget,

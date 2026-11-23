@@ -407,3 +407,461 @@ test('TC79 @regression @projectAndJob : Reject project creation with "      " na
 
     await projectPage.verifyModalClosed();
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// Missing-coverage E2E cases (formerly tests/TC41_ProjectsE2E.spec.js). Wrapped in a block so its
+// names never clash with this file's; it relies on this file's test.use
+// (storageState: sessionState.json). Added 2026-11-19.
+// ════════════════════════════════════════════════════════════════════════════
+{
+  /**
+   * Projects E2E — project coverage on suite-owned data only.
+   *
+   * Setup builds its OWN property → budget → project → finalized Contract job
+   * (ApprovalE2EPage.createFinalizedContractChain, unchanged). Every edit, upload
+   * and delete below happens on that project or on a throwaway project the test
+   * creates. The CM fee check (TC593) only reads existing rows.
+   *
+   *   TC588 tab kept in the URL; Create Job only on the Jobs tab
+   *   TC589 Edit Project saves Description / Estimated Budget; Budget Category read-only
+   *   TC590 Fiscal Year change blocked while the project has a finalized job
+   *   TC591 Create Project: Budget Category gated by property + fiscal year (not submitted)
+   *   TC592 Project Documents upload → listed → delete
+   *   TC593 CM fee projects have no Delete action (read-only)
+   *   TC594 Delete Project asks for confirmation; Cancel keeps it, Delete removes it
+   *
+   * Shared data/*.json hand-off files are backed up and verified unchanged.
+   * Live-verified 2026-11-19 — see locators/jobProjectE2ELocator.js.
+   */
+
+  const path = require("path");
+  const { JobProjectE2EPage } = require("../pages/jobProjectE2EPage");
+  const { ApprovalE2EPage } = require("../pages/approvalE2EPage");
+  const { PropertyE2EPage } = require("../pages/propertyE2EPage");
+  const { Logger } = require("../utils/logger");
+
+  const DOC_FILE = path.join(
+    __dirname,
+    "..",
+    "files",
+    "budget_malformed_headers.csv",
+  );
+  const DOC_NAME = "budget_malformed_headers.csv";
+  const CM_FEE_PROJECT = "Construction Management Fee Project";
+
+  test.describe.serial("Projects E2E — suite-owned project", () => {
+    let ctx;
+    /** @type {JobProjectE2EPage} */ let jp;
+    let chain;
+
+    test.beforeAll(async ({ browser }, testInfo) => {
+      testInfo.setTimeout(1200000); // property → budget → project → job → finalize
+      ctx = await browser.newContext({
+        storageState: "sessionState.json",
+        baseURL: process.env.BASE_URL,
+        viewport: { width: 1920, height: 1080 },
+      });
+      const page = await ctx.newPage();
+      jp = new JobProjectE2EPage(page);
+      const snapshot = ApprovalE2EPage.backupSharedData();
+      try {
+        chain = await jp.createChain(`Proj${Date.now().toString().slice(-7)}`);
+        expect(
+          ApprovalE2EPage.changedSharedData(snapshot),
+          "FAIL: building the chain must not change shared hand-off files",
+        ).toEqual([]);
+      } finally {
+        ApprovalE2EPage.restoreSharedData(snapshot);
+      }
+    });
+
+    test.afterAll(async () => {
+      if (chain && jp)
+        await new PropertyE2EPage(jp.page).deletePropertyQuietly(
+          chain.propertyName,
+        );
+      await ctx?.close().catch(() => {});
+    });
+
+    test("TC588 @projects @regression @e2e : Verify the project detail tab is kept in the URL and Create Job is shown only on the Jobs tab", async () => {
+      const page = jp.page;
+      await jp.openProject(chain.projectId);
+      await expect(jp.tab("Jobs"), "FAIL: Jobs tab").toBeVisible();
+      await expect(
+        jp.createJobButton(),
+        "FAIL: Create Job must not render on the Overview tab",
+      ).toBeHidden();
+      Logger.success("TC588: Overview tab has no Create Job");
+
+      await jp.selectProjectTab("Jobs", "jobs");
+      await expect(
+        jp.createJobButton(),
+        "FAIL: Create Job on the Jobs tab",
+      ).toBeVisible({
+        timeout: 15000,
+      });
+      Logger.success(`TC588: Jobs tab → ${page.url()}`);
+
+      await page.reload({ waitUntil: "load" });
+      await expect(
+        jp.tab("Jobs"),
+        "FAIL: Jobs tab must stay selected after reload",
+      ).toHaveAttribute("aria-selected", "true", { timeout: 30000 });
+      await expect(jp.createJobButton()).toBeVisible({ timeout: 15000 });
+      Logger.success("TC588: Jobs tab still selected after reload");
+
+      await jp.openProject(chain.projectId, "overview");
+      await expect(
+        jp.tab("Overview"),
+        "FAIL: ?tab=overview must select Overview",
+      ).toHaveAttribute("aria-selected", "true", { timeout: 30000 });
+      await expect(jp.createJobButton()).toBeHidden();
+      Logger.success("TC588 PASSED");
+    });
+
+    test("TC589 @projects @regression @e2e : Verify Edit Project saves Description and Estimated Budget and keeps Budget Category read-only", async () => {
+      const page = jp.page;
+      const description = `Edited by Projects E2E ${Date.now()}`;
+      await jp.openProject(chain.projectId, "overview");
+      const drawer = await jp.openEditProjectDrawer();
+      const save = jp.saveChanges(drawer);
+      await expect(
+        save,
+        "FAIL: Save Changes disabled before any change",
+      ).toBeDisabled();
+      const budgetCategory = jp.budgetCategoryInput(drawer);
+      await expect(
+        budgetCategory,
+        "FAIL: Budget Category must be disabled",
+      ).toBeDisabled();
+      expect(
+        await budgetCategory.evaluate((e) => e.readOnly),
+        "FAIL: Budget Category must be read-only",
+      ).toBe(true);
+      Logger.success(
+        "TC589: Save disabled, Budget Category disabled + read-only",
+      );
+
+      await drawer.getByPlaceholder("Enter description").fill(description);
+      const budget = drawer.getByPlaceholder("Enter estimated budget");
+      await budget.click();
+      await budget.press("Control+A");
+      await budget.fill("612345");
+      await expect(
+        save,
+        "FAIL: Save Changes enabled after a change",
+      ).toBeEnabled();
+      await save.click();
+      await jp.expectToast("Project updated successfully", "TC589");
+      await expect(drawer).toBeHidden({ timeout: 30000 });
+
+      await page.reload({ waitUntil: "load" });
+      await expect(
+        page.getByText(description, { exact: true }).first(),
+        "FAIL: new Description must show on the Overview after reload",
+      ).toBeVisible({ timeout: 30000 });
+      await expect(
+        page.getByText("$612,345").first(),
+        "FAIL: new Estimated Budget must show on the Overview after reload",
+      ).toBeVisible();
+      const row = (await jp.tableRows("project")).find(
+        (r) => String(r.id) === String(chain.projectId),
+      );
+      expect(row?.description, "FAIL: API description").toBe(description);
+      expect(Number(row?.estimated_budget), "FAIL: API estimated_budget").toBe(
+        612345,
+      );
+      Logger.success("TC589 PASSED");
+    });
+
+    test("TC590 @projects @regression @e2e : Verify changing the fiscal year is blocked while the project has an approved job", async () => {
+      const page = jp.page;
+      await jp.openProject(chain.projectId, "overview");
+      const drawer = await jp.openEditProjectDrawer();
+      const fy = jp.fiscalYearInput(drawer);
+      const current = await fy.inputValue();
+      expect(current, "FAIL: project fiscal year must be set").toMatch(
+        /^\d{4}$/,
+      );
+      // Added 2026-11-23 (insert-only). MCP-verified on project 3243 and suite project 5501: Save
+      // runs POST /api/bird-table/pre-flight-check {fiscal_year}; the server blocks
+      // (can_proceed:false → "Complete the following before saving") only when the project has an
+      // Approved/Pending Approval job for the current fiscal year — with the year unchanged it
+      // answers can_proceed:true and the project simply saves (no dialog). Guard both
+      // preconditions so a failure states which one was missing instead of a bare dialog timeout.
+      await expect
+        .poll(
+          async () =>
+            (await jp.tableRows("job"))
+              .filter(
+                (j) =>
+                  String(j.project_id) === String(chain.projectId) &&
+                  String(j.fiscal_year) === current,
+              )
+              .map((j) => String(j.status)),
+          {
+            message: `FAIL: project ${chain.projectId} must have an Approved/Pending Approval job for FY ${current} before the block can apply`,
+            timeout: 90000,
+            intervals: [3000, 5000, 10000],
+          },
+        )
+        .toEqual(
+          expect.arrayContaining([
+            expect.stringMatching(/^(Approved|Pending Approval)$/),
+          ]),
+        );
+      const isProjectPreflight = (req) =>
+        req.method() === "POST" &&
+        new URL(req.url()).pathname === "/api/bird-table/pre-flight-check" &&
+        /"table_name":"project"/.test(req.postData() || "");
+      let preflightRequest = page
+        .waitForRequest(isProjectPreflight, { timeout: 15000 })
+        .catch(() => null);
+      await jp.setFiscalYear(drawer, Number(current) + 1);
+      await jp.saveChanges(drawer).click();
+      // Added 2026-11-23 (insert-only): the Save click must reach the server with the new year.
+      // A click lost to a re-render sends nothing — click Save once more in that case only.
+      let sentPreflight = await preflightRequest;
+      if (!sentPreflight) {
+        Logger.info("TC590: no pre-flight request after Save — clicking Save again");
+        preflightRequest = page
+          .waitForRequest(isProjectPreflight, { timeout: 15000 })
+          .catch(() => null);
+        await jp.saveChanges(drawer).click();
+        sentPreflight = await preflightRequest;
+      }
+      expect(
+        sentPreflight,
+        "FAIL: Save Changes must send POST /api/bird-table/pre-flight-check for the project",
+      ).toBeTruthy();
+      const preflightBody = JSON.parse(sentPreflight.postData() || "{}");
+      expect(
+        String(preflightBody.payload?.fiscal_year),
+        `FAIL: pre-flight must carry the new fiscal year (sent ${JSON.stringify(preflightBody.payload)})`,
+      ).toBe(String(Number(current) + 1));
+      const preflightResponse = await sentPreflight.response();
+      const preflightResult = preflightResponse
+        ? await preflightResponse.json().catch(() => ({}))
+        : {};
+      Logger.info(
+        `TC590: pre-flight HTTP ${preflightResponse?.status()} → ${JSON.stringify(preflightResult)}`,
+      );
+      expect(
+        preflightResult.can_proceed,
+        `FAIL: server must block the fiscal year change (pre-flight answered ${JSON.stringify(preflightResult)})`,
+      ).toBe(false);
+
+      const blocker = jp.dialog("Complete the following before saving");
+      await expect(blocker, "FAIL: preflight dialog must open").toBeVisible({
+        timeout: 30000,
+      });
+      await expect(
+        blocker,
+        "FAIL: preflight must explain the fiscal year block",
+      ).toContainText(
+        `Fiscal year cannot be changed because this project has approved or pending-approval jobs for ${current}.`,
+      );
+      await expect(
+        blocker.getByRole("button", { name: /Proceed|Continue|Confirm/i }),
+        "FAIL: the block must not offer a way to proceed",
+      ).toHaveCount(0);
+      Logger.success(`TC590: FY ${current} → ${Number(current) + 1} blocked`);
+      await blocker.getByRole("button", { name: "Close", exact: true }).click();
+      await page.keyboard.press("Escape");
+
+      await page.reload({ waitUntil: "load" });
+      const row = (await jp.tableRows("project")).find(
+        (r) => String(r.id) === String(chain.projectId),
+      );
+      expect(
+        String(row?.fiscal_year),
+        "FAIL: fiscal year must be unchanged",
+      ).toBe(current);
+      Logger.success("TC590 PASSED");
+    });
+
+    test("TC591 @projects @regression @e2e : Verify Create Project keeps Budget Category disabled until a property is chosen and reports a fiscal year without budget", async () => {
+      const page = jp.page;
+      const pp = jp.projectPage;
+      await page.goto(`${process.env.BASE_URL}/projects`, {
+        waitUntil: "load",
+      });
+      await pp.openCreateProjectModal();
+      const modal = page
+        .getByRole("dialog")
+        .filter({ hasText: "Add project" })
+        .last();
+      const category = jp.budgetCategoryInput(modal);
+      await expect(
+        category,
+        "FAIL: Budget Category disabled without property",
+      ).toBeDisabled();
+      await expect(category).toHaveAttribute(
+        "placeholder",
+        "Select property and fiscal year first",
+      );
+      Logger.success(
+        "TC591: no property → disabled, 'Select property and fiscal year first'",
+      );
+
+      await pp.propertyDropdown.click();
+      await pp.propertyDropdown.fill(chain.propertyName);
+      await page
+        .getByRole("option", { name: chain.propertyName, exact: true })
+        .first()
+        .click();
+      await expect(
+        category,
+        "FAIL: Budget Category enabled with property + FY",
+      ).toBeEnabled({
+        timeout: 30000,
+      });
+      await expect(category).toHaveAttribute(
+        "placeholder",
+        "Select budget item",
+        {
+          timeout: 30000,
+        },
+      );
+      await category.click();
+      await expect(
+        page.getByRole("option", { name: "Concrete", exact: true }).first(),
+        "FAIL: budget items of the property must be offered",
+      ).toBeVisible({ timeout: 30000 });
+      await page.keyboard.press("Escape");
+      Logger.success("TC591: property + current FY → budget items listed");
+
+      await jp.setFiscalYear(modal, 2099);
+      await expect(
+        category,
+        "FAIL: a fiscal year without budget must say so",
+      ).toHaveAttribute(
+        "placeholder",
+        "No budget items found for this property and year",
+        {
+          timeout: 30000,
+        },
+      );
+      Logger.success(
+        "TC591: FY 2099 → 'No budget items found for this property and year'",
+      );
+
+      await modal.getByRole("button", { name: "Cancel", exact: true }).click();
+      await expect(modal, "FAIL: modal must close without creating").toBeHidden(
+        {
+          timeout: 15000,
+        },
+      );
+      Logger.success("TC591 PASSED");
+    });
+
+    test("TC592 @projects @regression @e2e : Verify a file uploaded to Project Documents is listed and can be deleted", async () => {
+      const page = jp.page;
+      await jp.openProject(chain.projectId, "overview");
+      await jp.uploadProjectDocument(DOC_FILE);
+      const fileCell = page.getByText(DOC_NAME, { exact: true }).first();
+      await expect(fileCell, "FAIL: uploaded file must be listed").toBeVisible({
+        timeout: 60000,
+      });
+      await expect(
+        jp.deleteFileButtons(),
+        "FAIL: one Delete File action",
+      ).toHaveCount(1);
+      Logger.success(`TC592: "${DOC_NAME}" listed in Project Documents`);
+
+      await jp.deleteFileButtons().first().click();
+      const confirm = jp.dialog("Delete File");
+      await expect(confirm).toContainText(
+        "Are you sure you want to delete this file? This action cannot be undone.",
+      );
+      await confirm
+        .getByRole("button", { name: "Delete", exact: true })
+        .click();
+      await jp.expectToast("Row deleted successfully", "TC592");
+      await expect(
+        page.getByText(DOC_NAME, { exact: true }),
+        "FAIL: file must be gone after delete",
+      ).toHaveCount(0, { timeout: 30000 });
+      Logger.success("TC592 PASSED");
+    });
+
+    test("TC593 @projects @regression : Verify CM fee projects show no Delete Project action", async () => {
+      const rows = await jp.tableRows("project");
+      const cm = rows.filter(
+        (r) => r.is_construction_management_fee_project === true,
+      );
+      expect(cm.length, "FAIL: org must have a CM fee project").toBeGreaterThan(
+        0,
+      );
+      const cmName = cm[0].title || cm[0].name || CM_FEE_PROJECT;
+
+      await jp.openProjectsTable();
+      await jp.searchGrid(cmName);
+      await expect(
+        jp.page.getByText(cmName, { exact: true }).first(),
+        "FAIL: CM fee project must be listed",
+      ).toBeVisible({ timeout: 30000 });
+      await expect(
+        jp.deleteProjectButtons(),
+        "FAIL: CM fee project rows must not offer Delete Project",
+      ).toHaveCount(0);
+      Logger.success(`TC593: "${cmName}" rows show no Delete Project`);
+
+      await jp.searchGrid(chain.projectName);
+      await expect(
+        jp.deleteProjectButtons().first(),
+        "FAIL: a normal project must offer Delete Project",
+      ).toBeVisible({ timeout: 30000 });
+      Logger.success("TC593 PASSED");
+    });
+
+    test("TC594 @projects @regression @e2e : Verify Delete Project asks for confirmation and removes the project only after Delete", async () => {
+      test.setTimeout(600000);
+      const page = jp.page;
+      const name = await jp.createThrowawayProject(chain.propertyName);
+      Logger.info(`TC594: throwaway project "${name}"`);
+
+      await jp.openProjectsTable();
+      await jp.searchGrid(name);
+      await expect(
+        jp.deleteProjectButtons(),
+        "FAIL: one matching project",
+      ).toHaveCount(1, {
+        timeout: 30000,
+      });
+      await jp.deleteProjectButtons().first().click();
+      const confirm = jp.dialog("Delete Project");
+      await expect(confirm).toContainText(
+        "This project and its associated data will be permanently removed. This action cannot be undone.",
+      );
+      await confirm
+        .getByRole("button", { name: "Cancel", exact: true })
+        .click();
+      await expect(confirm).toBeHidden();
+      await expect(
+        page.getByText(name, { exact: true }).first(),
+        "FAIL: Cancel must keep the project",
+      ).toBeVisible();
+      Logger.success("TC594: Cancel kept the project");
+
+      await jp.deleteProjectButtons().first().click();
+      await jp
+        .dialog("Delete Project")
+        .getByRole("button", { name: "Delete", exact: true })
+        .click();
+      await jp.expectToast("Row deleted successfully", "TC594");
+
+      await jp.openProjectsTable();
+      await jp.searchGrid(name);
+      await expect(
+        page.getByText(name, { exact: true }),
+        "FAIL: deleted project must not be listed",
+      ).toHaveCount(0, { timeout: 30000 });
+      expect(
+        (await jp.tableRows("project")).some((r) => r.title === name),
+        "FAIL: deleted project must not be returned by the API",
+      ).toBe(false);
+      Logger.success("TC594 PASSED");
+    });
+  });
+}

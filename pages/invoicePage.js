@@ -773,6 +773,36 @@ class InvoicePage {
       // Ensure the grid is rendered.
       const grid = detailsDialog.locator('[role="treegrid"]').first();
       await grid.waitFor({ state: "visible", timeout: 20000 });
+      // MCP-verified 2026-11-23 (job 6951, Change Order #11575, 1280x720): on a Unit Interior
+      // contract the dialog grid has FP Type / Unit Count / Unit columns, so RevoGrid stops
+      // drawing at "Remaining Balance" and "Change Order Amount" is not in the DOM at all (the
+      // header wait below timed out; CO left as a $0 Draft). revo-grid's own
+      // scrollToColumnProp("change_order_amount") mounts it (header data-rgcol=9, cell "—") inside
+      // the viewport width. Bring it in only when it is missing; no-op otherwise.
+      await expect(async () => {
+        const mounted = await grid
+          .locator('[role="columnheader"]')
+          .filter({ hasText: "Change Order Amount" })
+          .count();
+        if (mounted > 0) return;
+        await detailsDialog
+          .locator("revo-grid")
+          .first()
+          .evaluate(async g => {
+            if (typeof g.scrollToColumnProp === "function")
+              await g.scrollToColumnProp("change_order_amount");
+          });
+        await this.page.waitForTimeout(500);
+        expect(
+          await grid
+            .locator('[role="columnheader"]')
+            .filter({ hasText: "Change Order Amount" })
+            .count(),
+          '"Change Order Amount" column must be mounted in the Change Order Details grid'
+        ).toBeGreaterThan(0);
+      })
+        .toPass({ timeout: 20000, intervals: [500, 1000, 2000] })
+        .catch(() => {});
       const amountHeader = grid
         .locator('[role="columnheader"]')
         .filter({ hasText: "Change Order Amount" })
@@ -1154,6 +1184,35 @@ class InvoicePage {
       await dismissToasts();
       await this.page.waitForTimeout(300);
       await confirmChanges.click({ timeout: 15000, force: true });
+    }
+
+    // MCP-verified 2026-11-23 (job 4139, Change Order #11573): when the change order would push a
+    // budget line negative, Confirm Changes runs POST /api/bird-table/pre-flight-check
+    // (can_proceed:true + userFacingWarnings) and opens a "Complete the following before
+    // submitting" dialog whose only way forward is "Proceed Anyway". Without that click the change
+    // order stays Draft; after it the CO went to "Pending Approval". Wait for whichever of the two
+    // follow-up buttons appears instead of assuming the final Confirm.
+    const proceedAnyway = this.page.getByRole("button", {
+      name: "Proceed Anyway",
+      exact: true,
+    });
+    const nextStep = proceedAnyway.or(
+      this.page.getByRole("button", { name: /^Confirm$/ })
+    );
+    const nextStepShown = await nextStep
+      .first()
+      .waitFor({ state: "visible", timeout: 10000 })
+      .then(() => true)
+      .catch(() => false);
+    if (nextStepShown && (await proceedAnyway.isVisible().catch(() => false))) {
+      Logger.info(
+        "Budget pre-flight warning shown after Confirm Changes — clicking Proceed Anyway."
+      );
+      await proceedAnyway.click({ timeout: 15000 });
+      await expect(
+        proceedAnyway,
+        "FAIL: budget warning dialog did not close after Proceed Anyway"
+      ).toBeHidden({ timeout: 20000 });
     }
 
     const confirmFinal = this.page.getByRole("button", { name: /^Confirm$/ });

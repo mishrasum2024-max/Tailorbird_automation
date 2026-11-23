@@ -309,6 +309,27 @@ class VendorDashboardPage {
     );
   }
 
+  /**
+   * Number of entries the Approvals & Notifications panel will render, read from the same
+   * API the panel uses (GET /api/vendor-dashboard -> `approvals`: the vendor's Approved/
+   * Rejected invoices + change orders, newest first, max 5, no date window). MCP-verified
+   * 2026-11-23: an empty list renders "No recent approvals." with no action buttons.
+   * @returns {Promise<number>}
+   */
+  async getApprovalsCountFromApi() {
+    const res = await this.page.request.get(
+      `${process.env.BASE_URL}/api/vendor-dashboard`
+    );
+    expect(
+      res.status(),
+      "FAIL: GET /api/vendor-dashboard did not return 200 for the vendor session."
+    ).toBe(200);
+    const body = await res.json();
+    const count = Array.isArray(body.approvals) ? body.approvals.length : 0;
+    Logger.info(`VendorDashboardPage: vendor-dashboard API approvals=${count}`);
+    return count;
+  }
+
   /** Recent activity panel: header + its own "Latest updates" subtitle (the 2nd of the 2
    * instances on the page, appearing after Approvals & Notifications in DOM order). */
   async assertRecentActivityPanelVisible() {

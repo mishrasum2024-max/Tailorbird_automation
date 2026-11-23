@@ -5,6 +5,7 @@ const { UnitTrackerPage } = require("../pages/unitTrackerPage");
 const { resetActiveFilters } = require("../utils/filterResetHelper");
 const { Logger } = require("../utils/logger");
 const unitTrackerData = require("../fixture/unitTracker.json");
+const { ManageTeamRolesHelper } = require("../pages/manageTeamRolesHelper");
 
 test.use({
   storageState: "sessionState.json",
@@ -233,5 +234,410 @@ test.describe("Unit Tracker", () => {
         await unitTracker.updateSubRecordStatus(subRow(), status);
       });
     }
+  });
+});
+
+/**
+ * Move-In / Move-Out dates — TC564–TC567 (MCP-verified 2026-11-16, headed MCP browser, owner session).
+ *
+ * - Unit Tracker: "Move-In Date" / "Move-Out Date" are editable on unit rows only (date picker,
+ *   PUT /api/bird-table/cells), shown MM/DD/YYYY, "—" when empty; Move-In must be on or after
+ *   Move-Out (400 + toast); a filled cell has a clear (✕) button. See pages/unitTrackerPage.js.
+ * - Contract page → Units tab has NO Move-In / Move-Out field (not in its grid, Columns settings or
+ *   its ui-contract-units API). Every case therefore also asserts, for each job of the unit, that the
+ *   Contract Units tab shows the unit with the same FP Type / Unit Type / Status / Start-End dates as
+ *   the Unit Tracker, and that its contract data is identical before and after the date changes.
+ * - Target: unit 101 of Test Property 2_The Westerham (no dates; not TC501's unit 106 nor the units
+ *   105/107 that already carry dates). Days are picked in the month the date picker opens on (the
+ *   current month), so the cases do not depend on a calendar date.
+ * - Dates are saved server-side: a precondition empties them and afterEach empties them again.
+ */
+test.describe("Unit Tracker — Move-In / Move-Out dates", () => {
+  const md = unitTrackerData.moveDates;
+  // Added 2026-11-19 (insert-only): TC564–TC567 all edit and empty the SAME unit (101). Under the
+  // CI regression run (--workers=4 --fully-parallel) they ran concurrently, so one test's
+  // precondition/afterEach emptied 101's dates while another was mid-test; the grid re-reads the
+  // row after every save (GET /api/bird-table/rows?row_id=…), so the cell flipped to "—"
+  // (MCP-verified headed). "default" mode keeps these tests in one worker, in order, without
+  // skipping the rest when one fails.
+  test.describe.configure({ mode: "default" });
+  let unitTracker;
+  let unitId = null;
+
+  test.beforeEach(async ({ page }) => {
+    unitTracker = new UnitTrackerPage(page);
+    unitId = null;
+  });
+
+  test.afterEach(async ({ page }) => {
+    if (unitId)
+      await unitTracker
+        .restoreMoveDates(unitId)
+        .catch(e => Logger.info(`Cleanup failed: ${e.message}`));
+    await resetActiveFilters(page).catch(e =>
+      Logger.info(`Cleanup failed: ${e.message}`)
+    );
+  });
+
+  /** Opens the tracker, empties leftover dates of the unit and records the baseline of both pages. */
+  async function precondition() {
+    await unitTracker.navigateToUnitTracker();
+    await unitTracker.selectProperty();
+    let { unit, jobs } = await unitTracker.moveDateRows(md.unitLabel);
+    unitId = unit.id;
+    expect(
+      jobs.length,
+      `FAIL: Unit ${md.unitLabel} has no job to check on the Contract page`
+    ).toBeGreaterThan(0);
+    if (unit[md.moveInField] || unit[md.moveOutField]) {
+      Logger.info(
+        `Unit ${md.unitLabel} had leftover dates — emptying them first`
+      );
+      await unitTracker.restoreMoveDates(unitId);
+      ({ unit, jobs } = await unitTracker.moveDateRows(md.unitLabel));
+    }
+    expect(
+      [unit[md.moveInField], unit[md.moveOutField]],
+      `FAIL: Unit ${md.unitLabel} must start without Move-In / Move-Out dates`
+    ).toEqual([null, null]);
+    const contractBefore = await unitTracker.contractUnitSnapshot(
+      jobs,
+      md.unitLabel
+    );
+    return { unit, jobs, contractBefore };
+  }
+
+  /** Contract → Units tab of every job: same unit data as the tracker, contract data unchanged. */
+  async function verifyContractPage(baseline) {
+    const { unit, jobs } = await unitTracker.moveDateRows(md.unitLabel);
+    expect(unit.status, "FAIL: Date changes altered the unit status").toBe(
+      baseline.unit.status
+    );
+    expect(
+      unit.days_in_reno,
+      "FAIL: Date changes altered Days in renovation"
+    ).toBe(baseline.unit.days_in_reno);
+    for (const job of jobs)
+      await unitTracker.verifyContractUnitMatchesTracker(
+        unit,
+        job,
+        md.unitLabel
+      );
+    expect(
+      await unitTracker.contractUnitSnapshot(jobs, md.unitLabel),
+      "FAIL: Contract Units data changed after editing Move-In / Move-Out"
+    ).toEqual(baseline.contractBefore);
+    Logger.success(
+      "Contract Units data is unchanged and consistent with the Unit Tracker"
+    );
+  }
+
+  test("TC564 @regression @unitTracker : Validate Move-Out and Move-In dates can be set on a unit and are reflected in Unit Tracker and Contract Units tab", async () => {
+    let baseline, moveOut, moveIn;
+    await test.step(`Precondition: unit ${md.unitLabel} has no dates; contract baseline recorded`, async () => {
+      baseline = await precondition();
+    });
+    await test.step(`Contract page → Units tab: unit ${md.unitLabel} matches the Unit Tracker (before)`, async () => {
+      for (const job of baseline.jobs)
+        await unitTracker.verifyContractUnitMatchesTracker(
+          baseline.unit,
+          job,
+          md.unitLabel
+        );
+    });
+    await test.step(`Unit Tracker: search ${md.unitLabel}; both date columns show "${md.emptyCell}"`, async () => {
+      await unitTracker.openUnitInTracker(md.unitLabel);
+      await unitTracker.verifyMoveDates(md.unitLabel, unitId, {
+        moveIn: null,
+        moveOut: null,
+      });
+    });
+    await test.step(`Job rows of ${md.unitLabel} show Move-In / Move-Out read-only`, async () => {
+      await unitTracker.verifyJobRowsMoveDatesReadOnly(md.unitLabel);
+    });
+    await test.step(`Set "${md.moveOutColumn}" (day ${md.moveOutDay}): API 200; cell, grid data and API show it`, async () => {
+      moveOut = await unitTracker.setMoveDate(
+        md.unitLabel,
+        unitId,
+        md.moveOutColumn,
+        md.moveOutDay
+      );
+      await unitTracker.verifyMoveDates(md.unitLabel, unitId, {
+        moveIn: null,
+        moveOut: moveOut.iso,
+      });
+    });
+    await test.step(`Set "${md.moveInColumn}" (day ${md.moveInDay}, after Move-Out): API 200; both dates shown`, async () => {
+      moveIn = await unitTracker.setMoveDate(
+        md.unitLabel,
+        unitId,
+        md.moveInColumn,
+        md.moveInDay
+      );
+      await unitTracker.verifyMoveDates(md.unitLabel, unitId, {
+        moveIn: moveIn.iso,
+        moveOut: moveOut.iso,
+      });
+    });
+    await test.step("Reload the Unit Tracker: both dates persisted", async () => {
+      await unitTracker.openUnitInTracker(md.unitLabel);
+      await unitTracker.verifyMoveDates(md.unitLabel, unitId, {
+        moveIn: moveIn.iso,
+        moveOut: moveOut.iso,
+      });
+    });
+    await test.step("Contract page → Units tab: unit data consistent and unchanged (after)", async () => {
+      await verifyContractPage(baseline);
+    });
+  });
+
+  test("TC565 @regression @unitTracker : Validate Move-In date earlier than Move-Out date is rejected and the same day is accepted", async () => {
+    let baseline, moveOut, moveIn;
+    await test.step(`Precondition: unit ${md.unitLabel} has no dates; contract baseline recorded`, async () => {
+      baseline = await precondition();
+      await unitTracker.searchUnitContaining(md.unitLabel);
+    });
+    await test.step(`Set "${md.moveOutColumn}" (day ${md.moveInDay})`, async () => {
+      moveOut = await unitTracker.setMoveDate(
+        md.unitLabel,
+        unitId,
+        md.moveOutColumn,
+        md.moveInDay
+      );
+      await unitTracker.verifyMoveDates(md.unitLabel, unitId, {
+        moveIn: null,
+        moveOut: moveOut.iso,
+      });
+    });
+    await test.step(`Set "${md.moveInColumn}" before Move-Out (day ${md.invalidMoveInDay}): 400 "${md.invalidOrderMessage}" + toast`, async () => {
+      const rejected = await unitTracker.pickMoveDate(
+        md.unitLabel,
+        md.moveInColumn,
+        md.invalidMoveInDay
+      );
+      await unitTracker.verifyMoveDateRejected(rejected, unitId);
+      await unitTracker.closeCellEditor();
+    });
+    await test.step(`"${md.moveInColumn}" was not saved: cell, grid data and API still empty; Move-Out unchanged`, async () => {
+      await unitTracker.verifyMoveDates(md.unitLabel, unitId, {
+        moveIn: null,
+        moveOut: moveOut.iso,
+      });
+    });
+    await test.step(`Set "${md.moveInColumn}" on the same day as Move-Out: accepted (on or after)`, async () => {
+      moveIn = await unitTracker.setMoveDate(
+        md.unitLabel,
+        unitId,
+        md.moveInColumn,
+        md.moveInDay
+      );
+      expect(
+        moveIn.iso,
+        "FAIL: Move-In must equal Move-Out for the boundary check"
+      ).toBe(moveOut.iso);
+      await unitTracker.verifyMoveDates(md.unitLabel, unitId, {
+        moveIn: moveIn.iso,
+        moveOut: moveOut.iso,
+      });
+    });
+    await test.step("Reload the Unit Tracker: only the valid dates persisted", async () => {
+      await unitTracker.openUnitInTracker(md.unitLabel);
+      await unitTracker.verifyMoveDates(md.unitLabel, unitId, {
+        moveIn: moveIn.iso,
+        moveOut: moveOut.iso,
+      });
+    });
+    await test.step("Contract page → Units tab: unit data consistent and unchanged", async () => {
+      await verifyContractPage(baseline);
+    });
+  });
+
+  test("TC566 @regression @unitTracker : Validate Move-Out and Move-In dates can be cleared with the clear button", async () => {
+    let baseline, moveOut, moveIn;
+    await test.step(`Precondition: unit ${md.unitLabel} has no dates; contract baseline recorded`, async () => {
+      baseline = await precondition();
+      await unitTracker.searchUnitContaining(md.unitLabel);
+    });
+    await test.step(`Set "${md.moveOutColumn}" (day ${md.moveOutDay}) and "${md.moveInColumn}" (day ${md.moveInDay})`, async () => {
+      moveOut = await unitTracker.setMoveDate(
+        md.unitLabel,
+        unitId,
+        md.moveOutColumn,
+        md.moveOutDay
+      );
+      moveIn = await unitTracker.setMoveDate(
+        md.unitLabel,
+        unitId,
+        md.moveInColumn,
+        md.moveInDay
+      );
+      await unitTracker.verifyMoveDates(md.unitLabel, unitId, {
+        moveIn: moveIn.iso,
+        moveOut: moveOut.iso,
+      });
+    });
+    await test.step(`Clear "${md.moveOutColumn}" while Move-In is set: API 200 with empty value; Move-In kept`, async () => {
+      await unitTracker.clearMoveDate(md.unitLabel, unitId, md.moveOutColumn);
+      await unitTracker.verifyMoveDates(md.unitLabel, unitId, {
+        moveIn: moveIn.iso,
+        moveOut: null,
+      });
+    });
+    await test.step(`Clear "${md.moveInColumn}": API 200 with empty value; both cells "${md.emptyCell}"`, async () => {
+      await unitTracker.clearMoveDate(md.unitLabel, unitId, md.moveInColumn);
+      await unitTracker.verifyMoveDates(md.unitLabel, unitId, {
+        moveIn: null,
+        moveOut: null,
+      });
+    });
+    await test.step("Reload the Unit Tracker: both dates stay empty", async () => {
+      await unitTracker.openUnitInTracker(md.unitLabel);
+      await unitTracker.verifyMoveDates(md.unitLabel, unitId, {
+        moveIn: null,
+        moveOut: null,
+      });
+    });
+    await test.step("Contract page → Units tab: unit data consistent and unchanged", async () => {
+      await verifyContractPage(baseline);
+    });
+  });
+
+  test("TC567 @regression @unitTracker : Validate Move-In and Move-Out dates in search result and exported CSV", async () => {
+    let baseline, moveOut, moveIn, csv;
+    await test.step(`Precondition: unit ${md.unitLabel} has no dates; contract baseline recorded`, async () => {
+      baseline = await precondition();
+      await unitTracker.searchUnitContaining(md.unitLabel);
+    });
+    await test.step(`Set "${md.moveOutColumn}" (day ${md.moveOutDay}) and "${md.moveInColumn}" (day ${md.moveInDay})`, async () => {
+      moveOut = await unitTracker.setMoveDate(
+        md.unitLabel,
+        unitId,
+        md.moveOutColumn,
+        md.moveOutDay
+      );
+      moveIn = await unitTracker.setMoveDate(
+        md.unitLabel,
+        unitId,
+        md.moveInColumn,
+        md.moveInDay
+      );
+    });
+    await test.step(`Reload and search ${md.unitLabel}: the search result shows both dates`, async () => {
+      await unitTracker.openUnitInTracker(md.unitLabel);
+      await unitTracker.verifyMoveDates(md.unitLabel, unitId, {
+        moveIn: moveIn.iso,
+        moveOut: moveOut.iso,
+      });
+    });
+    await test.step("Reload without search and Export: a csv file is exported", async () => {
+      await unitTracker.navigateToUnitTracker();
+      await unitTracker.selectProperty();
+      await unitTracker.waitForAllRowsLoaded();
+      csv = await unitTracker.exportCsv();
+    });
+    await test.step(`CSV has "${md.moveInColumn}" / "${md.moveOutColumn}" and unit ${md.unitLabel} carries the new dates`, async () => {
+      const [header, ...rows] = UnitTrackerPage.parseCsv(csv);
+      const inCol = header.indexOf(md.moveInColumn);
+      const outCol = header.indexOf(md.moveOutColumn);
+      expect(
+        inCol,
+        `FAIL: CSV has no "${md.moveInColumn}" column`
+      ).toBeGreaterThanOrEqual(0);
+      expect(
+        outCol,
+        `FAIL: CSV has no "${md.moveOutColumn}" column`
+      ).toBeGreaterThanOrEqual(0);
+      const unitRows = rows.filter(r => r[0] === md.unitLabel);
+      expect(
+        unitRows.length,
+        `FAIL: CSV must have exactly one row for unit ${md.unitLabel}`
+      ).toBe(1);
+      expect(
+        unitRows[0][inCol],
+        `FAIL: CSV "${md.moveInColumn}" of ${md.unitLabel} is wrong`
+      ).toBe(moveIn.display);
+      expect(
+        unitRows[0][outCol],
+        `FAIL: CSV "${md.moveOutColumn}" of ${md.unitLabel} is wrong`
+      ).toBe(moveOut.display);
+      Logger.success(
+        `CSV unit ${md.unitLabel}: Move-In ${moveIn.display}, Move-Out ${moveOut.display}`
+      );
+    });
+    await test.step("CSV Move-In / Move-Out of every unit match the API (MM/DD/YYYY, empty when not set)", async () => {
+      const [header, ...rows] = UnitTrackerPage.parseCsv(csv);
+      const inCol = header.indexOf(md.moveInColumn);
+      const outCol = header.indexOf(md.moveOutColumn);
+      const asCsv = v =>
+        v ? UnitTrackerPage.displayDate(UnitTrackerPage.isoDay(v)) : "";
+      const apiUnits = (await unitTracker.fetchAllRowsFromApi()).filter(
+        r => r.__treeRowKind === "unit"
+      );
+      const csvByLabel = new Map(rows.map(r => [r[0], r]));
+      const mismatches = [];
+      for (const u of apiUnits) {
+        const r = csvByLabel.get(String(u.hierarchy_label));
+        if (!r) mismatches.push(`unit ${u.hierarchy_label} missing in CSV`);
+        else if (
+          r[inCol] !== asCsv(u[md.moveInField]) ||
+          r[outCol] !== asCsv(u[md.moveOutField])
+        )
+          mismatches.push(
+            `unit ${u.hierarchy_label}: csv ${r[inCol]}/${r[outCol]} api ${asCsv(u[md.moveInField])}/${asCsv(u[md.moveOutField])}`
+          );
+      }
+      expect(
+        mismatches.slice(0, 20),
+        "FAIL: CSV move dates differ from the API"
+      ).toEqual([]);
+      Logger.success(
+        `CSV move dates match the API for ${apiUnits.length} units`
+      );
+    });
+    await test.step("Contract page → Units tab: unit data consistent and unchanged", async () => {
+      await verifyContractPage(baseline);
+    });
+  });
+});
+
+/**
+ * Manage Organization → Roles → Add role: permission catalogue — TC568 (MCP-verified 2026-11-16).
+ * The live "Create role" drawer is captured as JSON (component → permissions with description and
+ * control type) and compared with fixture/rolePermissionsBaseline.json, so any added / removed /
+ * renamed / re-described / re-typed / re-ordered permission fails the run with a readable diff
+ * (attached as role-permissions-diff.txt; the live JSON is attached as role-permissions-live.json).
+ * Accept an intended change with UPDATE_ROLE_PERMISSIONS_BASELINE=1. Nothing is created: the drawer
+ * is cancelled and the test asserts no write API call was made.
+ */
+test.describe("Manage Organization — Create role permissions", () => {
+  test("TC568 @regression @manageTeam @roles : Validate Create role permission components and types match the baseline JSON", async ({
+    page,
+  }, testInfo) => {
+    const roles = new ManageTeamRolesHelper(page);
+    const writeCalls = [];
+    const trackWrites = request => {
+      if (request.url().includes("/api/") && request.method() !== "GET")
+        writeCalls.push(`${request.method()} ${request.url()}`);
+    };
+    let live;
+    await test.step("Dashboard → user menu → Manage Organization → Roles tab", async () => {
+      await roles.landOrganizationWorkspaceViaMenu(process.env.DASHBOARD_URL);
+      await roles.openRolesTab();
+    });
+    await test.step('Click "Add role": the "Create role" drawer opens with Name, Description and Permissions', async () => {
+      page.on("request", trackWrites);
+      await roles.openCreateRoleDrawer();
+      await roles.verifyCreateRoleFormFields();
+    });
+    await test.step("Expand every component: log and assert each permission and its type (unchecked, enabled, toggles)", async () => {
+      live = await roles.captureRolePermissions();
+    });
+    await test.step("Compare the live permissions JSON with fixture/rolePermissionsBaseline.json", async () => {
+      await roles.compareRolePermissionsWithBaseline(live, testInfo);
+    });
+    await test.step("Cancel: drawer closes and no role is created", async () => {
+      await roles.cancelCreateRole(writeCalls);
+      page.off("request", trackWrites);
+    });
   });
 });
