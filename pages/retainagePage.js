@@ -1,6 +1,9 @@
 const { expect } = require("@playwright/test");
 const { Logger } = require("../utils/logger");
 const { retainageLocators } = require("../locators/retainageLocator");
+const {
+  waitForReadyRecoveringErrors,
+} = require("../utils/errorLoadingDataRecovery");
 
 /**
  * Retainage UI lives inside the existing Invoice tab / Invoice Details drawer — there is no
@@ -130,10 +133,61 @@ class RetainagePage {
    */
   async setRetainagePercent(value) {
     Logger.step(`Setting Retainage % to "${value}"...`);
+    // Added 2026-11-23 (insert-only). MCP-verified on job 4304 (draft invoice #39137, value 6):
+    // after Tab the input flips back to "0%" (0.68s), PUT /api/bird-table/cells
+    // {columnName:"retainage_percent"} answers 200 at 0.84s and the badge only reads "Override" at
+    // 1.68s — the fixed 1s wait below is shorter than that, so TC330 read "From contract (0%)" in CI
+    // and TC331's next grid edit was interrupted by the late save. CI also failed to find this
+    // input at all within 55s on a slow invoice page. Wait for the input (up to 80s), then for the
+    // save and the settled badge/value.
+    await waitForReadyRecoveringErrors(
+      this.page,
+      this.loc.retainagePercentInput.first(),
+      { label: "Invoice Retainage % input" }
+    );
+    const inheritedBadgeBefore = await this.loc.invoiceRetainageBadge
+      .first()
+      .textContent()
+      .catch(() => "");
+    const retainageSaved = this.page
+      .waitForResponse(
+        r =>
+          r.request().method() === "PUT" &&
+          r.url().includes("/api/bird-table/cells") &&
+          (r.request().postData() || "").includes('"retainage_percent"'),
+        { timeout: 80000 }
+      )
+      .catch(() => null);
     await this.loc.retainagePercentInput.click();
     await this.loc.retainagePercentInput.fill(String(value));
     await this.page.keyboard.press("Tab");
     await this.page.waitForTimeout(1000);
+    // Added 2026-11-23 (insert-only): see above. Only for valid percentages — TC603 deliberately
+    // enters 101 / -3, which the app rejects ("Retainage % must be between 0 and 100").
+    const isValidPercent = Number(value) >= 0 && Number(value) <= 100;
+    if (isValidPercent) {
+      const savedResponse = await retainageSaved;
+      expect(
+        savedResponse && savedResponse.status(),
+        `FAIL: Retainage % ${value} was not saved (PUT /api/bird-table/cells retainage_percent)`
+      ).toBe(200);
+      await expect(
+        this.loc.retainagePercentInput,
+        `FAIL: Retainage % input must show ${value}% after saving`
+      ).toHaveValue(`${value}%`, { timeout: 60000 });
+      const inheritedPercent = Number(
+        ((inheritedBadgeBefore || "").match(/\(([\d.]+)%\)/) || [])[1]
+      );
+      if (
+        Number.isFinite(inheritedPercent) &&
+        inheritedPercent !== Number(value)
+      ) {
+        await expect(
+          this.loc.invoiceRetainageBadge.first(),
+          `FAIL: Retainage % badge must switch to "Override" after setting ${value}%`
+        ).toHaveText(/^Override$/i, { timeout: 60000 });
+      }
+    }
   }
 
   /** Reads the invoice-level Retainage % badge: "From contract (X%)" or "Override". */

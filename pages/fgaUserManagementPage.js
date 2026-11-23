@@ -4,6 +4,7 @@ const { healingLocator } = require('../utils/locatorHealer');
 const OrganizationHelper = require('./organizationHelper');
 const { ManageTeamRolesHelper } = require('./manageTeamRolesHelper');
 const fgaLocators = require('../locators/fgaLocator');
+const { waitForReadyRecoveringErrors } = require('../utils/errorLoadingDataRecovery');
 
 /**
  * FEAT-972 — FGA (Fine-Grained Access) User Management.
@@ -41,6 +42,15 @@ class FgaUserManagementPage {
     async openPropertyAccessTab() {
         Logger.step('Opening Property access tab');
         await healingLocator(fgaLocators.propertyAccessTabStrategies(this.page)).click();
+        // Added 2026-11-23 (insert-only): CI run (TC352) — search not visible in 15s. MCP-verified
+        // (dashboard → Manage Organization → Property access): the panel renders EMPTY (no search,
+        // 0 rows) until GET /api/properties answers — instant normally, 21.6s with that call
+        // delayed 20s. TC352 opens this tab right after the invite helper's page reload. Wait up to
+        // 80s, recovering from "Error Loading Data"/reload and re-selecting the tab.
+        await waitForReadyRecoveringErrors(this.page, this.propertyAccessSearchInput().first(), {
+            label: 'Property access search',
+            afterRecover: () => healingLocator(fgaLocators.propertyAccessTabStrategies(this.page)).click(),
+        });
         await expect(this.propertyAccessSearchInput()).toBeVisible({ timeout: 15000 });
         // Not getByRole('columnheader'): the header row's cell role flips between
         // "columnheader" and "cell" depending on render/hydration state (MCP/live-run
@@ -284,6 +294,16 @@ class FgaUserManagementPage {
      * "invite-user" widget call this used to wait on).
      */
     async inviteMemberAndCaptureApi(email, options = {}) {
+        // Added 2026-11-23 (insert-only): local TC352 run — the Users tab showed "Error Loading Data
+        // — HTTP error! status: 400" (MCP-reproduced live), so "Invite users" never rendered; the
+        // 20s invite-POST wait below (registered before the dialog is even opened) expired and
+        // ended the test mid-click. MCP-verified: Retry brings the button back in ~1s. Make sure
+        // the button is ready first (up to 80s, recovering) so the 20s only covers the form.
+        await waitForReadyRecoveringErrors(
+            this.page,
+            this.page.getByRole('button', { name: /^Invite users?$/i }).first(),
+            { label: 'Organization "Invite users" button' },
+        );
         const inviteResponsePromise = this.page.waitForResponse(
             (res) => res.url().endsWith('/api/organization/users') && res.request().method() === 'POST',
             { timeout: 20000 },

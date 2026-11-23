@@ -10,6 +10,7 @@ const { orgUrls } = require("../pages/manageTeamRolesHelper");
 const { UserActivationPage } = require("../pages/userActivationPage");
 const fgaTexts = require("../fixture/fga_cta_texts.json");
 const { ensureLeftPanelExpanded } = require("../utils/leftPanelExpander");
+const { ensureLeftPanelPinnedRobust } = require("../utils/leftPanelPinGuard");
 const dashboardLandingUrl = process.env.DASHBOARD_URL || orgUrls.dashboardUrl;
 const TARGET_PROPERTY = "Test Property 1_Cottages on Elm";
 // Added 2026-11-17 (insert-only): permanent seed job "Automation_Job" on TARGET_PROPERTY with an
@@ -700,6 +701,10 @@ test.describe.serial("FGA", () => {
     await page.goto(process.env.DASHBOARD_URL || dashboardLandingUrl, {
       waitUntil: "load",
     });
+    // Added 2026-11-23 (insert-only): CI run — TC357 failed here in ensureLeftPanelExpanded (Pin
+    // sidebar never revealed in 3×45s; a freshly activated user starts unpinned). Pin with the
+    // recovery-first guard first.
+    await ensureLeftPanelPinnedRobust(page);
     await ensureLeftPanelExpanded(page);
     return {
       context,

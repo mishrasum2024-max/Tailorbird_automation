@@ -517,6 +517,22 @@ class PropertiesHelper {
         address,
         placesAutocompleteResponse
       );
+      // Added 2026-11-23 (insert-only): CI run (TC201) — the "property created successfully" toast
+      // was not seen within 15s. MCP-verified (dashboard → Properties → Create Property): the
+      // toast only appears after POST /api/bird-table/rows (property) answers — 0.7s → 200, toast
+      // at 2.0s, gone at 9.3s on a normal beta. On a loaded beta that POST can take longer than
+      // the 15s toast wait (a 39.7s create is documented in approvalE2EPage). Register for the
+      // POST here (before Add Property is clicked below) and await it right before the toast
+      // check, so that check starts when the toast can actually show.
+      const propertyCreateResponse = this.page
+        .waitForResponse(
+          r =>
+            r.request().method() === "POST" &&
+            new URL(r.url()).pathname === "/api/bird-table/rows" &&
+            (r.request().postData() || "").includes('"property"'),
+          { timeout: 120000 }
+        )
+        .catch(() => null);
 
       console.log(`🏷 Entering Property Type: ${type}`);
       await this.typeInput.fill(type);
@@ -543,6 +559,14 @@ class PropertiesHelper {
         .locator(".mantine-Notification-root")
         .filter({ hasText: ui.propertyCreatedToastTitle })
         .filter({ hasText: ui.propertyCreatedToastMessage });
+      // Added 2026-11-23 (insert-only): see propertyCreateResponse above — wait for the create POST.
+      const propertyCreated = await propertyCreateResponse;
+      if (propertyCreated) {
+        expect(
+          propertyCreated.status(),
+          `FAIL: property create request must succeed (POST ${propertyCreated.url()})`
+        ).toBeLessThan(300);
+      }
       await expect(
         successToast.first(),
         `Success toast must match UI benchmark (update fixture tailorbirdUiMessages.json if product copy changed). Expected title+body from CreateRowModal.`

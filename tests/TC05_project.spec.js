@@ -7,6 +7,7 @@ const { ProjectPage } = require('../pages/projectPage');
 const { BudgetJob } = require('../pages/budgetPage');
 const PropertiesHelper = require('../pages/properties');
 const { ensureLeftPanelExpanded } = require('../utils/leftPanelExpander');
+const { ensureLeftPanelPinnedRobust } = require('../utils/leftPanelPinGuard');
 
 test.use({
     storageState: 'sessionState.json',
@@ -29,6 +30,10 @@ test.beforeEach(async ({ page }) => {
     prop = new PropertiesHelper(page);
 
     await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'domcontentloaded' });
+    // Added 2026-11-23 (insert-only): CI run — TC72/TC588 failed in ensureLeftPanelExpanded (Pin
+    // sidebar never revealed in 3×45s). Pin with the recovery-first guard first; the existing
+    // helper below then finds the panel pinned and returns.
+    await ensureLeftPanelPinnedRobust(page);
     await ensureLeftPanelExpanded(page);
     await expect(page).toHaveURL(process.env.DASHBOARD_URL);
     // networkidle times out on CapEx page in CI â€” wait for app shell instead

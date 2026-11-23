@@ -8,6 +8,7 @@ const path = require("path");
 const PropertiesHelper = require("../pages/properties");
 const { setTabsDisabledState } = require("../utils/tabsDisabledHelper");
 const { ensureLeftPanelExpanded } = require("../utils/leftPanelExpander");
+const { ensureLeftPanelPinnedRobust } = require("../utils/leftPanelPinGuard");
 const { healingLocator } = require("../utils/locatorHealer");
 const { retryOperation } = require("../utils/resilientRetry");
 const { resetActiveFilters } = require("../utils/filterResetHelper");
@@ -61,6 +62,9 @@ test.describe("Project and Jobs", () => {
     }
 
     await page.goto(process.env.DASHBOARD_URL, { waitUntil: "load" });
+    // Added 2026-11-23 (insert-only): CI run — TC496 failed in ensureLeftPanelExpanded (Pin
+    // sidebar never revealed in 3×45s). Pin with the recovery-first guard first.
+    await ensureLeftPanelPinnedRobust(page);
     await ensureLeftPanelExpanded(page);
     await expect(page).toHaveURL(process.env.DASHBOARD_URL);
     await page.waitForTimeout(10000);

@@ -1274,6 +1274,23 @@ class UnitTrackerPage {
       clear,
       `FAIL: Clear (✕) of "${columnName}" not shown`
     ).toBeVisible();
+    // Added 2026-11-23 (insert-only): CI run (TC566, second clear) — the ✕ was visible after hover,
+    // then "element is not visible" for the whole 55s click. MCP-verified CSS on /unit-tracker: the
+    // ✕ is display:none except `div[role="gridcell"]:hover .revo-grid-cell-clear-btn`, so it only
+    // shows while the pointer is over the cell; the grid re-renders after the previous save, and a
+    // re-rendered cell under a stationary (headless) pointer does not get :hover back. Move the real
+    // pointer onto the cell right before the click until the ✕ shows again.
+    await expect(async () => {
+      const box = await cell.boundingBox();
+      if (box) {
+        await this.page.mouse.move(
+          box.x + box.width / 2,
+          box.y + box.height / 2,
+          { steps: 5 }
+        );
+      }
+      await expect(clear).toBeVisible({ timeout: 2000 });
+    }).toPass({ timeout: 15000, intervals: [250, 500, 1000] });
     const result = {
       ...(await this.captureCellSave(this.moveDateField(columnName), () =>
         clear.click()

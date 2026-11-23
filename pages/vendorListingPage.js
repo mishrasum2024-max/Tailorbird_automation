@@ -6,6 +6,9 @@ const { expect } = require("@playwright/test");
 const { Logger } = require("../utils/logger");
 const { healingLocator } = require("../utils/locatorHealer");
 const { ensureLeftPanelExpanded } = require("../utils/leftPanelExpander");
+const {
+  waitForReadyRecoveringErrors,
+} = require("../utils/errorLoadingDataRecovery");
 const { LoginPage } = require("./loginPage");
 const { VendorBidPage } = require("./vendorBidPage");
 const {
@@ -358,6 +361,14 @@ class VendorListingPage {
     const searchInput = healingLocator(
       searchInputStrategies(this.page)
     ).first();
+    // Added 2026-11-23 (insert-only): CI run (TC457, Change Orders) — "Search..." not visible within
+    // the default 5s. MCP-verified as the vendor (dashboard → Change Orders): the header and "New
+    // Change Order" render at ~5.1s, but the grid toolbar (Search) only after the Piper chat loads
+    // first (chat-sessions → chat-history → vendor_chat_files) and then the table config —
+    // ~2.7s later on a normal beta, longer on a slow one. Wait up to 80s, recovering from errors.
+    await waitForReadyRecoveringErrors(this.page, searchInput, {
+      label: `${cfg.navLabel} "Search..." input`,
+    });
     await expect(
       searchInput,
       `FAIL: "Search..." input not visible on ${cfg.navLabel}.`

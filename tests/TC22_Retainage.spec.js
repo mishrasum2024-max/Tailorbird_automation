@@ -5,6 +5,7 @@ const { retainageLocators } = require("../locators/retainageLocator");
 const { Logger } = require("../utils/logger");
 const fixture = require("../fixture/retainage.json");
 const { ensureLeftPanelExpanded } = require("../utils/leftPanelExpander");
+const { ensureLeftPanelPinnedRobust } = require("../utils/leftPanelPinGuard");
 const {
   waitForReadyRecoveringErrors,
 } = require("../utils/errorLoadingDataRecovery");
@@ -47,6 +48,11 @@ test.beforeAll(async ({ browser }) => {
   await setupPage.goto(process.env.DASHBOARD_URL, {
     waitUntil: "domcontentloaded",
   });
+  // Added 2026-11-23 (insert-only): local run — TC337's first attempt failed HERE (this file-level
+  // beforeAll) in ensureLeftPanelExpanded: the dashboard's organization_membership query failed
+  // ("Error Loading Data") and the left panel rendered empty with no Pin/Unpin button. The guard
+  // reloads until the panel is pinned; the existing helper below then returns at once.
+  await ensureLeftPanelPinnedRobust(setupPage);
   await ensureLeftPanelExpanded(setupPage);
   await setupRetainagePage.gotoInvoiceList(fixture.jobId);
   // Added 2026-11-23 (insert-only): 2-worker run (TC601) — job 4304's Invoice tab was still
@@ -742,6 +748,9 @@ test.describe("retainage Contract", () => {
     await page.goto(process.env.DASHBOARD_URL, {
       waitUntil: "domcontentloaded",
     });
+    // Added 2026-11-23 (insert-only): CI run — TC337 failed in ensureLeftPanelExpanded (Pin
+    // sidebar never revealed in 3×45s). Pin with the recovery-first guard first.
+    await ensureLeftPanelPinnedRobust(page);
     await ensureLeftPanelExpanded(page);
   });
 

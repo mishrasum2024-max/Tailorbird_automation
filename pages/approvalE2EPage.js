@@ -355,6 +355,32 @@ class ApprovalE2EPage {
       .getByRole("dialog")
       .filter({ hasText: /Edit Contract Overview/i })
       .first();
+    // Added 2026-11-23 (insert-only): CI run (TC573) — the Edit click did not open "Edit Contract
+    // Overview" within 15s. MCP-verified (dashboard → Jobs → job 6944 → Contracts, sampled every
+    // 150ms): while the tab loads, an Edit button appears (Job Summary's, x=1610), disappears, and
+    // the Contracts panel's own Edit appears with "Contract ID" (x=1799) — a force click landing
+    // during that swap is lost. Re-click with full actionability checks until the dialog opens.
+    for (
+      let attempt = 1;
+      attempt <= 3 &&
+      !(await dialog
+        .waitFor({ state: "visible", timeout: 10000 })
+        .then(() => true)
+        .catch(() => false));
+      attempt++
+    ) {
+      Logger.info(
+        `Contract overview: "Edit Contract Overview" not open — clicking Edit again (${attempt}/3)`
+      );
+      await expect(
+        page.getByText("Contract ID", { exact: true }).first()
+      ).toBeVisible({ timeout: 80000 });
+      await page
+        .getByRole("button", { name: /^Edit$/i })
+        .first()
+        .click({ timeout: 30000 })
+        .catch(() => {});
+    }
     await expect(dialog).toBeVisible({ timeout: 15000 });
     const input = dialog
       .getByRole("textbox", { name: /Estimated total cost/i })
