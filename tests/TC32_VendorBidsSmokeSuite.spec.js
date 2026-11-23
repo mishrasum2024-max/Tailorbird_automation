@@ -441,28 +441,5 @@ test.describe("Vendor Bids — requested smoke suite", () => {
     );
   });
 
-  test('TC484 @vendor @bids @smoke : Verify "Can you check i hve any open bid ?" prompt and look for answer in AI Chat', async ({
-    page,
-  }) => {
-    test.setTimeout(90000);
-    const vendorListingPage = new VendorListingPage(page);
-    const vendorBidPage = new VendorBidPage(page);
-
-    await page.goto(process.env.BASE_URL, { waitUntil: "load" });
-    await page.waitForLoadState("domcontentloaded");
-    await page.waitForTimeout(1500);
-    await vendorListingPage.navigateTo("bids");
-
-    const answerText = await vendorBidPage.askPiperAndAwaitAnswer(
-      smokeData.piperOpenBidsQuestion
-    );
-    expect(
-      answerText.toLowerCase(),
-      'FAIL: Piper answer does not mention "open bid(s)".'
-    ).toContain("open bid");
-
-    Logger.success(
-      "TC484: Piper answered the open-bids prompt in the AI chat."
-    );
-  });
+  // TC484 (Piper open-bids question) removed for now — it calls the LLM. Restore from git history.
 });
