@@ -4,6 +4,7 @@ const fs = require("fs");
 const { test, expect } = require("@playwright/test");
 const { ApprovalJob } = require("../pages/approvalPage");
 const { DrawReportingJob } = require("../pages/drawReportingPage");
+const { DrawReportingCalcPage } = require("../pages/drawReportingCalcPage");
 const { Logger } = require("../utils/logger");
 const {
   captureDrawReportingUi,
@@ -927,5 +928,31 @@ test.describe("Draw Reporting", () => {
     await drawReportingJob.selectPropertyByName(propertyName);
     await drawReportingJob.assertSelectedPropertyIs(propertyName);
     await drawReportingJob.verifyHistoricalDrawsListApprovedDraws();
+  });
+});
+
+// Added 2026-11-24. Requirement: "Draw Reporting → tiles on the top are not calculating correctly
+// in the draw report overview". One case that recomputes EVERY calculated value on the Draw
+// Reporting page from live data — the 4/5 tiles, the Budget Overview table (rows + Total row),
+// CapEx Status, the current draw card and every Historical Draws row — and asserts + logs each rule.
+// Formulas come from the app code and were MCP-verified (see pages/drawReportingCalcPage.js).
+// Its own describe (not the serial "Draw Reporting" block above) so it never depends on, or is
+// skipped by, the draw-creating tests; it creates nothing and only reads.
+test.describe("Draw Reporting — calculations", () => {
+  test("TC608 @drawReporting @regression : Verify every Draw Reporting calculation (tiles, budget overview table, CapEx status, current draw, historical draws) on live data", async ({
+    page: p,
+  }) => {
+    test.setTimeout(600000);
+    const PROPERTY = "Test Property 6_Draw reporting";
+    const drawJob = new DrawReportingJob(p);
+    const calc = new DrawReportingCalcPage(p, drawJob);
+    await p.goto(process.env.DASHBOARD_URL, { waitUntil: "load" });
+    await ensureLeftPanelExpanded(p);
+    Logger.step(`TC608: Draw Reporting → ${PROPERTY}`);
+    await drawJob.navigateToDrawReporting();
+    await drawJob.selectPropertyByName(PROPERTY);
+    const { rules } = await calc.verifyAll("Draw Reporting");
+    expect(rules, "FAIL: TC608 must have verified calculation rules").toBeGreaterThan(0);
+    Logger.success(`TC608 PASSED: ${rules} Draw Reporting calculation rules verified on live data`);
   });
 });

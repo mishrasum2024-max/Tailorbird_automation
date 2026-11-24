@@ -146,6 +146,24 @@ test.describe("FEAT-1236 Column terminology (CapEx)", () => {
       await labelsReadAfterDrawerOpens,
       "FAIL: GET /api/table-view-config labels (read after Table settings opened) must return 200"
     ).toBe(200);
+    // Added 2026-11-24 (insert-only). Root cause of the TC558 failure: MCP-verified on beta that
+    // "Save for everyone" is ALREADY enabled before anything is typed — this user has a personal
+    // column order (userPosition set, orgPosition null, left by other column-order cases), which the
+    // drawer offers to share with everyone (SettingsDrawer.tsx orgOrderPayload). The blank label is
+    // not what enables it. "Reset to organization default" only resets the drawer DRAFT to the org
+    // version (nothing is saved; closing discards it) — after it the button is disabled and stays
+    // disabled for a whitespace-only label (MCP-verified), which is the rule this case checks.
+    if (await t.ts.saveForEveryoneButton.isEnabled().catch(() => false)) {
+      const resetToOrg = t.ts.drawer.getByRole("button", { name: "Reset to organization default" });
+      if (await resetToOrg.isVisible().catch(() => false)) {
+        Logger.info('TC558: draft differs from the org (personal column order) — "Reset to organization default" (draft only, nothing saved)');
+        await resetToOrg.click();
+      }
+      await expect(
+        t.ts.saveForEveryoneButton,
+        'FAIL (precondition): with the draft equal to the org settings, "Save for everyone" must be disabled'
+      ).toBeDisabled({ timeout: 15000 });
+    }
     const remaining = t.ts.columnDisplayName("Budget Remaining");
     await remaining.fill("   ");
     await expect(remaining, "FAIL: whitespace label was not typed").toHaveValue(

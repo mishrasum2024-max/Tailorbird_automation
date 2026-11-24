@@ -103,6 +103,34 @@ test.describe.serial('Multi-Year Budget', () => {
     test('TC388 @multiYearBudget @sanity @regression @e2e : create first single-year budget with one budget item ($50,000)', async () => {
         test.setTimeout(120000);
         Logger.step('TC388: Creating first single-year budget');
+        // Added 2026-11-24 (insert-only). Root cause of TC388 failing alone / on its retry: the
+        // property comes from TC386/TC387 module variables, which are empty in a fresh worker
+        // (a retry always starts one) → Budget stays on "Select a Property" and Revise never
+        // enables (headed screenshot). Rebuild that state the same way TC386/TC387 do. Also
+        // 90s was observed for the happy path on beta, so give the slow site room.
+        test.setTimeout(300000);
+        if (!propertyName) {
+            timestamp = Date.now();
+            propertyName = `TC26_MYBProp_${timestamp}`;
+            budgetItemName = `MYB_Item_${timestamp}`;
+            startYear = 2026;
+            endYear = 2036;
+            Logger.info(`TC388: no property from TC386 in this worker — creating "${propertyName}"`);
+            await approvalJob.createPropertyRobust(propertyName, 'Domestic Terminal, College Park, GA 30337, USA', 'College Park', 'GA', '30337', 'Garden Style');
+            await expect
+                .poll(async () => {
+                    const res = await page.request.get(`${process.env.BASE_URL.replace(/\/$/, '')}/api/bird-table?table_name=property`);
+                    const rows = (await res.json()).rows || [];
+                    propertyId = String(rows.find(r => r.name === propertyName)?.id || '');
+                    return propertyId;
+                }, { message: `property "${propertyName}" must be returned by the property API`, timeout: 80000, intervals: [3000] })
+                .not.toBe('');
+            const filePath = path.join(__dirname, '../data/multiYearBudgetPropertyData.json');
+            fs.writeFileSync(filePath, JSON.stringify({ propertyName, propertyId, budgetItemName, startYear, endYear, createdAt: timestamp }, null, 2));
+            Logger.success(`TC388: recovered TC386/TC387 state — "${propertyName}" (propertyId=${propertyId})`);
+            await page.goto(process.env.DASHBOARD_URL, { waitUntil: 'load' });
+            await ensureLeftPanelExpanded(page);
+        }
         await budgetJob.navigateToBudget();
         await budgetJob.selectPropertyByName(propertyName);
         await budgetJob.openRevisionEditor();

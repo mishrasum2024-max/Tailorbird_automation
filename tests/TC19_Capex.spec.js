@@ -1704,3 +1704,135 @@ test.describe("CapEx Page", () => {
     });
   });
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// TC609 — non-contract invoices from several vendors on one GL (added 2026-11-24).
+// Bug: "CapEx Tracker → Non-contract invoices with multiple vendors on a specific GL only shows
+// one vendor instead of all vendors". Agreed to stay RED until the product fix ships (no test.fail).
+// Data lives on "Test Property 1_Cottages on Elm" (never removed by the daily cleanup — user choice
+// 2026-11-24); no property/budget is created and job, GL, vendors, amounts ($5–$10) are runtime:
+//   A. reuse its non-contract job with ≥ 2 vendors on one GL (creates nothing — the normal path);
+//   B. else top up its existing non-contract job with $5–$10 invoices from other live vendors;
+//   C. else (first run only) add the "TC609_NonContract_MultiVendor …" job + 2 invoices to its
+//      oldest project with a GL. MCP-verified — see pages/capexNonContractVendorPage.js.
+// ════════════════════════════════════════════════════════════════════════════
+{
+  const { CapexNonContractVendorPage } = require("../pages/capexNonContractVendorPage");
+  const { CapexE2EPage } = require("../pages/capexE2EPage");
+  const { ProjectPage } = require("../pages/projectPage");
+  const { ProjectJob } = require("../pages/projectJob");
+  const { ensureLeftPanelPinnedRobust } = require("../utils/leftPanelPinGuard");
+
+  test.describe("CapEx — non-contract invoices with multiple vendors on one GL", () => {
+    test("TC609 @capex @regression : Verify CapEx shows every vendor of a non-contract job's approved invoices on a GL, with job, project and GL amounts matching their formulas", async ({
+      page,
+    }) => {
+      test.setTimeout(600000);
+      const nc = new CapexNonContractVendorPage(page);
+      const capexE2E = new CapexE2EPage(page);
+      const amount = () => 5 + Math.floor(Math.random() * 6); // $5–$10 only (user rule 2026-11-24)
+
+      await page.goto(process.env.DASHBOARD_URL, { waitUntil: "load" });
+      await ensureLeftPanelExpanded(page);
+      await ensureLeftPanelPinnedRobust(page);
+
+      // ── Find (or minimally top up) live data ────────────────────────────────
+      let { groups, topUpJobs } = await nc.discoverGroups();
+      let group = groups.find(g => g.vendors.length >= 2);
+      if (!group) {
+        // Test Property 1 has an invoice approval chain: finish any pending TC609 invoices first.
+        let approvedNow = 0;
+        for (const t of topUpJobs) approvedNow += await nc.approvePendingOnBehalf(t.job.id);
+        if (approvedNow) {
+          ({ groups, topUpJobs } = await nc.discoverGroups());
+          group = groups.find(g => g.vendors.length >= 2);
+        }
+      }
+      if (group) {
+        Logger.success(`TC609 path A: reusing job #${group.job.id} "${group.job.title}" — ${group.vendors.length} vendors, nothing created`);
+      } else {
+        let jobId;
+        let used;
+        if (topUpJobs.length) {
+          const t = topUpJobs[0];
+          Logger.info(`TC609 path B: topping up existing non-contract job #${t.job.id} "${t.job.title}" (vendors so far: ${JSON.stringify(t.vendors)})`);
+          await nc.openJobFromJobsList(t.job.title);
+          jobId = Number(t.job.id);
+          used = [...t.vendors];
+        } else {
+          const project = await nc.pickExistingProject();
+          Logger.info(`TC609 path C: no non-contract job yet — adding one to existing project "${project.title}"`);
+          const projectPage = new ProjectPage(page);
+          await projectPage.openProjectFromProjectsGrid(project.title);
+          await new ProjectJob(page).navigateToJobsTab();
+          await projectPage.openCreateJobModal();
+          ({ jobId } = await nc.createNonContractJobInOpenModal(CapexNonContractVendorPage.STABLE_JOB_PREFIX, {
+            pickGl: modal => projectPage.selectJobBudgetCategoryFromPicker(modal),
+          }));
+          used = [];
+        }
+        // New invoices (each a vendor not yet on the job) until the invoice-line GL has ≥ 2 vendors.
+        let gl = null;
+        const onGl = new Set();
+        for (let i = 0; i < 2 && onGl.size < 2; i++) {
+          const inv = await nc.createApprovedInvoice(jobId, { amount: amount(), exclude: used, gl });
+          gl = inv.gl;
+          used.push(inv.vendor);
+          onGl.add(inv.vendor);
+          if (i === 0) {
+            // Count vendors already approved on the SAME GL (budget item of the new invoice).
+            const all = await nc.getJobInvoices(jobId);
+            const bim = JSON.stringify((all.find(x => Number(x.id) === inv.invoiceId)?.invoice_detail_budget_items || []).map(Number));
+            all
+              .filter(
+                x =>
+                  /^approved$/i.test(String(x.status)) &&
+                  Number(x.invoice_amount) <= 10 &&
+                  JSON.stringify((x.invoice_detail_budget_items || []).map(Number)) === bim
+              )
+              .forEach(x => onGl.add(x.vendor_name));
+          }
+        }
+        await nc.approvePendingOnBehalf(jobId);
+      }
+      if (!group) {
+        await expect
+          .poll(async () => ((group = (await nc.discoverGroups()).groups.find(g => g.vendors.length >= 2)) ? true : false), {
+            message: "FAIL: a non-contract job with ≥ 2 vendors on one GL must exist after the top-up",
+            timeout: 90000,
+            intervals: [5000],
+          })
+          .toBe(true);
+      }
+
+      const { job, bim, invoices } = group;
+      const glRow = await nc.getCapexGlRow(job.property_id, bim);
+      expect(glRow, `FAIL: CapEx must have a row for GL bim ${bim} on property ${job.property_id}`).toBeTruthy();
+      const gl = glRow.group_label;
+      Logger.info(`TC609 data: property "${job.property_name}", project "${job.project_title}", job #${job.id} "${job.title}", GL "${gl}"`);
+
+      // ── Read every screen / API ─────────────────────────────────────────────
+      await nc.openJobFromJobsList(job.title);
+      const spendRows = await nc.readSpendTable(group.vendors.length, gl);
+      const drill = await nc.openGlDrillDown(capexE2E, {
+        propertyName: job.property_name,
+        gl,
+        projectName: job.project_title,
+        jobName: job.title,
+      });
+
+      const result = nc.verifyAll({
+        invoices,
+        budgetItemId: bim,
+        spendRows,
+        glRow,
+        drill,
+        jobId: Number(job.id),
+        jobName: job.title,
+        projectName: job.project_title,
+        gl,
+      });
+      Logger.info(`TC609: ${result.total} rules, ${result.failed} failed`);
+    });
+  });
+}

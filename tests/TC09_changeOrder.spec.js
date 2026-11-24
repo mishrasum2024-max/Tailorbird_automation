@@ -693,6 +693,18 @@ test.describe("Change Order tab", () => {
     await settleChangeOrderWorkspace(page, 2500);
     const search = coWorkspaceListSearch(page);
     await expect(search).toBeVisible({ timeout: 15000 });
+    // Added 2026-11-24 (insert-only). Root cause of TC152 being skipped: the shared
+    // projectData.json job has no change orders when TC152 runs alone or before TC145, so the
+    // list search is disabled and the case skipped itself. Seed one CO with the file's own
+    // createCompleteChangeOrder + changeOrderTestData so the search scenario always runs.
+    test.setTimeout(420000);
+    if (!(await search.isEnabled({ timeout: 3000 }).catch(() => false))) {
+      Logger.info("[TC152] CO list empty — creating one change order so the search scenario can run");
+      await invoicePage.createCompleteChangeOrder({ ...changeOrderTestData[0], amount: getRandomAmount() });
+      await settleChangeOrderWorkspace(page, 2500);
+      await expect(coWorkspaceListSearch(page), "FAIL: CO search must enable once a change order exists").toBeEnabled({ timeout: 80000 });
+      Logger.success("[TC152] Change order seeded — search enabled");
+    }
     const searchEnabled = await search
       .isEnabled({ timeout: 3000 })
       .catch(() => false);

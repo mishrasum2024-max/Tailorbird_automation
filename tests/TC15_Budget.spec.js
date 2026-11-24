@@ -5,6 +5,7 @@ const { test, expect } = require("@playwright/test");
 const { BudgetJob } = require("../pages/budgetPage");
 const { ApprovalJob } = require("../pages/approvalPage");
 const { AddColumnPage } = require("../pages/addColumnPage");
+const { BudgetRevisionCalcPage } = require("../pages/budgetRevisionCalcPage");
 const { Logger } = require("../utils/logger");
 const { ensureLeftPanelExpanded } = require("../utils/leftPanelExpander");
 
@@ -928,6 +929,105 @@ test.describe("Budget Workflow", () => {
     ).toBeLessThanOrEqual(1);
     expect(maxScroll, "Grid must not scroll horizontally on its own").toBe(0);
     Logger.success("TC556: Revision editor headers stay stable");
+  });
+
+  // Added 2026-11-24. Requirement: "Budget revision → tiles on the top are not calculating
+  // correctly in the budget revision editor". Every calculation on that screen (7 tiles, the
+  // computed row columns, the Total row and the change notes) is recomputed from the editor's own
+  // grid data and asserted + logged rule by rule — see pages/budgetRevisionCalcPage.js for the
+  // formulas (taken from the app code and MCP-verified on Test Property 2_The Westerham).
+  // Uses the permanent seed's live data; opens its own draft and always deletes it again.
+  test("TC607 @budget @regression @revision : Verify every Budget revision editor calculation (summary tiles, row amounts, Total row, notes) after increase, decrease and reallocation", async () => {
+    test.setTimeout(600000);
+    const PROPERTY = "Test Property 2_The Westerham";
+    const calc = new BudgetRevisionCalcPage(page, budgetJob);
+    let draftOpened = false;
+    try {
+      Logger.step(`TC607: Budget → ${PROPERTY} → Revise Budgets`);
+      // Run of 2026-11-24 (first attempt): the "Name this budget revision" dialog stayed open — the
+      // property allows ONE draft per financial year (see this describe's header note), so a draft
+      // still being deleted / created elsewhere rejects the new one. Recover: close, remove any
+      // draft with the existing ensureReviseEnabled(), and open again (up to 3 attempts).
+      draftOpened = true; // cleanup below is safe even if no draft got created
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          await budgetJob.navigateToBudget();
+          await budgetJob.selectPropertyByName(PROPERTY);
+          await budgetJob.openRevisionEditor(); // removes a leftover draft first (ensureReviseEnabled)
+          await budgetJob.waitForRevisionEditorReady();
+          break;
+        } catch (err) {
+          Logger.info(`TC607: revision editor did not open (attempt ${attempt}/3): ${String(err.message).split("\n")[0]}`);
+          if (attempt === 3) throw err;
+          await page.keyboard.press("Escape").catch(() => {});
+          await budgetJob.navigateToBudget();
+          await budgetJob.selectPropertyByName(PROPERTY);
+          await budgetJob.ensureReviseEnabled();
+        }
+      }
+
+      // Stage 1 — as opened: every formula on the live data (no fixed expected numbers)
+      const opened = await calc.verifyAllCalculations("Opened");
+
+      // Rows and amounts both come from the live data of this run.
+      const picked = calc.pickRows(opened.rows);
+      const amt = calc.liveAmounts(opened.rows, picked);
+      const { increaseRow, sourceRow, decreaseRow } = picked;
+      Logger.info(
+        `TC607: picked from live data → +${amt.increase} on "${increaseRow}", ${amt.decrease} on "${decreaseRow}", ${amt.realloc} reallocated "${sourceRow}" → "${increaseRow}"`
+      );
+
+      // Stage 2 — one increase and one decrease
+      await calc.expectCellSave("adjustment_amount", `Adjustment +${amt.increase} on "${increaseRow}"`, () =>
+        budgetJob.enterRevisionAdjustmentByItemNameV2(increaseRow, amt.increase)
+      );
+      await calc.expectCellSave("adjustment_amount", `Adjustment ${amt.decrease} on "${decreaseRow}"`, () =>
+        budgetJob.enterRevisionAdjustmentByItemNameV2(decreaseRow, amt.decrease)
+      );
+      const adjusted = await calc.verifyAllCalculations("After increase / decrease", {
+        adjustments: { [increaseRow]: amt.increase, [decreaseRow]: amt.decrease },
+      });
+      // Tile changes must equal exactly what was entered (relative to the live "Opened" values).
+      calc.expectTileDeltas("After increase / decrease", opened.tiles, adjusted.tiles, {
+        "Total Increase": amt.increase,
+        "Total Decrease": amt.decrease,
+        "Total Reallocated": 0,
+        "Net Change": amt.increase + amt.decrease,
+        "Adjusted Total": amt.increase + amt.decrease,
+        "Original Total": 0,
+        "Current Budget Total": 0,
+      });
+
+      // Stage 3 — a reallocation (moves money; must not change Net Change or Adjusted Total)
+      await calc.expectCellSave("reallocation_amount", `Reallocation ${amt.realloc} "${sourceRow}" → "${increaseRow}"`, () =>
+        budgetJob.reallocateBudgetAmountInReallocateFromColumn(increaseRow, sourceRow, amt.realloc)
+      );
+      const reallocated = await calc.verifyAllCalculations("After reallocation", {
+        adjustments: { [increaseRow]: amt.increase, [decreaseRow]: amt.decrease },
+        reallocations: [{ from: sourceRow, to: increaseRow, amount: amt.realloc }],
+      });
+      calc.expectTileDeltas("After reallocation", adjusted.tiles, reallocated.tiles, {
+        "Total Reallocated": amt.realloc,
+        "Total Increase": 0,
+        "Total Decrease": 0,
+        "Net Change": 0,
+        "Adjusted Total": 0,
+        "Original Total": 0,
+        "Current Budget Total": 0,
+      });
+      Logger.success("TC607 PASSED: every revision-editor calculation verified on live data at 3 stages");
+    } finally {
+      if (draftOpened) {
+        // Leave the seed clean: delete this test's draft so Revise Budgets is enabled again.
+        Logger.step("TC607 cleanup: deleting the draft revision");
+        await page.keyboard.press("Escape").catch(() => {});
+        await budgetJob.navigateToBudget();
+        await budgetJob.selectPropertyByName(PROPERTY);
+        const { reviseEnabled } = await budgetJob.ensureReviseEnabled();
+        expect(reviseEnabled, "FAIL: TC607 cleanup must delete its draft (Revise Budgets enabled again)").toBeTruthy();
+        Logger.success("TC607 cleanup: draft deleted, Revise Budgets enabled");
+      }
+    }
   });
 });
 
