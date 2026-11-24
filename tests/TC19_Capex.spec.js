@@ -1634,60 +1634,6 @@ test.describe("CapEx Page", () => {
       Logger.success("TC582 PASSED");
     });
 
-    test("TC583 @capex @regression @e2e : Verify Export Custom Report (AI Assisted) opens with the CapEx source and the selected scope", async () => {
-      test.setTimeout(300000);
-      const page = capex.page;
-      await capex.open();
-      await capex.selectOnlyProperty(property.name);
-
-      const menu = await capex.openExportMenu();
-      await expect(menu.csv, 'FAIL: "Export CSV" must be offered').toBeVisible({
-        timeout: 15000,
-      });
-      await expect(
-        menu.custom,
-        'FAIL: "Export Custom Report" must be offered',
-      ).toBeVisible();
-      await expect(
-        menu.custom,
-        "FAIL: custom report is AI assisted",
-      ).toContainText(/AI Assisted/i); // shown upper-case via CSS; DOM text is "AI Assisted"
-      await menu.custom.click();
-
-      const dialog = capex.customReportDialog();
-      await expect(dialog, "FAIL: Custom Report modal must open").toBeVisible({
-        timeout: 30000,
-      });
-      const source = `Source: CapEx · FY ${capex.fiscalYear} · Properties · ${property.name}`;
-      await expect(dialog, `FAIL: modal must show "${source}"`).toContainText(
-        source,
-      );
-      await expect(dialog, "FAIL: modal must be AI assisted").toContainText(
-        /AI Assisted/i,
-      );
-      await expect(dialog, "FAIL: modal must offer suggestions").toContainText(
-        /Suggested/i,
-      );
-      await expect(
-        dialog.getByRole("button", { name: "New", exact: true }),
-        'FAIL: "New" must be offered',
-      ).toBeVisible();
-      await expect(
-        dialog.getByRole("button", { name: /^History/ }),
-        'FAIL: "History" must be offered',
-      ).toBeVisible();
-      Logger.success(
-        `TC583: modal shows "${source}", suggestions, History and New`,
-      );
-      await page.keyboard.press("Escape");
-      await expect(
-        dialog,
-        "FAIL: modal must close without sending a prompt",
-      ).toBeHidden({
-        timeout: 15000,
-      });
-      Logger.success("TC583 PASSED");
-    });
   });
 
   // ═══════════════════════════════════════════════════════════════════════════

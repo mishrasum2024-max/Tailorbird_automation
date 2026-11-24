@@ -5,6 +5,7 @@ const { VendorListingPage } = require("../pages/vendorListingPage");
 const { VendorContractPage } = require("../pages/vendorContractPage");
 const { VendorChangeOrderPage } = require("../pages/vendorChangeOrderPage");
 const { VendorPayInvoicePage } = require("../pages/vendorPayInvoicePage");
+const path = require("path");
 const { Logger } = require("../utils/logger");
 const { healingLocator } = require("../utils/locatorHealer");
 const { waitForSlowDataWithReload } = require("../utils/resilientRetry");
@@ -788,10 +789,70 @@ test.describe("Vendor Contracts & Change Orders — requested smoke suite", () =
       );
     });
 
-    // TC496 BUG-1492 (Piper reads attached invoice PDF) removed for now — it calls the LLM.
-    // Restore from git history.
+    test("TC496 @regression @vendor @invoices BUG-1492-TC01 : Beta/Vendor portal - agent unable to fetch attached invoice PDF", async ({
+      page,
+    }) => {
+      test.setTimeout(180000);
+      await gotoBaseAndOpen(page, "invoices");
+
+      await page
+        .getByRole("button", { name: /Invoice or Pay App|New Invoice/ })
+        .first()
+        .click();
+      await page.getByRole("textbox", { name: "Contract" }).first().click();
+      const contractOption = page
+        .getByRole("option", { name: /Automation Job — Test Property 2/ })
+        .first();
+      await expect(
+        contractOption,
+        "FAIL: no contract option available to bill against."
+      ).toBeVisible({ timeout: 15000 });
+      await contractOption.click();
+
+      const [fileChooser] = await Promise.all([
+        page.waitForEvent("filechooser"),
+        page.getByText("Drop invoice documents here").click(),
+      ]);
+      await fileChooser.setFiles("files/supporting_invoice_placeholder.pdf");
+      await page.getByRole("button", { name: "Continue" }).click();
+      await page.waitForURL(/\/invoices\/drafts\/\d+/, { timeout: 30000 });
+
+      // The agent must be able to read the attached PDF: it must never claim the file is missing.
+      const chatReply = page
+        .getByText(/Supporting Invoice|isn't an invoice|placeholder/i)
+        .first();
+      await expect(
+        chatReply,
+        "FAIL: Piper did not read the attached invoice PDF (no reference to its content)."
+      ).toBeVisible({ timeout: 120000 });
+      await expect(
+        page.getByText(
+          /No file appears to be available|can't see (the|any) (file|attachment)|re-upload/i
+        ),
+        "FAIL: Piper reports the attached invoice PDF is unavailable."
+      ).toHaveCount(0);
+
+      Logger.success("TC496: Piper fetched and read the attached invoice PDF.");
+    });
   });
 
-  // TC496 BUG-1510 (invoice Piper chat kept after full editor) removed for now — it calls the LLM.
-  // Restore from git history.
+  test("TC496 @regression @vendor @changeOrderAndinvoice BUG-1510-TC01 : Vendor portal - Invoice Open full editor erases initial chat", async ({
+    page,
+  }) => {
+    test.setTimeout(150000);
+    const invoicePage = new VendorPayInvoicePage(page);
+    const message = "What still needs my attention before I submit?";
+
+    await gotoBaseAndOpen(page, "invoices");
+    const draftUrl = await invoicePage.startPdfInvoiceDraftWithPiper(
+      path.resolve(__dirname, "../files/supporting_invoice_placeholder.pdf")
+    );
+    await invoicePage.sendInvoiceChatMessage(message);
+    await invoicePage.openFullEditor(draftUrl);
+    await invoicePage.assertInvoiceChatRetained(message);
+
+    Logger.success(
+      "TC496: invoice Piper chat is retained after opening the full editor."
+    );
+  });
 });
